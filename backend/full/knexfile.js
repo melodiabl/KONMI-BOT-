@@ -7,26 +7,31 @@ const __dirname = dirname(__filename);
 
 export default {
   development: {
-    client: 'sqlite3',
+    client: 'pg',
     connection: {
-      filename: join(__dirname, 'storage', 'database.sqlite')
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || 5432,
+      user: process.env.DB_USER || 'appuser',
+      password: process.env.DB_PASSWORD || 'superpass',
+      database: process.env.DB_NAME || 'appdb'
     },
     migrations: {
       directory: join(__dirname, 'migrations'),
       loadExtensions: ['.js', '.cjs']
-    },
-    useNullAsDefault: true
+    }
   },
   production: {
     client: 'pg',
-    connection: process.env.DATABASE_URL,
+    connection: {
+      host: process.env.DB_HOST || 'db',
+      port: process.env.DB_PORT || 5432,
+      user: process.env.DB_USER || 'appuser',
+      password: process.env.DB_PASSWORD || 'superpass',
+      database: process.env.DB_NAME || 'appdb'
+    },
     migrations: {
       directory: join(__dirname, 'migrations'),
       loadExtensions: ['.js', '.cjs']
-    },
-    ssl: {
-      require: true,
-      rejectUnauthorized: false
     }
   }
 };

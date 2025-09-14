@@ -1,4 +1,4 @@
-import { db } from './index.js';
+import db from './db.js';
 
 // Comando /ia para responder con IA (ejemplo simple)
 async function handleIA(prompt, usuario, grupo) {
@@ -11,23 +11,28 @@ async function handleIA(prompt, usuario, grupo) {
 async function handleWarning(usuario, grupo, motivo) {
   try {
     const fecha = new Date().toISOString();
-    const advertenciaExistente = await db.get(
-      'SELECT * FROM advertencias WHERE usuario = ? AND grupo = ?',
-      [usuario, grupo]
-    );
+    const advertenciaExistente = await db('advertencias')
+      .where({ usuario, grupo })
+      .first();
 
     if (advertenciaExistente) {
       const nuevoNumero = advertenciaExistente.numero + 1;
-      await db.run(
-        'UPDATE advertencias SET motivo = ?, fecha = ?, numero = ? WHERE usuario = ? AND grupo = ?',
-        [motivo, fecha, nuevoNumero, usuario, grupo]
-      );
+      await db('advertencias')
+        .where({ usuario, grupo })
+        .update({
+          motivo,
+          fecha,
+          numero: nuevoNumero
+        });
       return { success: true, message: `Advertencia actualizada. Total: ${nuevoNumero}` };
     } else {
-      await db.run(
-        'INSERT INTO advertencias (usuario, grupo, motivo, fecha, numero) VALUES (?, ?, ?, ?, ?)',
-        [usuario, grupo, motivo, fecha, 1]
-      );
+      await db('advertencias').insert({
+        usuario,
+        grupo,
+        motivo,
+        fecha,
+        numero: 1
+      });
       return { success: true, message: 'Primera advertencia registrada.' };
     }
   } catch (error) {
@@ -52,7 +57,7 @@ function toggleModoAmigos() {
 // Obtener lista de grupos autorizados
 async function getAuthorizedGroups() {
   try {
-    const grupos = await db.all('SELECT * FROM grupos_autorizados');
+    const grupos = await db('grupos_autorizados').select('*');
     return grupos;
   } catch (error) {
     return [];

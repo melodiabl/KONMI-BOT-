@@ -1,5 +1,4 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import db from './db.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -8,12 +7,6 @@ const __dirname = dirname(__filename);
 
 async function addSampleData() {
   try {
-    // Abrir conexión a la base de datos
-    const db = await open({
-      filename: join(__dirname, 'storage', 'database.sqlite'),
-      driver: sqlite3.Database,
-    });
-
     console.log('📊 Agregando datos de ejemplo...');
 
     // Agregar manhwas de ejemplo
@@ -61,10 +54,7 @@ async function addSampleData() {
     ];
 
     for (const manhwa of manhwas) {
-      await db.run(
-        'INSERT INTO manhwas (titulo, autor, genero, estado, descripcion, url, fecha_registro, usuario_registro) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [manhwa.titulo, manhwa.autor, manhwa.genero, manhwa.estado, manhwa.descripcion, manhwa.url, manhwa.fecha_registro, manhwa.usuario_registro]
-      );
+      await db('manhwas').insert(manhwa);
     }
 
     // Agregar aportes de ejemplo
@@ -96,10 +86,7 @@ async function addSampleData() {
     ];
 
     for (const aporte of aportes) {
-      await db.run(
-        'INSERT INTO aportes (contenido, tipo, usuario, grupo, fecha, pdf_generado) VALUES (?, ?, ?, ?, ?, ?)',
-        [aporte.contenido, aporte.tipo, aporte.usuario, aporte.grupo, aporte.fecha, aporte.pdf_generado]
-      );
+      await db('aportes').insert(aporte);
     }
 
     // Agregar pedidos de ejemplo
@@ -121,10 +108,7 @@ async function addSampleData() {
     ];
 
     for (const pedido of pedidos) {
-      await db.run(
-        'INSERT INTO pedidos (texto, estado, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)',
-        [pedido.texto, pedido.estado, pedido.usuario, pedido.grupo, pedido.fecha]
-      );
+      await db('pedidos').insert(pedido);
     }
 
     // Agregar votaciones de ejemplo
@@ -150,10 +134,7 @@ async function addSampleData() {
     ];
 
     for (const votacion of votaciones) {
-      await db.run(
-        'INSERT INTO votaciones (titulo, descripcion, opciones, fecha_inicio, fecha_fin, estado, creador) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [votacion.titulo, votacion.descripcion, votacion.opciones, votacion.fecha_inicio, votacion.fecha_fin, votacion.estado, votacion.creador]
-      );
+      await db('votaciones').insert(votacion);
     }
 
     // Agregar algunos votos de ejemplo
@@ -166,10 +147,7 @@ async function addSampleData() {
     ];
 
     for (const voto of votos) {
-      await db.run(
-        'INSERT INTO votos (votacion_id, usuario, opcion, fecha) VALUES (?, ?, ?, ?)',
-        [voto.votacion_id, voto.usuario, voto.opcion, voto.fecha]
-      );
+      await db('votos').insert(voto);
     }
 
     // Agregar logs de ejemplo
@@ -198,13 +176,10 @@ async function addSampleData() {
     ];
 
     for (const log of logs) {
-      await db.run(
-        'INSERT INTO logs (tipo, comando, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)',
-        [log.tipo, log.comando, log.usuario, log.grupo, log.fecha]
-      );
+      await db('logs').insert(log);
     }
 
-    await db.close();
+      // ...existing code...
     console.log('✅ Datos de ejemplo agregados exitosamente');
     console.log('📊 Resumen de datos agregados:');
     console.log('   - 4 manhwas/series');

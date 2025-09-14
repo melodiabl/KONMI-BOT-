@@ -92,10 +92,9 @@ function detectContentType(messageText, filename = '') {
  */
 async function getProviderInfo(groupJid) {
   try {
-    const provider = await db.get(
-      'SELECT * FROM grupos_autorizados WHERE jid = ? AND tipo = ?',
-      [groupJid, 'proveedor']
-    );
+    const provider = await db('grupos_autorizados')
+      .where({ jid: groupJid, tipo: 'proveedor' })
+      .first();
     return provider;
   } catch (error) {
     console.error('Error obteniendo info del proveedor:', error);

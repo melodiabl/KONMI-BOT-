@@ -1,5 +1,4 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import db from './db.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -8,16 +7,11 @@ const __dirname = dirname(__filename);
 
 async function updateDatabaseSchema() {
   try {
-    const db = await open({
-      filename: join(__dirname, 'storage', 'database.sqlite'),
-      driver: sqlite3.Database,
-    });
-
     console.log('🔄 Actualizando esquema de base de datos...');
 
     // Agregar columna 'proveedor' a manhwas si no existe
     try {
-      await db.exec(`ALTER TABLE manhwas ADD COLUMN proveedor TEXT DEFAULT 'General'`);
+      await db.raw(`ALTER TABLE manhwas ADD COLUMN proveedor TEXT DEFAULT 'General'`);
       console.log('✅ Columna proveedor agregada a manhwas');
     } catch (error) {
       if (!error.message.includes('duplicate column name')) {
@@ -27,7 +21,7 @@ async function updateDatabaseSchema() {
 
     // Agregar columna 'tipo' a grupos_autorizados si no existe
     try {
-      await db.exec(`ALTER TABLE grupos_autorizados ADD COLUMN tipo TEXT DEFAULT 'normal'`);
+      await db.raw(`ALTER TABLE grupos_autorizados ADD COLUMN tipo TEXT DEFAULT 'normal'`);
       console.log('✅ Columna tipo agregada a grupos_autorizados');
     } catch (error) {
       if (!error.message.includes('duplicate column name')) {
@@ -37,7 +31,7 @@ async function updateDatabaseSchema() {
 
     // Agregar columna 'proveedor' a grupos_autorizados si no existe
     try {
-      await db.exec(`ALTER TABLE grupos_autorizados ADD COLUMN proveedor TEXT DEFAULT 'General'`);
+      await db.raw(`ALTER TABLE grupos_autorizados ADD COLUMN proveedor TEXT DEFAULT 'General'`);
       console.log('✅ Columna proveedor agregada a grupos_autorizados');
     } catch (error) {
       if (!error.message.includes('duplicate column name')) {

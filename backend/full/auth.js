@@ -1,10 +1,10 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import db from './db.js';
+import config from './config.js';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 
 // Middleware de autenticación
 const authenticateToken = async (req, res, next) => {
@@ -16,7 +16,7 @@ const authenticateToken = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, config.jwt.secret);
     const user = await db('usuarios').where({ username: decoded.username }).select('id', 'username', 'rol').first();
     
     if (!user) {
@@ -43,7 +43,7 @@ const authorizeRoles = (...roles) => {
 // Login
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, role } = req.body;
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
@@ -61,7 +61,12 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    const token = jwt.sign({ username: user.username, rol: user.rol }, JWT_SECRET, { expiresIn: '24h' });
+    // Si se proporciona un rol, verificar que coincida con el rol del usuario
+    if (role && user.rol !== role) {
+      return res.status(403).json({ error: 'No tienes permisos para acceder con este rol' });
+    }
+
+    const token = jwt.sign({ username: user.username, rol: user.rol }, config.jwt.secret, { expiresIn: config.jwt.expiresIn });
     
     res.json({
       token,
@@ -85,11 +90,11 @@ router.post('/register', authenticateToken, authorizeRoles('admin', 'owner'), as
       return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
 
-    if (!['admin', 'colaborador', 'usuario', 'owner'].includes(rol)) {
+    if (!['admin', 'colaborador', 'usuario', 'owner', 'creador', 'moderador'].includes(rol)) {
       return res.status(400).json({ error: 'Rol no válido' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, config.security.bcryptRounds);
     
     await db('usuarios').insert({
       username,
@@ -99,7 +104,7 @@ router.post('/register', authenticateToken, authorizeRoles('admin', 'owner'), as
 
     res.json({ success: true, message: 'Usuario creado correctamente' });
   } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.code === '23505') {
+    if (error.code === '23505') {
       return res.status(400).json({ error: 'El usuario ya existe' });
     }
     res.status(500).json({ error: error.message });
@@ -115,11 +120,25 @@ router.post('/auto-register', async (req, res) => {
       return res.status(400).json({ error: 'Número de WhatsApp, username y grupo son requeridos' });
     }
 
-    // Verificar que el grupo esté autorizado
-    const grupoAutorizado = await db('grupos_autorizados').where({ jid: grupo_jid }).first();
-    
-    if (!grupoAutorizado) {
-      return res.status(403).json({ error: 'Grupo no autorizado para registro automático' });
+    // Nueva lógica: respetar estado global y por grupo (ON/OFF)
+    // 1) Verificar estado global del bot
+    try {
+      const globalState = await db('bot_global_state').select('*').first();
+      if (globalState && globalState.isOn === false) {
+        return res.status(403).json({ error: 'Bot global desactivado para registro automático' });
+      }
+    } catch (_) {
+      // Si no existe la tabla/registro, asumimos encendido por compatibilidad
+    }
+
+    // 2) Verificar estado por grupo si existe registro; por defecto está activo
+    try {
+      const grupoEstado = await db('grupos_autorizados').where({ jid: grupo_jid }).first();
+      if (grupoEstado && grupoEstado.bot_enabled === false) {
+        return res.status(403).json({ error: 'Bot desactivado en este grupo para registro automático' });
+      }
+    } catch (_) {
+      // Si no existe la tabla o falla la consulta, continuar (modo por defecto activo)
     }
 
     // Verificar si el usuario ya existe
@@ -130,7 +149,7 @@ router.post('/auto-register', async (req, res) => {
 
     // Generar contraseña temporal
     const tempPassword = Math.random().toString(36).slice(-8);
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const hashedPassword = await bcrypt.hash(tempPassword, config.security.bcryptRounds);
     
     await db('usuarios').insert({
       username,
@@ -148,7 +167,7 @@ router.post('/auto-register', async (req, res) => {
       username: username
     });
   } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.code === '23505') {
+    if (error.code === '23505') {
       return res.status(400).json({ error: 'El usuario ya existe' });
     }
     res.status(500).json({ error: error.message });
@@ -172,7 +191,7 @@ router.post('/reset-password', async (req, res) => {
 
     // Generar nueva contraseña temporal
     const newTempPassword = Math.random().toString(36).slice(-8);
-    const hashedPassword = await bcrypt.hash(newTempPassword, 10);
+    const hashedPassword = await bcrypt.hash(newTempPassword, config.security.bcryptRounds);
     
     await db('usuarios').where({ id: user.id }).update({ password: hashedPassword });
 
@@ -203,7 +222,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Contraseña actual incorrecta' });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, config.security.bcryptRounds);
     await db('usuarios').where({ id: user.id }).update({ password: hashedPassword });
 
     res.json({ success: true, message: 'Contraseña cambiada correctamente' });

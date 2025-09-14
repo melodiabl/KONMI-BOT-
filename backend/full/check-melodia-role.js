@@ -1,5 +1,4 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import db from './db.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -7,15 +6,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 async function checkUser() {
-  const db = await open({
-    filename: join(__dirname, 'storage', 'database.sqlite'),
-    driver: sqlite3.Database,
-  });
-  
-  const user = await db.get('SELECT * FROM usuarios WHERE username = ?', ['Melodia']);
-  console.log('Usuario Melodia:', user);
-  
-  await db.close();
+  try {
+    const user = await db('usuarios').where({ username: 'Melodia' }).first();
+    console.log('Usuario Melodia:', user);
+  } catch (e) {
+    console.error('Error:', e);
+  }
 }
 
 checkUser().catch(console.error);

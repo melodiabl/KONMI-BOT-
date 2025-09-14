@@ -1,5 +1,4 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import db from './db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -7,14 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function updateDatabaseForProviders() {
-  const dbPath = path.join(__dirname, 'storage', 'database.sqlite');
-  
   try {
-    const db = await open({
-      filename: dbPath,
-      driver: sqlite3.Database
-    });
-
     console.log('🔄 Actualizando base de datos para sistema de proveedores automático...');
 
     // Agregar columnas a la tabla aportes para proveedores
@@ -29,7 +21,7 @@ async function updateDatabaseForProviders() {
 
     for (const query of alterQueries) {
       try {
-        await db.exec(query);
+        await db.raw(query);
         console.log(`✅ Columna agregada: ${query.split('ADD COLUMN ')[1]?.split(' ')[0]}`);
       } catch (error) {
         if (error.message.includes('duplicate column name')) {

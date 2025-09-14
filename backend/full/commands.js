@@ -35,34 +35,6 @@ async function handlePedido(texto, usuario, grupo, fecha) {
 }
 
 /**
- * Handle banning a user.
- * @param {string} usuario - The user to ban.
- * @param {string} motivo - Reason for ban.
- * @param {string} fecha - Date/time of ban.
- */
-async function handleBan(usuario, motivo, fecha) {
-  try {
-    await db('baneados').insert({ usuario, motivo, fecha }).onConflict('usuario').merge();
-    return { success: true, message: 'Usuario baneado correctamente.' };
-  } catch (error) {
-    return { success: false, message: error.message };
-  }
-}
-
-/**
- * Handle unbanning a user.
- * @param {string} usuario - The user to unban.
- */
-async function handleUnban(usuario) {
-  try {
-    await db('baneados').where({ usuario }).del();
-    return { success: true, message: 'Usuario desbaneado correctamente.' };
-  } catch (error) {
-    return { success: false, message: error.message };
-  }
-}
-
-/**
  * Handle the /ai command to interact with Gemini AI for general questions.
  * @param {string} pregunta - The question to ask the AI.
  * @param {string} usuario - The user who sent the command.
@@ -561,11 +533,112 @@ async function handleMiInfo(usuario, grupo, fecha) {
   }
 }
 
+/**
+ * Handle the /cleansession command to clean WhatsApp sessions and generate new QR
+ * @param {string} usuario - The user who sent the command
+ * @param {string} grupo - The group where the command was sent
+ * @param {string} fecha - The date/time of the command
+ */
+async function handleCleanSession(usuario, grupo, fecha) {
+  try {
+    console.log(`🧹 Comando /cleansession recibido de ${usuario}`);
+    
+    // Verificar si el usuario es admin
+    const whatsappNumber = usuario.split('@')[0];
+    const user = await db('usuarios').where({ whatsapp_number: whatsappNumber }).select('rol').first();
+    
+    if (!user || user.rol !== 'admin') {
+      return { 
+        success: true, 
+        message: '❌ *Solo administradores pueden usar este comando*' 
+      };
+    }
+
+    // Limpiar sesiones de WhatsApp
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    const sessionsDir = './sessions';
+    const jadibotsDir = './jadibots';
+    const tmpDir = './tmp';
+    
+    let cleanedFiles = 0;
+    
+    // Limpiar sesiones principales
+    if (fs.existsSync(sessionsDir)) {
+      const files = fs.readdirSync(sessionsDir);
+      files.forEach(file => {
+        if (file !== 'creds.json') {
+          try {
+            fs.unlinkSync(path.join(sessionsDir, file));
+            cleanedFiles++;
+          } catch (e) {
+            console.log(`Error eliminando ${file}:`, e.message);
+          }
+        }
+      });
+    }
+    
+    // Limpiar sesiones de sub-bots
+    if (fs.existsSync(jadibotsDir)) {
+      const botDirs = fs.readdirSync(jadibotsDir);
+      botDirs.forEach(botDir => {
+        const botPath = path.join(jadibotsDir, botDir);
+        if (fs.statSync(botPath).isDirectory()) {
+          const botFiles = fs.readdirSync(botPath);
+          botFiles.forEach(file => {
+            if (file !== 'creds.json') {
+              try {
+                fs.unlinkSync(path.join(botPath, file));
+                cleanedFiles++;
+              } catch (e) {
+                console.log(`Error eliminando ${botDir}/${file}:`, e.message);
+              }
+            }
+          });
+        }
+      });
+    }
+    
+    // Limpiar archivos temporales
+    if (fs.existsSync(tmpDir)) {
+      const tmpFiles = fs.readdirSync(tmpDir);
+      tmpFiles.forEach(file => {
+        try {
+          fs.unlinkSync(path.join(tmpDir, file));
+          cleanedFiles++;
+        } catch (e) {
+          console.log(`Error eliminando tmp/${file}:`, e.message);
+        }
+      });
+    }
+
+    // Log de la acción
+    await logControlAction(usuario, 'CLEAN_SESSION', `Sesiones limpiadas: ${cleanedFiles} archivos`, grupo);
+
+    return { 
+      success: true, 
+      message: `╭─❍「 🧹 Melodia Clean Session ✦ 」
+│
+├─ ✅ *Archivos eliminados:* ${cleanedFiles}
+├─ 🔄 *El bot se reiniciará para generar nuevo QR*
+├─ ⏳ *Reiniciando en 3 segundos...*
+│
+├─ 💫 Melodia ha limpiado todo perfectamente~ ♡
+╰─✦` 
+    };
+  } catch (error) {
+    console.error('Error en clean session:', error);
+    return { 
+      success: false, 
+      message: '❌ *Error al limpiar sesiones*' 
+    };
+  }
+}
+
 export {
   handleAportar,
   handlePedido,
-  handleBan,
-  handleUnban,
   handleAI,
   handleClasificar,
   handleListClasificados,
@@ -576,4 +649,5 @@ export {
   handleRegistrarUsuario,
   handleResetPassword,
   handleMiInfo,
+  handleCleanSession,
 };

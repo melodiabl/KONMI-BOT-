@@ -168,6 +168,8 @@ async function processWhatsAppMedia(message, category, usuario) {
       throw new Error('Tipo de media no soportado');
     }
 
+    console.log(`📥 Procesando media tipo: ${mediaType} de usuario: ${usuario}`);
+
     // Descargar media
     const buffer = await sock.downloadMediaMessage(message);
     
@@ -181,10 +183,22 @@ async function processWhatsAppMedia(message, category, usuario) {
     const filepath = path.join(mediaDir, filename);
 
     // Guardar archivo
-    fs.writeFileSync(filepath, buffer);
+    try {
+      fs.writeFileSync(filepath, buffer);
+    } catch (fsError) {
+      console.error('Error guardando archivo:', fsError);
+      throw fsError;
+    }
 
     // Registrar en base de datos
-    await registerDownload(filename, filepath, category, usuario, buffer.length, 'whatsapp_media');
+    try {
+      await registerDownload(filename, filepath, category, usuario, buffer.length, 'whatsapp_media');
+    } catch (dbError) {
+      console.error('Error registrando descarga en DB:', dbError);
+      throw dbError;
+    }
+
+    console.log(`✅ Media procesada y guardada en: ${filepath}`);
 
     return {
       success: true,
@@ -196,6 +210,7 @@ async function processWhatsAppMedia(message, category, usuario) {
     };
 
   } catch (error) {
+    console.error('❌ Error en processWhatsAppMedia:', error);
     throw error;
   }
 }

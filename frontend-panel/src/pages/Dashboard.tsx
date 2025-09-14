@@ -1,381 +1,434 @@
-import { 
-  Box, 
-  Grid, 
-  GridItem, 
-  Text,
+import React from 'react';
+import {
+  Box,
   VStack,
   HStack,
-  Badge,
-  Button,
-  useColorModeValue,
-  Flex,
   Heading,
-  Icon,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  TableContainer,
-  Progress,
-  Select,
-  Circle,
+  Text,
   SimpleGrid,
+  Stat,
+  StatLabel,
+  StatNumber,
+  StatHelpText,
+  StatArrow,
   Card,
   CardBody,
-  CardHeader
+  CardHeader,
+  Progress,
+  Badge,
+  Icon,
+  useColorModeValue,
+  Flex,
+  Spacer,
+  Button,
+  useToast,
+  Spinner,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react';
-import { FaWhatsapp, FaUsers, FaComments, FaChartBar, FaPaperPlane, FaInbox } from 'react-icons/fa';
-import { useEffect, useState } from 'react';
-import api from '../services/api';
+import {
+  FaUsers,
+  FaUsersCog,
+  FaWhatsapp,
+  FaCheckCircle,
+  FaTimesCircle,
+  FaClock,
+  FaChartLine,
+  FaExclamationTriangle,
+  FaPlay,
+  FaStop,
+  FaSync,
+} from 'react-icons/fa';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { apiService, getBotStatus, getStats, getUsuarioStats, getGroupStats } from '../services/api';
 
-interface DashboardStats {
-  usuarios: number;
-  aportes: number;
-  pedidos: number;
-  grupos: number;
-}
+export const Dashboard: React.FC = () => {
+  const toast = useToast();
+  const queryClient = useQueryClient();
 
-interface Votacion {
-  id: number;
-  titulo: string;
-  descripcion: string;
-  opciones: string;
-  fecha_inicio: string;
-  fecha_fin: string;
-  estado: string;
-  creador: string;
-}
+  const cardBg = useColorModeValue('white', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
 
-interface Aporte {
-  id: number;
-  contenido: string;
-  tipo: string;
-  usuario: string;
-  grupo: string;
-  fecha: string;
-}
+  // Queries
+  const { data: botStatus, isLoading: botLoading } = useQuery('botStatus', getBotStatus);
+  const { data: stats, isLoading: statsLoading } = useQuery('dashboardStats', getStats);
+  const { data: userStats } = useQuery('userStats', getUsuarioStats);
+  const { data: groupStats } = useQuery('groupStats', getGroupStats);
 
-interface Manhwa {
-  id: number;
-  titulo: string;
-  autor: string;
-  genero: string;
-  estado: string;
-  descripcion: string;
-  url: string;
-  fecha_registro: string;
-  usuario_registro: string;
-}
+  // Mutations
+  const restartBotMutation = useMutation(apiService.restartBot, {
+    onSuccess: () => {
+      queryClient.invalidateQueries('botStatus');
+      toast({
+        title: 'Bot reiniciado',
+        description: 'El bot ha sido reiniciado exitosamente',
+        status: 'success',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Error al reiniciar el bot',
+        status: 'error',
+      });
+    },
+  });
 
-export function Dashboard() {
-  const [stats, setStats] = useState<DashboardStats>({ usuarios: 0, aportes: 0, pedidos: 0, grupos: 0 });
-  const [votaciones, setVotaciones] = useState<Votacion[]>([]);
-  const [aportes, setAportes] = useState<Aporte[]>([]);
-  const [manhwas, setManhwas] = useState<Manhwa[]>([]);
-  const [loading, setLoading] = useState(true);
+  const disconnectBotMutation = useMutation(apiService.disconnectBot, {
+    onSuccess: () => {
+      queryClient.invalidateQueries('botStatus');
+      toast({
+        title: 'Bot desconectado',
+        description: 'El bot ha sido desconectado exitosamente',
+        status: 'success',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Error al desconectar el bot',
+        status: 'error',
+      });
+    },
+  });
 
-  const bg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const cardBg = useColorModeValue('gray.50', 'gray.900');
+  const handleRestartBot = () => {
+    if (window.confirm('¿Estás seguro de que quieres reiniciar el bot?')) {
+      restartBotMutation.mutate();
+    }
+  };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, votacionesRes, aportesRes, manhwasRes] = await Promise.all([
-          api.get('/dashboard/stats'),
-          api.get('/votaciones'),
-          api.get('/aportes'),
-          api.get('/manhwas')
-        ]);
+  const handleDisconnectBot = () => {
+    if (window.confirm('¿Estás seguro de que quieres desconectar el bot?')) {
+      disconnectBotMutation.mutate();
+    }
+  };
 
-        setStats(statsRes.data);
-        setVotaciones(votacionesRes.data);
-        setAportes(aportesRes.data);
-        setManhwas(manhwasRes.data);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  if (loading) {
+  if (botLoading || statsLoading) {
     return (
-      <Box p={6} bg={cardBg} minH="100vh">
-        <Text>Cargando...</Text>
+      <Box textAlign="center" py={10}>
+        <Spinner size="xl" />
+        <Heading mt={4}>Cargando dashboard...</Heading>
       </Box>
     );
   }
 
-  const parseOpciones = (opciones: string) => {
-    try {
-      return JSON.parse(opciones);
-    } catch {
-      return [];
-    }
-  };
-
   return (
-    <Box p={6} bg={cardBg} minH="100vh">
+    <Box>
       <VStack spacing={6} align="stretch">
-        {/* Header con iconos */}
-        <Flex justify="space-between" align="center" mb={6}>
+        {/* Header */}
+        <Flex align="center" justify="space-between">
+          <Box>
+            <Heading size="lg">Dashboard</Heading>
+            <Text color="gray.600" mt={1}>
+              Panel de control y estadísticas del sistema
+            </Text>
+          </Box>
           <HStack spacing={3}>
-            <Icon as={FaWhatsapp} boxSize={8} color="green.500" />
-            <Heading size="lg" color="green.500">
-              WhatsApp Bot Dashboard
-            </Heading>
-          </HStack>
-          
-          {/* Tarjetas de mensajes en la esquina superior derecha */}
-          <HStack spacing={4}>
-            <Card size="sm" bg={bg} borderColor={borderColor}>
-              <CardBody p={3}>
-                <HStack spacing={2}>
-                  <Icon as={FaPaperPlane} color="blue.500" />
-                  <VStack spacing={0} align="start">
-                    <Text fontSize="xs" color="gray.500">Mensajes enviados</Text>
-                    <Text fontSize="lg" fontWeight="bold">1,247</Text>
-                  </VStack>
-                </HStack>
-              </CardBody>
-            </Card>
-            
-            <Card size="sm" bg={bg} borderColor={borderColor}>
-              <CardBody p={3}>
-                <HStack spacing={2}>
-                  <Icon as={FaInbox} color="green.500" />
-                  <VStack spacing={0} align="start">
-                    <Text fontSize="xs" color="gray.500">Mensajes recibidos</Text>
-                    <Text fontSize="lg" fontWeight="bold">2,891</Text>
-                  </VStack>
-                </HStack>
-              </CardBody>
-            </Card>
+            <Button
+              leftIcon={<FaSync />}
+              colorScheme="blue"
+              variant="outline"
+              onClick={() => queryClient.invalidateQueries()}
+              isLoading={botLoading || statsLoading}
+            >
+              Actualizar
+            </Button>
           </HStack>
         </Flex>
 
-        {/* Estado del Bot - Círculo grande verde */}
-        <Card bg={bg} borderColor={borderColor}>
+        {/* Estado del Bot */}
+        <Card bg={cardBg} border="1px" borderColor={borderColor}>
           <CardHeader>
-            <Heading size="md">Estado del Bot</Heading>
+            <HStack>
+              <Icon as={FaWhatsapp} color="green.500" />
+              <Heading size="md">Estado del Bot</Heading>
+            </HStack>
           </CardHeader>
           <CardBody>
-            <Flex justify="center" align="center" direction="column" py={6}>
-              <Circle size="120px" bg="green.500" color="white" mb={4}>
-                <VStack spacing={1}>
-                  <Icon as={FaWhatsapp} boxSize={8} />
-                  <Box fontSize="lg" fontWeight="bold" color="white">En línea</Box>
-                </VStack>
-              </Circle>
+            <SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}>
+              <Stat>
+                <StatLabel>Estado de Conexión</StatLabel>
+                <StatNumber color={botStatus?.connected ? 'green.400' : 'red.400'}>
+                  {botStatus?.connected ? 'Conectado' : 'Desconectado'}
+                </StatNumber>
+                <StatHelpText>
+                  <Icon as={botStatus?.connected ? FaCheckCircle : FaTimesCircle} mr={1} />
+                  {botStatus?.connected ? 'Bot activo' : 'Bot inactivo'}
+                </StatHelpText>
+              </Stat>
               
-              <SimpleGrid columns={3} spacing={8} mt={6}>
-                <VStack spacing={1}>
-                  <Text fontSize="3xl" fontWeight="bold" color="blue.500">0</Text>
-                  <Text fontSize="sm" color="gray.500">Chats</Text>
-                </VStack>
-                <VStack spacing={1}>
-                  <Text fontSize="3xl" fontWeight="bold" color="purple.500">0</Text>
-                  <Text fontSize="sm" color="gray.500">Grupos</Text>
-                </VStack>
-                <VStack spacing={1}>
-                  <Text fontSize="3xl" fontWeight="bold" color="green.500">{stats.usuarios}</Text>
-                  <Text fontSize="sm" color="gray.500">Usuarios</Text>
-                </VStack>
-              </SimpleGrid>
+              <Stat>
+                <StatLabel>Número de Teléfono</StatLabel>
+                <StatNumber fontSize="lg">
+                  {botStatus?.phone || 'No disponible'}
+                </StatNumber>
+                <StatHelpText>WhatsApp conectado</StatHelpText>
+              </Stat>
               
-              <Text fontSize="sm" color="gray.400" mt={4}>
-                Última conexión: hace 2 horas
-              </Text>
-            </Flex>
-          </CardBody>
-        </Card>
-
-        {/* Sección de Envío Rápido */}
-        <Card bg={bg} borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Envío Rápido</Heading>
-          </CardHeader>
-          <CardBody>
-            <HStack spacing={4}>
-              <Select placeholder="Seleccionar grupo" flex={1}>
-                <option value="grupo1">Grupo Principal</option>
-                <option value="grupo2">Grupo Secundario</option>
-                <option value="grupo3">Grupo de Pruebas</option>
-              </Select>
-              <Button colorScheme="green" leftIcon={<Icon as={FaPaperPlane} />}>
-                Aportar
+              <Stat>
+                <StatLabel>Tiempo Activo</StatLabel>
+                <StatNumber>{botStatus?.uptime || '0h 0m'}</StatNumber>
+                <StatHelpText>
+                  <Icon as={FaClock} mr={1} />
+                  Uptime del bot
+                </StatHelpText>
+              </Stat>
+              
+              <Stat>
+                <StatLabel>Última Actividad</StatLabel>
+                <StatNumber fontSize="sm">
+                  {botStatus?.lastSeen ? new Date(botStatus.lastSeen).toLocaleString() : 'N/A'}
+                </StatNumber>
+                <StatHelpText>Última vez activo</StatHelpText>
+              </Stat>
+            </SimpleGrid>
+            
+            <HStack mt={6} spacing={4}>
+              <Button
+                leftIcon={<FaPlay />}
+                colorScheme="green"
+                onClick={handleRestartBot}
+                isLoading={restartBotMutation.isLoading}
+                isDisabled={!botStatus?.connected}
+              >
+                Reiniciar Bot
+              </Button>
+              <Button
+                leftIcon={<FaStop />}
+                colorScheme="red"
+                variant="outline"
+                onClick={handleDisconnectBot}
+                isLoading={disconnectBotMutation.isLoading}
+                isDisabled={!botStatus?.connected}
+              >
+                Desconectar Bot
               </Button>
             </HStack>
           </CardBody>
         </Card>
 
-        {/* Grid principal */}
-        <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={6}>
-          {/* Votaciones con tabla y barras de progreso */}
-          <GridItem>
-            <Card bg={bg} borderColor={borderColor}>
-              <CardHeader>
-                <Flex justify="space-between" align="center">
-                  <HStack spacing={2}>
-                    <Icon as={FaChartBar} color="blue.500" />
-                    <Heading size="md">Votaciones</Heading>
+        {/* Estadísticas Generales */}
+        <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6}>
+          <Card bg={cardBg} border="1px" borderColor={borderColor}>
+            <CardBody>
+              <Stat>
+                <StatLabel>
+                  <HStack>
+                    <Icon as={FaUsers} color="blue.500" />
+                    <Text>Total Usuarios</Text>
                   </HStack>
-                  <Button colorScheme="green" size="sm">Nueva Votación</Button>
-                </Flex>
-              </CardHeader>
-              <CardBody>
-                {votaciones.length > 0 ? (
-                  <TableContainer>
-                    <Table size="sm">
-                      <Thead>
-                        <Tr>
-                          <Th>Título</Th>
-                          <Th>Opciones</Th>
-                          <Th>Progreso</Th>
-                        </Tr>
-                      </Thead>
-                      <Tbody>
-                        {votaciones.slice(0, 3).map((votacion) => {
-                          const opciones = parseOpciones(votacion.opciones);
-                          return (
-                            <Tr key={votacion.id}>
-                              <Td>
-                                <VStack align="start" spacing={1}>
-                                  <Text fontWeight="semibold" fontSize="sm">{votacion.titulo}</Text>
-                                  <Badge 
-                                    colorScheme={votacion.estado === 'activa' ? 'green' : 'gray'} 
-                                    size="sm"
-                                  >
-                                    {votacion.estado}
-                                  </Badge>
-                                </VStack>
-                              </Td>
-                              <Td>
-                                <VStack align="start" spacing={1}>
-                                  {opciones.slice(0, 2).map((opcion: string, index: number) => (
-                                    <Text key={index} fontSize="xs" color="gray.600">
-                                      {opcion}
-                                    </Text>
-                                  ))}
-                                </VStack>
-                              </Td>
-                              <Td>
-                                <VStack align="start" spacing={2}>
-                                  <Progress value={65} size="sm" colorScheme="green" w="100%" />
-                                  <Text fontSize="xs" color="gray.500">65%</Text>
-                                </VStack>
-                              </Td>
-                            </Tr>
-                          );
-                        })}
-                      </Tbody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Text color="gray.500" textAlign="center" py={8}>
-                    No hay votaciones activas.
-                  </Text>
-                )}
-              </CardBody>
-            </Card>
-          </GridItem>
+                </StatLabel>
+                <StatNumber>{userStats?.totalUsuarios || 0}</StatNumber>
+                <StatHelpText>
+                  <StatArrow type="increase" />
+                  {userStats?.usuariosActivos || 0} activos
+                </StatHelpText>
+              </Stat>
+            </CardBody>
+          </Card>
 
-          {/* Manhwas */}
-          <GridItem>
-            <Card bg={bg} borderColor={borderColor}>
-              <CardHeader>
-                <Flex justify="space-between" align="center">
-                  <HStack spacing={2}>
-                    <Icon as={FaComments} color="purple.500" />
-                    <Heading size="md">Manhwas</Heading>
+          <Card bg={cardBg} border="1px" borderColor={borderColor}>
+            <CardBody>
+              <Stat>
+                <StatLabel>
+                  <HStack>
+                    <Icon as={FaUsersCog} color="green.500" />
+                    <Text>Total Grupos</Text>
                   </HStack>
-                  <Button colorScheme="green" size="sm">Añadir Manhwa</Button>
-                </Flex>
-              </CardHeader>
-              <CardBody>
-                {manhwas.length > 0 ? (
-                  <VStack spacing={3} align="stretch">
-                    {manhwas.slice(0, 4).map((manhwa) => (
-                      <Box key={manhwa.id} p={3} bg={cardBg} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <Flex justify="space-between" align="center">
-                          <VStack align="start" spacing={1} flex={1}>
-                            <Text fontWeight="semibold" fontSize="sm">{manhwa.titulo}</Text>
-                            <Text fontSize="xs" color="gray.500">
-                              {manhwa.autor} • {manhwa.genero}
-                            </Text>
-                            <Badge 
-                              colorScheme={manhwa.estado === 'Completado' ? 'blue' : 'orange'} 
-                              size="sm"
-                            >
-                              {manhwa.estado}
-                            </Badge>
-                          </VStack>
-                          <Button colorScheme="green" size="sm">
-                            Enviar
-                          </Button>
-                        </Flex>
-                      </Box>
-                    ))}
-                  </VStack>
-                ) : (
-                  <Text color="gray.500" textAlign="center" py={8}>
-                    No hay manhwas disponibles.
-                  </Text>
-                )}
-              </CardBody>
-            </Card>
-          </GridItem>
-        </Grid>
+                </StatLabel>
+                <StatNumber>{groupStats?.totalGrupos || 0}</StatNumber>
+                <StatHelpText>
+                  <StatArrow type="increase" />
+                  {groupStats?.gruposActivos || 0} bot activo
+                </StatHelpText>
+              </Stat>
+            </CardBody>
+          </Card>
 
-        {/* Aportes */}
-        <Card bg={bg} borderColor={borderColor}>
-          <CardHeader>
-            <Flex justify="space-between" align="center">
-              <HStack spacing={2}>
-                <Icon as={FaUsers} color="orange.500" />
-                <Heading size="md">Aportes</Heading>
-              </HStack>
-              <Button colorScheme="green" size="sm">Añadir Aporte</Button>
-            </Flex>
-          </CardHeader>
-          <CardBody>
-            {aportes.length > 0 ? (
-              <VStack spacing={3} align="stretch">
-                {aportes.slice(0, 5).map((aporte) => (
-                  <Box key={aporte.id} p={4} bg={cardBg} borderRadius="md" border="1px" borderColor={borderColor}>
-                    <Flex justify="space-between" align="center">
-                      <VStack align="start" spacing={1} flex={1}>
-                        <Text fontWeight="semibold" noOfLines={2} fontSize="sm">
-                          {aporte.contenido}
-                        </Text>
-                        <HStack spacing={2}>
-                          <Badge colorScheme="blue" size="sm">{aporte.tipo}</Badge>
-                          <Text fontSize="xs" color="gray.500">
-                            por {aporte.usuario}
-                          </Text>
-                        </HStack>
-                      </VStack>
-                      <Button colorScheme="green" size="sm" ml={4}>
-                        Enviar
-                      </Button>
-                    </Flex>
-                  </Box>
-                ))}
+          <Card bg={cardBg} border="1px" borderColor={borderColor}>
+            <CardBody>
+              <Stat>
+                <StatLabel>
+                  <HStack>
+                    <Icon as={FaChartLine} color="purple.500" />
+                    <Text>Total Aportes</Text>
+                  </HStack>
+                </StatLabel>
+                <StatNumber>{stats?.totalAportes || 0}</StatNumber>
+                <StatHelpText>
+                  <StatArrow type="increase" />
+                  Contenido compartido
+                </StatHelpText>
+              </Stat>
+            </CardBody>
+          </Card>
+
+          <Card bg={cardBg} border="1px" borderColor={borderColor}>
+            <CardBody>
+              <Stat>
+                <StatLabel>
+                  <HStack>
+                    <Icon as={FaExclamationTriangle} color="orange.500" />
+                    <Text>Pedidos Pendientes</Text>
+                  </HStack>
+                </StatLabel>
+                <StatNumber>{stats?.pedidosPendientes || 0}</StatNumber>
+                <StatHelpText>
+                  <StatArrow type="decrease" />
+                  Requieren atención
+                </StatHelpText>
+              </Stat>
+            </CardBody>
+          </Card>
+        </SimpleGrid>
+
+        {/* Detalles de Usuarios y Grupos */}
+        <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
+          {/* Usuarios por Rol */}
+          <Card bg={cardBg} border="1px" borderColor={borderColor}>
+            <CardHeader>
+              <Heading size="md">Usuarios por Rol</Heading>
+            </CardHeader>
+            <CardBody>
+              <VStack spacing={4} align="stretch">
+                <HStack justify="space-between">
+                  <HStack>
+                    <Badge colorScheme="red">Admin</Badge>
+                    <Text fontSize="sm">Administradores</Text>
+                  </HStack>
+                  <Text fontWeight="semibold">{userStats?.totalAdmins || 0}</Text>
+                </HStack>
+                <Progress value={(userStats?.totalAdmins || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="red" />
+                
+                <HStack justify="space-between">
+                  <HStack>
+                    <Badge colorScheme="blue">Creador</Badge>
+                    <Text fontSize="sm">Creadores</Text>
+                  </HStack>
+                  <Text fontWeight="semibold">{userStats?.totalCreadores || 0}</Text>
+                </HStack>
+                <Progress value={(userStats?.totalCreadores || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="blue" />
+                
+                <HStack justify="space-between">
+                  <HStack>
+                    <Badge colorScheme="green">Moderador</Badge>
+                    <Text fontSize="sm">Moderadores</Text>
+                  </HStack>
+                  <Text fontWeight="semibold">{userStats?.totalModeradores || 0}</Text>
+                </HStack>
+                <Progress value={(userStats?.totalModeradores || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="green" />
+                
+                <HStack justify="space-between">
+                  <HStack>
+                    <Badge colorScheme="gray">Usuario</Badge>
+                    <Text fontSize="sm">Usuarios</Text>
+                  </HStack>
+                  <Text fontWeight="semibold">{userStats?.totalUsuarios - (userStats?.totalAdmins || 0) - (userStats?.totalCreadores || 0) - (userStats?.totalModeradores || 0) || 0}</Text>
+                </HStack>
+                <Progress value={(userStats?.totalUsuarios - (userStats?.totalAdmins || 0) - (userStats?.totalCreadores || 0) - (userStats?.totalModeradores || 0) || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="gray" />
               </VStack>
-            ) : (
-              <Text color="gray.500" textAlign="center" py={8}>
-                No hay aportes disponibles.
-              </Text>
-            )}
-          </CardBody>
-        </Card>
+            </CardBody>
+          </Card>
+
+          {/* Estado de Grupos */}
+          <Card bg={cardBg} border="1px" borderColor={borderColor}>
+            <CardHeader>
+              <Heading size="md">Estado de Grupos</Heading>
+            </CardHeader>
+            <CardBody>
+              <VStack spacing={4} align="stretch">
+                <HStack justify="space-between">
+                  <HStack>
+                    <Badge colorScheme="green">Bot activo</Badge>
+                    <Text fontSize="sm">Grupos con bot activado</Text>
+                  </HStack>
+                  <Text fontWeight="semibold">{groupStats?.gruposActivos || 0}</Text>
+                </HStack>
+                <Progress value={(groupStats?.gruposActivos || 0) / (groupStats?.totalGrupos || 1) * 100} colorScheme="green" />
+                
+                <HStack justify="space-between">
+                  <HStack>
+                    <Badge colorScheme="blue">Proveedores</Badge>
+                    <Text fontSize="sm">Grupos proveedores</Text>
+                  </HStack>
+                  <Text fontWeight="semibold">{groupStats?.gruposProveedores || 0}</Text>
+                </HStack>
+                <Progress value={(groupStats?.gruposProveedores || 0) / (groupStats?.totalGrupos || 1) * 100} colorScheme="blue" />
+                
+                <HStack justify="space-between">
+                  <HStack>
+                    <Badge colorScheme="red">Bot inactivo</Badge>
+                    <Text fontSize="sm">Grupos sin bot</Text>
+                  </HStack>
+                  <Text fontWeight="semibold">{(groupStats?.totalGrupos || 0) - (groupStats?.gruposActivos || 0)}</Text>
+                </HStack>
+                <Progress value={((groupStats?.totalGrupos || 0) - (groupStats?.gruposActivos || 0)) / (groupStats?.totalGrupos || 1) * 100} colorScheme="red" />
+              </VStack>
+            </CardBody>
+          </Card>
+        </SimpleGrid>
+
+        {/* Alertas y Notificaciones */}
+        {(!botStatus?.connected || (stats?.pedidosPendientes || 0) > 0) && (
+          <Card bg={cardBg} border="1px" borderColor={borderColor}>
+            <CardHeader>
+              <Heading size="md">Alertas del Sistema</Heading>
+            </CardHeader>
+            <CardBody>
+              <VStack spacing={3} align="stretch">
+                {!botStatus?.connected && (
+                  <Alert status="error">
+                    <AlertIcon />
+                    <Box>
+                      <Text fontWeight="semibold">Bot desconectado</Text>
+                      <Text fontSize="sm">El bot de WhatsApp no está conectado. Revisa la conexión.</Text>
+                    </Box>
+                  </Alert>
+                )}
+                
+                {(stats?.pedidosPendientes || 0) > 0 && (
+                  <Alert status="warning">
+                    <AlertIcon />
+                    <Box>
+                      <Text fontWeight="semibold">Pedidos pendientes</Text>
+                      <Text fontSize="sm">Hay {stats.pedidosPendientes} pedidos que requieren atención.</Text>
+                    </Box>
+                  </Alert>
+                )}
+              </VStack>
+            </CardBody>
+          </Card>
+        )}
       </VStack>
     </Box>
   );
-}
+};
+
+export default Dashboard;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

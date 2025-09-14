@@ -1,26 +1,26 @@
-const sqlite3 = require('sqlite3');
-const path = require('path');
+import db from './db.js';
 
-const db = new sqlite3.Database(path.join(__dirname, 'storage', 'database.sqlite'));
+async function fixMelodiaRole() {
+  try {
+    // Actualizar el rol de Melodia a owner
+    const updated = await db('usuarios').where({ username: 'Melodia' }).update({ rol: 'owner' });
+    if (updated) {
+      console.log('✅ Rol de Melodia actualizado a OWNER');
+      console.log('Filas afectadas:', updated);
+    } else {
+      console.log('❌ Usuario Melodia no encontrado');
+    }
 
-// Actualizar el rol de Melodia a owner
-db.run('UPDATE usuarios SET rol = ? WHERE username = ?', ['owner', 'Melodia'], function(err) {
-  if (err) {
-    console.error('Error actualizando rol de Melodia:', err);
-  } else {
-    console.log('✅ Rol de Melodia actualizado a OWNER');
-    console.log('Filas afectadas:', this.changes);
-  }
-  
-  // Verificar el cambio
-  db.get('SELECT * FROM usuarios WHERE username = ?', ['Melodia'], (err, row) => {
-    if (err) {
-      console.error('Error verificando usuario:', err);
-    } else if (row) {
+    // Verificar el cambio
+    const row = await db('usuarios').where({ username: 'Melodia' }).first();
+    if (row) {
       console.log('✅ Usuario verificado:', row);
     } else {
       console.log('❌ Usuario no encontrado');
     }
-    db.close();
-  });
-});
+  } catch (err) {
+    console.error('Error actualizando/verificando usuario:', err);
+  }
+}
+
+fixMelodiaRole();
