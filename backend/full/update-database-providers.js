@@ -1,4 +1,4 @@
-import db from './db.js';
+import db from './db-connection.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

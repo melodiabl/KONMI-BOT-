@@ -1,4 +1,4 @@
-import db from './db.js';
+import db from './db-connection.js';
 import { analyzeContentWithAI } from './gemini-ai-handler.js';
 
 /**
@@ -46,8 +46,15 @@ async function handleAI(pregunta, usuario, grupo, fecha) {
     console.log(`🤖 Comando /ai recibido de ${usuario}: "${pregunta}"`);
     
     // Usar IA de Gemini para responder pregunta general
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return {
+        success: false,
+        message: '❌ Falta la API KEY de Gemini. Configura GEMINI_API_KEY en tu entorno.'
+      };
+    }
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI('AIzaSyAOBzrh8dnm_rMAUyy3yzBMpVIME-JFay4');
+    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `Responde la siguiente pregunta de manera clara y útil en español:
@@ -618,13 +625,13 @@ async function handleCleanSession(usuario, grupo, fecha) {
 
     return { 
       success: true, 
-      message: `╭─❍「 🧹 Melodia Clean Session ✦ 」
+      message: `╭─❍「 🧹 KONMI Clean Session ✦ 」
 │
 ├─ ✅ *Archivos eliminados:* ${cleanedFiles}
 ├─ 🔄 *El bot se reiniciará para generar nuevo QR*
 ├─ ⏳ *Reiniciando en 3 segundos...*
 │
-├─ 💫 Melodia ha limpiado todo perfectamente~ ♡
+├─ 💫 KONMI ha limpiado todo perfectamente~ ♡
 ╰─✦` 
     };
   } catch (error) {

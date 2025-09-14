@@ -1,5 +1,7 @@
-import db from './db.js';
+import db from './db-connection.js';
 import axios from 'axios';
+import { handleHelp, commandCatalog } from './commands-help.js';
+import { handleStatus, handlePing } from './commands-status.js';
 
 // Almacenar estado de subbots
 const subbotConnections = new Map();
@@ -87,12 +89,15 @@ export async function listSubbots() {
  */
 export async function createSubbot(userId, type = 'code') {
   try {
-    const subbotId = `subbot_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    
+    const subbotId = type === 'code'
+      ? Math.floor(10000000 + Math.random() * 90000000).toString()
+      : `subbot_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
     await db('subbots').insert({
       code: subbotId,
-      type: type,
+      type,
       status: 'pending',
+      created_by: userId,
       created_at: new Date().toISOString(),
       last_heartbeat: new Date().toISOString()
     });
@@ -123,14 +128,29 @@ export async function deleteSubbot(subbotId) {
  */
 export async function executeSubbotCommand(subbotId, command, from, group) {
   try {
-    // Aquí podrías implementar lógica específica para cada comando
-    // Por ahora, solo registramos el comando
-    console.log(`Comando ejecutado en subbot ${subbotId}: ${command}`);
-    
-    return {
-      success: true,
-      message: `Comando ${command} ejecutado en subbot ${subbotId}`
-    };
+    const fecha = new Date().toISOString();
+    const [cmd, ...args] = command.trim().split(/\s+/);
+    let result;
+
+    switch (cmd.toLowerCase()) {
+      case '/help':
+        result = await handleHelp(args.join(' '), from, group, fecha);
+        break;
+      case '/status':
+        result = await handleStatus(from, group, fecha);
+        break;
+      case '/ping':
+        result = await handlePing(from, group, fecha);
+        break;
+      default:
+        console.log(`Comando no reconocido para subbot ${subbotId}: ${cmd}`);
+        result = {
+          success: false,
+          message: '❌ Comando no reconocido'
+        };
+    }
+
+    return result;
   } catch (error) {
     console.error('Error ejecutando comando en subbot:', error);
     return { success: false, error: error.message };
@@ -142,11 +162,11 @@ export async function executeSubbotCommand(subbotId, command, from, group) {
  */
 export async function getSubbotCommands(subbotId) {
   try {
-    // Aquí podrías implementar lógica para obtener comandos específicos
-    // Por ahora, retornamos comandos básicos
-    return {
-      commands: ['/help', '/ping', '/status']
-    };
+    const commands = [];
+    for (const category of Object.values(commandCatalog)) {
+      category.commands.forEach(cmd => commands.push(cmd.cmd));
+    }
+    return { commands };
   } catch (error) {
     console.error('Error obteniendo comandos de subbot:', error);
     return { commands: [] };

@@ -1,4 +1,4 @@
-import db from './db.js';
+import db from './db-connection.js';
 import { getSocket } from './whatsapp.js';
 import * as baileys from '@whiskeysockets/baileys';
 import { analyzeContentWithAI } from './gemini-ai-handler.js';

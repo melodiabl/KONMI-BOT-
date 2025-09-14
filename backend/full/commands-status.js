@@ -1,4 +1,4 @@
-import db from './db.js';
+import db from './db-connection.js';
 import os from 'os';
 
 /**
@@ -61,7 +61,7 @@ async function handleStatus(usuario, grupo, fecha) {
       return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     };
 
-    const message = `╭─❍「 📊 Melodia Status ✦ 」
+    const message = `╭─❍「 📊 KONMI Status ✦ 」
 │
 ├─ 🤖 *Bot Principal*
 ├─ ⏰ *Uptime:* ${formatUptime(uptime)}
@@ -82,7 +82,7 @@ async function handleStatus(usuario, grupo, fecha) {
 ├─ 💻 *Plataforma:* ${os.platform()}
 ├─ 🏠 *Directorio:* ${process.cwd()}
 │
-├─ 💫 *Estado de Melodia*
+├─ 💫 *Estado de KONMI*
 ╰─✦`;
 
     return { 
@@ -118,13 +118,13 @@ async function handlePing(usuario, grupo, fecha) {
     
     return { 
       success: true, 
-      message: `╭─❍「 🏓 Melodia Ping ✦ 」
+      message: `╭─❍「 🏓 KONMI Ping ✦ 」
 │
 ├─ 🏓 *Pong!*
 ├─ ⚡ *Latencia:* ${ping}ms
 ├─ ⏰ *Hora:* ${new Date().toLocaleString()}
 │
-├─ 💫 *Melodia está activa*
+├─ 💫 *KONMI está activo*
 ╰─✦` 
     };
   } catch (error) {

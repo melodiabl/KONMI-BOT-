@@ -1,11 +1,15 @@
 // ==================== CONFIGURACIÓN GLOBAL DEL BOT ====================
 
+import config from './config.js';
+
 // Lista de administradores globales (superadmins)
+// Se toma el número principal desde las variables de entorno
 // Formato: [numero, nombre, esSuperAdmin]
-global.owner = [
-  ['595971284430', 'Melodía', true], // Tu número como superadmin
-  // Agregar más administradores aquí si es necesario
-]
+const ownerNumber = config.owner.whatsapp;
+if (!ownerNumber) {
+  console.warn('OWNER_WHATSAPP_NUMBER no está definido; la lista de administradores globales está vacía');
+}
+global.owner = ownerNumber ? [[ownerNumber, 'Owner', true]] : [];
 
 // Lista de moderadores (pueden usar comandos de moderación)
 global.mods = [

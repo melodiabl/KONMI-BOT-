@@ -4,6 +4,11 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+
 const config = {
   // Server Configuration
   server: {
@@ -14,7 +19,7 @@ const config = {
 
   // JWT Configuration
   jwt: {
-    secret: process.env.JWT_SECRET || 'whatsapp-bot-panel-secret-key-2025-change-in-production',
+    secret: jwtSecret,
     expiresIn: process.env.JWT_EXPIRES_IN || '24h',
   },
 

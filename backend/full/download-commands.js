@@ -1,12 +1,15 @@
-import { db } from './index.js';
-import { 
-  downloadFile, 
-  processWhatsAppMedia, 
-  listDownloads, 
+import db from './db-connection.js';
+import {
+  downloadFile,
+  processWhatsAppMedia,
+  listDownloads,
   getDownloadStats,
   cleanOldFiles,
-  checkDiskSpace 
+  checkDiskSpace
 } from './file-manager.js';
+
+const BOT_NAME = 'KONMI BOT';
+const DEV_NAME = 'Melodia';
 
 /**
  * Verificar si un usuario es Owner/Admin
@@ -37,57 +40,85 @@ async function logCommand(tipo, comando, usuario, grupo) {
 }
 
 /**
- * /descargar [url] [nombre] [categoria] - Descarga archivo desde URL
+ * /descargar [url] [nombre] [categoria] - Descarga archivo desde URL con barra de progreso
  */
-async function handleDescargar(url, nombre, categoria, usuario, grupo) {
+async function handleDescargar(url, nombre, categoria, usuario, jid) {
   if (!await isOwnerOrAdmin(usuario)) {
-    return { success: false, message: '❌ Solo Owner/Admin pueden descargar archivos.' };
+    return { success: false };
   }
 
   try {
-    // Validar parámetros
     if (!url || !nombre || !categoria) {
-      return { 
-        success: false, 
-        message: '❌ Uso: /descargar [url] [nombre] [categoria]\nCategorías: manhwa, serie, extra, ilustracion, pack' 
-      };
+      const { getSocket } = await import('./whatsapp.js');
+      const sock = getSocket();
+      await sock.sendMessage(jid, {
+        text: '❌ Uso: /descargar [url] [nombre] [categoria]\nCategorías: manhwa, serie, extra, ilustracion, pack'
+      });
+      return { success: false };
     }
 
-    // Validar categoría
     const validCategories = ['manhwa', 'serie', 'extra', 'ilustracion', 'pack'];
     if (!validCategories.includes(categoria.toLowerCase())) {
-      return { 
-        success: false, 
-        message: `❌ Categoría inválida. Usa: ${validCategories.join(', ')}` 
-      };
+      const { getSocket } = await import('./whatsapp.js');
+      const sock = getSocket();
+      await sock.sendMessage(jid, { text: `❌ Categoría inválida. Usa: ${validCategories.join(', ')}` });
+      return { success: false };
     }
 
-    // Verificar espacio disponible
     const spaceCheck = checkDiskSpace();
     if (!spaceCheck.available) {
-      return { success: false, message: '❌ Espacio insuficiente en disco.' };
+      const { getSocket } = await import('./whatsapp.js');
+      const sock = getSocket();
+      await sock.sendMessage(jid, { text: '❌ Espacio insuficiente en disco.' });
+      return { success: false };
     }
 
-    // Iniciar descarga
-    const result = await downloadFile(url, nombre, categoria.toLowerCase(), usuario);
+    const { getSocket } = await import('./whatsapp.js');
+    const sock = getSocket();
+
+    let progressText = `╭─❍「 📥 Descarga ✦ 」\n` +
+      `├─ Archivo: *${nombre}*\n` +
+      `├─ Categoría: ${categoria}\n` +
+      `├─ Progreso: 0%\n` +
+      `╰─✦`;
+    const progressMsg = await sock.sendMessage(jid, { text: progressText });
+
+    const result = await downloadFile(url, nombre, categoria.toLowerCase(), usuario, percent => {
+      const barLen = 20;
+      const filled = Math.round((barLen * percent) / 100);
+      const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
+      progressText = `╭─❍「 📥 Descarga ✦ 」\n` +
+        `├─ Archivo: *${nombre}*\n` +
+        `├─ Categoría: ${categoria}\n` +
+        `├─ Progreso: ${bar} ${percent.toFixed(0)}%\n` +
+        `╰─✦`;
+      sock.sendMessage(jid, { text: progressText }, { edit: progressMsg.key });
+    });
 
     if (result.success) {
       const sizeText = formatFileSize(result.size);
       const statusText = result.exists ? '(ya existía)' : '(nuevo)';
-      
-      await logCommand('descarga', 'descargar', usuario, grupo);
-      
-      return { 
-        success: true, 
-        message: `✅ *Descarga completada* ${statusText}\n\n📁 **${nombre}**\n🏷️ Categoría: ${categoria}\n📊 Tamaño: ${sizeText}\n👤 Por: @${usuario}` 
-      };
+      await logCommand('descarga', 'descargar', usuario, jid);
+      progressText = `╭─❍「 📥 Descarga ✦ 」\n` +
+        `├─ Archivo: *${nombre}* ${statusText}\n` +
+        `├─ Categoría: ${categoria}\n` +
+        `├─ Tamaño: ${sizeText}\n` +
+        `├─ Solicitado por: @${usuario}\n` +
+        `├─ 🤖 ${BOT_NAME}\n` +
+        `╰─ Desarrollado por ${DEV_NAME}`;
+      await sock.sendMessage(jid, { text: progressText }, { edit: progressMsg.key, mentions: [`${usuario}@s.whatsapp.net`] });
+      return { success: true };
     } else {
-      return { success: false, message: '❌ Error en la descarga.' };
+      await sock.sendMessage(jid, { text: '❌ Error en la descarga.' }, { edit: progressMsg.key });
+      return { success: false };
     }
 
   } catch (error) {
     console.error('Error en descarga:', error);
-    return { success: false, message: `❌ Error: ${error.message}` };
+    const { getSocket } = await import('./whatsapp.js');
+    const sock = getSocket();
+    await sock.sendMessage(jid, { text: `❌ Error: ${error.message}` });
+    return { success: false };
   }
 }
 
@@ -126,18 +157,27 @@ async function handleGuardar(categoria, usuario, grupo, message) {
     // Procesar media
     const result = await processWhatsAppMedia(message, categoria.toLowerCase(), usuario);
 
-    if (result.success) {
-      const sizeText = formatFileSize(result.size);
-      
-      await logCommand('almacenamiento', 'guardar', usuario, grupo);
-      
-      return { 
-        success: true, 
-        message: `✅ *Archivo guardado correctamente*\n\n📁 **${result.filename}**\n🏷️ Categoría: ${categoria}\n📊 Tamaño: ${sizeText}\n🎯 Tipo: ${result.mediaType}\n👤 Por: @${usuario}` 
-      };
-    } else {
-      return { success: false, message: '❌ Error al guardar archivo.' };
-    }
+      if (result.success) {
+        const sizeText = formatFileSize(result.size);
+
+        await logCommand('almacenamiento', 'guardar', usuario, grupo);
+
+        const msg = `╭─❍「 💾 Archivo guardado ✦ 」\n` +
+          `├─ Nombre: *${result.filename}*\n` +
+          `├─ Categoría: ${categoria}\n` +
+          `├─ Tamaño: ${sizeText}\n` +
+          `├─ Tipo: ${result.mediaType}\n` +
+          `├─ Guardado por: @${usuario}\n` +
+          `├─ 🤖 ${BOT_NAME}\n` +
+          `╰─ Desarrollado por ${DEV_NAME}`;
+
+        return {
+          success: true,
+          message: msg
+        };
+      } else {
+        return { success: false, message: '❌ Error al guardar archivo.' };
+      }
 
   } catch (error) {
     console.error('Error guardando archivo:', error);
@@ -163,10 +203,10 @@ async function handleArchivos(categoria, usuario, grupo) {
 
     const downloads = await listDownloads(categoria?.toLowerCase(), null);
 
-    if (downloads.length === 0) {
-      const categoryText = categoria ? ` de categoría "${categoria}"` : '';
-      return { success: true, message: `📁 No hay archivos descargados${categoryText}.` };
-    }
+      if (downloads.length === 0) {
+        const categoryText = categoria ? ` de categoría "${categoria}"` : '';
+        return { success: true, message: `📁 No hay archivos descargados${categoryText}.\n🤖 ${BOT_NAME} | Desarrollado por ${DEV_NAME}` };
+      }
 
     let message = `📁 *Archivos descargados`;
     if (categoria) {
@@ -188,7 +228,8 @@ async function handleArchivos(categoria, usuario, grupo) {
       message += `_... y ${downloads.length - 20} archivos más_\n\n`;
     }
 
-    message += `💡 *Tip:* Usa /archivos [categoria] para filtrar por tipo.`;
+      message += `💡 *Tip:* Usa /archivos [categoria] para filtrar por tipo.\n`;
+      message += `🤖 ${BOT_NAME} | Desarrollado por ${DEV_NAME}`;
 
     await logCommand('consulta', 'archivos', usuario, grupo);
     return { success: true, message };
@@ -206,9 +247,9 @@ async function handleMisArchivos(usuario, grupo) {
   try {
     const downloads = await listDownloads(null, usuario);
 
-    if (downloads.length === 0) {
-      return { success: true, message: '📁 No tienes archivos descargados.' };
-    }
+      if (downloads.length === 0) {
+        return { success: true, message: `📁 No tienes archivos descargados.\n🤖 ${BOT_NAME} | Desarrollado por ${DEV_NAME}` };
+      }
 
     let message = `📁 *Tus archivos descargados* (${downloads.length}):\n\n`;
 
@@ -221,12 +262,14 @@ async function handleMisArchivos(usuario, grupo) {
       message += `   📅 ${fecha}\n\n`;
     });
 
-    if (downloads.length > 15) {
-      message += `_... y ${downloads.length - 15} archivos más_`;
-    }
+      if (downloads.length > 15) {
+        message += `_... y ${downloads.length - 15} archivos más_`;
+      }
 
-    await logCommand('consulta', 'misarchivos', usuario, grupo);
-    return { success: true, message };
+      message += `\n🤖 ${BOT_NAME} | Desarrollado por ${DEV_NAME}`;
+
+      await logCommand('consulta', 'misarchivos', usuario, grupo);
+      return { success: true, message };
 
   } catch (error) {
     console.error('Error listando archivos del usuario:', error);
@@ -258,10 +301,11 @@ async function handleEstadisticas(usuario, grupo) {
       });
     }
 
-    message += `\n💡 *Tip:* Usa /limpiar para eliminar archivos antiguos.`;
+      message += `\n💡 *Tip:* Usa /limpiar para eliminar archivos antiguos.\n`;
+      message += `🤖 ${BOT_NAME} | Desarrollado por ${DEV_NAME}`;
 
-    await logCommand('consulta', 'estadisticas', usuario, grupo);
-    return { success: true, message };
+      await logCommand('consulta', 'estadisticas', usuario, grupo);
+      return { success: true, message };
 
   } catch (error) {
     console.error('Error obteniendo estadísticas:', error);
@@ -280,20 +324,22 @@ async function handleLimpiar(usuario, grupo) {
   try {
     const result = await cleanOldFiles();
 
-    const freedSpaceText = formatFileSize(result.freedSpace);
-    
-    let message = `🧹 *Limpieza completada*\n\n`;
-    message += `🗑️ **Archivos eliminados:** ${result.deletedCount}\n`;
-    message += `💾 **Espacio liberado:** ${freedSpaceText}\n\n`;
-    
-    if (result.deletedCount === 0) {
-      message += `✨ No había archivos antiguos para eliminar.`;
-    } else {
-      message += `✅ Se eliminaron archivos con más de 30 días de antigüedad.`;
-    }
+      const freedSpaceText = formatFileSize(result.freedSpace);
 
-    await logCommand('administracion', 'limpiar', usuario, grupo);
-    return { success: true, message };
+      let message = `🧹 *Limpieza completada*\n\n`;
+      message += `🗑️ **Archivos eliminados:** ${result.deletedCount}\n`;
+      message += `💾 **Espacio liberado:** ${freedSpaceText}\n\n`;
+
+      if (result.deletedCount === 0) {
+        message += `✨ No había archivos antiguos para eliminar.`;
+      } else {
+        message += `✅ Se eliminaron archivos con más de 30 días de antigüedad.`;
+      }
+
+      message += `\n🤖 ${BOT_NAME} | Desarrollado por ${DEV_NAME}`;
+
+      await logCommand('administracion', 'limpiar', usuario, grupo);
+      return { success: true, message };
 
   } catch (error) {
     console.error('Error limpiando archivos:', error);

@@ -1,7 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Configuración de Gemini AI
-const GEMINI_API_KEY = 'AIzaSyAOBzrh8dnm_rMAUyy3yzBMpVIME-JFay4';
+// Configuración de Gemini AI mediante variable de entorno
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  throw new Error('Falta la variable de entorno GEMINI_API_KEY');
+}
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 /**

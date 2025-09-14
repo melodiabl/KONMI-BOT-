@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import db from './db.js';
+import db from './db-connection.js';
 import { authenticateToken, authorizeRoles } from './auth.js';
 import { getQRCode, getQRCodeImage, getConnectionStatus, getAvailableGroups, getSocket } from './whatsapp.js';
 import {

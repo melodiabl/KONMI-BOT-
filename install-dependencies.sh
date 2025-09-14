@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🎵 Instalando dependencias para Melodia Bot..."
+echo "🎵 Instalando dependencias para KONMI BOT..."
 
 # Instalar dependencias del backend
 echo "📦 Instalando dependencias del backend..."
@@ -28,7 +28,7 @@ mkdir -p tmp
 echo "⚙️ Creando archivo de configuración de ejemplo..."
 cat > .env.example << EOF
 # Configuración del Bot
-BOT_NAME=Melodia
+BOT_NAME="KONMI BOT"
 BOT_VERSION=1.0.0
 BOT_AUTHOR=Melodia
 
@@ -57,4 +57,4 @@ echo "2. Configura tu base de datos PostgreSQL"
 echo "3. Ejecuta las migraciones: npm run migrate"
 echo "4. Inicia el bot: npm start"
 echo ""
-echo "🎵 ¡Melodia Bot está listo para usar!"
+echo "🎵 ¡KONMI BOT está listo para usar! Desarrollado por Melodia."

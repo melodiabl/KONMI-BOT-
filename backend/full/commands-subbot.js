@@ -1,4 +1,4 @@
-import db from './db.js';
+import db from './db-connection.js';
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
@@ -58,21 +58,6 @@ async function handleSerbot(usuario, grupo, fecha) {
       created_at: new Date().toISOString()
     });
 
-    // Crear archivo de configuración del sub-bot
-    const subbotConfig = {
-      id: subbotId,
-      created: new Date().toISOString(),
-      createdBy: whatsappNumber,
-      status: 'pending',
-      qrGenerated: false,
-      qrData: null
-    };
-
-    fs.writeFileSync(
-      path.join(subbotDir, 'subbot.json'), 
-      JSON.stringify(subbotConfig, null, 2)
-    );
-
     // Iniciar proceso del sub-bot de forma asíncrona
     setTimeout(async () => {
       try {
@@ -106,14 +91,14 @@ async function handleSerbot(usuario, grupo, fecha) {
 
     return { 
       success: true, 
-      message: `╭─❍「 🤖 Melodia Sub-bot ✦ 」
+      message: `╭─❍「 🤖 KONMI Sub-bot ✦ 」
 │
 ├─ ✅ *ID:* \`${subbotId}\`
 ├─ 📁 *Directorio:* \`${subbotDir}\`
 ├─ ⏳ *Iniciando proceso...*
 ├─ 🔗 *El QR se generará en unos segundos*
 │
-├─ 💫 Melodia ha creado tu sub-bot perfectamente~ ♡
+├─ 💫 KONMI ha creado tu sub-bot perfectamente~ ♡
 ╰─✦` 
     };
   } catch (error) {
@@ -252,7 +237,7 @@ async function handleQR(subbotId, usuario, grupo, fecha) {
     if (subbot.status !== 'qr_ready' && subbot.status !== 'connected') {
       return { 
         success: true, 
-        message: `╭─❍「 📱 Melodia QR ✦ 」
+        message: `╭─❍「 📱 KONMI QR ✦ 」
 │
 ├─ ⏳ *QR en preparación...*
 ├─ 🤖 Sub-bot: \`${subbotId}\`
@@ -285,13 +270,13 @@ async function handleQR(subbotId, usuario, grupo, fecha) {
     
     return { 
       success: true, 
-      message: `╭─❍「 📱 Melodia QR ✦ 」
+      message: `╭─❍「 📱 KONMI QR ✦ 」
 │
 ├─ 🤖 *Sub-bot:* \`${subbotId}\`
 ├─ 📊 *Estado:* ${subbot.status}
 ├─ 📸 *Escanea este código para vincular el sub-bot*
 │
-├─ 💫 *QR generado por Melodia*
+├─ 💫 *QR generado por KONMI*
 ╰─✦`,
       qrImage: qrBuffer
     };

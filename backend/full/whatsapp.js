@@ -5,9 +5,8 @@ import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
 import QRCode from 'qrcode';
-import { db } from './index.js';
+import db from './db-connection.js';
 import { 
-  handleHelp,
   handleIA,
   handleClasificar,
   handleMyAportes,
@@ -97,13 +96,12 @@ import {
 } from './commands-entertainment.js';
 
 import {
-  handlelogs
+  handlelogs,
   handleStats,
   handleExport
 } from './commands-logs.js';
 
 import {
-  handleIA
   handleHelp
 } from './commands-help.js';
 
@@ -670,7 +668,7 @@ async function handleMessage(message) {
         return;
       }
       const [url, nombre, categoriaDescarga] = args;
-      result = await handleDescargar(url, nombre, categoriaDescarga, usuario, grupo);
+      result = await handleDescargar(url, nombre, categoriaDescarga, usuario, remoteJid);
       break;
 
     case '/guardar':
@@ -796,12 +794,12 @@ async function handleMessage(message) {
       break;
 
     // Comandos de Media/Entretenimiento
-    case '/music':
-    case '/musica':
-    case '/song':
-    case '/cancion':
-      result = await handleMusic(text, usuario, grupo, fecha);
-      break;
+      case '/music':
+      case '/musica':
+      case '/song':
+      case '/cancion':
+        result = await handleMusic(text, usuario, remoteJid, fecha);
+        break;
 
     case '/meme':
       result = await handleMeme(usuario, grupo, fecha);

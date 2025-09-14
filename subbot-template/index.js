@@ -8,6 +8,8 @@ import chalk from 'chalk';
 
 const subbotId = process.env.SUBBOT_ID;
 const subbotDir = process.env.SUBBOT_DIR;
+const serverUrl = process.env.SERVER_URL || 'http://localhost:3001';
+const eventToken = process.env.SUBBOT_EVENT_TOKEN;
 
 console.log(chalk.cyan(`🤖 Iniciando Sub-bot: ${subbotId}`));
 
@@ -49,11 +51,13 @@ async function generateQR(qr) {
 async function notifyServer(event, data = {}) {
   try {
     const axios = (await import('axios')).default;
-    await axios.post('http://localhost:3001/api/subbot/event', {
+    await axios.post(`${serverUrl}/api/subbot/event`, {
       subbotId,
       event,
       data,
       timestamp: new Date().toISOString()
+    }, {
+      headers: eventToken ? { 'X-Subbot-Token': eventToken } : {}
     });
   } catch (error) {
     console.error('Error notificando servidor:', error);
@@ -130,37 +134,38 @@ async function startSubbot() {
       const messageText = message.message.conversation || 
                          message.message.extendedTextMessage?.text || '';
 
-      // Comandos básicos del sub-bot
+      // Comandos del sub-bot delegados al servidor principal
       if (messageText.startsWith('/')) {
-        const [command, ...args] = messageText.slice(1).split(' ');
-        
-        switch (command) {
-          case 'ping':
-            await sock.sendMessage(message.key.remoteJid, {
-              text: `🏓 Pong! Sub-bot ${subbotId} activo`
-            }, { quoted: message });
-            break;
-            
-          case 'info':
-            await sock.sendMessage(message.key.remoteJid, {
-              text: `🤖 *Información del Sub-bot*\n\n` +
-                    `📱 ID: \`${subbotId}\`\n` +
-                    `⏰ Uptime: ${Math.floor(process.uptime())}s\n` +
-                    `💾 Memoria: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n` +
-                    `🔄 Estado: Conectado`
-            }, { quoted: message });
-            break;
-            
-          case 'help':
-            await sock.sendMessage(message.key.remoteJid, {
-              text: `🤖 *Comandos del Sub-bot*\n\n` +
-                    `🏓 /ping - Verificar conexión\n` +
-                    `ℹ️ /info - Información del bot\n` +
-                    `❓ /help - Mostrar esta ayuda\n\n` +
-                    `💡 Este es un sub-bot de Konmi`
-            }, { quoted: message });
-            break;
+        try {
+          const axios = (await import('axios')).default;
+          const res = await axios.post(
+            `${serverUrl}/api/subbot/execute`,
+            {
+              subbotId,
+              command: messageText,
+              from: message.key.remoteJid,
+              group: message.key.remoteJid.endsWith('@g.us')
+            },
+            { headers: eventToken ? { 'X-Subbot-Token': eventToken } : {} }
+          );
+
+          if (res.data?.message) {
+            await sock.sendMessage(
+              message.key.remoteJid,
+              { text: res.data.message },
+              { quoted: message }
+            );
+          }
+        } catch (error) {
+          console.error('Error ejecutando comando en servidor:', error);
+          await sock.sendMessage(
+            message.key.remoteJid,
+            { text: '❌ Error ejecutando comando' },
+            { quoted: message }
+          );
         }
+
+        return;
       }
 
       // Notificar mensaje al servidor principal

@@ -3,7 +3,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { fileURLToPath } from 'url';
-import { db } from './index.js';
+import db from './db-connection.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,9 +45,10 @@ ensureDirectoriesExist();
  * @param {string} filename - Nombre del archivo
  * @param {string} category - Categoría (manhwa, serie, extra, etc.)
  * @param {string} usuario - Usuario que solicita la descarga
+ * @param {function} [onProgress] - Callback de progreso (0-100)
  * @returns {Promise<Object>} Resultado de la descarga
  */
-async function downloadFile(url, filename, category, usuario) {
+async function downloadFile(url, filename, category, usuario, onProgress) {
   return new Promise((resolve, reject) => {
     try {
       // Validar URL
@@ -86,26 +87,40 @@ async function downloadFile(url, filename, category, usuario) {
         let downloadedBytes = 0;
         const totalBytes = parseInt(response.headers['content-length'] || '0');
 
-        response.on('data', (chunk) => {
-          downloadedBytes += chunk.length;
-          fileStream.write(chunk);
-        });
-
-        response.on('end', async () => {
-          fileStream.end();
-          
-          // Registrar descarga en base de datos
-          await registerDownload(filename, filepath, category, usuario, downloadedBytes, url);
-          
-          resolve({
-            success: true,
-            message: 'Descarga completada',
-            filepath: filepath,
-            size: downloadedBytes,
-            totalSize: totalBytes,
-            exists: false
+          response.on('data', (chunk) => {
+            downloadedBytes += chunk.length;
+            fileStream.write(chunk);
+            if (totalBytes) {
+              const percent = (downloadedBytes / totalBytes) * 100;
+              if (onProgress) {
+                onProgress(percent);
+              } else {
+                const barLength = 20;
+                const filled = Math.round(barLength * percent / 100);
+                const bar = '█'.repeat(filled) + '░'.repeat(barLength - filled);
+                process.stdout.write(`\r⬇️ ${filename} ${bar} ${percent.toFixed(0)}%`);
+              }
+            }
           });
-        });
+
+          response.on('end', async () => {
+            fileStream.end();
+            if (!onProgress) {
+              process.stdout.write('\n');
+            }
+
+            // Registrar descarga en base de datos
+            await registerDownload(filename, filepath, category, usuario, downloadedBytes, url);
+
+            resolve({
+              success: true,
+              message: 'Descarga completada',
+              filepath: filepath,
+              size: downloadedBytes,
+              totalSize: totalBytes,
+              exists: false
+            });
+          });
 
         response.on('error', (error) => {
           fileStream.destroy();

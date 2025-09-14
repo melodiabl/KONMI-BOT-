@@ -1,46 +1,19 @@
 import express from 'express';
-import { 
-  registerSubbotEvent, 
-  getSubbotStatus, 
-  getSubbot, 
-  listSubbots, 
-  createSubbot, 
-  deleteSubbot, 
-  executeSubbotCommand, 
+import {
+  getSubbotStatus,
+  getSubbot,
+  listSubbots,
+  createSubbot,
+  deleteSubbot,
+  executeSubbotCommand,
   getSubbotCommands,
-  cleanupInactiveSubbots 
+  cleanupInactiveSubbots
 } from './subbot-manager.js';
 
 const router = express.Router();
 
 // Middleware para parsear JSON
 router.use(express.json());
-
-/**
- * POST /api/subbot/event
- * Registrar evento de subbot
- */
-router.post('/event', async (req, res) => {
-  try {
-    const { subbotId, event, data, timestamp } = req.body;
-    
-    if (!subbotId || !event) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'subbotId y event son requeridos' 
-      });
-    }
-
-    const result = await registerSubbotEvent(subbotId, event, data);
-    res.json(result);
-  } catch (error) {
-    console.error('Error en /api/subbot/event:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
-    });
-  }
-});
 
 /**
  * GET /api/subbot/status

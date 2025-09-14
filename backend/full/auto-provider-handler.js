@@ -1,4 +1,4 @@
-import { db } from './index.js';
+import db from './db-connection.js';
 import { processWhatsAppMedia } from './file-manager.js';
 import { analyzeProviderMessage } from './gemini-ai-handler.js';
 import path from 'path';

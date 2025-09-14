@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import db from './db.js';
+import db from './db-connection.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 

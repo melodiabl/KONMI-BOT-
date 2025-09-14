@@ -1,4 +1,4 @@
-import db from './db.js';
+import db from './db-connection.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -161,7 +161,7 @@ async function handleStats(usuario, grupo, fecha) {
       .orderBy('count', 'desc')
       .limit(5);
 
-    let message = `╭─❍「 📊 Melodia Stats ✦ 」
+    let message = `╭─❍「 📊 KONMI Stats ✦ 」
 │
 ├─ 👥 *Usuarios registrados:* ${totalUsers.count}
 ├─ 🤖 *Sub-bots activos:* ${totalSubbots.count}
@@ -179,7 +179,7 @@ async function handleStats(usuario, grupo, fecha) {
     });
 
     message += `│
-├─ 💫 *Estadísticas de Melodia*
+├─ 💫 *Estadísticas de KONMI*
 ╰─✦`;
 
     return { 
@@ -220,9 +220,9 @@ async function handleExport(format, usuario, grupo, fecha) {
     if (!format || !['json', 'csv', 'txt'].includes(format.toLowerCase())) {
       return { 
         success: true, 
-        message: `╭─❍「 📤 Melodia Export ✦ 」
+        message: `╭─❍「 📤 KONMI Export ✦ 」
 │
-├─ ¡Melodia puede exportar logs! 📤
+├─ ¡KONMI puede exportar logs! 📤
 ├─ Especifica el formato~ ♡
 │
 ├─ Formatos disponibles:
@@ -271,14 +271,14 @@ async function handleExport(format, usuario, grupo, fecha) {
 
     return { 
       success: true, 
-      message: `╭─❍「 📤 Melodia Export ✦ 」
+      message: `╭─❍「 📤 KONMI Export ✦ 」
 │
 ├─ ✅ *Archivo exportado:* ${filename}
 ├─ 📁 *Ubicación:* ${filepath}
 ├─ 📊 *Registros:* ${logs.length}
 ├─ 📅 *Fecha:* ${new Date().toLocaleString()}
 │
-├─ 💫 *Exportado por Melodia*
+├─ 💫 *Exportado por KONMI*
 ╰─✦` 
     };
   } catch (error) {

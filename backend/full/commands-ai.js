@@ -1,4 +1,4 @@
-import db from './db.js';
+import db from './db-connection.js';
 import axios from 'axios';
 
 /**
@@ -15,9 +15,9 @@ async function handleAI(pregunta, usuario, grupo, fecha) {
     if (!pregunta) {
       return { 
         success: true, 
-        message: `╭─❍「 🤖 Melodia AI ✦ 」
+        message: `╭─❍「 🤖 KONMI AI ✦ 」
 │
-├─ ¡Hola! Soy Melodia, tu asistente de IA 💫
+├─ ¡Hola! Soy KONMI, tu asistente de IA 💫
 ├─ Pregúntame lo que quieras y te ayudaré~ ♡
 │
 ├─ Ejemplos:
@@ -41,7 +41,7 @@ async function handleAI(pregunta, usuario, grupo, fecha) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
-    const prompt = `Eres Melodia, una asistente de IA amigable y útil. Responde de manera clara, concisa y con un toque de personalidad. Usa emojis ocasionalmente y mantén un tono conversacional pero profesional.
+    const prompt = `Eres KONMI, una asistente de IA amigable y útil. Responde de manera clara, concisa y con un toque de personalidad. Usa emojis ocasionalmente y mantén un tono conversacional pero profesional.
 
 Pregunta del usuario: ${pregunta}`;
 
@@ -54,11 +54,11 @@ Pregunta del usuario: ${pregunta}`;
 
     return { 
       success: true, 
-      message: `╭─❍「 🤖 Melodia AI ✦ 」
+      message: `╭─❍「 🤖 KONMI AI ✦ 」
 │
 ├─ ${text}
 │
-├─ 💫 *Respondido por Melodia AI*
+├─ 💫 *Respondido por KONMI AI*
 ╰─✦` 
     };
   } catch (error) {
@@ -67,7 +67,7 @@ Pregunta del usuario: ${pregunta}`;
       success: false, 
       message: `╭─❍「 ❌ Error ✦ 」
 │
-├─ Oops! Algo salió mal con la IA melodia 😅
+├─ Oops! Algo salió mal con la IA de KONMI 😅
 ├─ Intenta de nuevo en un momento
 ├─ o reformula tu pregunta~ ♡
 ╰─✦` 
@@ -89,9 +89,9 @@ async function handleImage(prompt, usuario, grupo, fecha) {
     if (!prompt) {
       return { 
         success: true, 
-        message: `╭─❍「 🎨 Melodia Image AI ✦ 」
+        message: `╭─❍「 🎨 KONMI Image AI ✦ 」
 │
-├─ ¡Melodia puede crear imágenes! 🎨
+├─ ¡KONMI puede crear imágenes! 🎨
 ├─ Describe lo que quieres que dibuje~ ♡
 │
 ├─ Ejemplos:
@@ -120,13 +120,13 @@ async function handleImage(prompt, usuario, grupo, fecha) {
 
     return { 
       success: true, 
-      message: `╭─❍「 🎨 Melodia Image AI ✦ 」
+      message: `╭─❍「 🎨 KONMI Image AI ✦ 」
 │
 ├─ *Prompt:* ${prompt}
 ├─ 🎨 *Imagen generada*
 ├─ 📱 *Resolución:* 512x512
 │
-├─ 💫 *Creado por Melodia AI*
+├─ 💫 *Creado por KONMI AI*
 ╰─✦`,
       media: {
         type: 'image',
@@ -158,9 +158,9 @@ async function handleTranslate(text, targetLang, usuario, grupo, fecha) {
     if (!text || !targetLang) {
       return { 
         success: true, 
-        message: `╭─❍「 🌍 Melodia Translator ✦ 」
+        message: `╭─❍「 🌍 KONMI Translator ✦ 」
 │
-├─ ¡Melodia puede traducir! 🌍
+├─ ¡KONMI puede traducir! 🌍
 ├─ Uso: .translate <texto> <idioma_destino>
 │
 ├─ Ejemplos:
@@ -194,7 +194,7 @@ Texto: ${text}`;
 
     return { 
       success: true, 
-      message: `╭─❍「 🌍 Melodia Translator ✦ 」
+      message: `╭─❍「 🌍 KONMI Translator ✦ 」
 │
 ├─ *Texto original:* ${text}
 ├─ *Idioma destino:* ${targetLang}
@@ -202,7 +202,7 @@ Texto: ${text}`;
 ├─ *Traducción:*
 ├─ ${translation}
 │
-├─ 💫 *Traducido por Melodia AI*
+├─ 💫 *Traducido por KONMI AI*
 ╰─✦` 
     };
   } catch (error) {

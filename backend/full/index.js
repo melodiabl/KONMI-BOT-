@@ -3,10 +3,11 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import { connectToWhatsApp, getAvailableGroups } from './whatsapp.js';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import db from './db.js';
+import { dirname, join, relative } from 'path';
+import db from './db-connection.js';
 import config from './config.js';
 import subbotApi from './subbot-api.js';
+import Joi from 'joi';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -56,10 +57,27 @@ app.get('/api/dashboard/stats', async (req, res) => {
 // Endpoint para recibir notificaciones de sub-bots
 app.post('/api/subbot/event', async (req, res) => {
   try {
-    const { subbotId, event, data, timestamp } = req.body;
-    
+    const token = req.get('X-Subbot-Token');
+    if (!token || token !== process.env.SUBBOT_EVENT_TOKEN) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const schema = Joi.object({
+      subbotId: Joi.string().required(),
+      event: Joi.string().required(),
+      data: Joi.object().optional(),
+      timestamp: Joi.date().optional()
+    });
+
+    const { value, error } = schema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+
+    const { subbotId, event, data } = value;
+
     console.log(`📱 Sub-bot ${subbotId} - Evento: ${event}`);
-    
+
     // Guardar pairing code si es el evento correspondiente
     if (event === 'pairing_code' && data.code) {
       await db('subbots').where('code', subbotId).update({
@@ -81,8 +99,11 @@ app.post('/api/subbot/event', async (req, res) => {
 
     // Si es un evento de QR listo, guardar la ruta del QR
     if (event === 'qr_ready' && data.qrPath) {
+      const storageDir = join(__dirname, 'storage');
+      const relativePath = relative(storageDir, data.qrPath);
+      const urlPath = `/media/${relativePath.replace(/\\/g, '/')}`;
       await db('subbots').where('code', subbotId).update({
-        qr_path: data.qrPath
+        qr_path: urlPath
       });
     }
 
@@ -110,6 +131,7 @@ app.get('/api/subbot/:id/pairing-code', async (req, res) => {
     }
     res.json({
       pairing_code: subbot.pairing_code,
+      qr_path: subbot.qr_path,
       status: subbot.status,
       connected: subbot.status === 'connected',
       last_heartbeat: subbot.last_heartbeat
@@ -270,4 +292,4 @@ async function start() {
 
 start();
 
-export { db, app };
+export { app };

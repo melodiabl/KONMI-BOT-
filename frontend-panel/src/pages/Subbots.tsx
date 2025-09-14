@@ -40,6 +40,7 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
+  Image,
 } from '@chakra-ui/react';
 import {
   FaPlus,
@@ -61,6 +62,7 @@ import {
 import { MdWifiOff } from 'react-icons/md';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
+import { RUNTIME_CONFIG } from '../config/runtime-config';
 
 interface Subbot {
   id: number;
@@ -71,6 +73,8 @@ interface Subbot {
   created_at: string;
   last_heartbeat: string;
   qr_data?: string;
+  qr_path?: string;
+  pairing_code?: string;
   isOnline?: boolean;
 }
 
@@ -83,6 +87,7 @@ const Subbots: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
+  const API_URL = RUNTIME_CONFIG.API_BASE_URL;
 
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
@@ -462,6 +467,22 @@ const Subbots: React.FC = () => {
                   <Text fontWeight="bold">Última actividad:</Text>
                   <Text>{getTimeAgo(selectedSubbot.last_heartbeat)}</Text>
                 </HStack>
+                {selectedSubbot.pairing_code && (
+                  <HStack justify="space-between">
+                    <Text fontWeight="bold">Código:</Text>
+                    <Text fontFamily="mono">{selectedSubbot.pairing_code}</Text>
+                  </HStack>
+                )}
+                {selectedSubbot.qr_path && (
+                  <Box>
+                    <Text fontWeight="bold" mb={2}>QR:</Text>
+                    <Image
+                      src={`${API_URL}${selectedSubbot.qr_path}`}
+                      alt="QR del subbot"
+                      borderRadius="md"
+                    />
+                  </Box>
+                )}
                 {selectedSubbot.qr_data && (
                   <Box>
                     <Text fontWeight="bold" mb={2}>QR Data:</Text>

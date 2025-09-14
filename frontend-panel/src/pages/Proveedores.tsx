@@ -247,7 +247,7 @@ export const Proveedores: React.FC = () => {
   // Estado para notificaciones de nuevos contenidos
   const [lastContentCount, setLastContentCount] = useState(0);
   const [showNewContentAlert, setShowNewContentAlert] = useState(false);
-  const [pollingInterval, setPollingInterval] = useState<number | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<ReturnType<typeof setInterval> | null>(null);
 
   const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCreateClose } = useDisclosure();
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
@@ -263,7 +263,7 @@ export const Proveedores: React.FC = () => {
   // Queries
   const { data: providers, isLoading } = useQuery('providers', apiService.getProviders);
   const { data: providerStats } = useQuery('providerStats', apiService.getProviderStats);
-  const { data: groups } = useQuery('groups', () => apiService.getGroups(1, 100));
+  const { data: groups, isLoading: loadingGroups } = useQuery('groups', () => apiService.getGroups(1, 100));
 
   // Mutations
   const createProviderMutation = useMutation(
@@ -908,11 +908,12 @@ export const Proveedores: React.FC = () => {
               <FormControl maxW="300px">
                 <FormLabel>Selecciona un grupo</FormLabel>
                 <Select
-                  placeholder="Seleccionar grupo"
+                  placeholder={loadingGroups ? 'Cargando grupos...' : 'Seleccionar grupo'}
                   value={selectedGroupId || ''}
                   onChange={e => setSelectedGroupId(Number(e.target.value) || null)}
+                  isDisabled={loadingGroups}
                 >
-                  {groups?.data?.map((grupo: Group) => (
+                  {!loadingGroups && groups?.data?.map((grupo: Group) => (
                     <option key={grupo.id} value={grupo.id}>{grupo.nombre}</option>
                   ))}
                 </Select>

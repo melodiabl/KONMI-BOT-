@@ -1,25 +1,25 @@
-import db from './db.js';
 import axios from 'axios';
 import yts from 'yt-search';
 import ytdl from 'ytdl-core';
+import { finished } from 'stream/promises';
 
 /**
  * Handle the /music command to search and download music
  * @param {string} query - The search query
  * @param {string} usuario - The user who sent the command
- * @param {string} grupo - The group where the command was sent
+ * @param {string} jid - Chat where the command was sent
  * @param {string} fecha - The date/time of the command
  */
-async function handleMusic(query, usuario, grupo, fecha) {
+async function handleMusic(query, usuario, jid, fecha) {
   try {
     console.log(`🎵 Comando /music recibido de ${usuario}: "${query}"`);
     
     if (!query) {
       return { 
         success: true, 
-        message: `╭─❍「 🎵 Melodia Music ✦ 」
+        message: `╭─❍「 🎵 KONMI Music ✦ 」
 │
-├─ ¡Melodia aquí! 🎶
+├─ ¡KONMI aquí! 🎶
 ├─ Dame el nombre de una canción o artista
 ├─ y te traeré la música que necesitas~ ♡
 │
@@ -36,9 +36,9 @@ async function handleMusic(query, usuario, grupo, fecha) {
     if (!res || !res.videos || res.videos.length === 0) {
       return { 
         success: true, 
-        message: `╭─❍「 🎵 Melodia Music ✦ 」
+        message: `╭─❍「 🎵 KONMI Music ✦ 」
 │
-├─ No encontré esa canción melodia 😔
+├─ No encontré esa canción, KONMI lo siente 😔
 ├─ Intenta con otro nombre o artista
 ├─ que seguro te encantará~ ♡
 ╰─✦` 
@@ -50,32 +50,49 @@ async function handleMusic(query, usuario, grupo, fecha) {
     const videoTitle = video.title;
     const videoDuration = video.duration;
     const videoViews = video.views;
-    const videoThumbnail = video.thumbnail;
+    const videoAuthor = video.author?.name || 'Desconocido';
 
-    return { 
-      success: true, 
-      message: `╭─❍「 🎵 *${videoTitle}* ✦ 」
-│
-├─ 🎶 *Duración:* ${videoDuration}
-├─ 👀 *Vistas:* ${videoViews}
-├─ 🔗 *URL:* ${videoUrl}
-│
-├─ Melodia descargando audio... ⏳
-╰─✦`,
-      media: {
-        type: 'audio',
-        url: videoUrl,
-        thumbnail: videoThumbnail,
-        title: videoTitle
-      }
-    };
+    // Obtener socket de WhatsApp para enviar mensajes
+    const { getSocket } = await import('./whatsapp.js');
+    const sock = getSocket();
+
+    // Mensaje inicial
+    let progressText = `╭─❍「 🎵 *${videoTitle}* ✦ 」\n│\n├─ 👤 *Artista:* ${videoAuthor}\n├─ ⏱️ *Duración:* ${videoDuration}\n├─ 👀 *Vistas:* ${videoViews}\n├─ 🔗 *URL:* ${videoUrl}\n│\n├─ Descarga en progreso: 0%\n╰─✦`;
+    const progressMsg = await sock.sendMessage(jid, { text: progressText });
+
+    // Descargar audio con progreso
+    const chunks = [];
+    const stream = ytdl(videoUrl, { quality: 'highestaudio' });
+    stream.on('progress', (chunkLen, downloaded, total) => {
+      const percent = total ? (downloaded / total) * 100 : 0;
+      const barLen = 20;
+      const filled = Math.round((barLen * percent) / 100);
+      const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
+      progressText = `╭─❍「 🎵 *${videoTitle}* ✦ 」\n│\n├─ 👤 *Artista:* ${videoAuthor}\n├─ ⏱️ *Duración:* ${videoDuration}\n├─ 👀 *Vistas:* ${videoViews}\n├─ 🔗 *URL:* ${videoUrl}\n│\n├─ Descarga: ${bar} ${percent.toFixed(0)}%\n╰─✦`;
+      sock.sendMessage(jid, { text: progressText }, { edit: progressMsg.key });
+    });
+
+    stream.on('data', (chunk) => chunks.push(chunk));
+    await finished(stream);
+    const audioBuffer = Buffer.concat(chunks);
+
+    await sock.sendMessage(
+      jid,
+      { audio: audioBuffer, mimetype: 'audio/mpeg', fileName: `${videoTitle}.mp3` },
+      { quoted: progressMsg }
+    );
+
+    progressText = `╭─❍「 🎵 *${videoTitle}* ✦ 」\n│\n├─ 👤 *Artista:* ${videoAuthor}\n├─ ⏱️ *Duración:* ${videoDuration}\n├─ 👀 *Vistas:* ${videoViews}\n├─ 🔗 *URL:* ${videoUrl}\n│\n├─ Descarga: completada ✅\n╰─✦`;
+    await sock.sendMessage(jid, { text: progressText }, { edit: progressMsg.key });
+
+    return { success: true };
   } catch (error) {
     console.error('Error en music:', error);
     return { 
       success: false, 
       message: `╭─❍「 ❌ Error ✦ 」
 │
-├─ Oops! Algo salió mal melodia 😅
+├─ Oops! Algo salió mal, KONMI 😅
 ├─ Intenta de nuevo en un momento
 ├─ o prueba con otra canción~ ♡
 ╰─✦` 
@@ -99,13 +116,13 @@ async function handleMeme(usuario, grupo, fecha) {
     if (!memeData || !memeData.url) {
       return { 
         success: true, 
-        message: '❌ No se pudo obtener el meme, melodia lo siente 😔' 
+        message: '❌ No se pudo obtener el meme, KONMI lo siente 😔'
       };
     }
 
     return { 
       success: true, 
-      message: `╭─❍「 😂 Meme de Melodia ✦ 」
+      message: `╭─❍「 😂 Meme de KONMI ✦ 」
 │
 ├─ *${memeData.title}*
 ├─ 📊 Upvotes: ${memeData.ups}
@@ -141,9 +158,9 @@ async function handleWallpaper(query, usuario, grupo, fecha) {
     if (!query) {
       return { 
         success: true, 
-        message: `╭─❍「 🖼️ Melodia Wallpapers ✦ 」
+        message: `╭─❍「 🖼️ KONMI Wallpapers ✦ 」
 │
-├─ ¡Melodia aquí! 🎨
+├─ ¡KONMI aquí! 🎨
 ├─ Dame el tema del wallpaper que quieres
 ├─ y te traeré algo hermoso~ ♡
 │
@@ -167,7 +184,7 @@ async function handleWallpaper(query, usuario, grupo, fecha) {
 ├─ 🎨 *Estilo:* Aleatorio
 ├─ 📱 *Resolución:* 800x600
 │
-├─ 💫 *Wallpaper de Melodia*
+├─ 💫 *Wallpaper de KONMI*
 ╰─✦`,
       media: {
         type: 'image',
@@ -200,7 +217,7 @@ async function handleJoke(usuario, grupo, fecha) {
     if (!jokeData || jokeData.error) {
       return { 
         success: true, 
-        message: '❌ No se pudo obtener el chiste, melodia lo siente 😔' 
+        message: '❌ No se pudo obtener el chiste, KONMI lo siente 😔'
       };
     }
 
@@ -213,7 +230,7 @@ async function handleJoke(usuario, grupo, fecha) {
 
     return { 
       success: true, 
-      message: `╭─❍「 😄 Chiste de Melodia ✦ 」
+      message: `╭─❍「 😄 Chiste de KONMI ✦ 」
 │
 ├─ ${jokeText}
 │

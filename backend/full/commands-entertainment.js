@@ -1,4 +1,4 @@
-import db from './db.js';
+import db from './db-connection.js';
 import axios from 'axios';
 
 /**
@@ -15,9 +15,9 @@ async function handleWeather(city, usuario, grupo, fecha) {
     if (!city) {
       return { 
         success: true, 
-        message: `╭─❍「 🌤️ Melodia Weather ✦ 」
+        message: `╭─❍「 🌤️ KONMI Weather ✦ 」
 │
-├─ ¡Melodia puede predecir el clima! 🌤️
+├─ ¡KONMI puede predecir el clima! 🌤️
 ├─ Dame el nombre de una ciudad~ ♡
 │
 ├─ Ejemplos:
@@ -50,7 +50,7 @@ async function handleWeather(city, usuario, grupo, fecha) {
 ├─ 💨 *Viento:* ${windSpeed} km/h
 ├─ ☁️ *Descripción:* ${description}
 │
-├─ 💫 *Información de Melodia Weather*
+├─ 💫 *Información de KONMI Weather*
 ╰─✦` 
     };
   } catch (error) {
@@ -59,7 +59,7 @@ async function handleWeather(city, usuario, grupo, fecha) {
       success: true, 
       message: `╭─❍「 ❌ Error ✦ 」
 │
-├─ No pude obtener el clima de "${city}" melodia 😔
+├─ No pude obtener el clima de "${city}" 😔
 ├─ Verifica que el nombre de la ciudad sea correcto
 ├─ o intenta con otra ciudad~ ♡
 ╰─✦` 
@@ -82,7 +82,7 @@ async function handleQuote(usuario, grupo, fecha) {
     
     return { 
       success: true, 
-      message: `╭─❍「 💭 Melodia Quote ✦ 」
+      message: `╭─❍「 💭 KONMI Quote ✦ 」
 │
 ├─ "${quote.content}"
 │
@@ -90,7 +90,7 @@ async function handleQuote(usuario, grupo, fecha) {
 ├─ 📊 *Longitud:* ${quote.length} caracteres
 ├─ 🏷️ *Tags:* ${quote.tags.join(', ')}
 │
-├─ 💫 *Inspirado por Melodia*
+├─ 💫 *Inspirado por KONMI*
 ╰─✦` 
     };
   } catch (error) {
@@ -117,11 +117,11 @@ async function handleFact(usuario, grupo, fecha) {
     
     return { 
       success: true, 
-      message: `╭─❍「 📚 Melodia Fact ✦ 」
+      message: `╭─❍「 📚 KONMI Fact ✦ 」
 │
 ├─ ${fact.text}
 │
-├─ 💫 *Dato curioso de Melodia*
+├─ 💫 *Dato curioso de KONMI*
 ╰─✦` 
     };
   } catch (error) {
@@ -156,7 +156,7 @@ async function handleTrivia(usuario, grupo, fecha) {
     
     return { 
       success: true, 
-      message: `╭─❍「 🧠 Melodia Trivia ✦ 」
+      message: `╭─❍「 🧠 KONMI Trivia ✦ 」
 │
 ├─ *Categoría:* ${trivia.category}
 ├─ *Dificultad:* ${trivia.difficulty}
@@ -166,7 +166,7 @@ async function handleTrivia(usuario, grupo, fecha) {
 │
 ├─ *Opciones:*
 ├─ ${optionsText}
-├─ 💫 *Trivia de Melodia*
+├─ 💫 *Trivia de KONMI*
 ╰─✦`,
       triviaAnswer: trivia.correct_answer
     };
@@ -193,9 +193,9 @@ async function handleHoroscope(sign, usuario, grupo, fecha) {
     if (!sign) {
       return { 
         success: true, 
-        message: `╭─❍「 🔮 Melodia Horoscope ✦ 」
+        message: `╭─❍「 🔮 KONMI Horoscope ✦ 」
 │
-├─ ¡Melodia puede leer las estrellas! 🔮
+├─ ¡KONMI puede leer las estrellas! 🔮
 ├─ Dame tu signo zodiacal~ ♡
 │
 ├─ Signos disponibles:
@@ -241,7 +241,7 @@ async function handleHoroscope(sign, usuario, grupo, fecha) {
 │
 ├─ ${horoscope}
 │
-├─ 💫 *Predicción de Melodia*
+├─ 💫 *Predicción de KONMI*
 ╰─✦` 
     };
   } catch (error) {
