@@ -97,11 +97,13 @@ import {
 } from './commands-entertainment.js';
 
 import {
+  handlelogs
   handleStats,
   handleExport
 } from './commands-logs.js';
 
 import {
+  handleIA
   handleHelp
 } from './commands-help.js';
 
