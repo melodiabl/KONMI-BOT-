@@ -5,6 +5,7 @@ frontend-panel/node_modules/
 # Production builds
 frontend-panel/dist/
 build/
+panel-dist/
 
 # Environment variables
 .env
@@ -98,6 +99,12 @@ Thumbs.db
 # Temporary files
 .tmp/
 temp/
+
+# Baileys files with case sensitivity issues
+backend/full/storage/baileys_full/app-state-sync-key-AAAAAC6*.json
+
+# Database files
+pgdata/
 
 # Test files
 coverage/

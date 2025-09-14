@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  subbot-1:
+    build: ./subbot-template
+    container_name: subbot-1
+    environment:
+      - SUBBOT_ID=subbot-1
+      - MASTER_API_URL=http://backend:3001
+      - SUBBOT_PORT=3002
+    volumes:
+      - ./auth/subbot-1:/app/auth
+      - ./logs/subbot-1:/app/logs
+    networks:
+      - bot-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  subbot-2:
+    build: ./subbot-template
+    container_name: subbot-2
+    environment:
+      - SUBBOT_ID=subbot-2
+      - MASTER_API_URL=http://backend:3001
+      - SUBBOT_PORT=3003
+    volumes:
+      - ./auth/subbot-2:/app/auth
+      - ./logs/subbot-2:/app/logs
+    networks:
+      - bot-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  subbot-3:
+    build: ./subbot-template
+    container_name: subbot-3
+    environment:
+      - SUBBOT_ID=subbot-3
+      - MASTER_API_URL=http://backend:3001
+      - SUBBOT_PORT=3004
+    volumes:
+      - ./auth/subbot-3:/app/auth
+      - ./logs/subbot-3:/app/logs
+    networks:
+      - bot-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  subbot-4:
+    build: ./subbot-template
+    container_name: subbot-4
+    environment:
+      - SUBBOT_ID=subbot-4
+      - MASTER_API_URL=http://backend:3001
+      - SUBBOT_PORT=3005
+    volumes:
+      - ./auth/subbot-4:/app/auth
+      - ./logs/subbot-4:/app/logs
+    networks:
+      - bot-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  subbot-5:
+    build: ./subbot-template
+    container_name: subbot-5
+    environment:
+      - SUBBOT_ID=subbot-5
+      - MASTER_API_URL=http://backend:3001
+      - SUBBOT_PORT=3006
+    volumes:
+      - ./auth/subbot-5:/app/auth
+      - ./logs/subbot-5:/app/logs
+    networks:
+      - bot-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+networks:
+  bot-network:
+    external: true
+
+
+
+
+
+
+
+
