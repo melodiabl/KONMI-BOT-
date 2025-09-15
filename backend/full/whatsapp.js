@@ -5,9 +5,14 @@ import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
 import QRCode from 'qrcode';
+<<<<<<< ours
 import db from './db-connection.js';
 import { 
   handleIA,
+=======
+import { db } from './index.js';
+import {
+>>>>>>> theirs
   handleClasificar,
   handleMyAportes,
   handleAportes,
@@ -22,7 +27,6 @@ import {
   handleAddGroup,
   handleDelGroup,
   handleAddManhwa,
-  handleLogs,
   handlePrivado,
   handleAmigos,
   handleAdvertencias,
@@ -96,12 +100,20 @@ import {
 } from './commands-entertainment.js';
 
 import {
+<<<<<<< ours
   handlelogs,
+=======
+  handleLogs,
+>>>>>>> theirs
   handleStats,
   handleExport
 } from './commands-logs.js';
 
 import {
+<<<<<<< ours
+=======
+  handleIA,
+>>>>>>> theirs
   handleHelp
 } from './commands-help.js';
 

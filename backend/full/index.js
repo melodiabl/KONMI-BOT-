@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import Joi from 'joi';
 import { connectToWhatsApp, getAvailableGroups } from './whatsapp.js';
 import { fileURLToPath } from 'url';
 import { dirname, join, relative } from 'path';
@@ -18,6 +19,14 @@ const port = config.server.port;
 app.use(cors(config.cors));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Schema de validación para eventos de subbots
+const subbotEventSchema = Joi.object({
+  subbotId: Joi.string().required(),
+  event: Joi.string().required(),
+  data: Joi.object().unknown(true).optional(),
+  timestamp: Joi.date().optional()
+});
 
 // Serve storage media statically (uploads, media, downloads)
 app.use('/media', express.static(join(__dirname, 'storage')));
@@ -57,6 +66,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
 // Endpoint para recibir notificaciones de sub-bots
 app.post('/api/subbot/event', async (req, res) => {
   try {
+<<<<<<< ours
     const token = req.get('X-Subbot-Token');
     if (!token || token !== process.env.SUBBOT_EVENT_TOKEN) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -75,6 +85,31 @@ app.post('/api/subbot/event', async (req, res) => {
     }
 
     const { subbotId, event, data } = value;
+=======
+    // Validar cuerpo de la petición
+    const { error, value } = subbotEventSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        error: 'Datos inválidos',
+        details: error.details.map(d => d.message)
+      });
+    }
+
+    const { subbotId, event, data, timestamp } = value;
+
+    // Autenticación de subbot mediante token
+    const authHeader = req.headers['authorization'];
+    const headerToken = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+    const token = req.headers['x-subbot-token'] || (headerToken ? headerToken.replace(/^Bearer\s+/i, '') : null);
+    if (!token) {
+      return res.status(401).json({ error: 'Token de autenticación requerido' });
+    }
+
+    const subbot = await db('subbots').where({ code: subbotId, token }).first();
+    if (!subbot) {
+      return res.status(403).json({ error: 'Sub-bot no autorizado' });
+    }
+>>>>>>> theirs
 
     console.log(`📱 Sub-bot ${subbotId} - Evento: ${event}`);
 
@@ -90,8 +125,8 @@ app.post('/api/subbot/event', async (req, res) => {
 
     // Actualizar estado del sub-bot en la base de datos
     await db('subbots').where('code', subbotId).update({
-      status: event === 'connected' ? 'connected' : 
-              event === 'disconnected' ? 'disconnected' : 
+      status: event === 'connected' ? 'connected' :
+              event === 'disconnected' ? 'disconnected' :
               event === 'qr_ready' ? 'qr_ready' : 'pending',
       last_heartbeat: new Date().toISOString(),
       qr_data: event === 'qr_ready' ? data.qrData : null
