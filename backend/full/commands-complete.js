@@ -5,6 +5,45 @@ import { analyzeContentWithAI } from './gemini-ai-handler.js';
 import { chatWithAI, analyzeManhwaContent } from './ai-chat-handler.js';
 import { isSuperAdmin, isModerator, isPremium, getOwnerName } from './global-config.js';
 
+// Consolidación de comandos: reexportamos funciones de módulos específicos
+import {
+  // Media
+  handleMusic,
+  handleMeme,
+  handleWallpaper,
+  handleJoke,
+  // AI
+  handleAIEnhanced,
+  handleImage,
+  handleTranslate,
+  // Entertainment
+  handleWeather,
+  handleQuote,
+  handleFact,
+  handleTrivia,
+  handleHoroscope,
+  // Status
+  handleStatus,
+  handlePing,
+  // Logs
+  handleLogsAdvanced,
+  handleStats,
+  handleExport,
+  // Sub-bots
+  handleSerbot,
+  handleBots,
+  handleDelSubbot,
+  handleQR,
+  // Downloads
+  handleDescargar,
+  handleGuardar,
+  handleArchivos,
+  handleMisArchivos,
+  handleEstadisticas,
+  handleLimpiar,
+  handleBuscarArchivo
+} from './commands-extended.js';
+
 // Variables globales para configuración del bot
 let modoPrivado = false;
 let modoAmigos = false;
@@ -105,12 +144,82 @@ async function logCommand(tipo, comando, usuario, grupo) {
   }
 }
 
+// Helper para construir un menú de ayuda más legible y bonito
+function buildPrettyHelp(isAdmin) {
+  let text = `╭━━━━━━━  𝙆𝙊𝙉𝙈𝙄 𝘽𝙊𝙏 — 𝙈𝙀𝙉𝙐  ━━━━━━━╮\n` +
+             `┃  Versión: v2.5.0   •   Panel Web         ┃\n` +
+             `┃  Prefijos: /   !   .                    ┃\n` +
+             `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+             `🌟 *Generales*\n` +
+             `• help | menu | ayuda — Ayuda\n` +
+             `• whoami — Tu información\n` +
+             `• ia <texto> — IA (Gemini)\n` +
+             `• clasificar <texto> — Clasificar contenido\n\n` +
+             `🎬 *Media & Descargas*\n` +
+             `• music <búsqueda|url>  • meme  • wallpaper <tema>  • joke\n` +
+             `• descargar <url> <nombre> <categoria>\n` +
+             `• guardar <categoria>  • archivos [categoria]\n` +
+             `• misarchivos  • estadisticas  • limpiar  • buscararchivo <texto>\n\n` +
+             `📚 *Contenido & Aportes*\n` +
+             `• aportar <tipo> <contenido>  • myaportes [tipo]\n` +
+             `• aportes [tipo]  • pedido <contenido>  • pedidos\n` +
+             `  tipos: manhwa | manhwas_bls | series | series_videos | series_bls | anime | anime_bls | extra | extra_imagen | ilustracion\n\n` +
+             `📖 *Manhwas & Series*\n` +
+             `• manhwas  • series  • ilustraciones  • extra <nombre>\n\n` +
+             `🤖 *Subbots*\n` +
+             `• serbot  • bots  • delsubbot <id>  • qr <id>\n\n` +
+             `🗳️ *Votaciones*\n` +
+             `• crearvotacion <pregunta|opciones>\n` +
+             `• votar <opción>  • cerrarvotacion <ID>`;
+
+  if (isAdmin) {
+    text += `\n\n🔧 *Admin & Moderación*\n` +
+            `• bot on/off  • bot global on/off  • update  • logs [tipo]\n` +
+            `• lock  • unlock  • tag <mensaje>\n` +
+            `• addmanhwa <título|autor|género|estado|desc|url|proveedor>\n` +
+            `• obtenermanhwa/extra/ilustracion/pack <nombre>\n` +
+            `• admininfo  • addadmin/deladmin <num>  • addmod/delmod <num>\n` +
+            `• getlid  • updatelid <lid>`;
+  }
+
+  text += `\n\nℹ️ *Información*\n` +
+          `• Algunos comandos requieren permisos de Admin\n` +
+          `• El bot registra metadatos y se reflejan en el panel\n` +
+          `• Subbots con códigos temporales`;
+  return text;
+}
+
+// Resolver nombre mostrable a partir de un JID/número: @username, @NombreWA o @numero
+async function getDisplayMention(userJidOrNum) {
+  try {
+    const num = String(userJidOrNum || '').split('@')[0].split(':')[0];
+    if (!num) return '@usuario';
+    const u = await db('usuarios').where({ whatsapp_number: num }).select('username').first();
+    if (u?.username) return `@${u.username}`;
+    const wa = await db('wa_contacts').where({ wa_number: num }).select('display_name').first();
+    if (wa?.display_name) return `@${wa.display_name}`;
+    return `@${num}`;
+  } catch (_) {
+    const num = String(userJidOrNum || '').split('@')[0].split(':')[0];
+    return `@${num || 'usuario'}`;
+  }
+}
+
 /**
  * /help - Muestra lista de comandos disponibles (solo verifica admin por WhatsApp, no por base de datos)
  */
 async function handleHelp(usuario, grupo, isGroup) {
   const isAdmin = await isOwnerOrAdmin(usuario);
-  let helpText = `╔══════════════════════════════════════╗\n`;
+  // Nuevo formato más tipográfico y legible
+  const pretty = buildPrettyHelp(isAdmin);
+  await logCommand('consulta', 'help', usuario, grupo);
+  return { success: true, message: pretty };
+}
+
+/**
+ * /ia [texto] - Responde usando IA
+ */
+async function handleIA(prompt, usuario, grupo) {
   helpText += `║         𝙆𝙊𝙉𝙈𝙄 𝘽𝙊𝙏 𝙈𝙀𝙉𝙐         ║\n`;
   helpText += `╚══════════════════════════════════════╝\n`;
   helpText += `*Versión:* 𝘷2.5.0  |  *Panel Web*\n`;
@@ -321,21 +430,25 @@ async function handleDelGroup(usuario, grupo) {
 /**
  * /myaportes - Lista solo los aportes del usuario
  */
-async function handleMyAportes(usuario, grupo) {
+async function handleMyAportes(usuario, grupo, filtroTipo = null) {
   try {
-    const aportes = await db.all(
-      'SELECT * FROM aportes WHERE usuario = ? ORDER BY fecha DESC LIMIT 10',
-      [usuario]
-    );
-    if (aportes.length === 0) {
-      return { success: true, message: '📝 No tienes aportes registrados.' };
+    let rows = await db('aportes').where({ usuario }).orderBy('fecha', 'desc').limit(50);
+    if (filtroTipo) rows = rows.filter(r => r.tipo === filtroTipo);
+    if (rows.length === 0) return { success: true, message: '📝 No tienes aportes registrados.' };
+    const byTipo = rows.reduce((acc, r) => {
+      (acc[r.tipo || 'sin_tipo'] ||= []).push(r);
+      return acc;
+    }, {});
+    const order = ['manhwa', 'manhwas_bls', 'series', 'series_videos', 'series_bls', 'anime', 'anime_bls', 'extra_imagen', 'ilustracion', 'extra'];
+    let message = `📝 *Tus Aportes (${rows.length})*\n`;
+    const tipos = Object.keys(byTipo).sort((a,b) => order.indexOf(a) - order.indexOf(b));
+    for (const tipo of tipos) {
+      message += `\n• ${tipo.toUpperCase()} (${byTipo[tipo].length})\n`;
+      byTipo[tipo].slice(0, 10).forEach((r, i) => {
+        const fecha = new Date(r.fecha).toLocaleDateString('es-ES');
+        message += `  ${i + 1}. ${r.contenido} — ${fecha}\n`;
+      });
     }
-    let message = `╭───── 📝 *Tus Aportes* ─────╮\n`;
-    aportes.forEach((aporte, index) => {
-      const fecha = new Date(aporte.fecha).toLocaleDateString();
-      message += `*${index + 1}.* [${aporte.tipo}] ${aporte.contenido}\n   📅 ${fecha}\n`;
-    });
-    message += `╰────────────────────────────╯`;
     await logCommand('consulta', 'myaportes', usuario, grupo);
     return { success: true, message };
   } catch (error) {
@@ -346,27 +459,42 @@ async function handleMyAportes(usuario, grupo) {
 /**
  * /aportes - Lista todos los aportes (solo si el bot está activo)
  */
-async function handleAportes(usuario, grupo, isGroup) {
+async function handleAportes(usuario, grupo, isGroup, filtroTipo = null) {
   if (isGroup && !await isBotActiveInGroup(grupo)) {
     return { success: false, message: '❌ El bot no está activo en este grupo.' };
   }
   
   try {
-    const aportes = await db.all(
-      'SELECT * FROM aportes ORDER BY fecha DESC LIMIT 20'
-    );
-    
+    let aportes = await db('aportes').orderBy('fecha', 'desc').limit(50);
+    if (filtroTipo) aportes = aportes.filter(a => a.tipo === filtroTipo);
     if (aportes.length === 0) {
       return { success: true, message: '📝 No hay aportes registrados.' };
     }
-    
-    let message = `📝 *Todos los aportes (${aportes.length}):*\n\n`;
-    aportes.forEach((aporte, index) => {
-      const fecha = new Date(aporte.fecha).toLocaleDateString();
-      message += `${index + 1}. *${aporte.tipo}* por @${aporte.usuario}\n`;
-      message += `   ${aporte.contenido}\n`;
-      message += `   📅 ${fecha}\n\n`;
-    });
+    // Resolver nombres de usuario a partir del número (JID)
+    const uniqueNums = [...new Set(aportes.map(a => String(a.usuario).split('@')[0].split(':')[0]))];
+    const users = await db('usuarios').whereIn('whatsapp_number', uniqueNums).select('whatsapp_number','username');
+    const nameByNumber = Object.fromEntries(users.map(u => [u.whatsapp_number, u.username]));
+    const missing = uniqueNums.filter(n => !nameByNumber[n]);
+    let waNames = [];
+    if (missing.length) {
+      waNames = await db('wa_contacts').whereIn('wa_number', missing).select('wa_number','display_name');
+    }
+    const waByNumber = Object.fromEntries(waNames.map(w => [w.wa_number, w.display_name]));
+
+    const byTipo = aportes.reduce((acc, r) => { (acc[r.tipo || 'sin_tipo'] ||= []).push(r); return acc; }, {});
+    const order = ['manhwa', 'manhwas_bls', 'series', 'series_videos', 'series_bls', 'anime', 'anime_bls', 'extra_imagen', 'ilustracion', 'extra'];
+    let message = `📝 *Aportes (${aportes.length})*\n`;
+    const tipos = Object.keys(byTipo).sort((a,b) => order.indexOf(a) - order.indexOf(b));
+    for (const tipo of tipos) {
+      message += `\n• ${tipo.toUpperCase()} (${byTipo[tipo].length})\n`;
+      byTipo[tipo].slice(0, 10).forEach((r, i) => {
+        const fecha = new Date(r.fecha).toLocaleDateString('es-ES');
+        const num = String(r.usuario).split('@')[0].split(':')[0];
+        const resolved = nameByNumber[num] || waByNumber[num] || num;
+        const uname = `@${resolved}`;
+        message += `  ${i + 1}. ${r.contenido} — ${uname} — ${fecha}\n`;
+      });
+    }
     
     await logCommand('consulta', 'aportes', usuario, grupo);
     return { success: true, message };
@@ -512,9 +640,10 @@ async function handleAddSerie(datos, usuario, grupo, isGroup) {
     await stmtAporte.finalize();
     
     await logCommand('comando', 'addserie', usuario, grupo);
+    const mention = await getDisplayMention(usuario);
     return { 
       success: true, 
-      message: `✅ *Serie agregada correctamente:*\n\n📺 **${titulo}**\n🏷️ Género: ${genero}\n📊 Estado: ${estado}\n📝 ${descripcion}\n👤 Agregada por: @${usuario}` 
+      message: `✅ *Serie agregada correctamente:*\n\n📺 **${titulo}**\n🏷️ Género: ${genero}\n📊 Estado: ${estado}\n📝 ${descripcion}\n👤 Agregada por: ${mention}` 
     };
   } catch (error) {
     return { success: false, message: 'Error al agregar serie.' };
@@ -535,6 +664,14 @@ async function handleSeries(usuario, grupo) {
       return { success: true, message: '📺 No hay series registradas.' };
     }
     
+    // Resolver nombres de quien registró
+    const nums = [...new Set(series.map(s => String(s.usuario_registro || '').split('@')[0].split(':')[0]))].filter(Boolean);
+    const dbUsers = nums.length ? await db('usuarios').whereIn('whatsapp_number', nums).select('whatsapp_number','username') : [];
+    const nameByNumber = Object.fromEntries(dbUsers.map(u => [u.whatsapp_number, u.username]));
+    const missing = nums.filter(n => !nameByNumber[n]);
+    const waNames = missing.length ? await db('wa_contacts').whereIn('wa_number', missing).select('wa_number','display_name') : [];
+    const waByNumber = Object.fromEntries(waNames.map(w => [w.wa_number, w.display_name]));
+
     let message = `📺 *Series disponibles (${series.length}):*\n\n`;
     series.forEach((serie, index) => {
       message += `${index + 1}. **${serie.titulo}**\n`;
@@ -543,7 +680,9 @@ async function handleSeries(usuario, grupo) {
       if (serie.descripcion) {
         message += `   📝 ${serie.descripcion.substring(0, 60)}...\n`;
       }
-      message += `   👤 Por: @${serie.usuario_registro}\n\n`;
+      const num = String(serie.usuario_registro || '').split('@')[0].split(':')[0];
+      const uname = num ? `@${nameByNumber[num] || waByNumber[num] || num}` : '@usuario';
+      message += `   👤 Por: ${uname}\n\n`;
     });
     
     await logCommand('consulta', 'series', usuario, grupo);
@@ -598,7 +737,13 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
       response += `✅ *¡Encontrado en aportes!*\n`;
       response += `📁 **${aporteEncontrado.contenido}**\n`;
       response += `🏷️ Tipo: ${aporteEncontrado.tipo}\n`;
-      response += `👤 Aportado por: @${aporteEncontrado.usuario}\n`;
+      {
+        const num = String(aporteEncontrado.usuario || '').split('@')[0].split(':')[0];
+        const u = await db('usuarios').where({ whatsapp_number: num }).select('username').first();
+        const wa = u?.username ? null : await db('wa_contacts').where({ wa_number: num }).select('display_name').first();
+        const mention = `@${u?.username || wa?.display_name || num}`;
+        response += `👤 Aportado por: ${mention}\n`;
+      }
       response += `📅 Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
     }
     
@@ -864,7 +1009,10 @@ async function handleCrearVotacion(datos, usuario, grupo) {
     });
     
     mensajeVotacion += `\n⏰ *Duración:* 7 días\n`;
-    mensajeVotacion += `👤 *Creada por:* @${usuario}\n`;
+    {
+      const mention = await getDisplayMention(usuario);
+      mensajeVotacion += `👤 *Creada por:* ${mention}\n`;
+    }
     mensajeVotacion += `🆔 *ID:* #${votacionId}\n\n`;
     mensajeVotacion += `💡 *Para votar usa:* /votar [opción]\n`;
     mensajeVotacion += `📝 *Ejemplo:* /votar ${opciones[0]}\n\n`;
@@ -1351,7 +1499,7 @@ async function handleUpdate(usuario) {
 /**
  * /qr - Generar QR de vinculación real para subbot (disponible para todos)
  */
-async function handleQR(usuario, grupo, isGroup) {
+async function handleQRDM(usuario, grupo, isGroup) {
   if (isGroup) {
     return {
       success: true,
@@ -1496,16 +1644,28 @@ async function handleCode(usuario, grupo, isGroup) {
  * /whoami - Mostrar información del usuario
  */
 async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
-  let info = `╭───── 👤 *Tu Información* ─────╮\n`;
-  info += `• *Usuario:* ${usuario}\n`;
-  if (waUserInfo) {
-    info += `• *Nombre:* ${waUserInfo.pushName || 'N/A'}\n`;
-    info += `• *Número:* ${waUserInfo.id || 'N/A'}\n`;
+  try {
+    const number = String(usuario).split('@')[0].split(':')[0];
+    const user = await db('usuarios').where({ whatsapp_number: number }).select('username','rol','fecha_registro').first();
+    const wa = await db('wa_contacts').where({ wa_number: number }).select('display_name').first();
+    const display = waUserInfo?.pushName || wa?.display_name || user?.username || number;
+    const registro = user?.fecha_registro ? new Date(user.fecha_registro).toLocaleDateString('es-ES') : 'N/D';
+    const rol = user?.rol ? user.rol.toUpperCase() : 'USUARIO';
+
+    let info = `╭───── 👤 *Tu Información* ─────╮\n`;
+    info += `• *Nombre WA:* ${display}\n`;
+    info += `• *Número:* ${number}\n`;
+    if (user?.username) info += `• *Usuario Panel:* @${user.username}\n`;
+    info += `• *Rol:* ${rol}\n`;
+    info += `• *Registro:* ${registro}\n`;
+    info += `• *Grupo:* ${grupo || 'Privado'}\n`;
+    info += `╰──────────────────────────────╯`;
+    await logCommand('consulta', 'whoami', usuario, grupo);
+    return { success: true, message: info };
+  } catch (e) {
+    await logCommand('consulta', 'whoami', usuario, grupo);
+    return { success: true, message: `👤 Usuario: ${usuario}\nGrupo: ${grupo || 'Privado'}` };
   }
-  info += `• *Grupo:* ${grupo || 'Privado'}\n`;
-  info += `╰──────────────────────────────╯`;
-  await logCommand('consulta', 'whoami', usuario, grupo);
-  return { success: true, message: info };
 }
 
 /**
@@ -2943,6 +3103,34 @@ export {
   handleQR,
   handleWhoami,
   handleTag,
+  
+  // Reexportados consolidación
+  handleSerbot,
+  handleBots,
+  handleDelSubbot,
+  handleMusic,
+  handleMeme,
+  handleWallpaper,
+  handleJoke,
+  handleAIEnhanced as handleAI,
+  handleImage,
+  handleTranslate,
+  handleWeather,
+  handleQuote,
+  handleFact,
+  handleTrivia,
+  handleHoroscope,
+  handleStatus,
+  handlePing,
+  handleStats,
+  handleExport,
+  handleDescargar,
+  handleGuardar,
+  handleArchivos,
+  handleMisArchivos,
+  handleEstadisticas,
+  handleLimpiar,
+  handleBuscarArchivo,
   
   // Variables de estado
   modoPrivado,

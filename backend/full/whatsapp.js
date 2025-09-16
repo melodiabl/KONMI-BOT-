@@ -6,7 +6,7 @@ import path from 'path';
 import pino from 'pino';
 import QRCode from 'qrcode';
 import { db } from './index.js';
-import { 
+import {
   handleHelp,
   handleIA,
   handleClasificar,
@@ -62,57 +62,35 @@ import {
   logConfigurationChange,
   handleLogs as handleLogsCommand,
   handleConfig,
+  handleAportar,
   handleRegistrarUsuario,
   handleResetPassword,
   handleMiInfo,
   handleCleanSession
 } from './commands.js';
 
+// Consolidated: import handlers from commands-complete
 import {
   handleSerbot,
   handleBots,
   handleDelSubbot,
-  handleQR
-} from './commands-subbot.js';
-
-import {
   handleMusic,
   handleMeme,
   handleWallpaper,
-  handleJoke
-} from './commands-media.js';
-
-import {
+  handleJoke,
   handleAI,
   handleImage,
-  handleTranslate
-} from './commands-ai.js';
-
-import {
+  handleTranslate,
   handleWeather,
   handleQuote,
   handleFact,
   handleTrivia,
-  handleHoroscope
-} from './commands-entertainment.js';
-
-import {
-  handlelogs
+  handleHoroscope,
+  handleLogsAdvanced,
   handleStats,
-  handleExport
-} from './commands-logs.js';
-
-import {
-  handleIA
-  handleHelp
-} from './commands-help.js';
-
-import {
+  handleExport,
   handleStatus,
-  handlePing
-} from './commands-status.js';
-
-import {
+  handlePing,
   handleDescargar,
   handleGuardar,
   handleArchivos,
@@ -120,7 +98,7 @@ import {
   handleEstadisticas,
   handleLimpiar,
   handleBuscarArchivo
-} from './download-commands.js';
+} from './commands-complete.js';
 
 import {
   processProviderMessage
@@ -394,11 +372,11 @@ async function handleMessage(message) {
       break;
 
     case '/myaportes':
-      result = await handleMyAportes(usuario, grupo);
+      result = await handleMyAportes(usuario, grupo, args[0] || null);
       break;
 
     case '/aportes':
-      result = await handleAportes(usuario, grupo, isGroup);
+      result = await handleAportes(usuario, grupo, isGroup, args[0] || null);
       break;
 
     case '/manhwas':
@@ -425,6 +403,19 @@ async function handleMessage(message) {
       const tipo = args[0];
       const contenido = args.slice(1).join(' ');
       result = await handleAddAporte(contenido, tipo, usuario, grupo, fecha);
+      break;
+
+    // Alias directo al comando del panel para guardar aportes
+    case '/aportar':
+      if (args.length < 2) {
+        await sock.sendMessage(remoteJid, { text: 'Uso: /aportar <tipo> <contenido>\n\nEjemplos:\n/aportar manhwa Jinx cap 45\n/aportar ilustracion Fanart de Jinx' });
+        return;
+      }
+      {
+        const tipoAporte = args[0];
+        const contenidoAporte = args.slice(1).join(' ');
+        result = await handleAportar(contenidoAporte, tipoAporte, usuario, grupo, fecha);
+      }
       break;
 
     case '/pedido':
@@ -506,12 +497,13 @@ async function handleMessage(message) {
       result = await handleCode(usuario);
       break;
 
-    case '/qr':
-      result = await handleQR(usuario);
-      break;
+    // Eliminado: '/qr' sin argumentos (obsoleto). Usar '/qr <subbot_id>' más abajo.
 
     case '/whoami':
-      result = await handleWhoami(usuario, grupo, isGroup);
+      {
+        const waInfo = { pushName: message.pushName || null, id: sender || remoteJid };
+        result = await handleWhoami(usuario, grupo, isGroup, waInfo);
+      }
       break;
 
     case '/tag':
@@ -530,25 +522,16 @@ async function handleMessage(message) {
       result = await handleAddManhwa(args.join(' '), usuario, grupo);
       break;
 
+    // '/logs' avanzado con categoría opcional (all, errors, commands, users, system)
     case '/logs':
-      result = await handleLogs(usuario, grupo);
+      result = await handleLogsAdvanced(text, usuario, grupo, fecha);
       break;
 
     case '/privado':
-      result = await handlePrivado(usuario, grupo);
-      break;
-
     case '/amigos':
-      result = await handleAmigos(usuario, grupo);
-      break;
-
     case '/advertencias':
-      if (args.length === 0) {
-        await sock.sendMessage(remoteJid, { text: 'Uso: /advertencias <on|off>' });
-        return;
-      }
-      result = await handleAdvertencias(args[0], usuario, grupo);
-      break;
+      await sock.sendMessage(remoteJid, { text: '⚙️ Configuraciones solo desde el panel web.' });
+      return;
 
     // Comandos de votación
     case '/votar':
@@ -608,27 +591,13 @@ async function handleMessage(message) {
       result = await handleObtenerPack(args.join(' '), usuario, grupo);
       break;
 
-    // Estado aportes
+    // Estado aportes: solo panel
     case '/aporteestado':
-      if (args.length < 2) {
-        await sock.sendMessage(remoteJid, { text: 'Uso: /aporteestado <id> <pendiente|en_revision|completado>' });
-        return;
-      }
-      result = await handleAporteEstado(Number(args[0]), args[1], usuario, grupo);
-      break;
-
     case '/revision':
-      if (args.length < 1) { await sock.sendMessage(remoteJid, { text: 'Uso: /revision <id>' }); return; }
-      result = await handleAporteEstado(Number(args[0]), 'en_revision', usuario, grupo);
-      break;
     case '/completado':
-      if (args.length < 1) { await sock.sendMessage(remoteJid, { text: 'Uso: /completado <id>' }); return; }
-      result = await handleAporteEstado(Number(args[0]), 'completado', usuario, grupo);
-      break;
     case '/pendiente':
-      if (args.length < 1) { await sock.sendMessage(remoteJid, { text: 'Uso: /pendiente <id>' }); return; }
-      result = await handleAporteEstado(Number(args[0]), 'pendiente', usuario, grupo);
-      break;
+      await sock.sendMessage(remoteJid, { text: '🗂️ El estado de aportes se cambia desde el panel.' });
+      return;
 
     // Comandos de moderación
 
@@ -713,6 +682,8 @@ async function handleMessage(message) {
 
     // Comandos de IA con Gemini
     case '/ai':
+    case '/chat':
+    case '/ask':
       if (args.length === 0) {
         await sock.sendMessage(remoteJid, { text: 'Uso: /ai <pregunta>\n\nEjemplo: /ai ¿Qué es Jinx?' });
         return;
@@ -818,12 +789,8 @@ async function handleMessage(message) {
       result = await handleJoke(usuario, grupo, fecha);
       break;
 
-    // Comandos de IA mejorados
-    case '/ai':
-    case '/chat':
-    case '/ask':
-      result = await handleAI(text, usuario, grupo, fecha);
-      break;
+    // Comandos de IA mejorados - Se mantiene solo la versión Gemini desde commands.js
+    // (Evita duplicidad con el bloque '/ai' anterior)
 
     case '/image':
     case '/imagen':
@@ -869,10 +836,7 @@ async function handleMessage(message) {
       result = await handleHoroscope(text, usuario, grupo, fecha);
       break;
 
-    // Comandos de logs y estadísticas
-    case '/logs':
-      result = await handleLogs(text, usuario, grupo, fecha);
-      break;
+    // Comandos de logs y estadísticas (mantener solo el avanzado '/logs')
 
     case '/stats':
     case '/estadisticas':
@@ -889,7 +853,7 @@ async function handleMessage(message) {
     case '/help':
     case '/ayuda':
     case '/comandos':
-      result = await handleHelp(text, usuario, grupo, fecha);
+      result = await handleHelp(usuario, grupo, isGroup);
       break;
 
     // Comandos de estado
@@ -1162,6 +1126,21 @@ async function connectToWhatsApp(authPath) {
         try {
           const remoteJid = message.key.remoteJid;
           const isGroup = remoteJid.endsWith('@g.us');
+          // Capturar y guardar nombre de WhatsApp del remitente
+          try {
+            const senderJid = (message.key.participant || message.key.remoteJid || '').toString();
+            const number = senderJid.split('@')[0].split(':')[0];
+            const pushName = message.pushName || message.message?.pushName || null;
+            if (number && pushName) {
+              await db('wa_contacts').insert({
+                wa_number: number,
+                display_name: pushName,
+                updated_at: new Date().toISOString()
+              }).onConflict('wa_number').merge(['display_name','updated_at']);
+            }
+          } catch (e) {
+            // No crítico
+          }
           
           // Verificar si es un comando primero
           const messageText = message.message.conversation ||
