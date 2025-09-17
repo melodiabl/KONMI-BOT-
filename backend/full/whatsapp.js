@@ -120,7 +120,7 @@ let healthCheckInterval = null;
 let authMethod = 'qr'; // 'qr' o 'pairing'
 
 // Protección contra spam - evitar respuestas múltiples
-const processedMessages = new Set();
+const processedMessages = new Map();
 const SPAM_PROTECTION_TIME = 5000; // 5 segundos
 
 // Lista de números admin (se actualiza automáticamente)
@@ -361,6 +361,7 @@ async function handleMessage(message) {
     case '/help':
     case '/ayuda':
     case '/menu':
+    case '/comandos':
     case '!help':
     case '!menu':
       result = await handleHelp(usuario, grupo, isGroup);
@@ -852,7 +853,6 @@ async function handleMessage(message) {
 
     case '/joke':
     case '/chiste':
-    case '/joke':
       result = await handleJoke(usuario, grupo, fecha);
       break;
 
@@ -906,8 +906,6 @@ async function handleMessage(message) {
     // Comandos de logs y estadísticas (mantener solo el avanzado '/logs')
 
     case '/stats':
-    case '/estadisticas':
-    case '/estadisticas':
       result = await handleStats(usuario, grupo, fecha);
       break;
 
@@ -917,12 +915,6 @@ async function handleMessage(message) {
       break;
 
     // Comando de ayuda
-    case '/help':
-    case '/ayuda':
-    case '/comandos':
-      result = await handleHelp(usuario, grupo, isGroup);
-      break;
-
     // Comandos de estado
     case '/status':
     case '/estado':
@@ -1267,15 +1259,15 @@ async function connectToWhatsApp(authPath) {
                 processedMessages.delete(key);
               }
             }
-            
+
             // Verificar si ya procesamos este mensaje recientemente
             if (processedMessages.has(messageId)) {
               console.log(`🛡️ Mensaje duplicado ignorado: ${messageText}`);
               return;
             }
-            
+
             // Marcar como procesado
-            processedMessages.add(messageId);
+            processedMessages.set(messageId, now);
             
             // Es un comando, procesar solo una vez
             await handleMessage(message);
