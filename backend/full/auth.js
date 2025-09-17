@@ -84,7 +84,7 @@ router.post('/login', async (req, res) => {
 // Register (solo admin y owner)
 router.post('/register', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
-    const { username, password, rol } = req.body;
+    const { username, password, rol, whatsapp_number } = req.body;
 
     if (!username || !password || !rol) {
       return res.status(400).json({ error: 'Todos los campos son requeridos' });
@@ -99,7 +99,10 @@ router.post('/register', authenticateToken, authorizeRoles('admin', 'owner'), as
     await db('usuarios').insert({
       username,
       password: hashedPassword,
-      rol
+      rol,
+      whatsapp_number: whatsapp_number || null,
+      fecha_registro: new Date().toISOString(),
+      created_at: new Date().toISOString()
     });
 
     res.json({ success: true, message: 'Usuario creado correctamente' });

@@ -151,27 +151,19 @@ async function processProviderMessage(message, groupJid, groupName) {
     const descripcion = aiAnalysis.descripcion;
     const fecha = new Date().toISOString();
 
-    // Guardar en tabla aportes
-    const stmtAporte = await db.prepare(`
-      INSERT INTO aportes (
-        contenido, tipo, usuario, grupo, fecha, 
-        archivo_path, archivo_size, proveedor, 
-        manhwa_titulo, contenido_tipo, mensaje_original
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    await stmtAporte.run(
-      descripcion,
-      'proveedor_auto',
-      'sistema_auto',
-      groupJid,
-      fecha,
-      mediaResult.filepath,
-      mediaResult.size,
-      providerInfo.nombre || groupName,
-      manhwaTitle,
-      contentType,
-      JSON.stringify({
+    // Guardar en tabla aportes (Knex)
+    await db('aportes').insert({
+      contenido: descripcion,
+      tipo: 'proveedor_auto',
+      usuario: 'sistema_auto',
+      grupo: groupJid,
+      fecha: fecha,
+      archivo_path: mediaResult.filepath,
+      archivo_size: mediaResult.size,
+      proveedor: providerInfo.nombre || groupName,
+      manhwa_titulo: manhwaTitle,
+      contenido_tipo: contentType,
+      mensaje_original: JSON.stringify({
         messageText: messageText,
         filename: filename,
         mediaType: mediaResult.mediaType,
@@ -179,10 +171,9 @@ async function processProviderMessage(message, groupJid, groupName) {
           id: message.key.id,
           timestamp: message.messageTimestamp
         }
-      })
-    );
-
-    await stmtAporte.finalize();
+      }),
+      estado: 'pendiente'
+    });
 
     // Registrar en logs
     await logProviderActivity('auto_procesado', descripcion, groupJid, providerInfo.nombre);
@@ -218,22 +209,14 @@ async function processProviderMessage(message, groupJid, groupName) {
 async function logProviderActivity(tipo, descripcion, groupJid, providerName) {
   try {
     const fecha = new Date().toISOString();
-    const stmt = await db.prepare(
-      'INSERT INTO logs (tipo, comando, usuario, grupo, fecha, detalles) VALUES (?, ?, ?, ?, ?, ?)'
-    );
-    await stmt.run(
-      'proveedor',
-      tipo,
-      'sistema_auto',
-      groupJid,
+    await db('logs').insert({
+      tipo: 'proveedor',
+      comando: tipo,
+      usuario: 'sistema_auto',
+      grupo: groupJid,
       fecha,
-      JSON.stringify({
-        descripcion,
-        proveedor: providerName,
-        timestamp: fecha
-      })
-    );
-    await stmt.finalize();
+      detalles: JSON.stringify({ descripcion, proveedor: providerName, timestamp: fecha })
+    });
   } catch (error) {
     console.error('Error registrando log de proveedor:', error);
   }
@@ -244,36 +227,25 @@ async function logProviderActivity(tipo, descripcion, groupJid, providerName) {
  */
 async function getProviderStats() {
   try {
-    const stats = await db.all(`
-      SELECT 
-        proveedor,
-        manhwa_titulo,
-        contenido_tipo,
-        COUNT(*) as total,
-        SUM(archivo_size) as total_size,
-        MAX(fecha) as ultimo_aporte
-      FROM aportes 
-      WHERE tipo = 'proveedor_auto' 
-      GROUP BY proveedor, manhwa_titulo, contenido_tipo
-      ORDER BY ultimo_aporte DESC
-    `);
+    const detallado = await db('aportes')
+      .where({ tipo: 'proveedor_auto' })
+      .select('proveedor', 'manhwa_titulo', 'contenido_tipo')
+      .count('* as total')
+      .sum({ total_size: 'archivo_size' })
+      .max({ ultimo_aporte: 'fecha' })
+      .groupBy('proveedor', 'manhwa_titulo', 'contenido_tipo')
+      .orderBy('ultimo_aporte', 'desc');
 
-    const resumen = await db.all(`
-      SELECT 
-        proveedor,
-        COUNT(*) as total_aportes,
-        SUM(archivo_size) as espacio_usado,
-        COUNT(DISTINCT manhwa_titulo) as manhwas_diferentes
-      FROM aportes 
-      WHERE tipo = 'proveedor_auto' 
-      GROUP BY proveedor
-      ORDER BY total_aportes DESC
-    `);
+    const resumen = await db('aportes')
+      .where({ tipo: 'proveedor_auto' })
+      .select('proveedor')
+      .count('* as total_aportes')
+      .sum({ espacio_usado: 'archivo_size' })
+      .countDistinct({ manhwas_diferentes: 'manhwa_titulo' })
+      .groupBy('proveedor')
+      .orderBy('total_aportes', 'desc');
 
-    return {
-      detallado: stats,
-      resumen: resumen
-    };
+    return { detallado, resumen };
   } catch (error) {
     console.error('Error obteniendo estadísticas de proveedores:', error);
     return { detallado: [], resumen: [] };
@@ -285,64 +257,44 @@ async function getProviderStats() {
  */
 async function getProviderAportes(filtros = {}) {
   try {
-    let query = `
-      SELECT 
-        id, contenido, manhwa_titulo, contenido_tipo, proveedor,
-        archivo_path, archivo_size, fecha, mensaje_original,
-        grupo
-      FROM aportes 
-      WHERE tipo = 'proveedor_auto'
-    `;
-    
-    const params = [];
+    let q = db('aportes')
+      .where({ tipo: 'proveedor_auto' })
+      .select(
+        'id',
+        'contenido',
+        'manhwa_titulo',
+        'contenido_tipo',
+        'proveedor',
+        'archivo_path',
+        'archivo_size',
+        'fecha',
+        'mensaje_original',
+        'grupo'
+      );
 
-    // Aplicar filtros
-    if (filtros.proveedor) {
-      query += ' AND proveedor = ?';
-      params.push(filtros.proveedor);
-    }
+    if (filtros.proveedor) q = q.andWhere('proveedor', filtros.proveedor);
+    if (filtros.manhwa) q = q.andWhere('manhwa_titulo', 'like', `%${filtros.manhwa}%`);
+    if (filtros.tipo) q = q.andWhere('contenido_tipo', filtros.tipo);
+    if (filtros.fecha_desde) q = q.andWhere('fecha', '>=', filtros.fecha_desde);
+    if (filtros.fecha_hasta) q = q.andWhere('fecha', '<=', filtros.fecha_hasta);
 
-    if (filtros.manhwa) {
-      query += ' AND manhwa_titulo LIKE ?';
-      params.push(`%${filtros.manhwa}%`);
-    }
+    const limit = filtros.limit || 100;
+    const aportes = await q.orderBy('fecha', 'desc').limit(limit);
 
-    if (filtros.tipo) {
-      query += ' AND contenido_tipo = ?';
-      params.push(filtros.tipo);
-    }
-
-    if (filtros.fecha_desde) {
-      query += ' AND fecha >= ?';
-      params.push(filtros.fecha_desde);
-    }
-
-    if (filtros.fecha_hasta) {
-      query += ' AND fecha <= ?';
-      params.push(filtros.fecha_hasta);
-    }
-
-    query += ' ORDER BY fecha DESC LIMIT ?';
-    params.push(filtros.limit || 100);
-
-    const aportes = await db.all(query, params);
-
-    // Procesar datos para el frontend
-    return aportes.map(aporte => ({
-      id: aporte.id,
-      titulo: aporte.manhwa_titulo,
-      tipo: aporte.contenido_tipo,
-      proveedor: aporte.proveedor,
+    return aportes.map((a) => ({
+      id: a.id,
+      titulo: a.manhwa_titulo,
+      tipo: a.contenido_tipo,
+      proveedor: a.proveedor,
       archivo: {
-        path: aporte.archivo_path,
-        size: aporte.archivo_size,
-        nombre: path.basename(aporte.archivo_path)
+        path: a.archivo_path,
+        size: a.archivo_size,
+        nombre: a.archivo_path ? path.basename(a.archivo_path) : null,
       },
-      fecha: aporte.fecha,
-      descripcion: aporte.contenido,
-      metadata: aporte.mensaje_original ? JSON.parse(aporte.mensaje_original) : {}
+      fecha: a.fecha,
+      descripcion: a.contenido,
+      metadata: a.mensaje_original ? JSON.parse(a.mensaje_original) : {},
     }));
-
   } catch (error) {
     console.error('Error obteniendo aportes de proveedores:', error);
     return [];
@@ -354,20 +306,16 @@ async function getProviderAportes(filtros = {}) {
  */
 async function cleanupManhwaTitles() {
   try {
-    // Obtener títulos únicos
-    const titles = await db.all(`
-      SELECT DISTINCT manhwa_titulo, COUNT(*) as count
-      FROM aportes 
-      WHERE tipo = 'proveedor_auto' AND manhwa_titulo != 'Desconocido'
-      GROUP BY manhwa_titulo
-      ORDER BY count DESC
-    `);
+    const titles = await db('aportes')
+      .where({ tipo: 'proveedor_auto' })
+      .whereNot('manhwa_titulo', 'Desconocido')
+      .select('manhwa_titulo')
+      .count('* as count')
+      .groupBy('manhwa_titulo')
+      .orderBy('count', 'desc');
 
     console.log('📊 Títulos de manhwa detectados:');
-    titles.forEach(title => {
-      console.log(`  - ${title.manhwa_titulo}: ${title.count} aportes`);
-    });
-
+    titles.forEach((t) => console.log(`  - ${t.manhwa_titulo}: ${t.count} aportes`));
     return titles;
   } catch (error) {
     console.error('Error limpiando títulos:', error);

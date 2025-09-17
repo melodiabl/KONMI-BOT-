@@ -60,7 +60,7 @@ import {
   FaDesktop,
 } from 'react-icons/fa';
 import { useQuery } from 'react-query';
-import { apiService } from '../services/api';
+import { apiService, getUsuarioStats, getGroupStats, getAporteStats, getPedidoStats, getStats } from '../services/api';
 
 interface AnalyticsData {
   overview: {
@@ -120,10 +120,11 @@ export const Analytics: React.FC = () => {
     () => apiService.getAnalytics(timeRange)
   );
 
-  const { data: userStats } = useQuery('userStats', apiService.getUsuarioStats);
-  const { data: groupStats } = useQuery('groupStats', apiService.getGroupStats);
-  const { data: aporteStats } = useQuery('aporteStats', apiService.getAporteStats);
-  const { data: pedidoStats } = useQuery('pedidoStats', apiService.getPedidoStats);
+  const { data: userStats } = useQuery('userStats', getUsuarioStats);
+  const { data: groupStats } = useQuery('groupStats', getGroupStats);
+  const { data: aporteStats } = useQuery('aporteStats', getAporteStats);
+  const { data: pedidoStats } = useQuery('pedidoStats', getPedidoStats);
+
 
   const getGrowthColor = (growth: number) => {
     if (growth > 0) return 'green';

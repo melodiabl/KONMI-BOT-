@@ -86,6 +86,12 @@ class ApiService {
     }
   }
 
+  async resetUserPassword(username: string, whatsapp_number: string) {
+    this.ensureApi();
+    const response = await this.api.post('/api/auth/reset-password', { username, whatsapp_number });
+    return response.data as { success: boolean; tempPassword?: string; username?: string };
+  }
+
   async verifyToken() {
     this.ensureApi();
     try {
@@ -150,6 +156,12 @@ class ApiService {
   async deleteSubbot(subbotId: string): Promise<{ success: boolean; error?: string }> {
     this.ensureApi();
     const response = await this.api.delete(`/api/subbot/${subbotId}`);
+    return response.data;
+  }
+  
+  async getSubbotQR(subbotId: string): Promise<{ success: boolean; qr?: string; error?: string }> {
+    this.ensureApi();
+    const response = await this.api.get(`/api/subbot/qr/${encodeURIComponent(subbotId)}`);
     return response.data;
   }
 
@@ -277,14 +289,15 @@ class ApiService {
   }
 
   // Groups
-  async getGroups(page = 1, limit = 20, search?: string) {
+  async getGroups(page = 1, limit = 20, search?: string, botEnabledFilter?: string, proveedorFilter?: string) {
     this.ensureApi();
     const params = new URLSearchParams();
-    // En backend actual, /api/grupos devuelve lista sin paginar; mantenemos search opcional
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
     if (search) params.append('search', search);
-    const qs = params.toString();
-    const url = `/api/grupos${qs ? `?${qs}` : ''}`;
-    const response = await this.api.get(url);
+    if (botEnabledFilter) params.append('botEnabled', botEnabledFilter);
+    if (proveedorFilter) params.append('proveedor', proveedorFilter);
+    const response = await this.api.get(`/api/grupos?${params.toString()}`);
     return response.data;
   }
 
@@ -293,7 +306,9 @@ class ApiService {
     const payload: any = {
       jid: (data as any).wa_jid || (data as any).jid,
       nombre: data.nombre,
+      descripcion: data.descripcion || '',
       botEnabled: (data as any).bot_enabled !== false,
+      es_proveedor: (data as any).es_proveedor === true,
     };
     const response = await this.api.post('/api/grupos', payload);
     return response.data;
@@ -302,22 +317,28 @@ class ApiService {
   async updateGrupo(idOrJid: string | number, data: Partial<Group>) {
     this.ensureApi();
     const jid: any = (data as any)?.wa_jid || idOrJid;
-    const payload: any = {
-      nombre: data.nombre,
-      botEnabled: (data as any).bot_enabled,
-    };
+    const payload: any = {};
+    if (typeof data.nombre !== 'undefined') payload.nombre = data.nombre;
+    if (typeof data.descripcion !== 'undefined') payload.descripcion = data.descripcion;
+    if (typeof (data as any).bot_enabled !== 'undefined') payload.botEnabled = (data as any).bot_enabled;
+    if (typeof data.es_proveedor !== 'undefined') payload.es_proveedor = data.es_proveedor;
     const response = await this.api.put(`/api/grupos/${jid}`, payload);
     return response.data;
   }
 
-  async authorizeGroup(jid: string, enabled: boolean) {
-    // Compatibilidad: usar como toggle de bot
+  async authorizeGroup(jid: string | number, enabled: boolean) {
     return this.updateGrupo(jid, { bot_enabled: enabled } as any);
   }
 
-  async toggleProvider(id: number, es_proveedor: boolean) {
+  async toggleProvider(idOrJid: string | number, es_proveedor: boolean) {
     this.ensureApi();
-    const response = await this.api.patch(`/api/grupos/${id}/proveedor`, { es_proveedor });
+    const response = await this.api.patch(`/api/grupos/${idOrJid}/proveedor`, { es_proveedor });
+    return response.data;
+  }
+
+  async getAvailableGrupos() {
+    this.ensureApi();
+    const response = await this.api.get('/api/grupos/available');
     return response.data;
   }
 
@@ -327,8 +348,36 @@ class ApiService {
     return response.data;
   }
 
+  // Dashboard stats combinando overview + pedidos
+  async getStats() {
+    this.ensureApi();
+    const [overview, pedidos] = await Promise.all([
+      this.api
+        .get('/api/dashboard/stats')
+        .then((r) => r.data)
+        .catch(() => ({ usuarios: 0, aportes: 0, pedidos: 0, grupos: 0, votaciones: 0, manhwas: 0 })),
+      this.api
+        .get('/api/pedidos/stats')
+        .then((r) => r.data)
+        .catch(() => ({ pedidosPendientes: 0, pedidosEnProceso: 0, pedidosCompletados: 0, pedidosCancelados: 0 }))
+    ]);
+
+    return {
+      totalUsuarios: overview.usuarios || 0,
+      totalGrupos: overview.grupos || 0,
+      totalAportes: overview.aportes || 0,
+      totalPedidos: overview.pedidos || 0,
+      totalVotaciones: overview.votaciones || 0,
+      totalManhwas: overview.manhwas || 0,
+      pedidosPendientes: pedidos.pedidosPendientes || 0,
+      pedidosEnProceso: pedidos.pedidosEnProceso || 0,
+      pedidosCompletados: pedidos.pedidosCompletados || 0,
+      pedidosCancelados: pedidos.pedidosCancelados || 0
+    };
+  }
+
   // Aportes
-  async getAportes(page = 1, limit = 20, search?: string, estado?: string, fuente?: string) {
+  async getAportes(page = 1, limit = 20, search?: string, estado?: string, fuente?: string, tipo?: string) {
     this.ensureApi();
     const params = new URLSearchParams();
     params.append('page', page.toString());
@@ -336,6 +385,7 @@ class ApiService {
     if (search) params.append('search', search);
     if (estado) params.append('estado', estado);
     if (fuente) params.append('fuente', fuente);
+    if (tipo) params.append('tipo', tipo);
 
     const response = await this.api.get(`/api/aportes?${params}`);
     return response.data;
@@ -378,13 +428,14 @@ class ApiService {
   }
 
   // Pedidos
-  async getPedidos(page = 1, limit = 20, search?: string, estado?: string) {
+  async getPedidos(page = 1, limit = 20, search?: string, estado?: string, prioridad?: string) {
     this.ensureApi();
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('limit', limit.toString());
     if (search) params.append('search', search);
     if (estado) params.append('estado', estado);
+    if (prioridad) params.append('prioridad', prioridad);
 
     const response = await this.api.get(`/api/pedidos?${params}`);
     return response.data;
@@ -463,13 +514,13 @@ class ApiService {
   }
 
   // Usuarios
-  async getUsuarios(page = 1, limit = 20, search?: string, estado?: string) {
+  async getUsuarios(page = 1, limit = 20, search?: string, rol?: string) {
     this.ensureApi();
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('limit', limit.toString());
     if (search) params.append('search', search);
-    if (estado) params.append('estado', estado);
+    if (rol && rol !== 'all') params.append('rol', rol);
 
     const response = await this.api.get(`/api/usuarios?${params}`);
     return response.data;
@@ -483,13 +534,24 @@ class ApiService {
 
   async createUsuario(usuario: Partial<User> & { password: string }) {
     this.ensureApi();
-    const response = await this.api.post('/api/usuarios', usuario);
+    // Usar endpoint de registro con hash estable y control de roles
+    const payload: any = {
+      username: usuario.username,
+      password: usuario.password,
+      rol: (usuario as any).rol || 'usuario',
+      whatsapp_number: usuario.whatsapp_number || null
+    };
+    const response = await this.api.post('/api/usuarios', payload);
     return response.data;
   }
 
   async updateUsuario(id: number, usuario: Partial<User> & { password?: string }) {
     this.ensureApi();
-    const response = await this.api.put(`/api/usuarios/${id}/full-edit`, usuario);
+    const payload: any = { ...usuario };
+    if (typeof payload.password === 'string' && payload.password.trim() === '') {
+      delete payload.password;
+    }
+    const response = await this.api.patch(`/api/usuarios/${id}`, payload);
     return response.data;
   }
 
@@ -524,11 +586,15 @@ class ApiService {
   }
 
   // Notificaciones
-  async getNotificaciones(page = 1, limit = 20) {
+  async getNotificaciones(page = 1, limit = 20, filters?: { search?: string; type?: string; category?: string; read?: string }) {
     this.ensureApi();
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('limit', limit.toString());
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.type && filters.type !== 'all') params.append('type', filters.type);
+    if (filters?.category && filters.category !== 'all') params.append('category', filters.category);
+    if (filters?.read && filters.read !== 'all') params.append('read', filters.read);
 
     const response = await this.api.get(`/api/notificaciones?${params}`);
     return response.data;
@@ -561,10 +627,9 @@ class ApiService {
     return response.data;
   }
 
-  async createTestNotification(message: string, type: string = 'info') {
+  async createNotification(notification: { title: string; message: string; type: string; category: string; metadata?: any; user_id?: number }) {
     this.ensureApi();
-    // Lógica básica: crear una notificación de prueba
-    const response = await this.api.post('/api/notificaciones/test', { message, type });
+    const response = await this.api.post('/api/notificaciones', notification);
     return response.data;
   }
 
@@ -648,34 +713,22 @@ class ApiService {
     return response.data;
   }
 
-  async createProvider(data: any) {
+  async createProvider(data: { jid: string; nombre?: string }) {
     this.ensureApi();
     const response = await this.api.post('/api/proveedores', data);
     return response.data;
   }
 
-  async updateProvider(id: number, data: any) {
+  async deleteProvider(jid: string) {
     this.ensureApi();
-    const response = await this.api.patch(`/api/proveedores/${id}`, data);
-    return response.data;
-  }
-
-  async deleteProvider(id: number) {
-    this.ensureApi();
-    const response = await this.api.delete(`/api/proveedores/${id}`);
-    return response.data;
-  }
-
-  async toggleProviderStatus(id: number, status: string) {
-    this.ensureApi();
-    const response = await this.api.patch(`/api/proveedores/${id}/status`, { status });
+    const response = await this.api.delete(`/api/proveedores/${encodeURIComponent(jid)}`);
     return response.data;
   }
 
   // Grupos
-  async deleteGrupo(id: number) {
+  async deleteGrupo(idOrJid: number | string) {
     this.ensureApi();
-    const response = await this.api.delete(`/api/grupos/${id}`);
+    const response = await this.api.delete(`/api/grupos/${idOrJid}`);
     return response.data;
   }
 
@@ -758,56 +811,48 @@ class ApiService {
     this.ensureApi();
     const formData = new FormData();
     formData.append('file', file);
-    
-    const response = await this.api.post('/multimedia/upload', formData, {
+
+    const response = await this.api.post('/api/multimedia/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     return response.data;
   }
 
-  async convertMultimedia(id: string, format: string) {
+  async getMultimediaItems(options: { page?: number; limit?: number; search?: string; type?: string } = {}) {
     this.ensureApi();
-    const response = await this.api.post(`/multimedia/${id}/convert`, { format });
+    const params = new URLSearchParams();
+    if (options.page) params.append('page', String(options.page));
+    if (options.limit) params.append('limit', String(options.limit));
+    if (options.search) params.append('search', options.search);
+    if (options.type && options.type !== 'all') params.append('type', options.type);
+
+    const query = params.toString();
+    const response = await this.api.get(`/api/multimedia${query ? `?${query}` : ''}`);
     return response.data;
   }
 
-  async getMultimedia(id: string) {
+  async getMultimediaItem(id: number) {
     this.ensureApi();
-    if (id === 'all') {
-      const response = await this.api.get('/api/multimedia/all');
-      return response.data;
-    }
-    const response = await this.api.get(`/multimedia/${id}`);
+    const response = await this.api.get(`/api/multimedia/${id}`);
     return response.data;
   }
 
-  async getAllMultimedia() {
+  async deleteMultimedia(id: number) {
     this.ensureApi();
-    const response = await this.api.get('/api/multimedia/all');
+    const response = await this.api.delete(`/api/multimedia/${id}`);
     return response.data;
   }
 
-  async deleteMultimedia(id: string) {
-    this.ensureApi();
-    const response = await this.api.delete(`/multimedia/${id}`);
-    return response.data;
-  }
-
-  // Stats
-  async getStats() {
-    this.ensureApi();
-    const response = await this.api.get('/api/stats/overview');
-    return response.data;
-  }
+  
 
   // BOT: Captura y monitoreo de grupos
-  async startGroupMonitoring(grupo_id: number, tipos_contenido: string[]) {
+  async startGroupMonitoring(grupo_id: string, tipos_contenido: string[]) {
     this.ensureApi();
     const response = await this.api.post('/bot/start-monitoring', { grupo_id, tipos_contenido });
     return response.data;
   }
 
-  async stopGroupMonitoring(grupo_id: number) {
+  async stopGroupMonitoring(grupo_id: string) {
     this.ensureApi();
     const response = await this.api.post('/bot/stop-monitoring', { grupo_id });
     return response.data;
@@ -834,6 +879,13 @@ class ApiService {
   async deleteCapturedContent(id: number) {
     this.ensureApi();
     const response = await this.api.delete(`/bot/captured-content/${id}`);
+    return response.data;
+  }
+
+  // Grupos proveedores
+  async setGroupAsProvider(jid: string, es_proveedor: boolean) {
+    this.ensureApi();
+    const response = await this.api.patch(`/api/grupos/${encodeURIComponent(jid)}/proveedor`, { es_proveedor });
     return response.data;
   }
 
@@ -944,18 +996,18 @@ export const getBotGlobalState = () => apiService.getBotGlobalState();
 export const updateBotGlobalState = (state: any) => apiService.setBotGlobalState(state);
 
 // Funciones adicionales que se usan en useQuery
-export const getUsuarios = (page = 1, limit = 20, search?: string, estado?: string) => 
-  apiService.getUsuarios(page, limit, search, estado);
-export const getAportes = (page = 1, limit = 20, search?: string, estado?: string, fuente?: string) => 
-  apiService.getAportes(page, limit, search, estado, fuente);
-export const getPedidos = (page = 1, limit = 20, search?: string, estado?: string) => 
-  apiService.getPedidos(page, limit, search, estado);
-export const getGrupos = (page = 1, limit = 20, search?: string) => 
-  apiService.getGroups(page, limit, search);
+export const getUsuarios = (page = 1, limit = 20, search?: string, rol?: string) => 
+  apiService.getUsuarios(page, limit, search, rol);
+export const getAportes = (page = 1, limit = 20, search?: string, estado?: string, fuente?: string, tipo?: string) => 
+  apiService.getAportes(page, limit, search, estado, fuente, tipo);
+export const getPedidos = (page = 1, limit = 20, search?: string, estado?: string, prioridad?: string) => 
+  apiService.getPedidos(page, limit, search, estado, prioridad);
+export const getGrupos = (page = 1, limit = 20, search?: string, botEnabled?: string, proveedor?: string) => 
+  apiService.getGroups(page, limit, search, botEnabled, proveedor);
 export const getLogs = (page = 1, limit = 50, level?: string) => 
   apiService.getLogs(page, limit, level);
-export const getNotificaciones = (page = 1, limit = 20) => 
-  apiService.getNotificaciones(page, limit);
+export const getNotificaciones = (page = 1, limit = 20, filters?: { search?: string; type?: string; category?: string; read?: string }) =>
+  apiService.getNotificaciones(page, limit, filters);
 export const getNotificationStats = () => 
   apiService.getNotificationStats();
 export const getAnalytics = (timeRange?: string) => 
@@ -1014,29 +1066,31 @@ export const testBotCommand = async (command: string, args: string[] = []) => {
 };
 
 // ===== NOTIFICACIONES =====
-export const getUserNotifications = async (limit: number = 50) => {
-  return await apiService.getNotificaciones(1, limit);
+export const getUserNotifications = async (limit: number = 50, filters?: { search?: string; type?: string; category?: string; read?: string }) => {
+  return await apiService.getNotificaciones(1, limit, filters);
 };
 
 export const markNotificationAsRead = async (notificationId: string) => {
-  return await apiService.markNotificationAsRead(parseInt(notificationId));
+  return await apiService.markAsRead(parseInt(notificationId));
 };
 
 export const markAllNotificationsAsRead = async () => {
-  return await apiService.markAllNotificationsAsRead();
+  return await apiService.markAllAsRead();
 };
 
 export const deleteNotification = async (notificationId: string) => {
   return await apiService.deleteNotification(parseInt(notificationId));
 };
 
-export const createTestNotification = async (notification: {
+export const createNotification = async (notification: {
   title: string;
   message: string;
-  type?: string;
-  category?: string;
+  type: string;
+  category: string;
+  metadata?: any;
+  user_id?: number;
 }) => {
-  return await apiService.createTestNotification(notification.message, notification.type || 'info');
+  return await apiService.createNotification(notification);
 };
 
 export const getNotificationCategories = async () => {

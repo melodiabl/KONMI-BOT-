@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -66,6 +66,7 @@ import {
 } from 'react-icons/fa';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService } from '../services/api';
+import { RUNTIME_CONFIG } from '../config/runtime-config';
 
 interface Notification {
   id: number;
@@ -74,10 +75,11 @@ interface Notification {
   type: string;
   category: string;
   read: boolean;
-  user_id: number;
+  user_id?: number | null;
   created_at: string;
   updated_at: string;
   metadata?: any;
+  user_name?: string | null;
 }
 
 const typeColors = {
@@ -106,9 +108,9 @@ const categoryColors = {
 
 export const Notificaciones: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [readFilter, setReadFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [readFilter, setReadFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
 
@@ -122,10 +124,17 @@ export const Notificaciones: React.FC = () => {
   // Queries
   const { data: notificationsData, isLoading, error } = useQuery(
     ['notifications', currentPage, searchTerm, typeFilter, categoryFilter, readFilter],
-    () => apiService.getNotificaciones(currentPage, 20)
+    () => apiService.getNotificaciones(currentPage, 20, {
+      search: searchTerm,
+      type: typeFilter,
+      category: categoryFilter,
+      read: readFilter,
+    })
   );
 
   const { data: stats } = useQuery('notificationStats', () => apiService.getNotificationStats());
+  const { data: categoriesData } = useQuery('notificationCategories', () => apiService.getNotificationCategories());
+  const { data: typesData } = useQuery('notificationTypes', () => apiService.getNotificationTypes());
 
   // Mutations
   const markAsReadMutation = useMutation(
@@ -134,6 +143,8 @@ export const Notificaciones: React.FC = () => {
       onSuccess: () => {
         queryClient.invalidateQueries('notifications');
         queryClient.invalidateQueries('notificationStats');
+        queryClient.invalidateQueries('notificationCategories');
+        queryClient.invalidateQueries('notificationTypes');
         toast({
           title: 'Notificación marcada como leída',
           status: 'success',
@@ -155,6 +166,8 @@ export const Notificaciones: React.FC = () => {
       onSuccess: () => {
         queryClient.invalidateQueries('notifications');
         queryClient.invalidateQueries('notificationStats');
+        queryClient.invalidateQueries('notificationCategories');
+        queryClient.invalidateQueries('notificationTypes');
         toast({
           title: 'Todas las notificaciones marcadas como leídas',
           status: 'success',
@@ -176,6 +189,8 @@ export const Notificaciones: React.FC = () => {
       onSuccess: () => {
         queryClient.invalidateQueries('notifications');
         queryClient.invalidateQueries('notificationStats');
+        queryClient.invalidateQueries('notificationCategories');
+        queryClient.invalidateQueries('notificationTypes');
         toast({
           title: 'Notificación eliminada',
           status: 'success',
@@ -229,17 +244,60 @@ export const Notificaciones: React.FC = () => {
     }
   };
 
-  const getNotificationStats = () => {
-    if (!notificationsData?.notifications) return { total: 0, unread: 0, read: 0 };
-    
-    const total = notificationsData.notifications.length;
-    const unread = notificationsData.notifications.filter((n: Notification) => !n.read).length;
-    const read = total - unread;
-    
-    return { total, unread, read };
-  };
+  useEffect(() => {
+    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
+      return;
+    }
 
-  const notificationStats = getNotificationStats();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      return;
+    }
+
+    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
+      ? RUNTIME_CONFIG.API_BASE_URL
+      : window.location.origin;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      const url = new URL('api/notificaciones/stream', normalizedBase);
+      url.searchParams.set('token', token);
+      eventSource = new EventSource(url.toString());
+    } catch (err) {
+      console.error('No se pudo iniciar la sincronización en tiempo real de notificaciones', err);
+      return;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'notificationChanged') {
+          queryClient.invalidateQueries('notifications');
+          queryClient.invalidateQueries('notificationStats');
+          queryClient.invalidateQueries('notificationCategories');
+          queryClient.invalidateQueries('notificationTypes');
+        }
+      } catch (error) {
+        console.error('Error procesando actualización de notificaciones', error);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('Stream de notificaciones en tiempo real desconectado', err);
+    };
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [queryClient]);
+
+  const totalNotifications = stats?.total || 0;
+  const unreadNotifications = stats?.no_leidas || 0;
+  const readNotifications = stats?.leidas || 0;
+  const categoriesCount = stats?.totalCategories || (stats?.categories?.length || 0);
 
   if (error) {
     return (
@@ -268,7 +326,7 @@ export const Notificaciones: React.FC = () => {
               variant="outline"
               onClick={handleMarkAllAsRead}
               isLoading={markAllAsReadMutation.isLoading}
-              isDisabled={notificationStats.unread === 0}
+              isDisabled={unreadNotifications === 0}
             >
               Marcar todas como leídas
             </Button>
@@ -288,25 +346,25 @@ export const Notificaciones: React.FC = () => {
             <HStack spacing={8} justify="center">
               <VStack>
                 <Badge colorScheme="blue" size="lg">
-                  {notificationStats.total}
+                  {totalNotifications}
                 </Badge>
                 <Text fontSize="sm" fontWeight="semibold">Total</Text>
               </VStack>
               <VStack>
                 <Badge colorScheme="red" size="lg">
-                  {notificationStats.unread}
+                  {unreadNotifications}
                 </Badge>
                 <Text fontSize="sm" fontWeight="semibold">No leídas</Text>
               </VStack>
               <VStack>
                 <Badge colorScheme="green" size="lg">
-                  {notificationStats.read}
+                  {readNotifications}
                 </Badge>
                 <Text fontSize="sm" fontWeight="semibold">Leídas</Text>
               </VStack>
               <VStack>
                 <Badge colorScheme="purple" size="lg">
-                  {stats?.totalCategories || 0}
+                  {categoriesCount}
                 </Badge>
                 <Text fontSize="sm" fontWeight="semibold">Categorías</Text>
               </VStack>
@@ -329,35 +387,31 @@ export const Notificaciones: React.FC = () => {
                 />
               </InputGroup>
               <Select
-                placeholder="Filtrar por tipo"
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
                 maxW="200px"
               >
-                <option value="info">Info</option>
-                <option value="success">Success</option>
-                <option value="warning">Warning</option>
-                <option value="error">Error</option>
-                <option value="system">System</option>
+                <option value="all">Todos los tipos</option>
+                {(typesData?.types || stats?.types || ['info', 'success', 'warning', 'error', 'system']).map((typeOption: string) => (
+                  <option key={typeOption} value={typeOption}>{typeOption}</option>
+                ))}
               </Select>
               <Select
-                placeholder="Filtrar por categoría"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 maxW="200px"
               >
-                <option value="system">Sistema</option>
-                <option value="user">Usuario</option>
-                <option value="content">Contenido</option>
-                <option value="security">Seguridad</option>
-                <option value="general">General</option>
+                <option value="all">Todas las categorías</option>
+                {(categoriesData?.categories || stats?.categories || ['system', 'user', 'content', 'security', 'general']).map((categoryOption: string) => (
+                  <option key={categoryOption} value={categoryOption}>{categoryOption}</option>
+                ))}
               </Select>
               <Select
-                placeholder="Filtrar por estado"
                 value={readFilter}
                 onChange={(e) => setReadFilter(e.target.value)}
                 maxW="200px"
               >
+                <option value="all">Todas</option>
                 <option value="unread">No leídas</option>
                 <option value="read">Leídas</option>
               </Select>
@@ -387,6 +441,16 @@ export const Notificaciones: React.FC = () => {
                     </Tr>
                   </Thead>
                   <Tbody>
+                    {notificationsData?.notifications?.length === 0 && (
+                      <Tr>
+                        <Td colSpan={6}>
+                          <Alert status="info" variant="subtle">
+                            <AlertIcon />
+                            No se encontraron notificaciones.
+                          </Alert>
+                        </Td>
+                      </Tr>
+                    )}
                     {notificationsData?.notifications?.map((notification: Notification) => {
                       const IconComponent = typeIcons[notification.type as keyof typeof typeIcons] || FaBell;
                       
@@ -589,9 +653,14 @@ export const Notificaciones: React.FC = () => {
                 {selectedNotification.metadata && (
                   <Box>
                     <Text fontWeight="semibold" mb={2}>Información Adicional</Text>
-                    <Text fontSize="sm" color="gray.600">
+                    <Box
+                      as="pre"
+                      fontSize="sm"
+                      color="gray.600"
+                      whiteSpace="pre-wrap"
+                    >
                       {JSON.stringify(selectedNotification.metadata, null, 2)}
-                    </Text>
+                    </Box>
                   </Box>
                 )}
               </VStack>
@@ -621,6 +690,3 @@ export const Notificaciones: React.FC = () => {
 };
 
 export default Notificaciones;
-
-
-

@@ -1,5 +1,5 @@
 import express from 'express';
-import { 
+import {
   registerSubbotEvent, 
   getSubbotStatus, 
   getSubbot, 
@@ -10,6 +10,8 @@ import {
   getSubbotCommands,
   cleanupInactiveSubbots 
 } from './subbot-manager.js';
+import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
 
@@ -56,6 +58,37 @@ router.get('/status', (req, res) => {
       success: false, 
       error: 'Error interno del servidor' 
     });
+  }
+});
+
+/**
+ * GET /api/subbot/qr/:subbotId
+ * Obtener QR del subbot como base64
+ */
+router.get('/qr/:subbotId', async (req, res) => {
+  try {
+    const { subbotId } = req.params;
+    // Buscar archivo qr.png en jadibots/<id>/qr.png
+    const subbotDir = path.join(process.cwd(), 'backend', 'full', 'jadibots', subbotId);
+    const qrFile = path.join(subbotDir, 'qr.png');
+    if (fs.existsSync(qrFile)) {
+      const buffer = fs.readFileSync(qrFile);
+      const base64 = buffer.toString('base64');
+      return res.json({ success: true, qr: base64 });
+    }
+    // Fallback: revisar columna qr_path si existe
+    try {
+      const db = (await import('./db.js')).default;
+      const row = await db('subbots').where({ code: subbotId }).first();
+      if (row?.qr_path && fs.existsSync(row.qr_path)) {
+        const buffer = fs.readFileSync(row.qr_path);
+        const base64 = buffer.toString('base64');
+        return res.json({ success: true, qr: base64 });
+      }
+    } catch (_) {}
+    return res.status(404).json({ success: false, error: 'QR no disponible' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

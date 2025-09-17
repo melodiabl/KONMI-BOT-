@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -68,8 +68,9 @@ import {
   FaThumbsDown,
 } from 'react-icons/fa';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apiService } from '../services/api';
+import { apiService, getAporteStats } from '../services/api';
 import { Aporte } from '../types';
+import { RUNTIME_CONFIG } from '../config/runtime-config';
 
 
 
@@ -78,7 +79,7 @@ interface AporteFormData {
   descripcion: string;
   contenido: string;
   tipo: string;
-  fuente: 'colaborador' | 'proveedor';
+  fuente: string;
   estado: 'pendiente' | 'aprobado' | 'rechazado';
   grupo_id?: number;
 }
@@ -90,7 +91,8 @@ const estadoColors = {
   revisando: 'blue',
 };
 
-const tipoColors = {
+const tipoColors: Record<string, string> = {
+  manhwa: 'teal',
   manga: 'purple',
   anime: 'blue',
   novela: 'green',
@@ -99,26 +101,27 @@ const tipoColors = {
   otro: 'gray',
 };
 
-const fuenteColors = {
+const fuenteColors: Record<string, string> = {
   usuario: 'blue',
   proveedor: 'green',
+  colaborador: 'purple',
   admin: 'red',
   sistema: 'gray',
 };
 
 export const Aportes: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [estadoFilter, setEstadoFilter] = useState('');
-  const [fuenteFilter, setFuenteFilter] = useState('');
-  const [tipoFilter, setTipoFilter] = useState('');
+  const [estadoFilter, setEstadoFilter] = useState('all');
+  const [fuenteFilter, setFuenteFilter] = useState('all');
+  const [tipoFilter, setTipoFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [editingAporte, setEditingAporte] = useState<Aporte | null>(null);
   const [formData, setFormData] = useState<AporteFormData>({
     titulo: '',
     descripcion: '',
     contenido: '',
-    tipo: 'manga',
-    fuente: 'colaborador',
+    tipo: 'manhwa',
+    fuente: 'usuario',
     estado: 'pendiente',
   });
 
@@ -132,15 +135,71 @@ export const Aportes: React.FC = () => {
   // Queries
   const { data: aportesData, isLoading, error } = useQuery(
     ['aportes', currentPage, searchTerm, estadoFilter, fuenteFilter, tipoFilter],
-    () => apiService.getAportes(currentPage, 20, searchTerm, estadoFilter, fuenteFilter)
+    () => apiService.getAportes(
+      currentPage,
+      20,
+      searchTerm,
+      estadoFilter === 'all' ? undefined : estadoFilter,
+      fuenteFilter === 'all' ? undefined : fuenteFilter,
+      tipoFilter === 'all' ? undefined : tipoFilter
+    )
   );
 
-  const { data: stats } = useQuery('aporteStats', apiService.getAporteStats);
+  const { data: stats } = useQuery('aporteStats', getAporteStats);
+
+  useEffect(() => {
+    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
+      return;
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      return;
+    }
+
+    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
+      ? RUNTIME_CONFIG.API_BASE_URL
+      : window.location.origin;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      const url = new URL('api/aportes/stream', normalizedBase);
+      url.searchParams.set('token', token);
+      eventSource = new EventSource(url.toString());
+    } catch (err) {
+      console.error('No se pudo iniciar la sincronización en tiempo real de aportes', err);
+      return;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'aporteChanged') {
+          queryClient.invalidateQueries('aportes');
+          queryClient.invalidateQueries('aporteStats');
+        }
+      } catch (error) {
+        console.error('Error procesando actualización de aportes', error);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('Stream de aportes en tiempo real desconectado', err);
+    };
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [queryClient]);
 
   // Mutations
   const createAporteMutation = useMutation(apiService.createAporte, {
     onSuccess: () => {
       queryClient.invalidateQueries('aportes');
+      queryClient.invalidateQueries('aporteStats');
       toast({
         title: 'Aporte creado',
         description: 'El aporte ha sido creado exitosamente',
@@ -164,6 +223,7 @@ export const Aportes: React.FC = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('aportes');
+        queryClient.invalidateQueries('aporteStats');
         toast({
           title: 'Aporte actualizado',
           description: 'El aporte ha sido actualizado exitosamente',
@@ -185,6 +245,7 @@ export const Aportes: React.FC = () => {
   const deleteAporteMutation = useMutation(apiService.deleteAporte, {
     onSuccess: () => {
       queryClient.invalidateQueries('aportes');
+      queryClient.invalidateQueries('aporteStats');
       toast({
         title: 'Aporte eliminado',
         description: 'El aporte ha sido eliminado exitosamente',
@@ -206,6 +267,7 @@ export const Aportes: React.FC = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('aportes');
+        queryClient.invalidateQueries('aporteStats');
         toast({
           title: 'Estado actualizado',
           description: 'El estado del aporte ha sido actualizado',
@@ -272,6 +334,14 @@ export const Aportes: React.FC = () => {
     }
   };
 
+  const handleChangeEstado = (aporte: Aporte, nuevoEstado: 'pendiente' | 'aprobado' | 'rechazado') => {
+    let motivo: string | undefined;
+    if (nuevoEstado === 'rechazado') {
+      motivo = window.prompt('Motivo del rechazo (opcional):') || undefined;
+    }
+    approveAporteMutation.mutate({ id: aporte.id, estado: nuevoEstado, motivo_rechazo: motivo });
+  };
+
   const handleApprove = (aporteId: number) => {
     approveAporteMutation.mutate({ id: aporteId, estado: 'aprobado' });
   };
@@ -313,22 +383,22 @@ export const Aportes: React.FC = () => {
             <HStack spacing={8} justify="center">
               <Stat textAlign="center">
                 <StatLabel>Total Aportes</StatLabel>
-                <StatNumber>{stats?.totalAportes || 0}</StatNumber>
+                <StatNumber>{Number(stats?.totalAportes || 0)}</StatNumber>
                 <StatHelpText>En el sistema</StatHelpText>
               </Stat>
               <Stat textAlign="center">
                 <StatLabel>Aprobados</StatLabel>
-                <StatNumber color="green.500">{stats?.aportesAprobados || 0}</StatNumber>
+                <StatNumber color="green.500">{Number(stats?.aportesAprobados || 0)}</StatNumber>
                 <StatHelpText>Aportes aprobados</StatHelpText>
               </Stat>
               <Stat textAlign="center">
                 <StatLabel>Pendientes</StatLabel>
-                <StatNumber color="yellow.500">{stats?.aportesPendientes || 0}</StatNumber>
+                <StatNumber color="yellow.500">{Number(stats?.aportesPendientes || 0)}</StatNumber>
                 <StatHelpText>En revisión</StatHelpText>
               </Stat>
               <Stat textAlign="center">
                 <StatLabel>Rechazados</StatLabel>
-                <StatNumber color="red.500">{stats?.aportesRechazados || 0}</StatNumber>
+                <StatNumber color="red.500">{Number(stats?.aportesRechazados || 0)}</StatNumber>
                 <StatHelpText>Aportes rechazados</StatHelpText>
               </Stat>
             </HStack>
@@ -350,36 +420,38 @@ export const Aportes: React.FC = () => {
                 />
               </InputGroup>
               <Select
-                placeholder="Filtrar por estado"
                 value={estadoFilter}
                 onChange={(e) => setEstadoFilter(e.target.value)}
                 maxW="200px"
               >
+                <option value="">Todos los estados</option>
                 <option value="pendiente">Pendiente</option>
                 <option value="aprobado">Aprobado</option>
                 <option value="rechazado">Rechazado</option>
-                <option value="revisando">Revisando</option>
               </Select>
               <Select
-                placeholder="Filtrar por tipo"
                 value={tipoFilter}
                 onChange={(e) => setTipoFilter(e.target.value)}
                 maxW="200px"
               >
+                <option value="all">Todos los tipos</option>
                 <option value="manga">Manga</option>
+                <option value="manhwa">Manhwa</option>
                 <option value="anime">Anime</option>
                 <option value="novela">Novela</option>
                 <option value="imagen">Imagen</option>
                 <option value="video">Video</option>
+                <option value="documento">Documento</option>
                 <option value="otro">Otro</option>
               </Select>
               <Select
-                placeholder="Filtrar por fuente"
                 value={fuenteFilter}
                 onChange={(e) => setFuenteFilter(e.target.value)}
                 maxW="200px"
               >
+                <option value="all">Todas las fuentes</option>
                 <option value="usuario">Usuario</option>
+                <option value="colaborador">Colaborador</option>
                 <option value="proveedor">Proveedor</option>
                 <option value="admin">Admin</option>
                 <option value="sistema">Sistema</option>
@@ -411,6 +483,16 @@ export const Aportes: React.FC = () => {
                     </Tr>
                   </Thead>
                   <Tbody>
+                    {aportesData?.aportes?.length === 0 && (
+                      <Tr>
+                        <Td colSpan={6}>
+                          <Alert status="info" variant="subtle">
+                            <AlertIcon />
+                            No se encontraron aportes.
+                          </Alert>
+                        </Td>
+                      </Tr>
+                    )}
                     {aportesData?.aportes?.map((aporte: Aporte) => (
                       <Tr key={aporte.id}>
                         <Td>
@@ -424,6 +506,16 @@ export const Aportes: React.FC = () => {
                             <Text fontSize="xs" color="gray.400">
                               ID: {aporte.id}
                             </Text>
+                            {aporte.archivo_path && (
+                              <Link href={aporte.archivo_path} color="blue.500" fontSize="sm" isExternal>
+                                Ver archivo
+                              </Link>
+                            )}
+                            {aporte.motivo_rechazo && (
+                              <Text fontSize="xs" color="red.500">
+                                Motivo: {aporte.motivo_rechazo}
+                              </Text>
+                            )}
                           </VStack>
                         </Td>
                         <Td>
@@ -454,9 +546,12 @@ export const Aportes: React.FC = () => {
                           <Text fontSize="sm">{aporte.usuario?.username || 'N/A'}</Text>
                         </Td>
                         <Td>
-                          <Text fontSize="sm">
-                            {new Date(aporte.created_at).toLocaleDateString()}
-                          </Text>
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="sm">{aporte.fecha ? new Date(aporte.fecha).toLocaleDateString() : new Date(aporte.created_at).toLocaleDateString()}</Text>
+                            {aporte.fecha_procesado && (
+                              <Text fontSize="xs" color="gray.500">Procesado: {new Date(aporte.fecha_procesado).toLocaleDateString()}</Text>
+                            )}
+                          </VStack>
                         </Td>
                         <Td>
                           <HStack spacing={2}>
@@ -513,6 +608,25 @@ export const Aportes: React.FC = () => {
                                   icon={<FaShare />}
                                 >
                                   Compartir
+                                </MenuItem>
+                                <MenuDivider />
+                               <MenuItem
+                                 icon={<FaCheck />}
+                                 onClick={() => handleChangeEstado(aporte, 'aprobado')}
+                               >
+                                 Aprobar
+                               </MenuItem>
+                                <MenuItem
+                                  icon={<FaClock />}
+                                  onClick={() => handleChangeEstado(aporte, 'pendiente')}
+                                >
+                                  Marcar como pendiente
+                                </MenuItem>
+                                <MenuItem
+                                  icon={<FaTimes />}
+                                  onClick={() => handleChangeEstado(aporte, 'rechazado')}
+                                >
+                                  Rechazar
                                 </MenuItem>
                                 <MenuDivider />
                                 <MenuItem
@@ -606,6 +720,7 @@ export const Aportes: React.FC = () => {
                     value={formData.tipo}
                     onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
                   >
+                    <option value="manhwa">Manhwa</option>
                     <option value="manga">Manga</option>
                     <option value="anime">Anime</option>
                     <option value="novela">Novela</option>
@@ -619,10 +734,13 @@ export const Aportes: React.FC = () => {
                   <FormLabel>Fuente</FormLabel>
                   <Select
                     value={formData.fuente}
-                    onChange={(e) => setFormData({ ...formData, fuente: e.target.value as 'colaborador' | 'proveedor' })}
+                    onChange={(e) => setFormData({ ...formData, fuente: e.target.value })}
                   >
+                    <option value="usuario">Usuario</option>
                     <option value="colaborador">Colaborador</option>
                     <option value="proveedor">Proveedor</option>
+                    <option value="admin">Admin</option>
+                    <option value="sistema">Sistema</option>
                   </Select>
                 </FormControl>
 
@@ -660,6 +778,3 @@ export const Aportes: React.FC = () => {
 };
 
 export default Aportes;
-
-
-

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -80,6 +80,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService } from '../services/api';
 import dayjs from 'dayjs';
+import { RUNTIME_CONFIG } from '../config/runtime-config';
 
 interface BotCommand {
   id: string;
@@ -117,6 +118,57 @@ export const BotCommands: React.FC = () => {
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue('white', 'gray.700');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
+
+  useEffect(() => {
+    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
+      return;
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      return;
+    }
+
+    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
+      ? RUNTIME_CONFIG.API_BASE_URL
+      : window.location.origin;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      const url = new URL('api/bot/commands/stream', normalizedBase);
+      url.searchParams.set('token', token);
+      eventSource = new EventSource(url.toString());
+    } catch (error) {
+      console.error('No se pudo iniciar la sincronización en tiempo real de comandos', error);
+      return;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event.data) {
+        return;
+      }
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'botCommandChanged') {
+          queryClient.invalidateQueries('botCommands');
+          queryClient.invalidateQueries('commandStats');
+          queryClient.invalidateQueries('commandCategories');
+        }
+      } catch (err) {
+        console.error('Error procesando la actualización de comandos', err);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('Stream de comandos en tiempo real desconectado', error);
+    };
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [queryClient]);
 
   // Queries
   const { data: commandsData, isLoading: commandsLoading } = useQuery(

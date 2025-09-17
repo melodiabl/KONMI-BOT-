@@ -1,8 +1,7 @@
 import db from './db.js';
 import { getSocket } from './whatsapp.js';
 import * as baileys from '@whiskeysockets/baileys';
-import { analyzeContentWithAI } from './gemini-ai-handler.js';
-import { chatWithAI, analyzeManhwaContent } from './ai-chat-handler.js';
+import { handleAI as handleAICommand, handleClasificar as handleClasificarCommand } from './commands.js';
 import { isSuperAdmin, isModerator, isPremium, getOwnerName } from './global-config.js';
 
 // Consolidación de comandos: reexportamos funciones de módulos específicos
@@ -216,172 +215,9 @@ async function handleHelp(usuario, grupo, isGroup) {
   return { success: true, message: pretty };
 }
 
-/**
- * /ia [texto] - Responde usando IA
- */
-async function handleIA(prompt, usuario, grupo) {
-  helpText += `║         𝙆𝙊𝙉𝙈𝙄 𝘽𝙊𝙏 𝙈𝙀𝙉𝙐         ║\n`;
-  helpText += `╚══════════════════════════════════════╝\n`;
-  helpText += `*Versión:* 𝘷2.5.0  |  *Panel Web*\n`;
-  helpText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  helpText += `*Prefijos válidos:*  
-  /  !  .\n`;
-  helpText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  helpText += `*🌟 𝙂𝙀𝙉𝙀𝙍𝘼𝙇𝙀𝙎*\n`;
-  helpText += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-  helpText += `┃  • *help, menu, .ayuda*  —  Ayuda\n`;
-  helpText += `┃  • *whoami*  —  Tu info\n`;
-  helpText += `┃  • *ia [texto]*  —  IA Gemini/OpenAI\n`;
-  helpText += `┃  • *clasificar [texto]*  —  Clasificar\n`;
-  helpText += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
-  helpText += `*🎬 𝙈𝙀𝘿𝙄𝘼 & 𝘿𝙀𝙎𝘾𝘼𝙍𝙂𝘼𝙎*\n`;
-  helpText += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-  helpText += `┃  • *yt [enlace/búsqueda]*  —  YouTube\n`;
-  helpText += `┃  • *sticker*  —  Crear sticker\n`;
-  helpText += `┃  • *tiktok [enlace/búsqueda]*\n`;
-  helpText += `┃  • *ig [enlace]*  —  Instagram\n`;
-  helpText += `┃  • *twitter [enlace]*  —  Twitter/X\n`;
-  helpText += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
-  helpText += `*📚 𝘾𝙊𝙉𝙏𝙀𝙉𝙄𝘿𝙊 & 𝘼𝙋𝙊𝙍𝙏𝙀𝙎*\n`;
-  helpText += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-  helpText += `┃  • *myaportes*  —  Tus aportes\n`;
-  helpText += `┃  • *addaporte [tipo] [contenido]*\n`;
-  helpText += `┃  • *pedido [contenido]*\n`;
-  helpText += `┃  • *pedidos*  —  Tus pedidos\n`;
-  helpText += `┃  • *aportes*  —  Todos los aportes\n`;
-  helpText += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
-  helpText += `*📖 𝙈𝘼𝙉𝙃𝙒𝘼𝙎 & 𝙎𝙀𝙍𝙄𝙀𝙎*\n`;
-  helpText += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-  helpText += `┃  • *manhwas*  —  Lista manhwas\n`;
-  helpText += `┃  • *series*  —  Lista series\n`;
-  helpText += `┃  • *addserie [título|género|estado|desc]*\n`;
-  helpText += `┃  • *ilustraciones*\n`;
-  helpText += `┃  • *extra [nombre]*\n`;
-  helpText += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
-  helpText += `*🗳️ 𝙑𝙊𝙏𝘼𝘾𝙄𝙊𝙉𝙀𝙎*\n`;
-  helpText += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-  helpText += `┃  • *crearvotacion [pregunta|opciones]*\n`;
-  helpText += `┃  • *cerrarvotacion [ID]*\n`;
-  helpText += `┃  • *votar [opción]*\n`;
-  helpText += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
-  helpText += `*🤖 𝙎𝙐𝘽𝘽𝙊𝙏𝙎*\n`;
-  helpText += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-  helpText += `┃  • *subbot*  —  Crear subbot (QR)\n`;
-  helpText += `┃  • *subbotcode*  —  Crear subbot (código)\n`;
-  helpText += `┃  • *subbots*  —  Lista subbots activos\n`;
-  helpText += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
-  if (isAdmin) {
-    helpText += `*🔧 𝘼𝘿𝙈𝙄𝙉 & 𝙈𝙊𝘿𝙀𝙍𝘼𝘾𝙄𝙊𝙉*\n`;
-    helpText += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-    helpText += `┃  • *bot on/off*\n`;
-    helpText += `┃  • *bot global on/off*\n`;
-    helpText += `┃  • *update*\n`;
-    helpText += `┃  • *code*\n`;
-    helpText += `┃  • *logs*\n`;
-    helpText += `┃  • *privado*\n`;
-    helpText += `┃  • *amigos*\n`;
-  helpText += `┃  • *advertencias on/off*\n`;
-  helpText += `┃  • *aporteestado [id] [estado]*\n`;
-  helpText += `┃  • *admininfo*  —  Info administración\n`;
-  helpText += `┃  • *addadmin [num] [nombre]*\n`;
-  helpText += `┃  • *deladmin [num]*\n`;
-  helpText += `┃  • *addmod [num]*\n`;
-  helpText += `┃  • *delmod [num]*\n`;
-  helpText += `┃  • *getlid*  —  Ver información LID\n`;
-  helpText += `┃  • *updatelid [lid]*  —  Actualizar LID\n`;
-    helpText += `┃  • *addmanhwa [título|autor|género|estado|desc|url|proveedor]*\n`;
-    helpText += `┃  • *obtenermanhwa [nombre]*\n`;
-    helpText += `┃  • *obtenerextra [nombre]*\n`;
-    helpText += `┃  • *obtenerilustracion [nombre]*\n`;
-    helpText += `┃  • *obtenerpack [nombre]*\n`;
-    helpText += `┃  • *kick @usuario*\n`;
-    helpText += `┃  • *promote @usuario*\n`;
-    helpText += `┃  • *demote @usuario*\n`;
-    helpText += `┃  • *tag [mensaje]*\n`;
-    helpText += `┃  • *lock*\n`;
-    helpText += `┃  • *unlock*\n`;
-    helpText += `┃  • *estadisticas*\n`;
-    helpText += `┃  • *limpiar*\n`;
-    helpText += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
-  }
-  helpText += `*ℹ️ 𝙄𝙉𝙁𝙊𝙍𝙈𝘼𝘾𝙄𝙊𝙉*\n`;
-  helpText += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-  helpText += `┃  • Los comandos funcionan con /, ! o .\n`;
-  helpText += `┃  • Algunos comandos requieren permisos de Admin (solo WhatsApp)\n`;
-  helpText += `┃  • El bot guarda metadatos de todo el contenido\n`;
-  helpText += `┃  • Todo se muestra en tiempo real en el panel web\n`;
-  helpText += `┃  • Los subbots se crean con códigos temporales\n`;
-  helpText += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
-  await logCommand('consulta', 'help', usuario, grupo);
-  return { success: true, message: helpText };
-}
-
-/**
- * /ia [texto] - Responde usando IA
- */
-async function handleIA(prompt, usuario, grupo) {
-  try {
-    if (!prompt || prompt.trim().length === 0) {
-      return { success: false, message: '❌ Por favor proporciona una pregunta o texto para analizar.\n\nEjemplo: `/ia ¿Qué es un manhwa?`' };
-    }
-    console.log(`🤖 Procesando consulta de IA: "${prompt}"`);
-    const aiResult = await chatWithAI(prompt, `Usuario: ${usuario}, Grupo: ${grupo}`);
-    if (aiResult.success) {
-      const response = `╭───── 🤖 *Respuesta de IA* ─────╮\n\n${aiResult.response}\n\n_🧠 Modelo: ${aiResult.model}_\n╰──────────────────────────────╯`;
-      await logCommand('comando', 'ia', usuario, grupo);
-      return { success: true, message: response };
-    } else {
-      const response = `╭───── 🤖 *Respuesta de IA* ─────╮\n\nHe analizado tu consulta: "${prompt}"\n\n_Nota: El análisis automático no pudo completarse, pero tu consulta ha sido registrada._\n╰──────────────────────────────╯`;
-      await logCommand('comando', 'ia', usuario, grupo);
-      return { success: true, message: response };
-    }
-  } catch (error) {
-    console.error('Error en comando IA:', error);
-    return { success: false, message: '❌ Error al procesar consulta de IA. Intenta nuevamente.' };
-  }
-}
-
-/**
- * /clasificar [texto] - Clasifica contenido usando IA
- */
-async function handleClasificar(texto, usuario, grupo) {
-  try {
-    if (!texto || texto.trim().length === 0) {
-      return { success: false, message: '❌ Por favor proporciona un texto para clasificar.\n\nEjemplo: `/clasificar Jinx capítulo 15`' };
-    }
-
-    console.log(`🔍 Clasificando contenido: "${texto}"`);
-    
-    // Usar IA para clasificar contenido de manhwa
-    const aiResult = await analyzeManhwaContent(texto, '');
-    
-    if (aiResult.success) {
-      const data = aiResult.data;
-      const response = `🔍 *Clasificación de Contenido:*\n\n` +
-        `📖 *Título:* ${data.titulo}\n` +
-        `📂 *Tipo:* ${data.tipo}\n` +
-        `📄 *Capítulo:* ${data.capitulo || 'N/A'}\n` +
-        `📝 *Descripción:* ${data.descripcion}\n` +
-        `🎯 *Confianza:* ${Math.round(data.confianza * 100)}%\n` +
-        `🤖 *Fuente:* ${data.fuente}`;
-      
-      await logCommand('comando', 'clasificar', usuario, grupo);
-      return { success: true, message: response };
-    } else {
-      // Fallback a clasificación básica
-      const response = `🔍 *Clasificación Básica:*\n\n` +
-        `📝 *Texto analizado:* "${texto}"\n` +
-        `⚠️ *Nota:* La clasificación automática no pudo completarse.\n` +
-        `_Tu contenido ha sido registrado para revisión manual._`;
-      
-      await logCommand('comando', 'clasificar', usuario, grupo);
-      return { success: true, message: response };
-    }
-  } catch (error) {
-    console.error('Error en comando clasificar:', error);
-    return { success: false, message: '❌ Error al clasificar contenido. Intenta nuevamente.' };
-  }
-}
+// Reutilizamos las implementaciones centralizadas en commands.js para evitar duplicados.
+const handleIA = handleAICommand;
+const handleClasificar = handleClasificarCommand;
 
 /**
  * /addgroup - Activa el bot en el grupo actual
@@ -1708,6 +1544,28 @@ async function handleTag(mensaje, usuario, grupo) {
   } catch (error) {
     console.error('Error en handleTag:', error);
     return { success: false, message: '❌ Error al enviar mensaje a todos.' };
+  }
+}
+
+/**
+ * /responder - Menciona al autor del mensaje citado y responde en hilo
+ */
+async function handleReplyTag(mensaje, usuario, grupo, quotedMessage) {
+  if (!grupo || !grupo.endsWith('@g.us')) {
+    return { success: false, message: '❌ Este comando solo funciona en grupos.' };
+  }
+  try {
+    const sock = getSocket();
+    if (!sock) return { success: false, message: '❌ Bot no conectado.' };
+    if (!quotedMessage || !quotedMessage.key) {
+      return { success: false, message: 'ℹ️ Responde a un mensaje para mencionar a su autor.' };
+    }
+    const mentionJid = quotedMessage.key.participant || quotedMessage.key.remoteJid;
+    const text = mensaje || '📣 Respuesta para ti';
+    await logCommand('moderacion', 'replytag', usuario, grupo);
+    return { success: true, message: text, mentions: mentionJid ? [mentionJid] : undefined, replyTo: quotedMessage };
+  } catch (e) {
+    return { success: false, message: '❌ Error al responder con mención.' };
   }
 }
 
@@ -3103,6 +2961,7 @@ export {
   handleQR,
   handleWhoami,
   handleTag,
+  handleReplyTag,
   
   // Reexportados consolidación
   handleSerbot,
@@ -3120,6 +2979,7 @@ export {
   handleFact,
   handleTrivia,
   handleHoroscope,
+  handleLogsAdvanced,
   handleStatus,
   handlePing,
   handleStats,

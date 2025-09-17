@@ -39,19 +39,26 @@ export interface Aporte {
   descripcion?: string;
   contenido: string;
   tipo: string;
-  fuente: 'colaborador' | 'proveedor';
+  fuente: string;
   estado: 'pendiente' | 'aprobado' | 'rechazado';
-  motivo_rechazo?: string;
-  grupo_id?: number;
-  usuario_id?: number;
+  motivo_rechazo?: string | null;
+  grupo_id?: number | null;
+  usuario_id?: number | null;
+  archivo_path?: string | null;
+  fecha?: string;
+  fecha_procesado?: string | null;
+  procesado_por?: string | null;
+  metadata?: any;
   created_at: string;
   updated_at: string;
   usuario?: {
+    id?: number;
     username: string;
-  };
+  } | null;
   grupo?: {
+    id?: number;
     nombre: string;
-  };
+  } | null;
 }
 
 export interface Pedido {
@@ -59,7 +66,7 @@ export interface Pedido {
   titulo: string;
   descripcion?: string;
   contenido_solicitado: string;
-  estado: 'pendiente' | 'resuelto';
+  estado: 'pendiente' | 'en_proceso' | 'resuelto' | 'cancelado' | 'rechazado';
   prioridad: string;
   grupo_id?: number;
   usuario_id?: number;

@@ -1,7 +1,8 @@
 // Configuración en tiempo de ejecución para el frontend
 export const RUNTIME_CONFIG = {
-  // URL base de la API - usar variable de entorno o fallback
-  API_BASE_URL: import.meta.env.VITE_API_URL || 'http://178.156.179.129:3001',
+  // URL base de la API - usar variable de entorno o fallback al mismo origen
+  // Usamos base relativa para que Caddy proxyee /api → backend:3001 sin CORS
+  API_BASE_URL: import.meta.env.VITE_API_URL || '',
   
   // Configuración de la aplicación
   APP_NAME: 'WhatsApp Bot Panel',
@@ -12,4 +13,3 @@ export const RUNTIME_CONFIG = {
   ENABLE_NOTIFICATIONS: true,
   ENABLE_REAL_TIME: true,
 };
-

@@ -66,6 +66,7 @@ import {
 } from 'react-icons/fa';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService, getGrupos, getGroupStats } from '../services/api';
+import { RUNTIME_CONFIG } from '../config/runtime-config';
 
 interface Group {
   id: number;
@@ -118,7 +119,7 @@ export const Grupos: React.FC = () => {
   // Queries
   const { data: gruposData, isLoading, error } = useQuery(
     ['grupos', currentPage, searchTerm, botEnabledFilter, proveedorFilter],
-    () => getGrupos(currentPage, 20, searchTerm)
+    () => getGrupos(currentPage, 20, searchTerm, botEnabledFilter, proveedorFilter)
   );
 
   const { data: stats } = useQuery('groupStats', getGroupStats);
@@ -127,6 +128,7 @@ export const Grupos: React.FC = () => {
   const createGroupMutation = useMutation(apiService.createGrupo, {
     onSuccess: () => {
       queryClient.invalidateQueries('grupos');
+      queryClient.invalidateQueries('groupStats');
       toast({
         title: 'Grupo añadido',
         description: 'El grupo ha sido añadido exitosamente',
@@ -150,6 +152,7 @@ export const Grupos: React.FC = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('grupos');
+        queryClient.invalidateQueries('groupStats');
         toast({
           title: 'Grupo actualizado',
           description: 'El grupo ha sido actualizado exitosamente',
@@ -171,6 +174,7 @@ export const Grupos: React.FC = () => {
   const deleteGroupMutation = useMutation(apiService.deleteGrupo, {
     onSuccess: () => {
       queryClient.invalidateQueries('grupos');
+      queryClient.invalidateQueries('groupStats');
       toast({
         title: 'Grupo eliminado',
         description: 'El grupo ha sido eliminado exitosamente',
@@ -192,6 +196,7 @@ export const Grupos: React.FC = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('grupos');
+        queryClient.invalidateQueries('groupStats');
         toast({
           title: 'Autorización actualizada',
           description: 'La autorización del grupo ha sido actualizada',
@@ -209,11 +214,12 @@ export const Grupos: React.FC = () => {
   );
 
   const toggleProviderMutation = useMutation(
-    (data: { id: number; es_proveedor: boolean }) =>
+    (data: { id: string | number; es_proveedor: boolean }) =>
       apiService.toggleProvider(data.id, data.es_proveedor),
     {
       onSuccess: () => {
         queryClient.invalidateQueries('grupos');
+        queryClient.invalidateQueries('groupStats');
         toast({
           title: 'Estado de proveedor actualizado',
           description: 'El estado de proveedor ha sido actualizado',
@@ -260,44 +266,102 @@ export const Grupos: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+    const payload = { ...formData } as any;
+
     if (editingGroup) {
       updateGroupMutation.mutate({
         id: (editingGroup as any).wa_jid || editingGroup.id,
-        group: formData as any,
+        group: payload,
       });
     } else {
-      createGroupMutation.mutate(formData);
+      if (!payload.wa_jid) {
+        toast({ title: 'Selecciona un grupo de WhatsApp', status: 'warning' });
+        return;
+      }
+      createGroupMutation.mutate(payload);
     }
   };
 
-  const handleDelete = (groupId: number) => {
+  const handleDelete = (group: Group) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este grupo?')) {
-      deleteGroupMutation.mutate(groupId);
+      const identifier = group.wa_jid || group.id;
+      const idValue = typeof identifier === 'number' ? identifier : String(identifier);
+      deleteGroupMutation.mutate(idValue);
     }
   };
 
-  const handleAutorizar = (jid: string, enabled: boolean) => {
-    authorizeGroupMutation.mutate({ jid, enabled });
+  const handleAutorizar = (jid: string | number, enabled: boolean) => {
+    authorizeGroupMutation.mutate({ jid: String(jid), enabled });
   };
 
-  const handleToggleProvider = (groupId: number, es_proveedor: boolean) => {
-    toggleProviderMutation.mutate({ id: groupId, es_proveedor });
+  const handleToggleProvider = (group: Group, es_proveedor: boolean) => {
+    const identifier = group.wa_jid || group.id;
+    const idValue = typeof identifier === 'number' ? identifier : String(identifier);
+    toggleProviderMutation.mutate({ id: idValue, es_proveedor });
   };
 
   // Obtener los grupos de WhatsApp al abrir el modal de crear grupo
   useEffect(() => {
     if (isOpen && !editingGroup) {
       setWaGroupsLoading(true);
-      fetch('/api/grupos')
-        .then(res => res.json())
-        .then(data => {
-          setWaGroups(data);
+      apiService.getAvailableGrupos()
+        .then((data) => {
+          setWaGroups(data?.grupos || []);
           setWaGroupsLoading(false);
         })
         .catch(() => setWaGroupsLoading(false));
     }
   }, [isOpen, editingGroup]);
+
+  useEffect(() => {
+    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
+      return;
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      return;
+    }
+
+    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
+      ? RUNTIME_CONFIG.API_BASE_URL
+      : window.location.origin;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      const url = new URL('api/grupos/stream', normalizedBase);
+      url.searchParams.set('token', token);
+      eventSource = new EventSource(url.toString());
+    } catch (eventError) {
+      console.error('No se pudo iniciar la sincronización en tiempo real de grupos', eventError);
+      return;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event.data) {
+        return;
+      }
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'grupoChanged') {
+          queryClient.invalidateQueries('grupos');
+          queryClient.invalidateQueries('groupStats');
+        }
+      } catch (err) {
+        console.error('Error procesando actualización de grupos', err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('Stream de grupos en tiempo real desconectado', err);
+    };
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [queryClient]);
 
   if (error) {
     return (
@@ -487,13 +551,13 @@ export const Grupos: React.FC = () => {
                               <MenuList>
                                 <MenuItem
                                   icon={(group as any).bot_enabled ? <FaTimes /> : <FaCheck />}
-                                  onClick={() => handleAutorizar(group.wa_jid as any, !(group as any).bot_enabled)}
+                                  onClick={() => handleAutorizar(group.wa_jid || group.id, !(group as any).bot_enabled)}
                                 >
                                   {(group as any).bot_enabled ? 'Desactivar bot' : 'Activar bot'}
                                 </MenuItem>
                                 <MenuItem
                                   icon={<FaStore />}
-                                  onClick={() => handleToggleProvider(group.id, !group.es_proveedor)}
+                                  onClick={() => handleToggleProvider(group, !group.es_proveedor)}
                                 >
                                   {group.es_proveedor ? 'Quitar proveedor' : 'Marcar como proveedor'}
                                 </MenuItem>
@@ -501,7 +565,7 @@ export const Grupos: React.FC = () => {
                                 <MenuItem
                                   icon={<FaTrash />}
                                   color="red.500"
-                                  onClick={() => handleDelete(group.id)}
+                                  onClick={() => handleDelete(group)}
                                 >
                                   Eliminar
                                 </MenuItem>
@@ -654,6 +718,3 @@ export const Grupos: React.FC = () => {
 };
 
 export default Grupos;
-
-
-

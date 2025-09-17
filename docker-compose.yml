@@ -54,9 +54,9 @@ services:
       - ./backend/full/storage/subbot-exports:/app/storage/subbot-exports
       - ./create-subbot.sh:/app/create-subbot.sh
     # Comando simplificado sin el script de espera
-    command: ["/bin/sh", "-c", "sleep 10 && node index.js"]
+    command: ["/bin/sh", "-c", "sleep 10 && npm run migrate && node index.js"]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/api/tools/ping | grep pong || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/api/health | grep -q '\"status\":\"ok\"' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -88,4 +88,3 @@ services:
       - ./backend/full/storage/auth/subbot-${SUBBOT_CODE}:/app/storage/auth/subbot-${SUBBOT_CODE}
       - ./backend/full/storage/subbot-exports:/app/storage/subbot-exports
     command: ["/bin/sh", "-c", "sleep 5 && node index.js"]
-

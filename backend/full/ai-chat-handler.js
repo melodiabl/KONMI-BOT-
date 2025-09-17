@@ -1,15 +1,18 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// Configuración de Gemini AI
-const GEMINI_API_KEY = 'AIzaSyAOBzrh8dnm_rMAUyy3yzBMpVIME-JFay4';
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+import { getGeminiModel, hasGeminiApiKey } from './gemini-client.js';
 
 /**
  * Responder preguntas generales usando Gemini AI
  */
 async function chatWithAI(message, context = '') {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    if (!hasGeminiApiKey()) {
+      return {
+        success: false,
+        error: 'GEMINI_API_KEY no está configurada'
+      };
+    }
+
+    const model = getGeminiModel('gemini-pro');
 
     const prompt = `
 Eres KONMI BOT, un asistente especializado en manhwas, webtoons y contenido de entretenimiento asiático. 
@@ -49,7 +52,14 @@ Responde directamente sin prefijos como "Respuesta:" o similares.
  */
 async function analyzeManhwaContent(message, filename = '') {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    if (!hasGeminiApiKey()) {
+      return {
+        success: false,
+        error: 'GEMINI_API_KEY no está configurada'
+      };
+    }
+
+    const model = getGeminiModel('gemini-pro');
 
     const prompt = `
 Analiza el siguiente contenido para extraer información sobre manhwa/webtoon:
@@ -115,7 +125,14 @@ REGLAS:
  */
 async function generateBotResponse(command, context = '') {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    if (!hasGeminiApiKey()) {
+      return {
+        success: false,
+        error: 'GEMINI_API_KEY no está configurada'
+      };
+    }
+
+    const model = getGeminiModel('gemini-pro');
 
     const prompt = `
 Eres KONMI BOT, un bot de WhatsApp especializado en manhwas y contenido de entretenimiento.
@@ -154,8 +171,6 @@ export {
   analyzeManhwaContent,
   generateBotResponse
 };
-
-
 
 
 

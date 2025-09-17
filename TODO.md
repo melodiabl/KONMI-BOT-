@@ -1,0 +1,4 @@
+- [x] Import QRCode library in Subbots.tsx
+- [x] Modify viewSubbotQR to generate QR from qr_data if available
+- [x] Update details modal to display QR image instead of text
+- [x] Test QR generation for subbots with qr_data (dev server running)

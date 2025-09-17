@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -13,6 +13,8 @@ import {
   Select,
   useToast,
   Spinner,
+  Alert,
+  AlertIcon,
   Flex,
   SimpleGrid,
   Stat,
@@ -66,6 +68,7 @@ import {
 } from 'react-icons/fa';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService } from '../services/api';
+import { RUNTIME_CONFIG } from '../config/runtime-config';
 
 interface MultimediaItem {
   id: number;
@@ -85,10 +88,32 @@ interface MultimediaItem {
   views: number;
 }
 
+interface MultimediaResponse {
+  items: MultimediaItem[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+interface MultimediaStats {
+  total: number;
+  totalFiles: number;
+  images: number;
+  videos: number;
+  audio: number;
+  documents: number;
+}
+
 export const Multimedia: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [selectedItem, setSelectedItem] = useState<MultimediaItem | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadCount, setUploadCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { isOpen: isUploadOpen, onOpen: onUploadOpen, onClose: onUploadClose } = useDisclosure();
   const { isOpen: isViewOpen, onOpen: onViewOpen, onClose: onViewClose } = useDisclosure();
@@ -99,12 +124,22 @@ export const Multimedia: React.FC = () => {
   const borderColor = useColorModeValue('gray.200', 'gray.600');
 
   // Queries
-  const { data: multimediaItems, isLoading } = useQuery('multimedia', () => apiService.getMultimedia('all'));
-  const { data: multimediaStats } = useQuery('multimediaStats', apiService.getMultimediaStats);
+  const { data: multimediaData, isLoading, error } = useQuery<MultimediaResponse>(
+    ['multimedia', currentPage, searchTerm, typeFilter],
+    () =>
+      apiService.getMultimediaItems({
+        page: currentPage,
+        limit: 12,
+        search: searchTerm,
+        type: typeFilter === 'all' ? undefined : typeFilter,
+      })
+  );
+
+  const { data: multimediaStats } = useQuery<MultimediaStats>('multimediaStats', apiService.getMultimediaStats);
 
   // Mutations
   const deleteMultimediaMutation = useMutation(
-    (id: number) => apiService.deleteMultimedia(id.toString()),
+    (id: number) => apiService.deleteMultimedia(id),
     {
       onSuccess: () => {
         queryClient.invalidateQueries('multimedia');
@@ -152,12 +187,63 @@ export const Multimedia: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const filteredItems = (multimediaItems as any[])?.filter((item: MultimediaItem) => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = typeFilter === 'all' || item.type === typeFilter;
-    return matchesSearch && matchesType;
-  }) || [];
+  const formatDuration = (seconds?: number) => {
+    if (!seconds || seconds <= 0) return null;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+  };
+
+  const items = multimediaData?.items || [];
+  const pagination = multimediaData?.pagination;
+
+  useEffect(() => {
+    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
+      return;
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      return;
+    }
+
+    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
+      ? RUNTIME_CONFIG.API_BASE_URL
+      : window.location.origin;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      const url = new URL('api/aportes/stream', normalizedBase);
+      url.searchParams.set('token', token);
+      eventSource = new EventSource(url.toString());
+    } catch (err) {
+      console.error('No se pudo iniciar la sincronización en tiempo real de multimedia', err);
+      return;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'aporteChanged') {
+          queryClient.invalidateQueries('multimedia');
+          queryClient.invalidateQueries('multimediaStats');
+        }
+      } catch (error) {
+        console.error('Error procesando actualización de multimedia', error);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('Stream de multimedia en tiempo real desconectado', err);
+    };
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [queryClient]);
 
   const handleDeleteItem = (id: number) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este archivo?')) {
@@ -171,13 +257,17 @@ export const Multimedia: React.FC = () => {
   };
 
   const handleDownload = (item: MultimediaItem) => {
+    if (!item.url) {
+      toast({ title: 'Sin archivo disponible', status: 'warning' });
+      return;
+    }
     const link = document.createElement('a');
     link.href = item.url;
     link.download = item.name;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     toast({
       title: 'Descarga iniciada',
       description: `Descargando ${item.name}`,
@@ -193,6 +283,69 @@ export const Multimedia: React.FC = () => {
       </Box>
     );
   }
+
+  if (error) {
+    return (
+      <Box textAlign="center" py={10}>
+        <Alert status="error" maxW="lg" mx="auto">
+          <AlertIcon />
+          Error al cargar multimedia: {(error as any).message}
+        </Alert>
+      </Box>
+    );
+  }
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, typeFilter]);
+
+  useEffect(() => {
+    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
+      return;
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      return;
+    }
+
+    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
+      ? RUNTIME_CONFIG.API_BASE_URL
+      : window.location.origin;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      const url = new URL('api/aportes/stream', normalizedBase);
+      url.searchParams.set('token', token);
+      eventSource = new EventSource(url.toString());
+    } catch (err) {
+      console.error('No se pudo iniciar la sincronización en tiempo real de multimedia', err);
+      return;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'aporteChanged') {
+          queryClient.invalidateQueries('multimedia');
+          queryClient.invalidateQueries('multimediaStats');
+        }
+      } catch (error) {
+        console.error('Error procesando actualización de multimedia', error);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('Stream de multimedia en tiempo real desconectado', err);
+    };
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [queryClient]);
 
   return (
     <Box>
@@ -215,7 +368,7 @@ export const Multimedia: React.FC = () => {
         </Flex>
 
         {/* Estadísticas */}
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6}>
+        <SimpleGrid columns={{ base: 1, md: 2, lg: 5 }} spacing={6}>
           <Card bg={cardBg} border="1px" borderColor={borderColor}>
             <CardBody>
               <Stat>
@@ -225,7 +378,7 @@ export const Multimedia: React.FC = () => {
                     <Text>Total Archivos</Text>
                   </HStack>
                 </StatLabel>
-                <StatNumber>{(multimediaStats as any)?.totalFiles || 0}</StatNumber>
+                <StatNumber>{multimediaStats?.totalFiles || 0}</StatNumber>
                 <StatHelpText>Archivos en el sistema</StatHelpText>
               </Stat>
             </CardBody>
@@ -240,7 +393,7 @@ export const Multimedia: React.FC = () => {
                     <Text>Videos</Text>
                   </HStack>
                 </StatLabel>
-                <StatNumber>{(multimediaStats as any)?.videos || 0}</StatNumber>
+                <StatNumber>{multimediaStats?.videos || 0}</StatNumber>
                 <StatHelpText>Archivos de video</StatHelpText>
               </Stat>
             </CardBody>
@@ -255,7 +408,7 @@ export const Multimedia: React.FC = () => {
                     <Text>Imágenes</Text>
                   </HStack>
                 </StatLabel>
-                <StatNumber>{(multimediaStats as any)?.images || 0}</StatNumber>
+                <StatNumber>{multimediaStats?.images || 0}</StatNumber>
                 <StatHelpText>Archivos de imagen</StatHelpText>
               </Stat>
             </CardBody>
@@ -270,8 +423,23 @@ export const Multimedia: React.FC = () => {
                     <Text>Audio</Text>
                   </HStack>
                 </StatLabel>
-                <StatNumber>{(multimediaStats as any)?.audio || 0}</StatNumber>
+                <StatNumber>{multimediaStats?.audio || 0}</StatNumber>
                 <StatHelpText>Archivos de audio</StatHelpText>
+              </Stat>
+            </CardBody>
+          </Card>
+
+          <Card bg={cardBg} border="1px" borderColor={borderColor}>
+            <CardBody>
+              <Stat>
+                <StatLabel>
+                  <HStack>
+                    <Icon as={FaFileAlt} color="teal.500" />
+                    <Text>Documentos</Text>
+                  </HStack>
+                </StatLabel>
+                <StatNumber>{multimediaStats?.documents || 0}</StatNumber>
+                <StatHelpText>Archivos de documentos</StatHelpText>
               </Stat>
             </CardBody>
           </Card>
@@ -302,9 +470,43 @@ export const Multimedia: React.FC = () => {
           </CardBody>
         </Card>
 
-        {/* Galería de Multimedia */}
-        <Wrap spacing={4}>
-          {filteredItems.map((item: MultimediaItem) => (
+        {/* Galería de Multimedia (acepta drag & drop global) */}
+        <Wrap
+          spacing={4}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const files = Array.from(e.dataTransfer.files || []);
+            if (!files.length) return;
+            try {
+              setUploading(true);
+              let done = 0;
+              for (const f of files) {
+                await apiService.uploadMultimedia(f as File);
+                done += 1;
+                setUploadCount(done);
+              }
+              toast({ title: 'Archivos subidos', description: `${done} archivo(s) subidos`, status: 'success' });
+              queryClient.invalidateQueries('multimedia');
+              queryClient.invalidateQueries('multimediaStats');
+            } catch (err: any) {
+              toast({ title: 'Error al subir', description: err?.response?.data?.error || err?.message, status: 'error' });
+            } finally {
+              setUploading(false);
+              setUploadCount(0);
+            }
+          }}
+        >
+          {items.length === 0 && (
+            <WrapItem>
+              <Alert status="info" variant="subtle">
+                <AlertIcon />
+                No se encontraron archivos multimedia.
+              </Alert>
+            </WrapItem>
+          )}
+          {items.map((item: MultimediaItem) => (
             <WrapItem key={item.id}>
               <Card
                 bg={cardBg}
@@ -374,6 +576,14 @@ export const Multimedia: React.FC = () => {
                         )}
                       </HStack>
                       <HStack justify="space-between" w="full">
+                        <Text fontSize="xs" color="gray.500">
+                          {item.uploadedBy}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {new Date(item.uploadedAt).toLocaleDateString()}
+                        </Text>
+                      </HStack>
+                      <HStack justify="space-between" w="full">
                         <HStack spacing={2}>
                           <Tooltip label="Ver detalles">
                             <IconButton
@@ -420,6 +630,30 @@ export const Multimedia: React.FC = () => {
             </WrapItem>
           ))}
         </Wrap>
+
+        {pagination && pagination.totalPages > 1 && (
+          <Flex justify="center" mt={6}>
+            <HStack spacing={2}>
+              <Button
+                size="sm"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                isDisabled={currentPage === 1}
+              >
+                Anterior
+              </Button>
+              <Text>
+                Página {pagination.page} de {pagination.totalPages}
+              </Text>
+              <Button
+                size="sm"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, pagination.totalPages))}
+                isDisabled={currentPage === pagination.totalPages}
+              >
+                Siguiente
+              </Button>
+            </HStack>
+          </Flex>
+        )}
       </VStack>
 
       {/* Modal Subir Archivos */}
@@ -439,6 +673,31 @@ export const Multimedia: React.FC = () => {
                 w="full"
                 _hover={{ borderColor: 'blue.500' }}
                 transition="all 0.2s"
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const files = Array.from(e.dataTransfer.files || []);
+                  if (!files.length) return;
+                  try {
+                    setUploading(true);
+                    let done = 0;
+                    for (const f of files) {
+                      await apiService.uploadMultimedia(f as File);
+                      done += 1;
+                      setUploadCount(done);
+                    }
+                    toast({ title: 'Archivos subidos', description: `${done} archivo(s) subidos`, status: 'success' });
+                    queryClient.invalidateQueries('multimedia');
+                    queryClient.invalidateQueries('multimediaStats');
+                    onUploadClose();
+                  } catch (err: any) {
+                    toast({ title: 'Error al subir', description: err?.response?.data?.error || err?.message, status: 'error' });
+                  } finally {
+                    setUploading(false);
+                    setUploadCount(0);
+                  }
+                }}
               >
                 <Icon as={FaUpload} boxSize="4xl" color="gray.400" mb={4} />
                 <Text fontSize="lg" fontWeight="semibold" mb={2}>
@@ -453,15 +712,41 @@ export const Multimedia: React.FC = () => {
                   accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
                   display="none"
                   id="file-upload"
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (!files.length) return;
+                    try {
+                      setUploading(true);
+                      let done = 0;
+                      for (const f of files) {
+                        await apiService.uploadMultimedia(f as File);
+                        done += 1;
+                        setUploadCount(done);
+                      }
+                      toast({ title: 'Archivos subidos', description: `${done} archivo(s) subidos`, status: 'success' });
+                      queryClient.invalidateQueries('multimedia');
+                      queryClient.invalidateQueries('multimediaStats');
+                      onUploadClose();
+                    } catch (err: any) {
+                      toast({ title: 'Error al subir', description: err?.response?.data?.error || err?.message, status: 'error' });
+                    } finally {
+                      setUploading(false);
+                      setUploadCount(0);
+                    }
+                  }}
                 />
                 <Button
                   as="label"
                   htmlFor="file-upload"
                   colorScheme="blue"
                   cursor="pointer"
+                  isLoading={uploading}
                 >
                   Seleccionar Archivos
                 </Button>
+                {uploading && (
+                  <Text mt={3} color="gray.500">Subiendo... {uploadCount}</Text>
+                )}
               </Box>
             </VStack>
           </ModalBody>

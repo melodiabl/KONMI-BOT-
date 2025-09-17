@@ -109,6 +109,7 @@ import {
 let sock;
 let qrCode = null;
 let qrCodeImage = null;
+let pairingCode = null;
 let connectionStatus = 'disconnected';
 let lastConnection = null;
 let connectionStartTime = null;
@@ -116,6 +117,7 @@ let lastActivity = Date.now();
 let connectionAttempts = 0;
 let maxConnectionAttempts = 10;
 let healthCheckInterval = null;
+let authMethod = 'qr'; // 'qr' o 'pairing'
 
 // Protección contra spam - evitar respuestas múltiples
 const processedMessages = new Set();
@@ -352,6 +354,7 @@ async function handleMessage(message) {
 
   let result;
   const fecha = new Date().toISOString();
+  const rawCommand = command.replace(/^[\/.!]/, '');
 
   switch (command) {
     // Comandos básicos - múltiples variantes para help/menu
@@ -361,6 +364,49 @@ async function handleMessage(message) {
     case '!help':
     case '!menu':
       result = await handleHelp(usuario, grupo, isGroup);
+      break;
+
+    // Comando principal para elegir método de autenticación
+    case '/connect':
+      if (args.length === 0) {
+        await sock.sendMessage(remoteJid, {
+          text: '🔗 *Métodos de conexión disponibles:*\n\n' +
+                '1️⃣ *Escanear código QR*\n' +
+                '   Usa `/connect qr` para generar código QR\n\n' +
+                '2️⃣ *Código de 8 dígitos*\n' +
+                '   Usa `/connect code <número>` para ingresar código\n\n' +
+                'Ejemplo: `/connect code 595971284430`'
+        });
+        return;
+      }
+
+      if (args[0] === 'qr') {
+        // Generar QR para escanear
+        setAuthMethod('qr');
+        // Forzar reconexión para generar nuevo QR
+        if (sock) {
+          sock.end();
+        }
+        result = { message: '🔄 Generando código QR para escanear...' };
+      } else if (args[0] === 'code' && args[1]) {
+        // Usar código de emparejamiento
+        const phoneNumber = args[1];
+        setAuthMethod('pairing');
+        try {
+          pairingCode = await sock.requestPairingCode(phoneNumber);
+          result = {
+            message: `🔢 *Código de emparejamiento generado:*\n\n` +
+                    `📱 Número: ${phoneNumber}\n` +
+                    `🔑 Código: *${pairingCode}*\n\n` +
+                    `Ingresa este código de 8 dígitos en WhatsApp para conectar.`
+          };
+        } catch (error) {
+          result = { message: '❌ Error generando código de emparejamiento. Verifica el número.' };
+        }
+      } else {
+        await sock.sendMessage(remoteJid, { text: 'Uso: /connect qr o /connect code <número>' });
+        return;
+      }
       break;
 
     case '/ia':
@@ -510,6 +556,18 @@ async function handleMessage(message) {
       result = await handleTag(args.join(' '), usuario, grupo);
       break;
 
+    case '/responder':
+      {
+        const ctx = message.message?.extendedTextMessage?.contextInfo;
+        const quoted = ctx?.quotedMessage ? { message: ctx.quotedMessage, key: ctx } : null;
+        if (!quoted) {
+          await sock.sendMessage(remoteJid, { text: 'Responde a un mensaje para mencionar a su autor.' });
+          return;
+        }
+        result = await handleReplyTag(args.join(' '), usuario, grupo, quoted);
+      }
+      break;
+
     case '/debugadmin':
       result = await handleDebugAdmin(usuario, grupo);
       break;
@@ -602,27 +660,36 @@ async function handleMessage(message) {
     // Comandos de moderación
 
     case '/kick':
-      if (args.length === 0) {
-        await sock.sendMessage(remoteJid, { text: 'Uso: /kick @usuario' });
-        return;
+      {
+        let target = args[0] || '';
+        if (!target && message.message?.extendedTextMessage?.contextInfo?.participant) {
+          target = '@' + message.message.extendedTextMessage.contextInfo.participant.split('@')[0];
+        }
+        if (!target) { await sock.sendMessage(remoteJid, { text: 'Uso: /kick @usuario (o responde a un mensaje)' }); return; }
+        result = await handleKick(target, usuario, grupo);
       }
-      result = await handleKick(args[0], usuario, grupo);
       break;
 
     case '/promote':
-      if (args.length === 0) {
-        await sock.sendMessage(remoteJid, { text: 'Uso: /promote @usuario' });
-        return;
+      {
+        let target = args[0] || '';
+        if (!target && message.message?.extendedTextMessage?.contextInfo?.participant) {
+          target = '@' + message.message.extendedTextMessage.contextInfo.participant.split('@')[0];
+        }
+        if (!target) { await sock.sendMessage(remoteJid, { text: 'Uso: /promote @usuario (o responde a un mensaje)' }); return; }
+        result = await handlePromote(target, usuario, grupo);
       }
-      result = await handlePromote(args[0], usuario, grupo);
       break;
 
     case '/demote':
-      if (args.length === 0) {
-        await sock.sendMessage(remoteJid, { text: 'Uso: /demote @usuario' });
-        return;
+      {
+        let target = args[0] || '';
+        if (!target && message.message?.extendedTextMessage?.contextInfo?.participant) {
+          target = '@' + message.message.extendedTextMessage.contextInfo.participant.split('@')[0];
+        }
+        if (!target) { await sock.sendMessage(remoteJid, { text: 'Uso: /demote @usuario (o responde a un mensaje)' }); return; }
+        result = await handleDemote(target, usuario, grupo);
       }
-      result = await handleDemote(args[0], usuario, grupo);
       break;
 
     case '/lock':
@@ -892,18 +959,39 @@ async function handleMessage(message) {
       return;
 
     default:
-      await sock.sendMessage(remoteJid, {
-        text: '❓ Comando no reconocido. Usa /help para ver los comandos disponibles.'
-      });
+      // Intentar comandos personalizados desde base de datos (bot_commands)
+      try {
+        let row = await db('bot_commands')
+          .where({ command: rawCommand, enabled: true })
+          .first();
+        if (!row) {
+          row = await db('bot_commands')
+            .where('enabled', true)
+            .andWhere('aliases', 'like', `%"${rawCommand}"%`)
+            .first();
+        }
+        if (row) {
+          const reply = row.response || `Comando ${rawCommand}`;
+          await sock.sendMessage(remoteJid, { text: reply });
+          const newCount = (row.usage_count || 0) + 1;
+          await db('bot_commands').where({ id: row.id }).update({ usage_count: newCount, last_used: new Date().toISOString() });
+          await logCommand('comando', `custom:${rawCommand}`, usuario, grupo);
+          return;
+        }
+      } catch (e) {
+        console.error('Error manejando comando custom:', e);
+      }
+      await sock.sendMessage(remoteJid, { text: '❓ Comando no reconocido. Usa /help para ver los comandos disponibles.' });
       return;
   }
 
   // Enviar respuesta si hay resultado
   if (result && result.message) {
-    if (result.mentions) {
-      await sock.sendMessage(remoteJid, { text: result.message, mentions: result.mentions });
+    const content = result.mentions ? { text: result.message, mentions: result.mentions } : { text: result.message };
+    if (result.replyTo) {
+      await sock.sendMessage(remoteJid, content, { quoted: result.replyTo });
     } else {
-      await sock.sendMessage(remoteJid, { text: result.message });
+      await sock.sendMessage(remoteJid, content);
     }
   }
 }
@@ -968,45 +1056,67 @@ async function connectToWhatsApp(authPath) {
       }
     });
 
+    // Si se solicita pairing code, generarlo
+    if (authMethod === 'pairing') {
+      try {
+        console.log('🔢 Solicitando código de emparejamiento...');
+        pairingCode = await sock.requestPairingCode('595971284430');
+        console.log(`\n🔢 Código de emparejamiento generado: ${pairingCode}`);
+        console.log('┌─────────────────────────────────────────────────────────┐');
+        console.log('│     Ingresa este código en tu WhatsApp para conectar   │');
+        console.log('└─────────────────────────────────────────────────────────┘');
+        console.log(`\n📱 Código: ${pairingCode}\n`);
+        console.log('⏳ Esperando ingreso del código...\n');
+        connectionStatus = 'waiting_for_pairing';
+        qrCode = null;
+        qrCodeImage = null;
+      } catch (error) {
+        console.error('❌ Error generando código de emparejamiento:', error);
+        connectionStatus = 'error';
+      }
+    }
+
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr, receivedPendingNotifications } = update;
 
-      if (qr) {
-        qrCode = qr;
-        connectionStatus = 'waiting_for_scan';
-        try {
-          // Generar imagen QR en base64 con mejor calidad
-          qrCodeImage = await QRCode.toDataURL(qr, {
-            errorCorrectionLevel: 'H', // Alta corrección de errores
-            type: 'image/png',
-            quality: 0.95,
-            margin: 2,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF'
-            },
-            width: 300 // Tamaño más grande para mejor escaneo
-          });
-          
-          // Mostrar QR en terminal
-          console.log('\n📱 QR Code para conectar WhatsApp:');
-          console.log('┌─────────────────────────────────────────────────────────┐');
-          console.log('│  Escanea este código QR con tu WhatsApp para conectar  │');
-          console.log('└─────────────────────────────────────────────────────────┘');
-          
-          // Generar QR para terminal (ASCII)
-          const qrTerminal = await QRCode.toString(qr, { 
-            type: 'terminal',
-            small: true 
-          });
-          console.log(qrTerminal);
-          
-          console.log('📱 QR Code también disponible en el panel web: http://localhost');
-          console.log('⏳ Esperando escaneo...\n');
-        } catch (error) {
-          console.error('❌ Error generando imagen QR:', error);
-        }
+    if (qr) {
+      qrCode = qr;
+      connectionStatus = 'waiting_for_scan';
+      pairingCode = null;
+      setAuthMethod('qr');
+      try {
+        // Generar imagen QR en base64 con mejor calidad
+        qrCodeImage = await QRCode.toDataURL(qr, {
+          errorCorrectionLevel: 'H', // Alta corrección de errores
+          type: 'image/png',
+          quality: 0.95,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          },
+          width: 300 // Tamaño más grande para mejor escaneo
+        });
+        
+        // Mostrar QR en terminal
+        console.log('\n📱 QR Code para conectar WhatsApp:');
+        console.log('┌─────────────────────────────────────────────────────────┐');
+        console.log('│  Escanea este código QR con tu WhatsApp para conectar  │');
+        console.log('└─────────────────────────────────────────────────────────┘');
+        
+        // Generar QR para terminal (ASCII)
+        const qrTerminal = await QRCode.toString(qr, { 
+          type: 'terminal',
+          small: true 
+        });
+        console.log(qrTerminal);
+        
+        console.log('📱 QR Code también disponible en el panel web: http://localhost');
+        console.log('⏳ Esperando escaneo...\n');
+      } catch (error) {
+        console.error('❌ Error generando imagen QR:', error);
       }
+    }
 
       if (connection === 'close') {
         const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -1215,6 +1325,15 @@ function getQRCodeImage() {
   return qrCodeImage;
 }
 
+function getPairingCode() {
+  return pairingCode;
+}
+
+function setAuthMethod(method) {
+  authMethod = method;
+  console.log(`🔧 Método de autenticación establecido: ${method}`);
+}
+
 function getConnectionStatus() {
   const now = new Date();
   let uptime = null;
@@ -1293,4 +1412,4 @@ async function getAvailableGroups() {
   }
 }
 
-export { connectToWhatsApp, getQRCode, getQRCodeImage, getConnectionStatus, getSocket, getAvailableGroups };
+export { connectToWhatsApp, getQRCode, getQRCodeImage, getPairingCode, setAuthMethod, getConnectionStatus, getSocket, getAvailableGroups };

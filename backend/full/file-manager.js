@@ -3,7 +3,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { fileURLToPath } from 'url';
-import { db } from './index.js';
+import db from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -221,14 +221,16 @@ async function processWhatsAppMedia(message, category, usuario) {
 async function registerDownload(filename, filepath, category, usuario, size, source) {
   try {
     const fecha = new Date().toISOString();
-    const stmt = await db.prepare(`
-      INSERT INTO descargas (
-        filename, filepath, category, usuario, size, source, fecha, estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    await stmt.run(filename, filepath, category, usuario, size, source, fecha, 'completada');
-    await stmt.finalize();
+    await db('descargas').insert({
+      filename,
+      filepath,
+      category,
+      usuario,
+      size,
+      source,
+      fecha,
+      estado: 'completada'
+    });
   } catch (error) {
     console.error('Error registrando descarga:', error);
   }
@@ -263,22 +265,10 @@ function getFileExtension(mimetype) {
  */
 async function listDownloads(category = null, usuario = null) {
   try {
-    let query = 'SELECT * FROM descargas WHERE 1=1';
-    const params = [];
-
-    if (category) {
-      query += ' AND category = ?';
-      params.push(category);
-    }
-
-    if (usuario) {
-      query += ' AND usuario = ?';
-      params.push(usuario);
-    }
-
-    query += ' ORDER BY fecha DESC LIMIT 50';
-
-    const downloads = await db.all(query, params);
+    let query = db('descargas').select('*');
+    if (category) query = query.where({ category });
+    if (usuario) query = query.where({ usuario });
+    const downloads = await query.orderBy('fecha', 'desc').limit(50);
     return downloads;
   } catch (error) {
     console.error('Error listando descargas:', error);
@@ -291,23 +281,22 @@ async function listDownloads(category = null, usuario = null) {
  */
 async function getDownloadStats() {
   try {
-    const stats = await db.all(`
-      SELECT 
-        category,
-        COUNT(*) as total,
-        SUM(size) as total_size,
-        AVG(size) as avg_size
-      FROM descargas 
-      GROUP BY category
-    `);
+    const stats = await db('descargas')
+      .select('category')
+      .count({ total: 'id' })
+      .sum({ total_size: 'size' })
+      .avg({ avg_size: 'size' })
+      .groupBy('category');
 
-    const totalFiles = await db.get('SELECT COUNT(*) as total FROM descargas');
-    const totalSize = await db.get('SELECT SUM(size) as total FROM descargas');
+    const totals = await db('descargas')
+      .count({ totalFiles: 'id' })
+      .sum({ totalSize: 'size' })
+      .first();
 
     return {
       byCategory: stats,
-      totalFiles: totalFiles.total,
-      totalSize: totalSize.total || 0
+      totalFiles: Number(totals?.totalFiles || 0),
+      totalSize: Number(totals?.totalSize || 0)
     };
   } catch (error) {
     console.error('Error obteniendo estadísticas:', error);
@@ -321,11 +310,7 @@ async function getDownloadStats() {
 async function cleanOldFiles() {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    
-    const oldFiles = await db.all(
-      'SELECT * FROM descargas WHERE fecha < ?',
-      [thirtyDaysAgo]
-    );
+    const oldFiles = await db('descargas').where('fecha', '<', thirtyDaysAgo).select('*');
 
     let deletedCount = 0;
     let freedSpace = 0;
@@ -337,18 +322,14 @@ async function cleanOldFiles() {
           fs.unlinkSync(file.filepath);
           freedSpace += stats.size;
         }
-        
-        await db.run('DELETE FROM descargas WHERE id = ?', [file.id]);
+        await db('descargas').where({ id: file.id }).del();
         deletedCount++;
       } catch (error) {
         console.error(`Error eliminando archivo ${file.filename}:`, error);
       }
     }
 
-    return {
-      deletedCount,
-      freedSpace
-    };
+    return { deletedCount, freedSpace };
   } catch (error) {
     console.error('Error limpiando archivos antiguos:', error);
     return { deletedCount: 0, freedSpace: 0 };

@@ -40,7 +40,9 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
+  Image,
 } from '@chakra-ui/react';
+import QRCode from 'qrcode';
 import {
   FaPlus,
   FaTrash,
@@ -82,6 +84,9 @@ const Subbots: React.FC = () => {
   const [selectedSubbot, setSelectedSubbot] = useState<Subbot | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isQrOpen, onOpen: onQrOpen, onClose: onQrClose } = useDisclosure();
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState<string | null>(null);
   const toast = useToast();
 
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -159,6 +164,34 @@ const Subbots: React.FC = () => {
       });
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // Ver QR del subbot
+  const viewSubbotQR = async (subbotId: string) => {
+    try {
+      setQrLoading(subbotId);
+      setQrImage(null);
+      const subbot = subbots.find(s => s.code === subbotId);
+      if (subbot && subbot.qr_data) {
+        // Generar QR desde qr_data
+        const qrDataURL = await QRCode.toDataURL(subbot.qr_data, { width: 256 });
+        setQrImage(qrDataURL);
+        onQrOpen();
+      } else {
+        // Fallback a backend
+        const resp = await apiService.getSubbotQR(subbotId);
+        if (resp.success && resp.qr) {
+          setQrImage(`data:image/png;base64,${resp.qr}`);
+          onQrOpen();
+        } else {
+          toast({ title: 'QR no disponible', status: 'warning' });
+        }
+      }
+    } catch (e) {
+      toast({ title: 'Error obteniendo QR', status: 'error' });
+    } finally {
+      setQrLoading(null);
     }
   };
 
@@ -401,6 +434,17 @@ const Subbots: React.FC = () => {
                             }}
                           />
                         </Tooltip>
+                        <Tooltip label="Ver QR">
+                          <IconButton
+                            aria-label="Ver QR"
+                            icon={<FaQrcode />}
+                            size="sm"
+                            variant="ghost"
+                            colorScheme="blue"
+                            onClick={() => viewSubbotQR(subbot.code)}
+                            isLoading={qrLoading === subbot.code}
+                          />
+                        </Tooltip>
                         <Tooltip label="Eliminar">
                           <IconButton
                             aria-label="Eliminar"
@@ -464,17 +508,13 @@ const Subbots: React.FC = () => {
                 </HStack>
                 {selectedSubbot.qr_data && (
                   <Box>
-                    <Text fontWeight="bold" mb={2}>QR Data:</Text>
-                    <Text
-                      fontFamily="mono"
-                      fontSize="sm"
-                      p={2}
-                      bg="gray.100"
-                      borderRadius="md"
-                      wordBreak="break-all"
-                    >
-                      {selectedSubbot.qr_data}
-                    </Text>
+                    <Text fontWeight="bold" mb={2}>Código QR:</Text>
+                    <Image
+                      src={qrImage || ''}
+                      alt="Código QR"
+                      maxW="200px"
+                      mx="auto"
+                    />
                   </Box>
                 )}
               </VStack>
@@ -485,9 +525,26 @@ const Subbots: React.FC = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Modal de QR */}
+      <Modal isOpen={isQrOpen} onClose={onQrClose} size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>QR del Sub-bot</ModalHeader>
+          <ModalBody>
+            {qrImage ? (
+              <Image src={qrImage} alt="QR Subbot" />
+            ) : (
+              <Text>QR no disponible.</Text>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={onQrClose}>Cerrar</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };
 
 export default Subbots;
-

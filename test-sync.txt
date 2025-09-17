@@ -1,2 +1,0 @@
-Este es un archivo de prueba para verificar la sincronización automática.
-Creado: Sun Sep 14 10:07:00 PM UTC 2025

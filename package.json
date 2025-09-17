@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "npm run start:production",
-    "start:production": "npx knex migrate:latest --knexfile backend/full/knexfile.js && cd backend/full && node index.js",
+    "start:production": "cd backend/full && npm run migrate && node index.js",
     "start:full": "cd backend/full && node index.js",
     "start:lite": "cd backend/lite && node index.js",
     "dev:full": "nodemon backend/full/index.js",

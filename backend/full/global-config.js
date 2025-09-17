@@ -3,7 +3,7 @@
 // Lista de administradores globales (superadmins)
 // Formato: [numero, nombre, esSuperAdmin]
 global.owner = [
-  ['595971284430', 'Melodía', true], // Tu número como superadmin
+  ['595971284430', 'Melodia', true], // Tu número como superadmin
   // Agregar más administradores aquí si es necesario
 ]
 

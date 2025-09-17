@@ -92,6 +92,15 @@ export const Dashboard: React.FC = () => {
     },
   });
 
+  const formatUptime = (seconds?: number | string) => {
+    if (!seconds) return '0h 0m';
+    const totalSeconds = typeof seconds === 'string' ? parseFloat(seconds) : seconds;
+    if (!Number.isFinite(totalSeconds)) return '0h 0m';
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+  };
+
   const handleRestartBot = () => {
     if (window.confirm('¿Estás seguro de que quieres reiniciar el bot?')) {
       restartBotMutation.mutate();
@@ -168,7 +177,7 @@ export const Dashboard: React.FC = () => {
               
               <Stat>
                 <StatLabel>Tiempo Activo</StatLabel>
-                <StatNumber>{botStatus?.uptime || '0h 0m'}</StatNumber>
+                <StatNumber>{formatUptime(botStatus?.uptime)}</StatNumber>
                 <StatHelpText>
                   <Icon as={FaClock} mr={1} />
                   Uptime del bot
@@ -406,7 +415,6 @@ export const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
-
 
 
 

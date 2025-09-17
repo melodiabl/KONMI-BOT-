@@ -4,7 +4,8 @@ import { apiService } from '../services/api';
 interface User {
   id: number;
   username: string;
-  roles: string[];
+  roles?: string[];
+  rol?: string; // compat backend
   wa_jid?: string;
 }
 
@@ -45,8 +46,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('AuthContext: Verificando token con backend...');
       apiService.getMe()
         .then((response) => {
-          console.log('Usuario obtenido:', response.user);
-          setUser(response.user);
+          // Backend devuelve el usuario directo (no envuelto) en /auth/me
+          const backendUser: User = (response && response.user) ? response.user : response;
+          const normalized: User = {
+            ...backendUser,
+            roles: backendUser?.roles && backendUser.roles.length
+              ? backendUser.roles
+              : (backendUser?.rol ? [backendUser.rol] : []),
+          };
+          console.log('Usuario obtenido (normalizado):', normalized);
+          setUser(normalized);
         })
         .catch((error) => {
           console.error('Error obteniendo usuario:', error);
@@ -76,8 +85,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await apiService.login(username, password, role);
       console.log('Login exitoso:', response);
       localStorage.setItem('token', response.token);
-      setUser(response.user);
-      console.log('AuthContext: Usuario establecido:', response.user);
+      const backendUser: User = response.user;
+      const normalized: User = {
+        ...backendUser,
+        roles: backendUser?.roles && backendUser.roles.length
+          ? backendUser.roles
+          : (backendUser?.rol ? [backendUser.rol] : []),
+      };
+      setUser(normalized);
+      console.log('AuthContext: Usuario establecido:', normalized);
     } catch (error) {
       console.error('AuthContext: Error en login:', error);
       throw error;
@@ -92,7 +108,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const hasRole = (role: string) => {
-    return user?.roles.includes(role) || false;
+    if (!user) return false;
+    return user.rol === role || (user.roles?.includes(role) ?? false);
   };
 
   const isOwner = () => {

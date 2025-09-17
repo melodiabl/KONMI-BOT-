@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -70,7 +70,8 @@ import {
   FaBan,
 } from 'react-icons/fa';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apiService } from '../services/api';
+import { apiService, getPedidoStats } from '../services/api';
+import { RUNTIME_CONFIG } from '../config/runtime-config';
 import { Pedido } from '../types';
 
 
@@ -79,14 +80,17 @@ interface PedidoFormData {
   titulo: string;
   descripcion: string;
   contenido_solicitado: string;
-  estado: 'pendiente' | 'resuelto';
+  estado: 'pendiente' | 'en_proceso' | 'resuelto' | 'cancelado' | 'rechazado';
   prioridad: string;
   grupo_id?: number;
 }
 
 const estadoColors = {
   pendiente: 'yellow',
+  en_proceso: 'blue',
   resuelto: 'green',
+  cancelado: 'red',
+  rechazado: 'red',
 };
 
 const prioridadColors = {
@@ -120,15 +124,16 @@ export const Pedidos: React.FC = () => {
   // Queries
   const { data: pedidosData, isLoading, error } = useQuery(
     ['pedidos', currentPage, searchTerm, estadoFilter, prioridadFilter],
-    () => apiService.getPedidos(currentPage, 20, searchTerm, estadoFilter)
+    () => apiService.getPedidos(currentPage, 20, searchTerm, estadoFilter, prioridadFilter)
   );
 
-  const { data: stats } = useQuery('pedidoStats', apiService.getPedidoStats);
+  const { data: stats } = useQuery('pedidoStats', getPedidoStats);
 
   // Mutations
   const createPedidoMutation = useMutation(apiService.createPedido, {
     onSuccess: () => {
       queryClient.invalidateQueries('pedidos');
+      queryClient.invalidateQueries('pedidoStats');
       toast({
         title: 'Pedido creado',
         description: 'El pedido ha sido creado exitosamente',
@@ -152,6 +157,7 @@ export const Pedidos: React.FC = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('pedidos');
+        queryClient.invalidateQueries('pedidoStats');
         toast({
           title: 'Pedido actualizado',
           description: 'El pedido ha sido actualizado exitosamente',
@@ -173,6 +179,7 @@ export const Pedidos: React.FC = () => {
   const deletePedidoMutation = useMutation(apiService.deletePedido, {
     onSuccess: () => {
       queryClient.invalidateQueries('pedidos');
+      queryClient.invalidateQueries('pedidoStats');
       toast({
         title: 'Pedido eliminado',
         description: 'El pedido ha sido eliminado exitosamente',
@@ -194,6 +201,8 @@ export const Pedidos: React.FC = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('pedidos');
+        queryClient.invalidateQueries('pedidoStats');
+        queryClient.invalidateQueries('pedidoStats');
         toast({
           title: 'Pedido resuelto',
           description: 'El pedido ha sido marcado como completado',
@@ -232,7 +241,7 @@ export const Pedidos: React.FC = () => {
       titulo: pedido.titulo,
       descripcion: pedido.descripcion || '',
       contenido_solicitado: pedido.contenido_solicitado,
-      estado: pedido.estado as 'pendiente' | 'resuelto',
+      estado: pedido.estado as 'pendiente' | 'en_proceso' | 'resuelto' | 'cancelado' | 'rechazado',
       prioridad: pedido.prioridad,
       grupo_id: pedido.grupo_id,
     });
@@ -263,12 +272,62 @@ export const Pedidos: React.FC = () => {
     resolvePedidoMutation.mutate({ id: pedidoId, aporte_id: aporteId ? parseInt(aporteId) : undefined });
   };
 
-  const handleEstadoChange = (pedidoId: number, newEstado: 'pendiente' | 'resuelto') => {
+  const handleEstadoChange = (pedidoId: number, newEstado: 'pendiente' | 'en_proceso' | 'resuelto' | 'cancelado' | 'rechazado') => {
     updatePedidoMutation.mutate({
       id: pedidoId,
       pedido: { estado: newEstado },
     });
   };
+
+  useEffect(() => {
+    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
+      return;
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      return;
+    }
+
+    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
+      ? RUNTIME_CONFIG.API_BASE_URL
+      : window.location.origin;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      const url = new URL('api/pedidos/stream', normalizedBase);
+      url.searchParams.set('token', token);
+      eventSource = new EventSource(url.toString());
+    } catch (err) {
+      console.error('No se pudo iniciar la sincronización en tiempo real de pedidos', err);
+      return;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event.data) {
+        return;
+      }
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'pedidoChanged') {
+          queryClient.invalidateQueries('pedidos');
+          queryClient.invalidateQueries('pedidoStats');
+        }
+      } catch (error) {
+        console.error('Error procesando actualización de pedidos', error);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('Stream de pedidos en tiempo real desconectado', err);
+    };
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [queryClient]);
 
   if (error) {
     return (
@@ -475,7 +534,7 @@ export const Pedidos: React.FC = () => {
                                   <>
                                     <MenuItem
                                       icon={<FaHourglassHalf />}
-                                      onClick={() => handleEstadoChange(pedido.id, 'resuelto')}
+                                      onClick={() => handleEstadoChange(pedido.id, 'en_proceso')}
                                     >
                                       Marcar en proceso
                                     </MenuItem>
@@ -485,31 +544,27 @@ export const Pedidos: React.FC = () => {
                                     >
                                       Completar
                                     </MenuItem>
+                                    <MenuItem
+                                      icon={<FaBan />}
+                                      onClick={() => handleEstadoChange(pedido.id, 'cancelado')}
+                                    >
+                                      Cancelar
+                                    </MenuItem>
+                                    <MenuItem
+                                      icon={<FaTimes />}
+                                      onClick={() => handleEstadoChange(pedido.id, 'rechazado')}
+                                    >
+                                      Rechazar
+                                    </MenuItem>
                                   </>
                                 )}
-                                {pedido.estado === 'resuelto' && (
+                                {pedido.estado === 'en_proceso' && (
                                   <MenuItem
                                     icon={<FaCheckCircle />}
                                     onClick={() => handleResolve(pedido.id)}
                                   >
                                     Completar
                                   </MenuItem>
-                                )}
-                                {pedido.estado === 'pendiente' && (
-                                  <>
-                                    <MenuItem
-                                      icon={<FaBan />}
-                                      onClick={() => handleEstadoChange(pedido.id, 'resuelto')}
-                                    >
-                                      Cancelar
-                                    </MenuItem>
-                                    <MenuItem
-                                      icon={<FaTimes />}
-                                      onClick={() => handleEstadoChange(pedido.id, 'resuelto')}
-                                    >
-                                      Rechazar
-                                    </MenuItem>
-                                  </>
                                 )}
                                 <MenuDivider />
                                 <MenuItem
@@ -642,6 +697,3 @@ export const Pedidos: React.FC = () => {
 };
 
 export default Pedidos;
-
-
-

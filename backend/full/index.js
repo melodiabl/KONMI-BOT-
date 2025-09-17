@@ -228,6 +228,25 @@ app.post('/api/whatsapp/logout', async (req, res) => {
   }
 });
 
+// Compat endpoints for frontend
+app.post('/api/bot/disconnect', async (req, res) => {
+  try {
+    const sock = getSocket();
+    if (sock) { await sock.logout(); return res.json({ success: true }); }
+    return res.json({ success: false, message: 'No hay conexión activa' });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bot/restart', async (req, res) => {
+  try {
+    const sock = getSocket();
+    if (sock) { try { await sock.logout(); } catch (_) {} }
+    // Reconnect with same auth directory
+    await connectToWhatsApp(join(__dirname, 'storage', 'baileys_full'));
+    return res.json({ success: true });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
 // Endpoint para obtener grupos disponibles del bot
 app.get('/api/whatsapp/groups', async (req, res) => {
   try {

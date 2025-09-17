@@ -1,8 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// Configuración de Gemini AI
-const GEMINI_API_KEY = 'AIzaSyAOBzrh8dnm_rMAUyy3yzBMpVIME-JFay4';
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+import { getGeminiModel, hasGeminiApiKey } from './gemini-client.js';
 
 /**
  * Sistema de IA para detección inteligente de contenido de manhwa
@@ -13,7 +9,14 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
  */
 async function analyzeContentWithAI(messageText, filename = '') {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    if (!hasGeminiApiKey()) {
+      return {
+        success: false,
+        error: 'GEMINI_API_KEY no está configurada'
+      };
+    }
+
+    const model = getGeminiModel('gemini-pro');
 
     const prompt = `
 Analiza el siguiente texto y nombre de archivo para extraer información sobre contenido de manhwa/webtoon:

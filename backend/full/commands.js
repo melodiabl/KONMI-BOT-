@@ -1,5 +1,6 @@
 import db from './db.js';
 import { analyzeContentWithAI } from './gemini-ai-handler.js';
+import { chatWithAI, analyzeManhwaContent } from './ai-chat-handler.js';
 
 /**
  * Handle the /aportar command to save a new aporte in the database.
@@ -9,26 +10,41 @@ import { analyzeContentWithAI } from './gemini-ai-handler.js';
  * @param {string} grupo - The group where the aporte was sent.
  * @param {string} fecha - The date/time of the aporte.
  */
-async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
-  try {
-    await db('aportes').insert({ contenido, tipo, usuario, grupo, fecha });
-    return { success: true, message: `Aporte guardado correctamente para el usuario ${usuario}.` };
-  } catch (error) {
-    return { success: false, message: error.message };
-  }
+function normalizeAporteTipo(raw) {
+  if (!raw) return 'extra';
+  const v = String(raw).trim().toLowerCase();
+  const map = {
+    'manhwa': 'manhwa',
+    'manhwas': 'manhwa',
+    'manhwas_bls': 'manhwas_bls',
+    'manhwa bls': 'manhwas_bls',
+    'bls': 'manhwas_bls',
+    'serie': 'series',
+    'series': 'series',
+    'series_videos': 'series_videos',
+    'series videos': 'series_videos',
+    'series_bls': 'series_bls',
+    'series bls': 'series_bls',
+    'anime': 'anime',
+    'anime_bls': 'anime_bls',
+    'anime bls': 'anime_bls',
+    'extra': 'extra',
+    'extra_imagen': 'extra_imagen',
+    'extra imagen': 'extra_imagen',
+    'imagen': 'extra_imagen',
+    'ilustracion': 'ilustracion',
+    'ilustración': 'ilustracion',
+    'ilustraciones': 'ilustracion',
+    'pack': 'pack'
+  };
+  return map[v] || v.replace(/\s+/g, '_');
 }
 
-/**
- * Handle the /pedido command to save a new pedido in the database.
- * @param {string} texto - The pedido text.
- * @param {string} usuario - The user who sent the pedido.
- * @param {string} grupo - The group where the pedido was sent.
- * @param {string} fecha - The date/time of the pedido.
- */
-async function handlePedido(texto, usuario, grupo, fecha) {
+async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
   try {
-    await db('pedidos').insert({ texto, estado: 'pendiente', usuario, grupo, fecha });
-    return { success: true, message: `Pedido guardado correctamente para el usuario ${usuario}.` };
+    const tipoNorm = normalizeAporteTipo(tipo);
+    await db('aportes').insert({ contenido, tipo: tipoNorm, usuario, grupo, fecha });
+    return { success: true, message: `Aporte guardado correctamente para el usuario ${usuario}.` };
   } catch (error) {
     return { success: false, message: error.message };
   }
@@ -44,25 +60,20 @@ async function handlePedido(texto, usuario, grupo, fecha) {
 async function handleAI(pregunta, usuario, grupo, fecha) {
   try {
     console.log(`🤖 Comando /ai recibido de ${usuario}: "${pregunta}"`);
-    
-    // Usar IA de Gemini para responder pregunta general
-    const { GoogleGenerativeAI } = await import('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI('AIzaSyAOBzrh8dnm_rMAUyy3yzBMpVIME-JFay4');
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const prompt = `Responde la siguiente pregunta de manera clara y útil en español:
+    const aiResult = await chatWithAI(pregunta, `Usuario: ${usuario}, Grupo: ${grupo}`);
+    if (!aiResult.success) {
+      const reason = aiResult.error?.includes('no está configurada')
+        ? 'La función de IA no está configurada. Por favor establece GEMINI_API_KEY en el servidor.'
+        : aiResult.error || 'La IA no pudo procesar tu solicitud.';
+      return {
+        success: false,
+        message: `❌ ${reason}`
+      };
+    }
 
-PREGUNTA: "${pregunta}"
+    const finalResponse = `🤖 *Respuesta de IA:*\n\n${aiResult.response}\n\n_Procesado por ${aiResult.model || 'Gemini AI'}_`;
 
-Por favor proporciona una respuesta informativa y concisa. Si es sobre manhwa, anime, o contenido relacionado, incluye detalles relevantes.`;
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const aiResponse = response.text();
-
-    const finalResponse = `🤖 *Respuesta de IA:*\n\n${aiResponse}\n\n_Procesado por Gemini AI_`;
-    
-    // Registrar en logs
     await db('logs').insert({
       tipo: 'ai_command',
       comando: '/ai',
@@ -70,19 +81,20 @@ Por favor proporciona una respuesta informativa y concisa. Si es sobre manhwa, a
       grupo,
       fecha,
       detalles: JSON.stringify({
-        pregunta: pregunta,
-        respuesta: aiResponse,
+        pregunta,
+        respuesta: aiResult.response,
+        modelo: aiResult.model || 'gemini-pro',
         timestamp: fecha
       })
     });
-    
+
     return { success: true, message: finalResponse };
-    
+
   } catch (error) {
     console.error('Error en comando /ai:', error);
-    return { 
-      success: false, 
-      message: `❌ Error procesando comando /ai: ${error.message}\n\n_Intenta reformular tu pregunta._` 
+    return {
+      success: false,
+      message: `❌ Error procesando comando /ai: ${error.message}\n\n_Intenta reformular tu pregunta._`
     };
   }
 }
@@ -99,17 +111,23 @@ async function handleClasificar(texto, usuario, grupo, fecha) {
     console.log(`🔍 Comando /clasificar recibido de ${usuario}: "${texto}"`);
     
     // Analizar con IA para clasificación de manhwa
-    const aiResult = await analyzeContentWithAI(texto, '');
-    
+    let aiResult = await analyzeManhwaContent(texto, '');
+
+    if (!aiResult.success) {
+      aiResult = await analyzeContentWithAI(texto, '');
+    }
+
     if (aiResult.success) {
+      const data = aiResult.data;
       const response = `🔍 *Clasificación de IA:*\n\n` +
-                      `📚 *Título detectado:* ${aiResult.data.titulo}\n` +
-                      `🏷️ *Tipo de contenido:* ${aiResult.data.tipo}\n` +
-                      `📊 *Nivel de confianza:* ${Math.round(aiResult.data.confianza * 100)}%\n` +
-                      `🔧 *Método usado:* ${aiResult.data.fuente}\n\n` +
-                      `_Análisis realizado por Gemini AI_`;
-      
-      // Registrar en logs
+        `📚 *Título detectado:* ${data.titulo}\n` +
+        `🏷️ *Tipo de contenido:* ${data.tipo}\n` +
+        (data.capitulo ? `📖 *Capítulo:* ${data.capitulo}\n` : '') +
+        (data.descripcion ? `📝 *Descripción:* ${data.descripcion}\n` : '') +
+        `📊 *Nivel de confianza:* ${Math.round((data.confianza || 0) * 100)}%\n` +
+        `🔧 *Método usado:* ${data.fuente || 'gemini-ai'}\n\n` +
+        `_Análisis realizado por Gemini AI_`;
+
       await db('logs').insert({
         tipo: 'clasificar_command',
         comando: '/clasificar',
@@ -117,19 +135,19 @@ async function handleClasificar(texto, usuario, grupo, fecha) {
         grupo,
         fecha,
         detalles: JSON.stringify({
-          texto: texto,
-          resultado: aiResult.data,
+          texto,
+          resultado: data,
           timestamp: fecha
         })
       });
-      
+
       return { success: true, message: response };
-    } else {
-      return { 
-        success: false, 
-        message: `❌ Error en clasificación: ${aiResult.error}\n\n_Intenta con otro texto._` 
-      };
     }
+
+    return {
+      success: false,
+      message: `❌ Error en clasificación: ${aiResult.error || 'IA no disponible'}\n\n_Intenta con otro texto._`
+    };
   } catch (error) {
     console.error('Error en comando /clasificar:', error);
     return { 
@@ -263,6 +281,14 @@ async function handleLogs(categoria, usuario, grupo, fecha) {
 
     let response = `📋 *Logs del Sistema${categoria ? ` - ${categoria.toUpperCase()}` : ''}:*\n\n`;
     
+    // Resolver nombres de usuario
+    const nums = [...new Set(logs.map(l => String(l.usuario || '').split('@')[0].split(':')[0]))].filter(Boolean);
+    const dbUsers = nums.length ? await db('usuarios').whereIn('whatsapp_number', nums).select('whatsapp_number','username') : [];
+    const nameByNumber = Object.fromEntries(dbUsers.map(u => [u.whatsapp_number, u.username]));
+    const missing = nums.filter(n => !nameByNumber[n]);
+    const waNames = missing.length ? await db('wa_contacts').whereIn('wa_number', missing).select('wa_number','display_name') : [];
+    const waByNumber = Object.fromEntries(waNames.map(w => [w.wa_number, w.display_name]));
+
     logs.forEach((log, index) => {
       const fechaCorta = new Date(log.fecha).toLocaleString('es-ES');
       const tipoIcon = {
@@ -275,7 +301,9 @@ async function handleLogs(categoria, usuario, grupo, fecha) {
       }[log.tipo] || '📝';
       
       response += `${index + 1}. ${tipoIcon} *${log.comando}*\n`;
-      response += `   👤 ${log.usuario} | 📅 ${fechaCorta}\n`;
+      const num = String(log.usuario || '').split('@')[0].split(':')[0];
+      const uname = nameByNumber[num] || waByNumber[num] || num || '-';
+      response += `   👤 @${uname} | 📅 ${fechaCorta}\n`;
       if (log.grupo) response += `   📍 Grupo: ${log.grupo}\n`;
       response += `\n`;
     });
@@ -637,8 +665,8 @@ async function handleCleanSession(usuario, grupo, fecha) {
 }
 
 export {
+  normalizeAporteTipo,
   handleAportar,
-  handlePedido,
   handleAI,
   handleClasificar,
   handleListClasificados,
