@@ -1,706 +1,478 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Badge,
-  IconButton,
-  useDisclosure,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  FormControl,
-  FormLabel,
-  Select,
-  useToast,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Flex,
-  Card,
-  CardBody,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  useColorModeValue,
-  Progress,
-  Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-} from '@chakra-ui/react';
-import {
-  FaSearch,
-  FaPlus,
-  FaEdit,
-  FaTrash,
-  FaEye,
-  FaEllipsisV,
-  FaShieldAlt,
-} from 'react-icons/fa';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apiService, getUsuarios, getUsuarioStats } from '../services/api';
-import { RUNTIME_CONFIG } from '../config/runtime-config';
-import { useAuth } from '../contexts/AuthContext';
+  Users, 
+  Search, 
+  RefreshCw, 
+  Shield, 
+  UserCheck, 
+  Mail, 
+  Phone, 
+  Calendar,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  Edit,
+  Eye
+} from 'lucide-react';
 
 interface User {
   id: number;
   username: string;
-  rol: string;
-  whatsapp_number?: string;
-  grupo_registro?: string;
+  email: string;
+  whatsapp_number: string;
+  rol: 'admin' | 'moderador' | 'usuario';
   fecha_registro: string;
-  created_at: string;
+  activo: boolean;
 }
 
-interface UserFormData {
-  username: string;
-  password: string;
-  rol: string;
-  whatsapp_number?: string;
-}
-
-const roleColors: Record<string, string> = {
-  owner: 'purple',
-  admin: 'red',
-  moderador: 'green',
-  colaborador: 'blue',
-  creador: 'teal',
-  usuario: 'gray',
-};
-
-const roleLabels: Record<string, string> = {
-  owner: 'Propietario',
-  admin: 'Administrador',
-  moderador: 'Moderador',
-  colaborador: 'Colaborador',
-  creador: 'Creador',
-  usuario: 'Usuario',
-};
-
-// Removido - no usamos estados de activo/inactivo
-
-export const Usuarios: React.FC = () => {
-  const { user: currentUser } = useAuth();
+const Usuarios: React.FC = () => {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState<UserFormData>({
-    username: '',
-    password: '',
-    rol: 'usuario',
-    whatsapp_number: '',
-  });
-  const [formErrors, setFormErrors] = useState<Partial<UserFormData>>({});
-
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const toast = useToast();
-  const queryClient = useQueryClient();
-
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
-
-  const currentRole = (currentUser as any)?.rol || (currentUser as any)?.roles?.[0] || 'usuario';
-  const baseRoleOptions = [
-    { value: 'owner', label: 'Propietario' },
-    { value: 'admin', label: 'Administrador' },
-    { value: 'moderador', label: 'Moderador' },
-    { value: 'colaborador', label: 'Colaborador' },
-    { value: 'usuario', label: 'Usuario' },
-  ];
-
-  const roleOptions = baseRoleOptions.filter((option) => {
-    if (currentRole === 'owner') return true;
-    if (currentRole === 'admin') {
-      return option.value !== 'owner';
-    }
-    if (currentRole === 'moderador') {
-      return ['moderador', 'usuario'].includes(option.value);
-    }
-    return option.value === 'usuario';
-  });
-
-  // Queries
-  const { data: usuariosData, isLoading, error } = useQuery(
-    ['usuarios', currentPage, searchTerm, roleFilter],
-    () => getUsuarios(currentPage, 20, searchTerm, roleFilter)
-  );
-
-  const { data: stats } = useQuery('usuarioStats', getUsuarioStats);
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [newRole, setNewRole] = useState<string>('');
 
   useEffect(() => {
-    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
-      return;
-    }
+    loadUsers();
+  }, []);
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) {
-      return;
-    }
-
-    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
-      ? RUNTIME_CONFIG.API_BASE_URL
-      : window.location.origin;
-
-    let eventSource: EventSource | null = null;
-
+  const loadUsers = async () => {
     try {
-      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-      const url = new URL('api/usuarios/stream', normalizedBase);
-      url.searchParams.set('token', token);
-      eventSource = new EventSource(url.toString());
-    } catch (error) {
-      console.error('No se pudo iniciar la sincronización en tiempo real de usuarios', error);
-      return;
-    }
-
-    eventSource.onmessage = (event) => {
-      if (!event.data) {
-        return;
-      }
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type === 'usuarioChanged') {
-          queryClient.invalidateQueries('usuarios');
-          queryClient.invalidateQueries('usuarioStats');
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      } catch (err) {
-        console.error('Error procesando actualización de usuarios', err);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('Stream de usuarios en tiempo real desconectado', error);
-    };
-
-    return () => {
-      eventSource?.close();
-    };
-  }, [queryClient]);
-
-  // Mutations
-  const createUserMutation = useMutation(apiService.createUsuario, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('usuarios');
-      queryClient.invalidateQueries('usuarioStats');
-      toast({
-        title: 'Usuario creado',
-        description: 'El usuario ha sido creado exitosamente',
-        status: 'success',
       });
-      onClose();
-      resetForm();
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Error al crear usuario',
-        status: 'error',
-      });
-    },
-  });
-
-  const updateUserMutation = useMutation(
-    (data: { id: number; user: Partial<User> & { password?: string } }) =>
-      apiService.updateUsuario(data.id, data.user),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('usuarios');
-        queryClient.invalidateQueries('usuarioStats');
-        toast({
-          title: 'Usuario actualizado',
-          description: 'El usuario ha sido actualizado exitosamente',
-          status: 'success',
-        });
-        onClose();
-        resetForm();
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al actualizar usuario',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const deleteUserMutation = useMutation(apiService.deleteUsuario, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('usuarios');
-      queryClient.invalidateQueries('usuarioStats');
-      toast({
-        title: 'Usuario eliminado',
-        description: 'El usuario ha sido eliminado exitosamente',
-        status: 'success',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Error al eliminar usuario',
-        status: 'error',
-      });
-    },
-  });
-
-  // Removido - no usamos estados de activo/inactivo
-
-  const resetForm = () => {
-    setFormData({
-      username: '',
-      password: '',
-      rol: 'usuario',
-      whatsapp_number: '',
-    });
-    setEditingUser(null);
-  };
-
-  const handleOpenCreate = () => {
-    resetForm();
-    onOpen();
-  };
-
-  const handleOpenEdit = (user: User) => {
-    setEditingUser(user);
-    setFormData({
-      username: user.username,
-      password: '',
-      rol: user.rol,
-      whatsapp_number: user.whatsapp_number || '',
-    });
-    onOpen();
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Validaciones
-    const errs: Partial<UserFormData> = {};
-    const uname = formData.username.trim();
-    if (!uname || uname.length < 3) errs.username = 'Mínimo 3 caracteres';
-    if (!editingUser) {
-      if (!formData.password || formData.password.length < 6) errs.password = 'Mínimo 6 caracteres';
-    } else if (formData.password && formData.password.length < 6) {
-      errs.password = 'Mínimo 6 caracteres';
-    }
-    const allowed = ['usuario','colaborador','admin','owner'];
-    if (!allowed.includes(formData.rol)) errs.rol = 'Rol inválido';
-    if (formData.whatsapp_number && !/^\d{6,20}$/.test(formData.whatsapp_number.replace(/[^0-9]/g,''))) {
-      errs.whatsapp_number = 'Solo dígitos (6-20)';
-    }
-    setFormErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-
-    const payload: UserFormData = {
-      ...formData,
-      username: uname,
-      whatsapp_number: formData.whatsapp_number?.trim() || undefined
-    };
-
-    if (editingUser) {
-      const updatePayload: Partial<UserFormData> = { ...payload };
-      if (!updatePayload.password) {
-        delete updatePayload.password;
-      }
-      updateUserMutation.mutate({
-        id: editingUser.id,
-        user: updatePayload,
-      });
-    } else {
-      createUserMutation.mutate(payload);
-    }
-  };
-
-  const handleDelete = (userId: number) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este usuario?')) {
-      deleteUserMutation.mutate(userId);
-    }
-  };
-
-  const handleResetPassword = async (user: User) => {
-    try {
-      const defaultWa = user.whatsapp_number || '';
-      const wa = window.prompt('Confirma o ingresa el número de WhatsApp para resetear contraseña (solo dígitos):', defaultWa) || '';
-      const cleanWa = wa.replace(/[^0-9]/g, '');
-      if (!cleanWa) return;
-      const resp = await apiService.resetUserPassword(user.username, cleanWa);
-      if (resp?.success && resp.tempPassword) {
-        toast({ title: 'Contraseña temporal generada', description: `Usuario: ${user.username} | Temp: ${resp.tempPassword}`, status: 'success', duration: 7000, isClosable: true });
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data || []);
+        setError(null);
       } else {
-        toast({ title: 'No se pudo resetear', status: 'error' });
+        setError('Error al cargar usuarios');
       }
-    } catch (e: any) {
-      toast({ title: 'Error', description: e?.response?.data?.error || e?.message || 'Fallo al resetear contraseña', status: 'error' });
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Removido - no usamos estados de activo/inactivo
+  const updateUserRole = async (userId: number, role: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/users/${userId}/role`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ rol: role })
+      });
 
-  if (error) {
-    return (
-      <Alert status="error">
-        <AlertIcon />
-        Error al cargar usuarios: {(error as any).message}
-      </Alert>
-    );
-  }
+      if (response.ok) {
+        setUsers(prev => prev.map(user => 
+          user.id === userId ? { ...user, rol: role as any } : user
+        ));
+        setSuccess('Rol actualizado correctamente');
+        setShowEditModal(false);
+        setSelectedUser(null);
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Error al actualizar rol');
+      }
+    } catch (err) {
+      setError('Error de conexión');
+    }
+  };
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user);
+    setNewRole(user.rol);
+    setShowEditModal(true);
+  };
+
+  const handleSaveRole = () => {
+    if (selectedUser && newRole) {
+      updateUserRole(selectedUser.id, newRole);
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'admin': return 'bg-red-100 text-red-800 border-red-200';
+      case 'moderador': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'usuario': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'admin': return <Shield className="w-4 h-4" />;
+      case 'moderador': return <UserCheck className="w-4 h-4" />;
+      case 'usuario': return <Users className="w-4 h-4" />;
+      default: return <Users className="w-4 h-4" />;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES');
+  };
+
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         user.whatsapp_number.includes(searchTerm);
+    const matchesRole = roleFilter === 'all' || user.rol === roleFilter;
+    return matchesSearch && matchesRole;
+  });
+
+  const stats = {
+    total: users.length,
+    admins: users.filter(u => u.rol === 'admin').length,
+    moderadores: users.filter(u => u.rol === 'moderador').length,
+    usuarios: users.filter(u => u.rol === 'usuario').length,
+    activos: users.filter(u => u.activo).length
+  };
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <Flex align="center" justify="space-between">
-          <Heading size="lg">Gestión de Usuarios</Heading>
-          <Button
-            leftIcon={<FaPlus />}
-            colorScheme="green"
-            onClick={handleOpenCreate}
-          >
-            Nuevo Usuario
-          </Button>
-        </Flex>
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <Users className="w-8 h-8 text-blue-600" />
+                Gestión de Usuarios
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Administra usuarios, roles y permisos del sistema
+              </p>
+            </div>
+            <button
+              onClick={loadUsers}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+          </div>
+        </div>
+
+        {/* Alertas */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span className="text-red-700">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-500 hover:text-red-700"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <span className="text-green-700">{success}</span>
+            <button
+              onClick={() => setSuccess(null)}
+              className="ml-auto text-green-500 hover:text-green-700"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Estadísticas */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={8} justify="center">
-              <Stat textAlign="center">
-                <StatLabel>Total Usuarios</StatLabel>
-                <StatNumber>{stats?.totalUsuarios || 0}</StatNumber>
-                <StatHelpText>Registrados en el sistema</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Activos</StatLabel>
-                <StatNumber color="green.500">{stats?.usuariosActivos || 0}</StatNumber>
-                <StatHelpText>Usuarios activos</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Administradores</StatLabel>
-                <StatNumber color="red.500">{stats?.totalAdmins || 0}</StatNumber>
-                <StatHelpText>Con rol admin</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Creadores</StatLabel>
-                <StatNumber color="purple.500">{stats?.totalCreadores || 0}</StatNumber>
-                <StatHelpText>Usuarios con rol creador</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Moderadores</StatLabel>
-                <StatNumber color="teal.500">{stats?.totalModeradores || 0}</StatNumber>
-                <StatHelpText>Equipo de moderación</StatHelpText>
-              </Stat>
-            </HStack>
-          </CardBody>
-        </Card>
-
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Distribución por Roles</Heading>
-          </CardHeader>
-          <CardBody>
-            <VStack spacing={4} align="stretch">
-              {(stats?.usuariosPorRol || []).map((rolItem: { rol: string; count: number }) => {
-                const count = Number(rolItem.count || 0);
-                const percentage = (count / (stats?.totalUsuarios || 1)) * 100;
-                const label = roleLabels[rolItem.rol] || rolItem.rol;
-                return (
-                  <Box key={rolItem.rol}>
-                    <HStack justify="space-between">
-                      <HStack>
-                        <Badge colorScheme={roleColors[rolItem.rol] || 'gray'}>{label}</Badge>
-                        <Text fontSize="sm">{label}</Text>
-                      </HStack>
-                      <Text fontWeight="semibold">{count}</Text>
-                    </HStack>
-                    <Progress value={percentage} colorScheme={roleColors[rolItem.rol] || 'gray'} mt={2} />
-                  </Box>
-                );
-              })}
-            </VStack>
-          </CardBody>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              </div>
+              <Users className="w-8 h-8 text-blue-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Admins</p>
+                <p className="text-2xl font-bold text-red-600">{stats.admins}</p>
+              </div>
+              <Shield className="w-8 h-8 text-red-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Moderadores</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.moderadores}</p>
+              </div>
+              <UserCheck className="w-8 h-8 text-blue-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Usuarios</p>
+                <p className="text-2xl font-bold text-green-600">{stats.usuarios}</p>
+              </div>
+              <Users className="w-8 h-8 text-green-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Activos</p>
+                <p className="text-2xl font-bold text-purple-600">{stats.activos}</p>
+              </div>
+              <UserCheck className="w-8 h-8 text-purple-500" />
+            </div>
+          </div>
+        </div>
 
         {/* Filtros */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={4}>
-              <InputGroup maxW="300px">
-                <InputLeftElement pointerEvents="none">
-                  <FaSearch color="gray.300" />
-                </InputLeftElement>
-                <Input
-                  placeholder="Buscar usuarios..."
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre, email o teléfono..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-              </InputGroup>
-              <Select
-                maxW="220px"
+              </div>
+            </div>
+            <div className="md:w-48">
+              <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">Todos los roles</option>
-                <option value="owner">Propietario</option>
-                <option value="admin">Administrador</option>
-                <option value="moderador">Moderador</option>
-                <option value="colaborador">Colaborador</option>
-                <option value="usuario">Usuario</option>
-              </Select>
-            </HStack>
-          </CardBody>
-        </Card>
+                <option value="admin">Administradores</option>
+                <option value="moderador">Moderadores</option>
+                <option value="usuario">Usuarios</option>
+              </select>
+            </div>
+          </div>
+        </div>
 
-        {/* Tabla */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            {isLoading ? (
-              <Box textAlign="center" py={8}>
-                <Spinner size="xl" />
-                <Text mt={4}>Cargando usuarios...</Text>
-              </Box>
-            ) : (
-              <Box overflowX="auto">
-                <Table variant="simple">
-                  <Thead>
-                    <Tr>
-                      <Th>Usuario</Th>
-                      <Th>Rol</Th>
-                      <Th>WhatsApp</Th>
-                      <Th>Grupo Registro</Th>
-                      <Th>Fecha Creación</Th>
-                      <Th>Acciones</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {usuariosData?.usuarios?.length === 0 && (
-                      <Tr>
-                        <Td colSpan={6}>
-                          <Alert status="info" variant="subtle">
-                            <AlertIcon />
-                            No se encontraron usuarios.
-                          </Alert>
-                        </Td>
-                      </Tr>
-                    )}
-                    {usuariosData?.usuarios?.map((user: User) => (
-                      <Tr key={user.id}>
-                        <Td>
-                          <VStack align="start" spacing={1}>
-                            <Text fontWeight="semibold">{user.username}</Text>
-                            <Text fontSize="sm" color="gray.500">
+        {/* Tabla de Usuarios */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Lista de Usuarios</h2>
+            <p className="text-gray-600 mt-1">
+              {filteredUsers.length} de {users.length} usuarios
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center">
+              <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
+              <p className="text-gray-600">Cargando usuarios...</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="p-8 text-center">
+              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay usuarios</h3>
+              <p className="text-gray-600">No se encontraron usuarios con los filtros aplicados</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Usuario
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Contacto
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Rol
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Registro
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Estado
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                              <Users className="w-5 h-5 text-blue-600" />
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">
+                              {user.username}
+                            </div>
+                            <div className="text-sm text-gray-500">
                               ID: {user.id}
-                            </Text>
-                          </VStack>
-                        </Td>
-                        <Td>
-                          <Badge
-                            colorScheme={roleColors[user.rol as keyof typeof roleColors] || 'gray'}
-                            variant="subtle"
-                          >
-                            {roleLabels[user.rol] || user.rol}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          {user.whatsapp_number ? (
-                            <Text fontSize="sm" color="green.500">
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-gray-400" />
+                            {user.email}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Phone className="w-4 h-4 text-gray-400" />
                               {user.whatsapp_number}
-                            </Text>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getRoleColor(user.rol)}`}>
+                          {getRoleIcon(user.rol)}
+                          {user.rol.charAt(0).toUpperCase() + user.rol.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4" />
+                          {formatDate(user.fecha_registro)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          user.activo 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {user.activo ? (
+                            <>
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Activo
+                            </>
                           ) : (
-                            <Text fontSize="sm" color="gray.500">
-                              No configurado
-                            </Text>
+                            <>
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Inactivo
+                            </>
                           )}
-                        </Td>
-                        <Td>
-                          {user.grupo_registro ? (
-                            <Text fontSize="sm" color="blue.500">
-                              {user.grupo_registro}
-                            </Text>
-                          ) : (
-                            <Text fontSize="sm" color="gray.500">
-                              No registrado
-                            </Text>
-                          )}
-                        </Td>
-                        <Td>
-                          <Text fontSize="sm">
-                            {new Date(user.created_at).toLocaleDateString()}
-                          </Text>
-                        </Td>
-                        <Td>
-                          <HStack spacing={2}>
-                            <Tooltip label="Ver detalles">
-                              <IconButton
-                                aria-label="Ver detalles"
-                                icon={<FaEye />}
-                                size="sm"
-                                variant="ghost"
-                                colorScheme="blue"
-                              />
-                            </Tooltip>
-                            <Tooltip label="Editar usuario">
-                              <IconButton
-                                aria-label="Editar usuario"
-                                icon={<FaEdit />}
-                                size="sm"
-                                variant="ghost"
-                                colorScheme="orange"
-                                onClick={() => handleOpenEdit(user)}
-                              />
-                            </Tooltip>
-                            <Menu>
-                              <MenuButton
-                                as={IconButton}
-                                aria-label="Más opciones"
-                                icon={<FaEllipsisV />}
-                                size="sm"
-                                variant="ghost"
-                              />
-                              <MenuList>
-                                <MenuItem
-                                  icon={<FaShieldAlt />}
-                                  onClick={() => handleResetPassword(user)}
-                                >
-                                  Resetear Contraseña
-                                </MenuItem>
-                                <MenuItem
-                                  icon={<FaTrash />}
-                                  color="red.500"
-                                  onClick={() => handleDelete(user.id)}
-                                >
-                                  Eliminar
-                                </MenuItem>
-                              </MenuList>
-                            </Menu>
-                          </HStack>
-                        </Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
-              </Box>
-            )}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleEditUser(user)}
+                            className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                            title="Editar rol"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            className="text-gray-600 hover:text-gray-900 p-1 rounded hover:bg-gray-50"
+                            title="Ver detalles"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-            {/* Paginación */}
-            {usuariosData?.pagination && (
-              <Flex justify="center" mt={6}>
-                <HStack spacing={2}>
-                  <Button
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    isDisabled={currentPage === 1}
-                  >
-                    Anterior
-                  </Button>
-                  <Text>
-                    Página {currentPage} de {usuariosData.pagination.totalPages}
-                  </Text>
-                  <Button
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    isDisabled={currentPage === usuariosData.pagination.totalPages}
-                  >
-                    Siguiente
-                  </Button>
-                </HStack>
-              </Flex>
-            )}
-          </CardBody>
-        </Card>
-      </VStack>
-
-      {/* Modal de Crear/Editar Usuario */}
-      <Modal isOpen={isOpen} onClose={onClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <form onSubmit={handleSubmit}>
-            <ModalHeader>
-              {editingUser ? 'Editar Usuario' : 'Crear Nuevo Usuario'}
-            </ModalHeader>
-            <ModalBody>
-              <VStack spacing={4}>
-                <FormControl isRequired isInvalid={!!formErrors.username}>
-                  <FormLabel>Nombre de Usuario</FormLabel>
-                  <Input
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    placeholder="Ingresa el nombre de usuario"
-                  />
-                  {formErrors.username && <Text color="red.400" fontSize="sm">{formErrors.username}</Text>}
-                </FormControl>
-
-                <FormControl isRequired={!editingUser} isInvalid={!!formErrors.password}>
-                  <FormLabel>
-                    {editingUser ? 'Nueva Contraseña (opcional)' : 'Contraseña'}
-                  </FormLabel>
-                  <Input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder={editingUser ? 'Dejar vacío para mantener' : 'Ingresa la contraseña'}
-                  />
-                  {formErrors.password && <Text color="red.400" fontSize="sm">{formErrors.password}</Text>}
-                </FormControl>
-
-                <FormControl isRequired isInvalid={!!formErrors.rol}>
-                  <FormLabel>Rol</FormLabel>
-                  <Select
-                    value={formData.rol}
-                    onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
-                  >
-                    {roleOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </Select>
-                  {formErrors.rol && <Text color="red.400" fontSize="sm">{formErrors.rol}</Text>}
-                </FormControl>
-
-                <FormControl isInvalid={!!formErrors.whatsapp_number}>
-                  <FormLabel>Número de WhatsApp (opcional)</FormLabel>
-                  <Input
-                    value={formData.whatsapp_number || ''}
-                    onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
-                    placeholder="1234567890"
-                  />
-                  {formErrors.whatsapp_number && <Text color="red.400" fontSize="sm">{formErrors.whatsapp_number}</Text>}
-                </FormControl>
-              </VStack>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="ghost" mr={3} onClick={onClose}>
+        {/* Modal de Edición */}
+        {showEditModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Editar Rol de Usuario
+              </h3>
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Usuario: <span className="font-medium">{selectedUser.username}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  Email: <span className="font-medium">{selectedUser.email}</span>
+                </p>
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nuevo Rol
+                </label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="usuario">Usuario</option>
+                  <option value="moderador">Moderador</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveRole}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Guardar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedUser(null);
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+                >
                 Cancelar
-              </Button>
-              <Button
-                colorScheme="blue"
-                type="submit"
-                isLoading={createUserMutation.isLoading || updateUserMutation.isLoading}
-              >
-                {editingUser ? 'Actualizar' : 'Crear'}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
-    </Box>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
 export default Usuarios;
+
+
+
+
+
+
+
+
+
+

@@ -1,219 +1,155 @@
 import express from 'express';
+import { authenticateToken, authorizeRoles } from './auth.js';
 import {
-  registerSubbotEvent, 
-  getSubbotStatus, 
-  getSubbot, 
-  listSubbots, 
-  createSubbot, 
-  deleteSubbot, 
-  executeSubbotCommand, 
-  getSubbotCommands,
-  cleanupInactiveSubbots 
-} from './subbot-manager.js';
-import fs from 'fs';
-import path from 'path';
+  launchSubbot,
+  deleteSubbot,
+  fetchSubbotListWithOnlineFlag,
+  getSubbotStatus,
+  registerSubbotEvent,
+  getSubbotByCode,
+  onSubbotEvent
+} from './subproc-subbots.js';
 
 const router = express.Router();
 
-// Middleware para parsear JSON
-router.use(express.json());
-
-/**
- * POST /api/subbot/event
- * Registrar evento de subbot
- */
 router.post('/event', async (req, res) => {
   try {
-    const { subbotId, event, data, timestamp } = req.body;
-    
-    if (!subbotId || !event) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'subbotId y event son requeridos' 
-      });
+    const { subbotId, token, event, data } = req.body || {};
+    const result = await registerSubbotEvent({ subbotId, token, event, data });
+    if (!result.success) {
+      return res.status(400).json(result);
     }
-
-    const result = await registerSubbotEvent(subbotId, event, data);
-    res.json(result);
-  } catch (error) {
-    console.error('Error en /api/subbot/event:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
-    });
-  }
-});
-
-/**
- * GET /api/subbot/status
- * Obtener estado de todos los subbots
- */
-router.get('/status', (req, res) => {
-  try {
-    const status = getSubbotStatus();
-    res.json({ success: true, subbots: status });
-  } catch (error) {
-    console.error('Error en /api/subbot/status:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
-    });
-  }
-});
-
-/**
- * GET /api/subbot/qr/:subbotId
- * Obtener QR del subbot como base64
- */
-router.get('/qr/:subbotId', async (req, res) => {
-  try {
-    const { subbotId } = req.params;
-    // Buscar archivo qr.png en jadibots/<id>/qr.png
-    const subbotDir = path.join(process.cwd(), 'backend', 'full', 'jadibots', subbotId);
-    const qrFile = path.join(subbotDir, 'qr.png');
-    if (fs.existsSync(qrFile)) {
-      const buffer = fs.readFileSync(qrFile);
-      const base64 = buffer.toString('base64');
-      return res.json({ success: true, qr: base64 });
-    }
-    // Fallback: revisar columna qr_path si existe
-    try {
-      const db = (await import('./db.js')).default;
-      const row = await db('subbots').where({ code: subbotId }).first();
-      if (row?.qr_path && fs.existsSync(row.qr_path)) {
-        const buffer = fs.readFileSync(row.qr_path);
-        const base64 = buffer.toString('base64');
-        return res.json({ success: true, qr: base64 });
-      }
-    } catch (_) {}
-    return res.status(404).json({ success: false, error: 'QR no disponible' });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-/**
- * GET /api/subbot/list
- * Listar todos los subbots
- */
-router.get('/list', async (req, res) => {
+router.use(authenticateToken);
+router.use(authorizeRoles('admin', 'owner'));
+
+router.get('/list', async (_req, res) => {
   try {
-    const subbots = await listSubbots();
+    const subbots = await fetchSubbotListWithOnlineFlag();
     res.json({ success: true, subbots });
   } catch (error) {
-    console.error('Error en /api/subbot/list:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-/**
- * POST /api/subbot/create
- * Crear nuevo subbot
- */
+router.get('/status', async (_req, res) => {
+  try {
+    const subbots = await getSubbotStatus();
+    res.json({ success: true, subbots });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/create', async (req, res) => {
   try {
-    const { userId, type } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'userId es requerido' 
-      });
+    const { type = 'qr', phoneNumber = null } = req.body || {};
+    const requester = req.user?.username || null;
+    const sanitizedNumber = phoneNumber ? String(phoneNumber).replace(/[^0-9]/g, '') : null;
+
+    if (type === 'code' && (!sanitizedNumber || sanitizedNumber.length < 7)) {
+      return res.status(400).json({ success: false, error: 'Número de emparejamiento inválido.' });
     }
 
-    const result = await createSubbot(userId, type);
-    res.json(result);
-  } catch (error) {
-    console.error('Error en /api/subbot/create:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
+    const result = await launchSubbot({
+      type,
+      createdBy: requester,
+      requestJid: null,
+      requestParticipant: null,
+      targetNumber: type === 'code' ? sanitizedNumber : null,
+      metadata: { source: 'panel', requester }
     });
-  }
-});
 
-/**
- * DELETE /api/subbot/:subbotId
- * Eliminar subbot
- */
-router.delete('/:subbotId', async (req, res) => {
-  try {
-    const { subbotId } = req.params;
-    
-    const result = await deleteSubbot(subbotId);
-    res.json(result);
-  } catch (error) {
-    console.error('Error en /api/subbot/delete:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
-    });
-  }
-});
-
-/**
- * POST /api/subbot/execute
- * Ejecutar comando en subbot
- */
-router.post('/execute', async (req, res) => {
-  try {
-    const { subbotId, command, from, group, timestamp } = req.body;
-    
-    if (!subbotId || !command) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'subbotId y command son requeridos' 
-      });
+    if (!result.success) {
+      return res.status(400).json(result);
     }
 
-    const result = await executeSubbotCommand(subbotId, command, from, group);
-    res.json(result);
+    res.json({ success: true, subbotId: result.subbot.code });
   } catch (error) {
-    console.error('Error en /api/subbot/execute:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-/**
- * GET /api/subbot/commands/:subbotId
- * Obtener comandos para subbot
- */
-router.get('/commands/:subbotId', async (req, res) => {
+router.delete('/:code', async (req, res) => {
   try {
-    const { subbotId } = req.params;
-    
-    const result = await getSubbotCommands(subbotId);
+    const { code } = req.params;
+    const result = await deleteSubbot(code);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
     res.json(result);
   } catch (error) {
-    console.error('Error en /api/subbot/commands:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-/**
- * POST /api/subbot/cleanup
- * Limpiar subbots inactivos
- */
-router.post('/cleanup', async (req, res) => {
+// QR se entrega por eventos y DM; este endpoint puede ser omitido en modo in-proc
+
+router.get('/details/:code', async (req, res) => {
   try {
-    const result = await cleanupInactiveSubbots();
-    res.json(result);
+    const subbot = await getSubbotByCode(req.params.code);
+    if (!subbot) {
+      return res.status(404).json({ success: false, error: 'Subbot no encontrado' });
+    }
+    res.json({ success: true, subbot });
   } catch (error) {
-    console.error('Error en /api/subbot/cleanup:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// Eventos/Logs de sub-bots
+router.get('/events', async (req, res) => {
+  try {
+    const code = req.query.code ? String(req.query.code) : null;
+    const page = Math.max(1, parseInt(req.query.page || '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '50')));
+    const offset = (page - 1) * limit;
+    let q = db('subbot_events').select('*').orderBy('id','desc').limit(limit).offset(offset);
+    if (code) q = q.where({ code });
+    const rows = await q;
+    res.json({ success:true, page, limit, events: rows });
+  } catch (error) {
+    res.status(500).json({ success:false, error: error.message });
+  }
+});
+
+// SSE live stream de eventos
+const sseClients = new Set();
+onSubbotEvent('qr_ready', (p) => broadcastSse({ type:'qr_ready', ...p }));
+onSubbotEvent('pairing_code', (p) => broadcastSse({ type:'pairing_code', ...p }));
+onSubbotEvent('connected', (p) => broadcastSse({ type:'connected', ...p }));
+onSubbotEvent('disconnected', (p) => broadcastSse({ type:'disconnected', ...p }));
+onSubbotEvent('error', (p) => broadcastSse({ type:'error', ...p }));
+onSubbotEvent('stopped', (p) => broadcastSse({ type:'stopped', ...p }));
+onSubbotEvent('launch', (p) => broadcastSse({ type:'launch', ...p }));
+
+function broadcastSse(payload){
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const client of sseClients){
+    try {
+      if (!client.filter || client.filter === payload?.subbot?.code) {
+        client.res.write(data);
+      }
+    } catch (_) {}
+  }
+}
+
+router.get('/events/stream', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive'
+  });
+  const filter = req.query.code ? String(req.query.code) : null;
+  const client = { res, filter };
+  sseClients.add(client);
+  req.on('close', () => sseClients.delete(client));
+  res.write(`data: ${JSON.stringify({ type:'hello', filter })}\n\n`);
 });
 
 export default router;

@@ -138,7 +138,7 @@ const styles = {
   }),
 };
 
-export const theme = extendTheme({
+const theme = extendTheme({
   config,
   colors,
   components,
@@ -152,3 +152,5 @@ export const theme = extendTheme({
     xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
   },
 });
+
+export default theme;

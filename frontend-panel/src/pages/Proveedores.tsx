@@ -1,486 +1,709 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  useToast,
-  useColorModeValue,
-  Alert,
-  AlertIcon,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Select,
-  IconButton,
-  Spinner,
-  Wrap,
-  WrapItem,
-  Badge,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-  Divider,
-  SimpleGrid,
-} from '@chakra-ui/react';
-import {
-  FaUserTie,
-  FaPlus,
-  FaTrash,
-  FaPlay,
-  FaStop,
-  FaEye,
-  FaSync,
-} from 'react-icons/fa';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apiService } from '../services/api';
-import dayjs from 'dayjs';
+  Building2, 
+  Search, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Eye, 
+  CheckCircle, 
+  XCircle, 
+  Clock,
+  User,
+  Calendar,
+  Tag,
+  MessageSquare,
+  AlertCircle,
+  RefreshCw,
+  Filter,
+  Star,
+  Phone,
+  Mail,
+  Globe,
+  Users,
+  Activity
+} from 'lucide-react';
 
-interface Provider {
-  id: number | null;
-  jid: string;
-  name: string;
-  status: 'active' | 'inactive';
-  esProveedor?: boolean;
-}
-
-interface ProviderStats {
-  totalProviders: number;
-}
-
-interface GroupOption {
+interface Proveedor {
   id: number;
   jid: string;
   nombre: string;
+  descripcion: string;
+  tipo: string;
+  estado: 'activo' | 'inactivo' | 'suspendido';
+  contacto: string;
+  telefono?: string;
+  email?: string;
+  website?: string;
+  fecha_registro: string;
+  fecha_actualizacion?: string;
+  total_aportes: number;
+  total_pedidos: number;
+  rating: number;
+  grupo_id?: number;
+  grupo_nombre?: string;
 }
 
-interface CapturedContent {
-  id: number;
-  grupo_id: number;
-  usuario_id: number;
-  tipo_contenido: string;
-  contenido: string;
-  metadata?: any;
-  fecha_captura: string;
-  estado: string;
-  grupo?: { nombre: string };
-  usuario?: { username: string };
+interface ProveedorStats {
+  total: number;
+  activos: number;
+  inactivos: number;
+  suspendidos: number;
+  por_tipo: Array<{ tipo: string; count: number }>;
+  top_proveedores: Array<{ nombre: string; aportes: number; pedidos: number }>;
 }
-
-const CONTENT_TYPES = ['texto', 'imagen', 'video', 'audio', 'documento'];
 
 const Proveedores: React.FC = () => {
-  const toast = useToast();
-  const queryClient = useQueryClient();
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [stats, setStats] = useState<ProveedorStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedProveedor, setSelectedProveedor] = useState<Proveedor | null>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newProveedor, setNewProveedor] = useState<Partial<Proveedor>>({});
 
-  const [selectedGroup, setSelectedGroup] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
-  const [capturedContent, setCapturedContent] = useState<CapturedContent[]>([]);
-  const [loadingContent, setLoadingContent] = useState(false);
-  const [monitoring, setMonitoring] = useState(false);
+  useEffect(() => {
+    loadProveedores();
+    loadStats();
+  }, []);
 
-  const { isOpen, onOpen, onClose } = useDisclosure();
-
-  const providersQuery = useQuery('providers', async () => {
-    const response = await apiService.getProviders();
-    return (response?.providers || []) as Provider[];
-  });
-
-  const providerStatsQuery = useQuery('providerStats', async () => {
-    const response = await apiService.getProviderStats();
-    return response as ProviderStats;
-  });
-
-  const groupsQuery = useQuery('groups', async () => {
-    const response = await apiService.getGroups(1, 100);
-    return (response?.grupos || []) as GroupOption[];
-  });
-
-  const providers = providersQuery.data || [];
-  const providerStats = providerStatsQuery.data;
-
-  const availableGroups = useMemo(() => {
-    const groups = groupsQuery.data || [];
-    if (!groups.length) return [];
-    return groups.filter((group) => !providers.some((provider) => provider.jid === group.jid));
-  }, [groupsQuery.data, providers]);
-
-  const addProviderMutation = useMutation(
-    (jid: string) => apiService.createProvider({ jid }),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('providers');
-        queryClient.invalidateQueries('providerStats');
-        toast({ title: 'Proveedor añadido', status: 'success' });
-        setSelectedGroup('');
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'No se pudo añadir el proveedor',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const removeProviderMutation = useMutation(
-    (jid: string) => apiService.deleteProvider(jid),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('providers');
-        queryClient.invalidateQueries('providerStats');
-        toast({ title: 'Proveedor quitado', status: 'info' });
-        if (selectedProvider && selectedProvider.jid === jid) {
-          setSelectedProvider(null);
-          setCapturedContent([]);
-        }
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'No se pudo quitar el proveedor',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const fetchCapturedContent = async (jid: string) => {
+  const loadProveedores = async () => {
     try {
-      setLoadingContent(true);
-      const response = await apiService.getCapturedContent({ grupo_id: jid, limit: 25 });
-      const data = (response?.data || response || []) as CapturedContent[];
-      setCapturedContent(data);
-    } catch (error) {
-      toast({ title: 'Error al cargar contenido', status: 'error' });
-    } finally {
-      setLoadingContent(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedProvider) {
-      fetchCapturedContent(selectedProvider.jid);
-    } else {
-      setCapturedContent([]);
-    }
-  }, [selectedProvider]);
-
-  useEffect(() => {
-    if (!selectedProvider) return;
-
-    const eventSource = new EventSource(`${apiService.api.defaults.baseURL || ''}/api/aportes/stream?token=${localStorage.getItem('token') || ''}`);
-    eventSource.onmessage = (event) => {
-      if (!event.data) return;
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type === 'aporteChanged') {
-          fetchCapturedContent(selectedProvider.jid);
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/proveedores', {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      } catch (error) {
-        console.error('Error procesando SSE de aportes:', error);
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProveedores(data || []);
+        setError(null);
+      } else {
+        setError('Error al cargar proveedores');
       }
-    };
-    eventSource.onerror = () => {
-      eventSource.close();
-    };
-
-    return () => {
-      eventSource.close();
-    };
-  }, [selectedProvider]);
-
-  const handleAddProvider = () => {
-    if (!selectedGroup) {
-      toast({ title: 'Selecciona un grupo', status: 'warning' });
-      return;
-    }
-    addProviderMutation.mutate(selectedGroup);
-  };
-
-  const handleSelectProvider = (provider: Provider) => {
-    setSelectedProvider(provider);
-    onOpen();
-  };
-
-  const handleRemoveProvider = (provider: Provider) => {
-    if (window.confirm(`¿Quitar ${provider.name} como proveedor?`)) {
-      removeProviderMutation.mutate(provider.jid);
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleStartMonitoring = async () => {
-    if (!selectedProvider) return;
+  const loadStats = async () => {
     try {
-      await apiService.startGroupMonitoring(selectedProvider.jid, CONTENT_TYPES);
-      toast({ title: 'Monitoreo iniciado', status: 'success' });
-      setMonitoring(true);
-    } catch (error: any) {
-      toast({
-        title: 'Error al iniciar monitoreo',
-        description: error.response?.data?.message || error.message,
-        status: 'error',
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/proveedores/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error('Error loading stats:', err);
     }
   };
 
-  const handleStopMonitoring = async () => {
-    if (!selectedProvider) return;
+  const createProveedor = async () => {
     try {
-      await apiService.stopGroupMonitoring(selectedProvider.jid);
-      toast({ title: 'Monitoreo detenido', status: 'info' });
-      setMonitoring(false);
-    } catch (error: any) {
-      toast({
-        title: 'Error al detener monitoreo',
-        description: error.response?.data?.message || error.message,
-        status: 'error',
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/proveedores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newProveedor)
       });
+
+      if (response.ok) {
+        const createdProveedor = await response.json();
+        setProveedores(prev => [createdProveedor, ...prev]);
+        setSuccess('Proveedor creado correctamente');
+        setShowCreateModal(false);
+        setNewProveedor({});
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Error al crear proveedor');
+      }
+    } catch (err) {
+      setError('Error de conexión');
     }
   };
 
-  const parseMetadata = (metadata: any) => {
-    if (!metadata) return null;
-    if (typeof metadata === 'object') return metadata;
+  const updateProveedorStatus = async (jid: string, estado: string) => {
     try {
-      return JSON.parse(metadata);
-    } catch (_) {
-      return null;
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/proveedores/${jid}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ estado })
+      });
+
+      if (response.ok) {
+        setProveedores(prev => prev.map(proveedor => 
+          proveedor.jid === jid ? { ...proveedor, estado: estado as any } : proveedor
+        ));
+        setSuccess('Estado actualizado correctamente');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Error al actualizar estado');
+      }
+    } catch (err) {
+      setError('Error de conexión');
     }
+  };
+
+  const deleteProveedor = async (jid: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este proveedor?')) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/proveedores/${jid}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setProveedores(prev => prev.filter(proveedor => proveedor.jid !== jid));
+        setSuccess('Proveedor eliminado correctamente');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Error al eliminar proveedor');
+      }
+    } catch (err) {
+      setError('Error de conexión');
+    }
+  };
+
+  const getStatusColor = (estado: string) => {
+    switch (estado) {
+      case 'activo': return 'bg-green-100 text-green-800 border-green-200';
+      case 'inactivo': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'suspendido': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getStatusIcon = (estado: string) => {
+    switch (estado) {
+      case 'activo': return <CheckCircle className="w-4 h-4" />;
+      case 'inactivo': return <Clock className="w-4 h-4" />;
+      case 'suspendido': return <XCircle className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const getTypeColor = (tipo: string) => {
+    switch (tipo) {
+      case 'manhwa': return 'bg-teal-100 text-teal-800 border-teal-200';
+      case 'manga': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'anime': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'novela': return 'bg-green-100 text-green-800 border-green-200';
+      case 'general': return 'bg-gray-100 text-gray-800 border-gray-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES');
+  };
+
+  const filteredProveedores = proveedores.filter(proveedor => {
+    const matchesSearch = proveedor.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         proveedor.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         proveedor.contacto.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = typeFilter === 'all' || proveedor.tipo === typeFilter;
+    const matchesStatus = statusFilter === 'all' || proveedor.estado === statusFilter;
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  const handleViewProveedor = (proveedor: Proveedor) => {
+    setSelectedProveedor(proveedor);
+    setShowViewModal(true);
   };
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
-        <Flex align="center" justify="space-between">
-          <Box>
-            <Heading size="lg">Gestión de Proveedores</Heading>
-            <Text color="gray.600" mt={1}>
-              Selecciona grupos para que el bot capture y clasifique contenido automáticamente.
-            </Text>
-          </Box>
-          <HStack>
-            <Button
-              leftIcon={<FaSync />}
-              variant="outline"
-              onClick={() => queryClient.invalidateQueries('providers')}
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <Building2 className="w-8 h-8 text-purple-600" />
+                Gestión de Proveedores
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Administra los proveedores de contenido
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Nuevo Proveedor
+              </button>
+              <button
+                onClick={loadProveedores}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Alertas */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span className="text-red-700">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-500 hover:text-red-700"
             >
-              Actualizar
-            </Button>
-          </HStack>
-        </Flex>
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <Stat textAlign="center">
-              <StatLabel>Total Proveedores</StatLabel>
-              <StatNumber>{providerStats?.totalProviders || 0}</StatNumber>
-              <StatHelpText>Grupos configurados como proveedores</StatHelpText>
-            </Stat>
-          </CardBody>
-        </Card>
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <span className="text-green-700">{success}</span>
+            <button
+              onClick={() => setSuccess(null)}
+              className="ml-auto text-green-500 hover:text-green-700"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Añadir nuevo proveedor</Heading>
-          </CardHeader>
-          <CardBody>
-            <HStack spacing={4} align="center">
-              <Select
-                placeholder="Seleccionar grupo"
-                value={selectedGroup}
-                onChange={(e) => setSelectedGroup(e.target.value)}
-                maxW="300px"
+        {/* Estadísticas */}
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+                <Building2 className="w-8 h-8 text-purple-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Activos</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.activos}</p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Inactivos</p>
+                  <p className="text-2xl font-bold text-gray-600">{stats.inactivos}</p>
+                </div>
+                <Clock className="w-8 h-8 text-gray-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Suspendidos</p>
+                  <p className="text-2xl font-bold text-red-600">{stats.suspendidos}</p>
+                </div>
+                <XCircle className="w-8 h-8 text-red-500" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Filtros */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Buscar proveedores..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
-                {availableGroups.map((group) => (
-                  <option key={group.jid} value={group.jid}>
-                    {group.nombre || group.jid}
-                  </option>
-                ))}
-              </Select>
-              <Button
-                leftIcon={<FaPlus />}
-                colorScheme="green"
-                onClick={handleAddProvider}
-                isLoading={addProviderMutation.isLoading}
+                <option value="all">Todos los tipos</option>
+                <option value="manhwa">Manhwa</option>
+                <option value="manga">Manga</option>
+                <option value="anime">Anime</option>
+                <option value="novela">Novela</option>
+                <option value="general">General</option>
+              </select>
+            </div>
+            <div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
-                Añadir proveedor
-              </Button>
-              {availableGroups.length === 0 && (
-                <Text color="gray.500">No hay grupos disponibles para convertir en proveedores.</Text>
-              )}
-            </HStack>
-          </CardBody>
-        </Card>
+                <option value="all">Todos los estados</option>
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+                <option value="suspendido">Suspendido</option>
+              </select>
+            </div>
+          </div>
+        </div>
 
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Proveedores configurados</Heading>
-          </CardHeader>
-          <CardBody>
-            {providersQuery.isLoading ? (
-              <Box textAlign="center" py={8}>
-                <Spinner size="xl" />
-                <Text mt={4}>Cargando proveedores...</Text>
-              </Box>
-            ) : providers.length === 0 ? (
-              <Alert status="info">
-                <AlertIcon />
-                Aún no hay proveedores configurados.
-              </Alert>
-            ) : (
-              <Table size="sm">
-                <Thead>
-                  <Tr>
-                    <Th>Proveedor</Th>
-                    <Th>Estado</Th>
-                    <Th>Acciones</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {providers.map((provider) => (
-                    <Tr key={provider.jid}>
-                      <Td>
-                        <HStack spacing={3}>
-                          <Icon as={FaUserTie} color="blue.500" />
-                          <Box>
-                            <Text fontWeight="bold">{provider.name}</Text>
-                            <Text fontSize="sm" color="gray.500">{provider.jid}</Text>
-                          </Box>
-                        </HStack>
-                      </Td>
-                      <Td>
-                        <Badge colorScheme={provider.status === 'active' ? 'green' : 'gray'}>
-                          {provider.status === 'active' ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </Td>
-                      <Td>
-                        <HStack spacing={2}>
-                          <Button
-                            size="xs"
-                            leftIcon={<FaEye />}
-                            onClick={() => handleSelectProvider(provider)}
-                          >
-                            Ver contenido
-                          </Button>
-                          <IconButton
-                            aria-label="Eliminar proveedor"
-                            icon={<FaTrash />}
-                            size="xs"
-                            variant="ghost"
-                            colorScheme="red"
-                            onClick={() => handleRemoveProvider(provider)}
-                          />
-                        </HStack>
-                      </Td>
-                    </Tr>
-                  ))}
-                </Tbody>
-              </Table>
-            )}
-          </CardBody>
-        </Card>
+        {/* Lista de Proveedores */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Lista de Proveedores</h2>
+            <p className="text-gray-600 mt-1">
+              {filteredProveedores.length} de {proveedores.length} proveedores
+            </p>
+          </div>
 
-        <Modal isOpen={isOpen} onClose={onClose} size="xl">
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>Contenido capturado</ModalHeader>
-            <ModalBody>
-              {!selectedProvider ? (
-                <Text>Selecciona un proveedor para ver su contenido capturado.</Text>
-              ) : (
-                <VStack spacing={4} align="stretch">
-                  <HStack justify="space-between">
-                    <Box>
-                      <Heading size="sm">{selectedProvider.name}</Heading>
-                      <Text fontSize="sm" color="gray.500">{selectedProvider.jid}</Text>
-                    </Box>
-                    <HStack>
-                      <Button
-                        leftIcon={<FaPlay />}
-                        size="sm"
-                        colorScheme="green"
-                        onClick={handleStartMonitoring}
+          {loading ? (
+            <div className="p-8 text-center">
+              <RefreshCw className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-4" />
+              <p className="text-gray-600">Cargando proveedores...</p>
+            </div>
+          ) : filteredProveedores.length === 0 ? (
+            <div className="p-8 text-center">
+              <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay proveedores</h3>
+              <p className="text-gray-600">No se encontraron proveedores con los filtros aplicados</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {filteredProveedores.map((proveedor) => (
+                <div key={proveedor.id} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">{proveedor.nombre}</h3>
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(proveedor.estado)}`}>
+                          {getStatusIcon(proveedor.estado)}
+                          {proveedor.estado.charAt(0).toUpperCase() + proveedor.estado.slice(1)}
+                        </span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getTypeColor(proveedor.tipo)}`}>
+                          <Tag className="w-3 h-3" />
+                          {proveedor.tipo.charAt(0).toUpperCase() + proveedor.tipo.slice(1)}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Star className="w-4 h-4 text-yellow-500" />
+                          <span className="text-sm text-gray-600">{proveedor.rating.toFixed(1)}</span>
+                        </div>
+                      </div>
+                      
+                      <p className="text-gray-600 mb-3 line-clamp-2">{proveedor.descripcion}</p>
+                      
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <div className="flex items-center gap-1">
+                          <User className="w-4 h-4" />
+                          {proveedor.contacto}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          {formatDate(proveedor.fecha_registro)}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Activity className="w-4 h-4" />
+                          {proveedor.total_aportes} aportes
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <MessageSquare className="w-4 h-4" />
+                          {proveedor.total_pedidos} pedidos
+                        </div>
+                        {proveedor.grupo_nombre && (
+                          <div className="flex items-center gap-1">
+                            <Users className="w-4 h-4" />
+                            {proveedor.grupo_nombre}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 ml-4">
+                      <button
+                        onClick={() => handleViewProveedor(proveedor)}
+                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Ver detalles"
                       >
-                        Iniciar monitoreo
-                      </Button>
-                      <Button
-                        leftIcon={<FaStop />}
-                        size="sm"
-                        colorScheme="orange"
-                        onClick={handleStopMonitoring}
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      
+                      {proveedor.estado === 'activo' && (
+                        <button
+                          onClick={() => updateProveedorStatus(proveedor.jid, 'suspendido')}
+                          className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Suspender"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      
+                      {proveedor.estado === 'suspendido' && (
+                        <button
+                          onClick={() => updateProveedorStatus(proveedor.jid, 'activo')}
+                          className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="Activar"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={() => deleteProveedor(proveedor.jid)}
+                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Eliminar"
                       >
-                        Detener
-                      </Button>
-                      <IconButton
-                        aria-label="Actualizar contenido"
-                        icon={<FaSync />}
-                        size="sm"
-                        onClick={() => selectedProvider && fetchCapturedContent(selectedProvider.jid)}
-                      />
-                    </HStack>
-                  </HStack>
-                  <Divider />
-                  {loadingContent ? (
-                    <Spinner />
-                  ) : capturedContent.length === 0 ? (
-                    <Alert status="info">
-                      <AlertIcon />
-                      No se ha capturado contenido aún.
-                    </Alert>
-                  ) : (
-                    <VStack spacing={3} align="stretch">
-                      {capturedContent.map((content) => {
-                        const metadata = parseMetadata(content.metadata);
-                        return (
-                          <Box key={content.id} borderWidth="1px" borderRadius="md" p={4} borderColor={borderColor}>
-                            <HStack justify="space-between">
-                              <Badge colorScheme="blue">{content.tipo_contenido}</Badge>
-                              <Text fontSize="xs" color="gray.500">
-                                {dayjs(content.fecha_captura).format('DD/MM/YYYY HH:mm')}
-                              </Text>
-                            </HStack>
-                            <Text mt={2}>{content.contenido}</Text>
-                            {metadata && (
-                              <Box mt={2} fontSize="sm" color="gray.500">
-                                <Text fontWeight="bold">Clasificación:</Text>
-                                <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(metadata, null, 2)}</pre>
-                              </Box>
-                            )}
-                          </Box>
-                        );
-                      })}
-                    </VStack>
-                  )}
-                </VStack>
-              )}
-            </ModalBody>
-            <ModalFooter>
-              <Button onClick={onClose}>Cerrar</Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
-      </VStack>
-    </Box>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Modal de Ver Proveedor */}
+        {showViewModal && selectedProveedor && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                {selectedProveedor.nombre}
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estado
+                  </label>
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(selectedProveedor.estado)}`}>
+                    {getStatusIcon(selectedProveedor.estado)}
+                    {selectedProveedor.estado.charAt(0).toUpperCase() + selectedProveedor.estado.slice(1)}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo
+                  </label>
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getTypeColor(selectedProveedor.tipo)}`}>
+                    <Tag className="w-3 h-3" />
+                    {selectedProveedor.tipo.charAt(0).toUpperCase() + selectedProveedor.tipo.slice(1)}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descripción
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-100 p-3 rounded">{selectedProveedor.descripcion}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contacto
+                  </label>
+                  <p className="text-sm text-gray-900">{selectedProveedor.contacto}</p>
+                </div>
+                {selectedProveedor.telefono && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Teléfono
+                    </label>
+                    <p className="text-sm text-gray-900">{selectedProveedor.telefono}</p>
+                  </div>
+                )}
+                {selectedProveedor.email && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email
+                    </label>
+                    <p className="text-sm text-gray-900">{selectedProveedor.email}</p>
+                  </div>
+                )}
+                {selectedProveedor.website && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Website
+                    </label>
+                    <p className="text-sm text-gray-900">{selectedProveedor.website}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Total Aportes
+                    </label>
+                    <p className="text-sm text-gray-900">{selectedProveedor.total_aportes}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Total Pedidos
+                    </label>
+                    <p className="text-sm text-gray-900">{selectedProveedor.total_pedidos}</p>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Rating
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <Star className="w-4 h-4 text-yellow-500" />
+                    <span className="text-sm text-gray-900">{selectedProveedor.rating.toFixed(1)}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha de registro
+                  </label>
+                  <p className="text-sm text-gray-900">{formatDate(selectedProveedor.fecha_registro)}</p>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Crear Proveedor */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Crear Nuevo Proveedor
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    value={newProveedor.nombre || ''}
+                    onChange={(e) => setNewProveedor(prev => ({ ...prev, nombre: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Nombre del proveedor"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descripción
+                  </label>
+                  <textarea
+                    value={newProveedor.descripcion || ''}
+                    onChange={(e) => setNewProveedor(prev => ({ ...prev, descripcion: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Descripción del proveedor"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo
+                  </label>
+                  <select
+                    value={newProveedor.tipo || ''}
+                    onChange={(e) => setNewProveedor(prev => ({ ...prev, tipo: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="">Seleccionar tipo</option>
+                    <option value="manhwa">Manhwa</option>
+                    <option value="manga">Manga</option>
+                    <option value="anime">Anime</option>
+                    <option value="novela">Novela</option>
+                    <option value="general">General</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contacto
+                  </label>
+                  <input
+                    type="text"
+                    value={newProveedor.contacto || ''}
+                    onChange={(e) => setNewProveedor(prev => ({ ...prev, contacto: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Contacto del proveedor"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    JID (WhatsApp)
+                  </label>
+                  <input
+                    type="text"
+                    value={newProveedor.jid || ''}
+                    onChange={(e) => setNewProveedor(prev => ({ ...prev, jid: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="jid@c.us"
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={createProveedor}
+                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Crear
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setNewProveedor({});
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

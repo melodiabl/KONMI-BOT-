@@ -116,6 +116,18 @@ class ApiService {
     return response.data;
   }
 
+  async setWhatsappAuthMethod(method: 'qr' | 'pairing', phoneNumber?: string) {
+    this.ensureApi();
+    const response = await this.api.post('/api/whatsapp/auth-method', { method, phoneNumber });
+    return response.data as { success: boolean; method: 'qr' | 'pairing'; phoneNumber?: string };
+  }
+
+  async getPairingCode() {
+    this.ensureApi();
+    const response = await this.api.get('/api/whatsapp/pairing-code');
+    return response.data as { available: boolean; pairingCode?: string; phoneNumber?: string | null };
+  }
+
   async restartBot() {
     this.ensureApi();
     const response = await this.api.post('/api/bot/restart');
@@ -147,9 +159,11 @@ class ApiService {
     return response.data;
   }
 
-  async createSubbot(userId: number, type: 'qr' | 'code'): Promise<{ success: boolean; subbotId?: string; error?: string }> {
+  async createSubbot(userId: number, type: 'qr' | 'code', phoneNumber?: string): Promise<{ success: boolean; subbotId?: string; error?: string }> {
     this.ensureApi();
-    const response = await this.api.post('/api/subbot/create', { userId, type });
+    const payload: Record<string, any> = { userId, type };
+    if (phoneNumber) payload.phoneNumber = phoneNumber;
+    const response = await this.api.post('/api/subbot/create', payload);
     return response.data;
   }
 
@@ -285,6 +299,57 @@ class ApiService {
   async updateBotConfig(config: any) {
     this.ensureApi();
     const response = await this.api.patch('/api/bot/config', config);
+    return response.data;
+  }
+
+  // ========== MÉTODOS PARA BOT PRINCIPAL ==========
+
+  async connectMainBot(method: 'qr' | 'pairing', phoneNumber?: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    this.ensureApi();
+    const payload: any = { method };
+    if (phoneNumber) payload.phoneNumber = phoneNumber;
+    const response = await this.api.post('/api/bot/main/connect', payload);
+    return response.data;
+  }
+
+  async getMainBotStatus(): Promise<BotStatus> {
+    this.ensureApi();
+    const response = await this.api.get('/api/bot/main/status');
+    return response.data;
+  }
+
+  async getMainBotQR(): Promise<{ available: boolean; qr?: string; qrCode?: string; qrCodeImage?: string; status?: string; message?: string }> {
+    this.ensureApi();
+    const response = await this.api.get('/api/bot/main/qr');
+    return response.data;
+  }
+
+  async getMainBotPairingCode(): Promise<{ available: boolean; code?: string; phoneNumber?: string; displayCode?: string; message?: string }> {
+    this.ensureApi();
+    const response = await this.api.get('/api/bot/main/pairing-code');
+    return response.data;
+  }
+
+  async setMainBotMethod(method: 'qr' | 'pairing', phoneNumber?: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    this.ensureApi();
+    const payload: any = { method };
+    if (phoneNumber) payload.phoneNumber = phoneNumber;
+    const response = await this.api.post('/api/bot/main/method', payload);
+    return response.data;
+  }
+
+  async disconnectMainBot(): Promise<{ success: boolean; message?: string; error?: string }> {
+    this.ensureApi();
+    const response = await this.api.post('/api/bot/main/disconnect');
+    return response.data;
+  }
+
+  async restartMainBot(method?: 'qr' | 'pairing', phoneNumber?: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    this.ensureApi();
+    const payload: any = {};
+    if (method) payload.method = method;
+    if (phoneNumber) payload.phoneNumber = phoneNumber;
+    const response = await this.api.post('/api/bot/main/restart', payload);
     return response.data;
   }
 

@@ -1,86 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  useToast,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Flex,
-  useColorModeValue,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Badge,
-  Icon,
-  Divider,
+  Bot, 
+  Search, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Play, 
+  Copy, 
+  Download, 
+  Upload,
+  Terminal,
   Code,
-  Wrap,
-  WrapItem,
-  Tag,
-  TagLabel,
-  TagCloseButton,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  useDisclosure,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  FormControl,
-  FormLabel,
-  Textarea,
-  Select,
-  Switch,
-  Tooltip,
-  Progress,
-  AlertTitle,
-  AlertDescription,
-  SimpleGrid,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-} from '@chakra-ui/react';
-import {
-  FaRobot,
-  FaCog,
-  FaPlus,
-  FaEdit,
-  FaTrash,
-  FaPlay,
-  FaStop,
-  FaCopy,
-  FaDownload,
-  FaUpload,
-  FaTerminal,
-  FaCode,
-  FaExclamationTriangle,
-  FaCheckCircle,
-  FaTimesCircle,
-  FaSync,
-  FaList,
-  FaSearch,
-  FaFilter,
-} from 'react-icons/fa';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apiService } from '../services/api';
-import dayjs from 'dayjs';
-import { RUNTIME_CONFIG } from '../config/runtime-config';
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  List,
+  Filter,
+  Settings,
+  Eye,
+  EyeOff,
+  Clock,
+  Users,
+  BarChart3,
+  HelpCircle,
+  MessageSquare,
+  Zap,
+  Shield,
+  Star,
+  Tag
+} from 'lucide-react';
 
 interface BotCommand {
   id: string;
@@ -105,239 +54,223 @@ interface CommandCategory {
   command_count: number;
 }
 
-export const BotCommands: React.FC = () => {
+const BotCommands: React.FC = () => {
+  const [commands, setCommands] = useState<BotCommand[]>([]);
+  const [categories, setCategories] = useState<CommandCategory[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCommand, setSelectedCommand] = useState<BotCommand | null>(null);
+  const [showCommandModal, setShowCommandModal] = useState(false);
+  const [showTestModal, setShowTestModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  
-  const { isOpen: isCommandModalOpen, onOpen: onCommandModalOpen, onClose: onCommandModalClose } = useDisclosure();
-  const { isOpen: isTestModalOpen, onOpen: onTestModalOpen, onClose: onTestModalClose } = useDisclosure();
+  const [testMessage, setTestMessage] = useState('');
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const toast = useToast();
-  const queryClient = useQueryClient();
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
-
+  // Cargar comandos al montar el componente
   useEffect(() => {
-    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
-      return;
-    }
+    loadCommands();
+    loadCategories();
+  }, []);
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) {
-      return;
-    }
-
-    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
-      ? RUNTIME_CONFIG.API_BASE_URL
-      : window.location.origin;
-
-    let eventSource: EventSource | null = null;
-
+  const loadCommands = async () => {
     try {
-      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-      const url = new URL('api/bot/commands/stream', normalizedBase);
-      url.searchParams.set('token', token);
-      eventSource = new EventSource(url.toString());
-    } catch (error) {
-      console.error('No se pudo iniciar la sincronización en tiempo real de comandos', error);
-      return;
-    }
-
-    eventSource.onmessage = (event) => {
-      if (!event.data) {
-        return;
+      setLoading(true);
+      const response = await fetch('/api/bot/commands');
+      if (response.ok) {
+        const data = await response.json();
+        setCommands(data.commands || []);
+        setError(null);
+      } else {
+        setError('Error al cargar comandos');
       }
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type === 'botCommandChanged') {
-          queryClient.invalidateQueries('botCommands');
-          queryClient.invalidateQueries('commandStats');
-          queryClient.invalidateQueries('commandCategories');
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const response = await fetch('/api/bot/commands/categories');
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data.categories || []);
+      }
+    } catch (err) {
+      console.error('Error cargando categorías:', err);
+    }
+  };
+
+  const createCommand = async (commandData: Partial<BotCommand>) => {
+    try {
+      setActionLoading('create');
+      setError(null);
+      const response = await fetch('/api/bot/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(commandData)
+      });
+      
+      if (response.ok) {
+        setSuccess('Comando creado exitosamente');
+        setShowCommandModal(false);
+        await loadCommands();
+      } else {
+        setError('Error al crear comando');
+      }
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const updateCommand = async (id: string, commandData: Partial<BotCommand>) => {
+    try {
+      setActionLoading('update');
+      setError(null);
+      const response = await fetch(`/api/bot/commands/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(commandData)
+      });
+      
+      if (response.ok) {
+        setSuccess('Comando actualizado exitosamente');
+        setShowCommandModal(false);
+        await loadCommands();
+      } else {
+        setError('Error al actualizar comando');
         }
       } catch (err) {
-        console.error('Error procesando la actualización de comandos', err);
+      setError('Error de conexión');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const deleteCommand = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este comando?')) return;
+    
+    try {
+      setActionLoading(id);
+      setError(null);
+      const response = await fetch(`/api/bot/commands/${id}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        setSuccess('Comando eliminado exitosamente');
+        await loadCommands();
+      } else {
+        setError('Error al eliminar comando');
       }
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const toggleCommand = async (id: string, enabled: boolean) => {
+    try {
+      setActionLoading(id);
+      setError(null);
+      const response = await fetch(`/api/bot/commands/${id}/toggle`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      
+      if (response.ok) {
+        setSuccess(`Comando ${enabled ? 'habilitado' : 'deshabilitado'} exitosamente`);
+        await loadCommands();
+      } else {
+        setError('Error al cambiar estado del comando');
+      }
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const testCommand = async (command: string, message: string) => {
+    try {
+      setActionLoading('test');
+      setError(null);
+      const response = await fetch('/api/bot/commands/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command, message })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setTestResult(data.response);
+        setSuccess('Comando probado exitosamente');
+      } else {
+        setError('Error al probar comando');
+      }
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    const colors: { [key: string]: string } = {
+      general: 'bg-blue-100 text-blue-800 border-blue-200',
+      admin: 'bg-red-100 text-red-800 border-red-200',
+      fun: 'bg-purple-100 text-purple-800 border-purple-200',
+      utility: 'bg-green-100 text-green-800 border-green-200',
+      info: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      subbot: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      media: 'bg-pink-100 text-pink-800 border-pink-200'
     };
+    return colors[category] || 'bg-gray-100 text-gray-800 border-gray-200';
+  };
 
-    eventSource.onerror = (error) => {
-      console.error('Stream de comandos en tiempo real desconectado', error);
+  const getCategoryIcon = (category: string) => {
+    const icons: { [key: string]: React.ReactNode } = {
+      general: <HelpCircle className="w-4 h-4" />,
+      admin: <Shield className="w-4 h-4" />,
+      fun: <Zap className="w-4 h-4" />,
+      utility: <Settings className="w-4 h-4" />,
+      info: <MessageSquare className="w-4 h-4" />,
+      subbot: <Bot className="w-4 h-4" />,
+      media: <Upload className="w-4 h-4" />
     };
-
-    return () => {
-      eventSource?.close();
-    };
-  }, [queryClient]);
-
-  // Queries
-  const { data: commandsData, isLoading: commandsLoading } = useQuery(
-    ['botCommands', searchTerm, selectedCategory],
-    () => apiService.getBotCommands(searchTerm, selectedCategory)
-  );
-
-  const { data: categoriesData } = useQuery('commandCategories', apiService.getCommandCategories);
-  const { data: commandStats } = useQuery('commandStats', apiService.getCommandStats);
-
-  // Mutations
-  const createCommandMutation = useMutation(
-    (command: Partial<BotCommand>) => apiService.createBotCommand(command),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('botCommands');
-        queryClient.invalidateQueries('commandStats');
-        onCommandModalClose();
-        toast({
-          title: 'Comando creado',
-          description: 'El comando ha sido creado exitosamente',
-          status: 'success',
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al crear comando',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const updateCommandMutation = useMutation(
-    ({ id, command }: { id: string; command: Partial<BotCommand> }) =>
-      apiService.updateBotCommand(id, command),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('botCommands');
-        queryClient.invalidateQueries('commandStats');
-        onCommandModalClose();
-        toast({
-          title: 'Comando actualizado',
-          description: 'El comando ha sido actualizado exitosamente',
-          status: 'success',
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al actualizar comando',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const deleteCommandMutation = useMutation(
-    (commandId: string) => apiService.deleteBotCommand(commandId),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('botCommands');
-        queryClient.invalidateQueries('commandStats');
-        toast({
-          title: 'Comando eliminado',
-          description: 'El comando ha sido eliminado exitosamente',
-          status: 'success',
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al eliminar comando',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const toggleCommandMutation = useMutation(
-    ({ id, enabled }: { id: string; enabled: boolean }) =>
-      apiService.toggleBotCommand(id, enabled),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('botCommands');
-        toast({
-          title: 'Estado actualizado',
-          description: 'El estado del comando ha sido actualizado',
-          status: 'success',
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al actualizar estado',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const testCommandMutation = useMutation(
-    ({ command, testMessage }: { command: string; testMessage: string }) =>
-      apiService.testBotCommand(command, testMessage),
-    {
-      onSuccess: (data) => {
-        toast({
-          title: 'Comando probado',
-          description: data.response,
-          status: 'success',
-          duration: 5000,
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error en prueba',
-          description: error.response?.data?.message || 'Error al probar comando',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const handleCreateCommand = () => {
-    setSelectedCommand(null);
-    setIsEditing(false);
-    onCommandModalOpen();
+    return icons[category] || <Tag className="w-4 h-4" />;
   };
 
-  const handleEditCommand = (command: BotCommand) => {
-    setSelectedCommand(command);
-    setIsEditing(true);
-    onCommandModalOpen();
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('es-ES');
   };
 
-  const handleDeleteCommand = (commandId: string) => {
-    deleteCommandMutation.mutate(commandId);
-  };
-
-  const handleToggleCommand = (command: BotCommand) => {
-    toggleCommandMutation.mutate({ id: command.id, enabled: !command.enabled });
-  };
-
-  const handleTestCommand = (command: BotCommand) => {
-    setSelectedCommand(command);
-    onTestModalOpen();
-  };
-
-  const handleSubmitCommand = (formData: Partial<BotCommand>) => {
-    if (isEditing && selectedCommand) {
-      updateCommandMutation.mutate({ id: selectedCommand.id, command: formData });
-    } else {
-      createCommandMutation.mutate(formData);
-    }
+  const getTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days}d`;
+    if (hours > 0) return `${hours}h`;
+    return `${minutes}m`;
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: 'Copiado',
-      description: 'Texto copiado al portapapeles',
-      status: 'success',
-      duration: 2000,
-    });
+    setSuccess('Copiado al portapapeles');
   };
-
-  const commands = commandsData?.commands || [];
-  const categories = categoriesData?.categories || [];
 
   const filteredCommands = commands.filter((command) => {
     const matchesSearch = command.command.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -346,90 +279,153 @@ export const BotCommands: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  if (commandsLoading) {
-    return (
-      <Box textAlign="center" py={10}>
-        <Spinner size="xl" />
-        <Text mt={4}>Cargando comandos del bot...</Text>
-      </Box>
-    );
-  }
+  const stats = {
+    total: commands.length,
+    active: commands.filter(c => c.enabled).length,
+    todayUsage: commands.reduce((sum, c) => sum + c.usage_count, 0),
+    categories: categories.length
+  };
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <Flex align="center" justify="space-between">
-          <Box>
-            <Heading size="lg">Comandos del Bot</Heading>
-            <Text color="gray.600" mt={1}>
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <Bot className="w-8 h-8 text-blue-600" />
+                Comandos del Bot
+              </h1>
+              <p className="text-gray-600 mt-2">
               Gestiona los comandos disponibles para el bot de WhatsApp
-            </Text>
-          </Box>
-          <HStack spacing={3}>
-            <Button
-              leftIcon={<FaSync />}
-              onClick={() => queryClient.invalidateQueries('botCommands')}
-              variant="outline"
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={loadCommands}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Actualizar
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedCommand(null);
+                  setIsEditing(false);
+                  setShowCommandModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Nuevo Comando
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Alertas */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+            <span className="text-red-700">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-500 hover:text-red-700"
             >
-              Actualizar
-            </Button>
-            <Button
-              leftIcon={<FaPlus />}
-              onClick={handleCreateCommand}
-              colorScheme="blue"
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <span className="text-green-700">{success}</span>
+            <button
+              onClick={() => setSuccess(null)}
+              className="ml-auto text-green-500 hover:text-green-700"
             >
-              Nuevo Comando
-            </Button>
-          </HStack>
-        </Flex>
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Estadísticas */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={8} justify="center">
-              <Stat textAlign="center">
-                <StatLabel>Total Comandos</StatLabel>
-                <StatNumber>{commandStats?.totalCommands || 0}</StatNumber>
-                <StatHelpText>Comandos registrados</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Activos</StatLabel>
-                <StatNumber color="green.500">{commandStats?.activeCommands || 0}</StatNumber>
-                <StatHelpText>Comandos habilitados</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Usados Hoy</StatLabel>
-                <StatNumber color="blue.500">{commandStats?.todayUsage || 0}</StatNumber>
-                <StatHelpText>Veces utilizados</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Categorías</StatLabel>
-                <StatNumber color="purple.500">{categories.length}</StatNumber>
-                <StatHelpText>Categorías disponibles</StatHelpText>
-              </Stat>
-            </HStack>
-          </CardBody>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Comandos</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              </div>
+              <Terminal className="w-8 h-8 text-blue-500" />
+            </div>
+            <div className="mt-2 text-sm text-gray-600">
+              Comandos registrados
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Activos</p>
+                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-500" />
+            </div>
+            <div className="mt-2 text-sm text-gray-600">
+              Comandos habilitados
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Usos Totales</p>
+                <p className="text-2xl font-bold text-purple-600">{stats.todayUsage}</p>
+              </div>
+              <BarChart3 className="w-8 h-8 text-purple-500" />
+            </div>
+            <div className="mt-2 text-sm text-gray-600">
+              Veces utilizados
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Categorías</p>
+                <p className="text-2xl font-bold text-indigo-600">{stats.categories}</p>
+              </div>
+              <Tag className="w-8 h-8 text-indigo-500" />
+            </div>
+            <div className="mt-2 text-sm text-gray-600">
+              Categorías disponibles
+            </div>
+          </div>
+        </div>
 
         {/* Filtros */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={4}>
-              <InputGroup maxW="300px">
-                <InputLeftElement pointerEvents="none">
-                  <FaSearch color="gray.300" />
-                </InputLeftElement>
-                <Input
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
                   placeholder="Buscar comandos..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-              </InputGroup>
-              <Select
+              </div>
+            </div>
+            <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                maxW="200px"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">Todas las categorías</option>
                 {categories.map((category) => (
@@ -437,204 +433,254 @@ export const BotCommands: React.FC = () => {
                     {category.name}
                   </option>
                 ))}
-              </Select>
-            </HStack>
-          </CardBody>
-        </Card>
+            </select>
+          </div>
+        </div>
 
         {/* Lista de Comandos */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Lista de Comandos</Heading>
-          </CardHeader>
-          <CardBody>
-            {filteredCommands.length === 0 ? (
-              <Alert status="info">
-                <AlertIcon />
-                No se encontraron comandos
-              </Alert>
-            ) : (
-              <Table variant="simple">
-                <Thead>
-                  <Tr>
-                    <Th>Comando</Th>
-                    <Th>Descripción</Th>
-                    <Th>Categoría</Th>
-                    <Th>Estado</Th>
-                    <Th>Uso</Th>
-                    <Th>Último Uso</Th>
-                    <Th>Acciones</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {filteredCommands.map((command) => (
-                    <Tr key={command.id}>
-                      <Td>
-                        <VStack align="start" spacing={1}>
-                          <Code fontSize="sm">{command.command}</Code>
-                          {command.aliases.length > 0 && (
-                            <Wrap>
-                              {command.aliases.map((alias, index) => (
-                                <WrapItem key={index}>
-                                  <Tag size="sm" variant="outline">
-                                    <TagLabel>{alias}</TagLabel>
-                                  </Tag>
-                                </WrapItem>
-                              ))}
-                            </Wrap>
-                          )}
-                        </VStack>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm" noOfLines={2}>
-                          {command.description}
-                        </Text>
-                      </Td>
-                      <Td>
-                        <Badge colorScheme="blue" variant="outline">
-                          {command.category}
-                        </Badge>
-                      </Td>
-                      <Td>
-                        <HStack>
-                          <Badge
-                            colorScheme={command.enabled ? 'green' : 'red'}
-                            variant="solid"
-                          >
-                            {command.enabled ? 'Activo' : 'Inactivo'}
-                          </Badge>
-                          <Switch
-                            isChecked={command.enabled}
-                            onChange={() => handleToggleCommand(command)}
-                            colorScheme="green"
-                            size="sm"
-                          />
-                        </HStack>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm" fontWeight="bold">
-                          {command.usage_count}
-                        </Text>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm">
-                          {command.last_used 
-                            ? dayjs(command.last_used).format('DD/MM HH:mm')
-                            : 'Nunca'
-                          }
-                        </Text>
-                      </Td>
-                      <Td>
-                        <HStack spacing={2}>
-                          <Tooltip label="Probar comando">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              leftIcon={<FaPlay />}
-                              onClick={() => handleTestCommand(command)}
-                            >
-                              Probar
-                            </Button>
-                          </Tooltip>
-                          <Tooltip label="Editar comando">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              leftIcon={<FaEdit />}
-                              onClick={() => handleEditCommand(command)}
-                            >
-                              Editar
-                            </Button>
-                          </Tooltip>
-                          <Tooltip label="Eliminar comando">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              colorScheme="red"
-                              leftIcon={<FaTrash />}
-                              onClick={() => handleDeleteCommand(command.id)}
-                            >
-                              Eliminar
-                            </Button>
-                          </Tooltip>
-                        </HStack>
-                      </Td>
-                    </Tr>
-                  ))}
-                </Tbody>
-              </Table>
-            )}
-          </CardBody>
-        </Card>
-      </VStack>
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Lista de Comandos</h2>
+            <p className="text-gray-600 mt-1">
+              {filteredCommands.length} comando{filteredCommands.length !== 1 ? 's' : ''} encontrado{filteredCommands.length !== 1 ? 's' : ''}
+            </p>
+          </div>
 
-      {/* Modal Crear/Editar Comando */}
-      <Modal isOpen={isCommandModalOpen} onClose={onCommandModalClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>
+          {loading ? (
+            <div className="p-8 text-center">
+              <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
+              <p className="text-gray-600">Cargando comandos...</p>
+            </div>
+          ) : filteredCommands.length === 0 ? (
+            <div className="p-8 text-center">
+              <Terminal className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay comandos</h3>
+              <p className="text-gray-600 mb-4">Crea tu primer comando para comenzar</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+                  {filteredCommands.map((command) => (
+                <div key={command.id} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        {command.enabled ? (
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-gray-400" />
+                        )}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                          command.enabled ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-800 border-gray-200'
+                        }`}>
+                          {command.enabled ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {getCategoryIcon(command.category)}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(command.category)}`}>
+                          {command.category}
+                        </span>
+                      </div>
+                      
+                      <div className="text-sm text-gray-900">
+                        <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
+                          {command.command}
+                        </code>
+                      </div>
+                      
+                      <div className="text-sm text-gray-600 max-w-md">
+                        {command.description}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <div className="text-right text-sm text-gray-500">
+                        <div className="flex items-center gap-1">
+                          <BarChart3 className="w-4 h-4" />
+                          {command.usage_count} usos
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          {command.last_used ? getTimeAgo(command.last_used) : 'Nunca'}
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedCommand(command);
+                            setTestMessage('');
+                            setTestResult(null);
+                            setShowTestModal(true);
+                          }}
+                          className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Probar comando"
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setSelectedCommand(command);
+                            setIsEditing(true);
+                            setShowCommandModal(true);
+                          }}
+                          className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="Editar comando"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        
+                        <button
+                          onClick={() => toggleCommand(command.id, !command.enabled)}
+                          disabled={actionLoading === command.id}
+                          className="p-2 text-gray-600 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-50"
+                          title={command.enabled ? 'Deshabilitar' : 'Habilitar'}
+                        >
+                          {command.enabled ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                        
+                        <button
+                          onClick={() => deleteCommand(command.id)}
+                          disabled={actionLoading === command.id}
+                          className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Eliminar comando"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {command.aliases.length > 0 && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Aliases:</span>
+                      <div className="flex gap-1">
+                        {command.aliases.map((alias, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
+                          >
+                            {alias}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Modal para crear/editar comando */}
+        {showCommandModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
             {isEditing ? 'Editar Comando' : 'Nuevo Comando'}
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
+                </h3>
+                <button
+                  onClick={() => setShowCommandModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              
             <CommandForm
               command={selectedCommand}
-              onSubmit={handleSubmitCommand}
-              isLoading={createCommandMutation.isLoading || updateCommandMutation.isLoading}
-            />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+                onSubmit={isEditing ? 
+                  (data) => updateCommand(selectedCommand!.id, data) : 
+                  createCommand
+                }
+                isLoading={actionLoading === 'create' || actionLoading === 'update'}
+                onCancel={() => setShowCommandModal(false)}
+              />
+            </div>
+          </div>
+        )}
 
-      {/* Modal Probar Comando */}
-      <Modal isOpen={isTestModalOpen} onClose={onTestModalClose} size="md">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Probar Comando</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            {selectedCommand && (
-              <VStack spacing={4} align="stretch">
-                <Box>
-                  <Text fontWeight="bold">Comando:</Text>
-                  <Code p={2} display="block" mt={1}>
+        {/* Modal para probar comando */}
+        {showTestModal && selectedCommand && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Probar Comando</h3>
+                <button
+                  onClick={() => setShowTestModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Comando
+                  </label>
+                  <code className="block p-2 bg-gray-100 rounded text-sm font-mono">
                     {selectedCommand.command}
-                  </Code>
-                </Box>
-                <Box>
-                  <Text fontWeight="bold">Descripción:</Text>
-                  <Text fontSize="sm" mt={1}>
+                  </code>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Descripción
+                  </label>
+                  <p className="text-sm text-gray-600">
                     {selectedCommand.description}
-                  </Text>
-                </Box>
-                <FormControl>
-                  <FormLabel>Mensaje de prueba</FormLabel>
-                  <Textarea
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Mensaje de prueba
+                  </label>
+                  <textarea
                     placeholder="Escribe un mensaje de prueba..."
+                    value={testMessage}
+                    onChange={(e) => setTestMessage(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={3}
                   />
-                </FormControl>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onTestModalClose}>
+                </div>
+                
+                {testResult && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Resultado
+                    </label>
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm text-green-800">{testResult}</p>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowTestModal(false)}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
               Cancelar
-            </Button>
-            <Button
-              colorScheme="blue"
-              onClick={() => {
-                // Implementar lógica de prueba
-                onTestModalClose();
-              }}
-              isLoading={testCommandMutation.isLoading}
-            >
-              Probar
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </Box>
+                  </button>
+                  <button
+                    onClick={() => testCommand(selectedCommand.command, testMessage)}
+                    disabled={actionLoading === 'test' || !testMessage.trim()}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {actionLoading === 'test' ? 'Probando...' : 'Probar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -643,7 +689,8 @@ const CommandForm: React.FC<{
   command?: BotCommand | null;
   onSubmit: (data: Partial<BotCommand>) => void;
   isLoading: boolean;
-}> = ({ command, onSubmit, isLoading }) => {
+  onCancel: () => void;
+}> = ({ command, onSubmit, isLoading, onCancel }) => {
   const [formData, setFormData] = useState({
     command: command?.command || '',
     description: command?.description || '',
@@ -660,54 +707,97 @@ const CommandForm: React.FC<{
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <VStack spacing={4} align="stretch">
-        <FormControl isRequired>
-          <FormLabel>Comando</FormLabel>
-          <Input
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Comando *
+        </label>
+        <input
+          type="text"
             value={formData.command}
             onChange={(e) => setFormData({ ...formData, command: e.target.value })}
             placeholder="ej: /help"
-          />
-        </FormControl>
-        <FormControl isRequired>
-          <FormLabel>Descripción</FormLabel>
-          <Input
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          required
+        />
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Descripción *
+        </label>
+        <input
+          type="text"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             placeholder="Descripción del comando"
-          />
-        </FormControl>
-        <FormControl isRequired>
-          <FormLabel>Respuesta</FormLabel>
-          <Textarea
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          required
+        />
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Respuesta *
+        </label>
+        <textarea
             value={formData.response}
             onChange={(e) => setFormData({ ...formData, response: e.target.value })}
             placeholder="Respuesta del bot"
             rows={4}
-          />
-        </FormControl>
-        <FormControl>
-          <FormLabel>Categoría</FormLabel>
-          <Select
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          required
+        />
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Categoría
+        </label>
+        <select
             value={formData.category}
             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="general">General</option>
             <option value="admin">Administración</option>
             <option value="fun">Diversión</option>
             <option value="utility">Utilidades</option>
             <option value="info">Información</option>
-          </Select>
-        </FormControl>
-        <FormControl display="flex" alignItems="center">
-          <FormLabel mb="0">Habilitado</FormLabel>
-          <Switch
-            isChecked={formData.enabled}
+          <option value="subbot">Subbots</option>
+          <option value="media">Multimedia</option>
+        </select>
+      </div>
+      
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="enabled"
+          checked={formData.enabled}
             onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-          />
-        </FormControl>
-      </VStack>
+          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+        />
+        <label htmlFor="enabled" className="ml-2 block text-sm text-gray-700">
+          Habilitado
+        </label>
+      </div>
+      
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? 'Guardando...' : 'Guardar'}
+        </button>
+      </div>
     </form>
   );
 };

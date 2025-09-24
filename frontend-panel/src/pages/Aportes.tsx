@@ -1,780 +1,559 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Badge,
-  IconButton,
-  useDisclosure,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  FormControl,
-  FormLabel,
-  Textarea,
-  Select,
-  useToast,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Flex,
-  Card,
-  CardBody,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  useColorModeValue,
-  Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  MenuDivider,
-  Image,
+  Star, 
+  Search, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Eye, 
+  CheckCircle, 
+  XCircle, 
+  Clock,
+  User,
+  FileText,
   Link,
-} from '@chakra-ui/react';
-import {
-  FaSearch,
-  FaPlus,
-  FaEdit,
-  FaTrash,
-  FaEye,
-  FaEllipsisV,
-  FaCheck,
-  FaTimes,
-  FaClock,
-  FaUser,
-  FaFileAlt,
-  FaLink,
-  FaDownload,
-  FaShare,
-  FaThumbsUp,
-  FaThumbsDown,
-} from 'react-icons/fa';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apiService, getAporteStats } from '../services/api';
-import { Aporte } from '../types';
-import { RUNTIME_CONFIG } from '../config/runtime-config';
+  Download,
+  Share,
+  ThumbsUp,
+  ThumbsDown,
+  RefreshCw,
+  AlertCircle,
+  Filter,
+  Calendar,
+  Tag
+} from 'lucide-react';
 
-
-
-interface AporteFormData {
+interface Aporte {
+  id: number;
   titulo: string;
   descripcion: string;
   contenido: string;
   tipo: string;
   fuente: string;
-  estado: 'pendiente' | 'aprobado' | 'rechazado';
+  estado: 'pendiente' | 'aprobado' | 'rechazado' | 'revisando';
+  usuario: string;
+  fecha_creacion: string;
+  fecha_actualizacion?: string;
   grupo_id?: number;
+  grupo_nombre?: string;
 }
 
-const estadoColors = {
-  pendiente: 'yellow',
-  aprobado: 'green',
-  rechazado: 'red',
-  revisando: 'blue',
-};
+interface AporteStats {
+  total: number;
+  pendientes: number;
+  aprobados: number;
+  rechazados: number;
+  por_tipo: Array<{ tipo: string; count: number }>;
+  por_estado: Array<{ estado: string; count: number }>;
+}
 
-const tipoColors: Record<string, string> = {
-  manhwa: 'teal',
-  manga: 'purple',
-  anime: 'blue',
-  novela: 'green',
-  imagen: 'pink',
-  video: 'red',
-  otro: 'gray',
-};
-
-const fuenteColors: Record<string, string> = {
-  usuario: 'blue',
-  proveedor: 'green',
-  colaborador: 'purple',
-  admin: 'red',
-  sistema: 'gray',
-};
-
-export const Aportes: React.FC = () => {
+const Aportes: React.FC = () => {
+  const [aportes, setAportes] = useState<Aporte[]>([]);
+  const [stats, setStats] = useState<AporteStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [estadoFilter, setEstadoFilter] = useState('all');
-  const [fuenteFilter, setFuenteFilter] = useState('all');
-  const [tipoFilter, setTipoFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [editingAporte, setEditingAporte] = useState<Aporte | null>(null);
-  const [formData, setFormData] = useState<AporteFormData>({
-    titulo: '',
-    descripcion: '',
-    contenido: '',
-    tipo: 'manhwa',
-    fuente: 'usuario',
-    estado: 'pendiente',
-  });
-
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const toast = useToast();
-  const queryClient = useQueryClient();
-
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
-
-  // Queries
-  const { data: aportesData, isLoading, error } = useQuery(
-    ['aportes', currentPage, searchTerm, estadoFilter, fuenteFilter, tipoFilter],
-    () => apiService.getAportes(
-      currentPage,
-      20,
-      searchTerm,
-      estadoFilter === 'all' ? undefined : estadoFilter,
-      fuenteFilter === 'all' ? undefined : fuenteFilter,
-      tipoFilter === 'all' ? undefined : tipoFilter
-    )
-  );
-
-  const { data: stats } = useQuery('aporteStats', getAporteStats);
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedAporte, setSelectedAporte] = useState<Aporte | null>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingAporte, setEditingAporte] = useState<Partial<Aporte>>({});
 
   useEffect(() => {
-    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
-      return;
-    }
+    loadAportes();
+    loadStats();
+  }, []);
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) {
-      return;
-    }
-
-    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
-      ? RUNTIME_CONFIG.API_BASE_URL
-      : window.location.origin;
-
-    let eventSource: EventSource | null = null;
-
+  const loadAportes = async () => {
     try {
-      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-      const url = new URL('api/aportes/stream', normalizedBase);
-      url.searchParams.set('token', token);
-      eventSource = new EventSource(url.toString());
-    } catch (err) {
-      console.error('No se pudo iniciar la sincronización en tiempo real de aportes', err);
-      return;
-    }
-
-    eventSource.onmessage = (event) => {
-      if (!event.data) return;
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type === 'aporteChanged') {
-          queryClient.invalidateQueries('aportes');
-          queryClient.invalidateQueries('aporteStats');
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/aportes', {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      } catch (error) {
-        console.error('Error procesando actualización de aportes', error);
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAportes(data || []);
+        setError(null);
+      } else {
+        setError('Error al cargar aportes');
       }
-    };
-
-    eventSource.onerror = (err) => {
-      console.error('Stream de aportes en tiempo real desconectado', err);
-    };
-
-    return () => {
-      eventSource?.close();
-    };
-  }, [queryClient]);
-
-  // Mutations
-  const createAporteMutation = useMutation(apiService.createAporte, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('aportes');
-      queryClient.invalidateQueries('aporteStats');
-      toast({
-        title: 'Aporte creado',
-        description: 'El aporte ha sido creado exitosamente',
-        status: 'success',
-      });
-      onClose();
-      resetForm();
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Error al crear aporte',
-        status: 'error',
-      });
-    },
-  });
-
-  const updateAporteMutation = useMutation(
-    (data: { id: number; aporte: Partial<Aporte> }) =>
-      apiService.updateAporte(data.id, data.aporte),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('aportes');
-        queryClient.invalidateQueries('aporteStats');
-        toast({
-          title: 'Aporte actualizado',
-          description: 'El aporte ha sido actualizado exitosamente',
-          status: 'success',
-        });
-        onClose();
-        resetForm();
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al actualizar aporte',
-          status: 'error',
-        });
-      },
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setLoading(false);
     }
-  );
+  };
 
-  const deleteAporteMutation = useMutation(apiService.deleteAporte, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('aportes');
-      queryClient.invalidateQueries('aporteStats');
-      toast({
-        title: 'Aporte eliminado',
-        description: 'El aporte ha sido eliminado exitosamente',
-        status: 'success',
+  const loadStats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/aportes/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Error al eliminar aporte',
-        status: 'error',
-      });
-    },
-  });
-
-  const approveAporteMutation = useMutation(
-    (data: { id: number; estado: 'pendiente' | 'aprobado' | 'rechazado'; motivo_rechazo?: string }) =>
-      apiService.approveAporte(data.id, data.estado, data.motivo_rechazo),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('aportes');
-        queryClient.invalidateQueries('aporteStats');
-        toast({
-          title: 'Estado actualizado',
-          description: 'El estado del aporte ha sido actualizado',
-          status: 'success',
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al actualizar estado',
-          status: 'error',
-        });
-      },
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error('Error loading stats:', err);
     }
-  );
-
-  const resetForm = () => {
-    setFormData({
-      titulo: '',
-      descripcion: '',
-      contenido: '',
-      tipo: 'manga',
-      fuente: 'colaborador',
-      estado: 'pendiente',
-    });
-    setEditingAporte(null);
   };
 
-  const handleOpenCreate = () => {
-    resetForm();
-    onOpen();
+  const updateAporteStatus = async (id: number, estado: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/aportes/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ estado })
+      });
+
+      if (response.ok) {
+        setAportes(prev => prev.map(aporte => 
+          aporte.id === id ? { ...aporte, estado: estado as any } : aporte
+        ));
+        setSuccess('Estado actualizado correctamente');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Error al actualizar estado');
+      }
+    } catch (err) {
+      setError('Error de conexión');
+    }
   };
 
-  const handleOpenEdit = (aporte: Aporte) => {
-    setEditingAporte(aporte);
-    setFormData({
-      titulo: aporte.titulo,
-      descripcion: aporte.descripcion || '',
-      contenido: aporte.contenido,
-      tipo: aporte.tipo,
-      fuente: aporte.fuente as 'colaborador' | 'proveedor',
-      estado: aporte.estado as 'pendiente' | 'aprobado' | 'rechazado',
-      grupo_id: aporte.grupo_id,
-    });
-    onOpen();
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const deleteAporte = async (id: number) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este aporte?')) return;
     
-    if (editingAporte) {
-      updateAporteMutation.mutate({
-        id: editingAporte.id,
-        aporte: formData as Partial<Aporte>,
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/aportes/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
+
+      if (response.ok) {
+        setAportes(prev => prev.filter(aporte => aporte.id !== id));
+        setSuccess('Aporte eliminado correctamente');
+        setTimeout(() => setSuccess(null), 3000);
     } else {
-      createAporteMutation.mutate(formData as Partial<Aporte>);
+        const errorData = await response.json();
+        setError(errorData.error || 'Error al eliminar aporte');
+      }
+    } catch (err) {
+      setError('Error de conexión');
     }
   };
 
-  const handleDelete = (aporteId: number) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este aporte?')) {
-      deleteAporteMutation.mutate(aporteId);
+  const getStatusColor = (estado: string) => {
+    switch (estado) {
+      case 'aprobado': return 'bg-green-100 text-green-800 border-green-200';
+      case 'pendiente': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'rechazado': return 'bg-red-100 text-red-800 border-red-200';
+      case 'revisando': return 'bg-blue-100 text-blue-800 border-blue-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
-  const handleChangeEstado = (aporte: Aporte, nuevoEstado: 'pendiente' | 'aprobado' | 'rechazado') => {
-    let motivo: string | undefined;
-    if (nuevoEstado === 'rechazado') {
-      motivo = window.prompt('Motivo del rechazo (opcional):') || undefined;
-    }
-    approveAporteMutation.mutate({ id: aporte.id, estado: nuevoEstado, motivo_rechazo: motivo });
-  };
-
-  const handleApprove = (aporteId: number) => {
-    approveAporteMutation.mutate({ id: aporteId, estado: 'aprobado' });
-  };
-
-  const handleReject = (aporteId: number) => {
-    const motivo = window.prompt('Motivo del rechazo:');
-    if (motivo !== null) {
-      approveAporteMutation.mutate({ id: aporteId, estado: 'rechazado', motivo_rechazo: motivo });
+  const getStatusIcon = (estado: string) => {
+    switch (estado) {
+      case 'aprobado': return <CheckCircle className="w-4 h-4" />;
+      case 'pendiente': return <Clock className="w-4 h-4" />;
+      case 'rechazado': return <XCircle className="w-4 h-4" />;
+      case 'revisando': return <Eye className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
     }
   };
 
-  if (error) {
-    return (
-      <Alert status="error">
-        <AlertIcon />
-        Error al cargar aportes: {(error as any).message}
-      </Alert>
-    );
-  }
+  const getTypeColor = (tipo: string) => {
+    switch (tipo) {
+      case 'manhwa': return 'bg-teal-100 text-teal-800 border-teal-200';
+      case 'manga': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'anime': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'novela': return 'bg-green-100 text-green-800 border-green-200';
+      case 'imagen': return 'bg-pink-100 text-pink-800 border-pink-200';
+      case 'video': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES');
+  };
+
+  const filteredAportes = aportes.filter(aporte => {
+    const matchesSearch = aporte.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         aporte.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         aporte.usuario.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = typeFilter === 'all' || aporte.tipo === typeFilter;
+    const matchesStatus = statusFilter === 'all' || aporte.estado === statusFilter;
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  const handleViewAporte = (aporte: Aporte) => {
+    setSelectedAporte(aporte);
+    setShowViewModal(true);
+  };
+
+  const handleEditAporte = (aporte: Aporte) => {
+    setEditingAporte(aporte);
+    setShowEditModal(true);
+  };
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <Flex align="center" justify="space-between">
-          <Heading size="lg">Gestión de Aportes</Heading>
-          <Button
-            leftIcon={<FaPlus />}
-            colorScheme="green"
-            onClick={handleOpenCreate}
-          >
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <Star className="w-8 h-8 text-yellow-600" />
+                Sistema de Aportes
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Gestiona los aportes de la comunidad
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
             Nuevo Aporte
-          </Button>
-        </Flex>
+              </button>
+              <button
+                onClick={loadAportes}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Alertas */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span className="text-red-700">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-500 hover:text-red-700"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <span className="text-green-700">{success}</span>
+            <button
+              onClick={() => setSuccess(null)}
+              className="ml-auto text-green-500 hover:text-green-700"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Estadísticas */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={8} justify="center">
-              <Stat textAlign="center">
-                <StatLabel>Total Aportes</StatLabel>
-                <StatNumber>{Number(stats?.totalAportes || 0)}</StatNumber>
-                <StatHelpText>En el sistema</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Aprobados</StatLabel>
-                <StatNumber color="green.500">{Number(stats?.aportesAprobados || 0)}</StatNumber>
-                <StatHelpText>Aportes aprobados</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Pendientes</StatLabel>
-                <StatNumber color="yellow.500">{Number(stats?.aportesPendientes || 0)}</StatNumber>
-                <StatHelpText>En revisión</StatHelpText>
-              </Stat>
-              <Stat textAlign="center">
-                <StatLabel>Rechazados</StatLabel>
-                <StatNumber color="red.500">{Number(stats?.aportesRechazados || 0)}</StatNumber>
-                <StatHelpText>Aportes rechazados</StatHelpText>
-              </Stat>
-            </HStack>
-          </CardBody>
-        </Card>
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+                <Star className="w-8 h-8 text-yellow-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Pendientes</p>
+                  <p className="text-2xl font-bold text-yellow-600">{stats.pendientes}</p>
+                </div>
+                <Clock className="w-8 h-8 text-yellow-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Aprobados</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.aprobados}</p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Rechazados</p>
+                  <p className="text-2xl font-bold text-red-600">{stats.rechazados}</p>
+                </div>
+                <XCircle className="w-8 h-8 text-red-500" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filtros */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={4} wrap="wrap">
-              <InputGroup maxW="300px">
-                <InputLeftElement pointerEvents="none">
-                  <FaSearch color="gray.300" />
-                </InputLeftElement>
-                <Input
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
                   placeholder="Buscar aportes..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                 />
-              </InputGroup>
-              <Select
-                value={estadoFilter}
-                onChange={(e) => setEstadoFilter(e.target.value)}
-                maxW="200px"
-              >
-                <option value="">Todos los estados</option>
-                <option value="pendiente">Pendiente</option>
-                <option value="aprobado">Aprobado</option>
-                <option value="rechazado">Rechazado</option>
-              </Select>
-              <Select
-                value={tipoFilter}
-                onChange={(e) => setTipoFilter(e.target.value)}
-                maxW="200px"
+              </div>
+            </div>
+            <div>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
               >
                 <option value="all">Todos los tipos</option>
-                <option value="manga">Manga</option>
                 <option value="manhwa">Manhwa</option>
+                <option value="manga">Manga</option>
                 <option value="anime">Anime</option>
                 <option value="novela">Novela</option>
                 <option value="imagen">Imagen</option>
                 <option value="video">Video</option>
-                <option value="documento">Documento</option>
-                <option value="otro">Otro</option>
-              </Select>
-              <Select
-                value={fuenteFilter}
-                onChange={(e) => setFuenteFilter(e.target.value)}
-                maxW="200px"
+              </select>
+            </div>
+            <div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
               >
-                <option value="all">Todas las fuentes</option>
-                <option value="usuario">Usuario</option>
-                <option value="colaborador">Colaborador</option>
-                <option value="proveedor">Proveedor</option>
-                <option value="admin">Admin</option>
-                <option value="sistema">Sistema</option>
-              </Select>
-            </HStack>
-          </CardBody>
-        </Card>
+                <option value="all">Todos los estados</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="aprobado">Aprobado</option>
+                <option value="rechazado">Rechazado</option>
+                <option value="revisando">Revisando</option>
+              </select>
+            </div>
+          </div>
+        </div>
 
-        {/* Tabla */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            {isLoading ? (
-              <Box textAlign="center" py={8}>
-                <Spinner size="xl" />
-                <Text mt={4}>Cargando aportes...</Text>
-              </Box>
-            ) : (
-              <Box overflowX="auto">
-                <Table variant="simple">
-                  <Thead>
-                    <Tr>
-                      <Th>Título</Th>
-                      <Th>Tipo</Th>
-                      <Th>Fuente</Th>
-                      <Th>Estado</Th>
-                      <Th>Usuario</Th>
-                      <Th>Fecha</Th>
-                      <Th>Acciones</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {aportesData?.aportes?.length === 0 && (
-                      <Tr>
-                        <Td colSpan={6}>
-                          <Alert status="info" variant="subtle">
-                            <AlertIcon />
-                            No se encontraron aportes.
-                          </Alert>
-                        </Td>
-                      </Tr>
-                    )}
-                    {aportesData?.aportes?.map((aporte: Aporte) => (
-                      <Tr key={aporte.id}>
-                        <Td>
-                          <VStack align="start" spacing={1}>
-                            <Text fontWeight="semibold">{aporte.titulo}</Text>
-                            {aporte.descripcion && (
-                              <Text fontSize="sm" color="gray.500" noOfLines={2}>
-                                {aporte.descripcion}
-                              </Text>
-                            )}
-                            <Text fontSize="xs" color="gray.400">
-                              ID: {aporte.id}
-                            </Text>
-                            {aporte.archivo_path && (
-                              <Link href={aporte.archivo_path} color="blue.500" fontSize="sm" isExternal>
-                                Ver archivo
-                              </Link>
-                            )}
-                            {aporte.motivo_rechazo && (
-                              <Text fontSize="xs" color="red.500">
-                                Motivo: {aporte.motivo_rechazo}
-                              </Text>
-                            )}
-                          </VStack>
-                        </Td>
-                        <Td>
-                          <Badge
-                            colorScheme={tipoColors[aporte.tipo as keyof typeof tipoColors] || 'gray'}
-                            variant="subtle"
+        {/* Lista de Aportes */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Lista de Aportes</h2>
+            <p className="text-gray-600 mt-1">
+              {filteredAportes.length} de {aportes.length} aportes
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center">
+              <RefreshCw className="w-8 h-8 text-yellow-500 animate-spin mx-auto mb-4" />
+              <p className="text-gray-600">Cargando aportes...</p>
+            </div>
+          ) : filteredAportes.length === 0 ? (
+            <div className="p-8 text-center">
+              <Star className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay aportes</h3>
+              <p className="text-gray-600">No se encontraron aportes con los filtros aplicados</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {filteredAportes.map((aporte) => (
+                <div key={aporte.id} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">{aporte.titulo}</h3>
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(aporte.estado)}`}>
+                          {getStatusIcon(aporte.estado)}
+                          {aporte.estado.charAt(0).toUpperCase() + aporte.estado.slice(1)}
+                        </span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getTypeColor(aporte.tipo)}`}>
+                          <Tag className="w-3 h-3" />
+                          {aporte.tipo.charAt(0).toUpperCase() + aporte.tipo.slice(1)}
+                        </span>
+                      </div>
+                      
+                      <p className="text-gray-600 mb-3 line-clamp-2">{aporte.descripcion}</p>
+                      
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <div className="flex items-center gap-1">
+                          <User className="w-4 h-4" />
+                          {aporte.usuario}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          {formatDate(aporte.fecha_creacion)}
+                        </div>
+                        {aporte.grupo_nombre && (
+                          <div className="flex items-center gap-1">
+                            <FileText className="w-4 h-4" />
+                            {aporte.grupo_nombre}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 ml-4">
+                      <button
+                        onClick={() => handleViewAporte(aporte)}
+                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Ver detalles"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      
+                      <button
+                        onClick={() => handleEditAporte(aporte)}
+                        className="p-2 text-gray-600 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      
+                      {aporte.estado === 'pendiente' && (
+                        <>
+                          <button
+                            onClick={() => updateAporteStatus(aporte.id, 'aprobado')}
+                            className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Aprobar"
                           >
-                            {aporte.tipo}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          <Badge
-                            colorScheme={fuenteColors[aporte.fuente as keyof typeof fuenteColors] || 'gray'}
-                            variant="subtle"
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => updateAporteStatus(aporte.id, 'rechazado')}
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Rechazar"
                           >
-                            {aporte.fuente}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          <Badge
-                            colorScheme={estadoColors[aporte.estado as keyof typeof estadoColors] || 'gray'}
-                            variant="subtle"
-                          >
-                            {aporte.estado}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          <Text fontSize="sm">{aporte.usuario?.username || 'N/A'}</Text>
-                        </Td>
-                        <Td>
-                          <VStack align="start" spacing={0}>
-                            <Text fontSize="sm">{aporte.fecha ? new Date(aporte.fecha).toLocaleDateString() : new Date(aporte.created_at).toLocaleDateString()}</Text>
-                            {aporte.fecha_procesado && (
-                              <Text fontSize="xs" color="gray.500">Procesado: {new Date(aporte.fecha_procesado).toLocaleDateString()}</Text>
-                            )}
-                          </VStack>
-                        </Td>
-                        <Td>
-                          <HStack spacing={2}>
-                            <Tooltip label="Ver detalles">
-                              <IconButton
-                                aria-label="Ver detalles"
-                                icon={<FaEye />}
-                                size="sm"
-                                variant="ghost"
-                                colorScheme="blue"
-                              />
-                            </Tooltip>
-                            <Tooltip label="Editar aporte">
-                              <IconButton
-                                aria-label="Editar aporte"
-                                icon={<FaEdit />}
-                                size="sm"
-                                variant="ghost"
-                                colorScheme="orange"
-                                onClick={() => handleOpenEdit(aporte)}
-                              />
-                            </Tooltip>
-                            <Menu>
-                              <MenuButton
-                                as={IconButton}
-                                aria-label="Más opciones"
-                                icon={<FaEllipsisV />}
-                                size="sm"
-                                variant="ghost"
-                              />
-                              <MenuList>
-                                {aporte.estado === 'pendiente' && (
-                                  <>
-                                    <MenuItem
-                                      icon={<FaCheck />}
-                                      onClick={() => handleApprove(aporte.id)}
-                                    >
-                                      Aprobar
-                                    </MenuItem>
-                                    <MenuItem
-                                      icon={<FaTimes />}
-                                      onClick={() => handleReject(aporte.id)}
-                                    >
-                                      Rechazar
-                                    </MenuItem>
+                            <XCircle className="w-4 h-4" />
+                          </button>
                                   </>
                                 )}
-                                <MenuItem
-                                  icon={<FaDownload />}
-                                >
-                                  Descargar
-                                </MenuItem>
-                                <MenuItem
-                                  icon={<FaShare />}
-                                >
-                                  Compartir
-                                </MenuItem>
-                                <MenuDivider />
-                               <MenuItem
-                                 icon={<FaCheck />}
-                                 onClick={() => handleChangeEstado(aporte, 'aprobado')}
-                               >
-                                 Aprobar
-                               </MenuItem>
-                                <MenuItem
-                                  icon={<FaClock />}
-                                  onClick={() => handleChangeEstado(aporte, 'pendiente')}
-                                >
-                                  Marcar como pendiente
-                                </MenuItem>
-                                <MenuItem
-                                  icon={<FaTimes />}
-                                  onClick={() => handleChangeEstado(aporte, 'rechazado')}
-                                >
-                                  Rechazar
-                                </MenuItem>
-                                <MenuDivider />
-                                <MenuItem
-                                  icon={<FaTrash />}
-                                  color="red.500"
-                                  onClick={() => handleDelete(aporte.id)}
-                                >
-                                  Eliminar
-                                </MenuItem>
-                              </MenuList>
-                            </Menu>
-                          </HStack>
-                        </Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
-              </Box>
-            )}
+                      
+                      <button
+                        onClick={() => deleteAporte(aporte.id)}
+                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-            {/* Paginación */}
-            {aportesData?.pagination && (
-              <Flex justify="center" mt={6}>
-                <HStack spacing={2}>
-                  <Button
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    isDisabled={currentPage === 1}
-                  >
-                    Anterior
-                  </Button>
-                  <Text>
-                    Página {currentPage} de {aportesData.pagination.totalPages}
-                  </Text>
-                  <Button
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    isDisabled={currentPage === aportesData.pagination.totalPages}
-                  >
-                    Siguiente
-                  </Button>
-                </HStack>
-              </Flex>
-            )}
-          </CardBody>
-        </Card>
-      </VStack>
-
-      {/* Modal de Crear/Editar Aporte */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <form onSubmit={handleSubmit}>
-            <ModalHeader>
-              {editingAporte ? 'Editar Aporte' : 'Crear Nuevo Aporte'}
-            </ModalHeader>
-            <ModalBody>
-              <VStack spacing={4}>
-                <FormControl isRequired>
-                  <FormLabel>Título</FormLabel>
-                  <Input
-                    value={formData.titulo}
-                    onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                    placeholder="Ingresa el título del aporte"
-                  />
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel>Descripción</FormLabel>
-                  <Textarea
-                    value={formData.descripcion}
-                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                    placeholder="Descripción opcional del aporte"
-                    rows={3}
-                  />
-                </FormControl>
-
-                <FormControl isRequired>
-                  <FormLabel>Contenido</FormLabel>
-                  <Textarea
-                    value={formData.contenido}
-                    onChange={(e) => setFormData({ ...formData, contenido: e.target.value })}
-                    placeholder="Contenido del aporte (enlace, texto, etc.)"
-                    rows={5}
-                  />
-                </FormControl>
-
-                <FormControl isRequired>
-                  <FormLabel>Tipo</FormLabel>
-                  <Select
-                    value={formData.tipo}
-                    onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                  >
-                    <option value="manhwa">Manhwa</option>
-                    <option value="manga">Manga</option>
-                    <option value="anime">Anime</option>
-                    <option value="novela">Novela</option>
-                    <option value="imagen">Imagen</option>
-                    <option value="video">Video</option>
-                    <option value="otro">Otro</option>
-                  </Select>
-                </FormControl>
-
-                <FormControl isRequired>
-                  <FormLabel>Fuente</FormLabel>
-                  <Select
-                    value={formData.fuente}
-                    onChange={(e) => setFormData({ ...formData, fuente: e.target.value })}
-                  >
-                    <option value="usuario">Usuario</option>
-                    <option value="colaborador">Colaborador</option>
-                    <option value="proveedor">Proveedor</option>
-                    <option value="admin">Admin</option>
-                    <option value="sistema">Sistema</option>
-                  </Select>
-                </FormControl>
-
-                <FormControl isRequired>
-                  <FormLabel>Estado</FormLabel>
-                  <Select
-                    value={formData.estado}
-                    onChange={(e) => setFormData({ ...formData, estado: e.target.value as 'pendiente' | 'aprobado' | 'rechazado' })}
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="aprobado">Aprobado</option>
-                    <option value="rechazado">Rechazado</option>
-
-                  </Select>
-                </FormControl>
-              </VStack>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="ghost" mr={3} onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button
-                colorScheme="blue"
-                type="submit"
-                isLoading={createAporteMutation.isLoading || updateAporteMutation.isLoading}
-              >
-                {editingAporte ? 'Actualizar' : 'Crear'}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
-    </Box>
+        {/* Modal de Ver Aporte */}
+        {showViewModal && selectedAporte && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                {selectedAporte.titulo}
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estado
+                  </label>
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(selectedAporte.estado)}`}>
+                    {getStatusIcon(selectedAporte.estado)}
+                    {selectedAporte.estado.charAt(0).toUpperCase() + selectedAporte.estado.slice(1)}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo
+                  </label>
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getTypeColor(selectedAporte.tipo)}`}>
+                    <Tag className="w-3 h-3" />
+                    {selectedAporte.tipo.charAt(0).toUpperCase() + selectedAporte.tipo.slice(1)}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descripción
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-100 p-3 rounded">{selectedAporte.descripcion}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contenido
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-100 p-3 rounded whitespace-pre-wrap">{selectedAporte.contenido}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fuente
+                  </label>
+                  <p className="text-sm text-gray-900">{selectedAporte.fuente}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Usuario
+                  </label>
+                  <p className="text-sm text-gray-900">{selectedAporte.usuario}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha de creación
+                  </label>
+                  <p className="text-sm text-gray-900">{formatDate(selectedAporte.fecha_creacion)}</p>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
 export default Aportes;
+
+
+
+
+
+
+

@@ -1,71 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  Input,
-  Select,
-  useToast,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Flex,
-  SimpleGrid,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  Badge,
-  Icon,
-  useColorModeValue,
-  Grid,
   Image,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-  useDisclosure,
-  FormControl,
-  FormLabel,
-  Textarea,
-  Progress,
-  Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  IconButton,
-  AspectRatio,
-  Wrap,
-  WrapItem,
-} from '@chakra-ui/react';
-import {
-  FaImage,
-  FaVideo,
-  FaMusic,
-  FaFile,
-  FaPlus,
-  FaEdit,
-  FaTrash,
-  FaDownload,
-  FaEye,
-  FaShare,
-  FaUpload,
-  FaSearch,
-  FaEllipsisV,
-  FaImages,
-  FaMicrophone,
-  FaFileAlt,
-} from 'react-icons/fa';
+  Video,
+  Music,
+  File,
+  Plus,
+  Edit,
+  Trash2,
+  Download,
+  Eye,
+  Share,
+  Upload,
+  Search,
+  MoreVertical,
+  Images,
+  Mic,
+  FileText,
+  Loader2,
+  RefreshCw,
+  X,
+  Check,
+  AlertTriangle,
+  Info
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService } from '../services/api';
 import { RUNTIME_CONFIG } from '../config/runtime-config';
@@ -114,14 +71,10 @@ export const Multimedia: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadCount, setUploadCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isViewOpen, setIsViewOpen] = useState(false);
 
-  const { isOpen: isUploadOpen, onOpen: onUploadOpen, onClose: onUploadClose } = useDisclosure();
-  const { isOpen: isViewOpen, onOpen: onViewOpen, onClose: onViewClose } = useDisclosure();
-
-  const toast = useToast();
   const queryClient = useQueryClient();
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
 
   // Queries
   const { data: multimediaData, isLoading, error } = useQuery<MultimediaResponse>(
@@ -144,28 +97,34 @@ export const Multimedia: React.FC = () => {
       onSuccess: () => {
         queryClient.invalidateQueries('multimedia');
         queryClient.invalidateQueries('multimediaStats');
-        toast({
-          title: 'Archivo eliminado exitosamente',
-          status: 'success',
-        });
+        alert('Archivo eliminado exitosamente');
       },
       onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al eliminar el archivo',
-          status: 'error',
-        });
+        alert(`Error al eliminar el archivo: ${error.response?.data?.message || 'Error desconocido'}`);
+      },
+    }
+  );
+
+  const uploadMultimediaMutation = useMutation(
+    (file: File) => apiService.uploadMultimedia(file),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('multimedia');
+        queryClient.invalidateQueries('multimediaStats');
+      },
+      onError: (error: any) => {
+        alert(`Error al subir archivo: ${error.response?.data?.message || 'Error desconocido'}`);
       },
     }
   );
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'image': return FaImage;
-      case 'video': return FaVideo;
-      case 'audio': return FaMusic;
-      case 'document': return FaFile;
-      default: return FaFile;
+      case 'image': return Image;
+      case 'video': return Video;
+      case 'audio': return Music;
+      case 'document': return File;
+      default: return File;
     }
   };
 
@@ -197,6 +156,7 @@ export const Multimedia: React.FC = () => {
   const items = multimediaData?.items || [];
   const pagination = multimediaData?.pagination;
 
+  // Real-time updates
   useEffect(() => {
     if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
       return;
@@ -253,12 +213,12 @@ export const Multimedia: React.FC = () => {
 
   const handleViewItem = (item: MultimediaItem) => {
     setSelectedItem(item);
-    onViewOpen();
+    setIsViewOpen(true);
   };
 
   const handleDownload = (item: MultimediaItem) => {
     if (!item.url) {
-      toast({ title: 'Sin archivo disponible', status: 'warning' });
+      alert('Sin archivo disponible');
       return;
     }
     const link = document.createElement('a');
@@ -267,564 +227,444 @@ export const Multimedia: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    toast({
-      title: 'Descarga iniciada',
-      description: `Descargando ${item.name}`,
-      status: 'info',
-    });
+    alert(`Descargando ${item.name}`);
   };
 
-  if (isLoading) {
-    return (
-      <Box textAlign="center" py={10}>
-        <Spinner size="xl" />
-        <Text mt={4}>Cargando multimedia...</Text>
-      </Box>
-    );
-  }
+  const handleFileUpload = async (files: FileList) => {
+    if (!files.length) return;
+    
+    try {
+      setUploading(true);
+      let done = 0;
+      for (const file of Array.from(files)) {
+        await uploadMultimediaMutation.mutateAsync(file);
+        done += 1;
+        setUploadCount(done);
+      }
+      alert(`Archivos subidos: ${done} archivo(s) subidos`);
+      setIsUploadOpen(false);
+    } catch (err: any) {
+      alert(`Error al subir: ${err?.response?.data?.error || err?.message}`);
+    } finally {
+      setUploading(false);
+      setUploadCount(0);
+    }
+  };
 
-  if (error) {
-    return (
-      <Box textAlign="center" py={10}>
-        <Alert status="error" maxW="lg" mx="auto">
-          <AlertIcon />
-          Error al cargar multimedia: {(error as any).message}
-        </Alert>
-      </Box>
-    );
-  }
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleFileUpload(e.dataTransfer.files);
+  };
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, typeFilter]);
 
-  useEffect(() => {
-    if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
-      return;
-    }
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+          <h2 className="text-xl font-semibold">Cargando multimedia...</h2>
+        </div>
+      </div>
+    );
+  }
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) {
-      return;
-    }
-
-    const baseUrl = RUNTIME_CONFIG.API_BASE_URL && RUNTIME_CONFIG.API_BASE_URL.trim().length > 0
-      ? RUNTIME_CONFIG.API_BASE_URL
-      : window.location.origin;
-
-    let eventSource: EventSource | null = null;
-
-    try {
-      const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-      const url = new URL('api/aportes/stream', normalizedBase);
-      url.searchParams.set('token', token);
-      eventSource = new EventSource(url.toString());
-    } catch (err) {
-      console.error('No se pudo iniciar la sincronización en tiempo real de multimedia', err);
-      return;
-    }
-
-    eventSource.onmessage = (event) => {
-      if (!event.data) return;
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type === 'aporteChanged') {
-          queryClient.invalidateQueries('multimedia');
-          queryClient.invalidateQueries('multimediaStats');
-        }
-      } catch (error) {
-        console.error('Error procesando actualización de multimedia', error);
-      }
-    };
-
-    eventSource.onerror = (err) => {
-      console.error('Stream de multimedia en tiempo real desconectado', err);
-    };
-
-    return () => {
-      eventSource?.close();
-    };
-  }, [queryClient]);
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="flex items-center">
+          <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+          <span className="text-red-700">
+            Error al cargar multimedia: {(error as any).message}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
-        {/* Header */}
-        <Flex align="center" justify="space-between">
-          <Box>
-            <Heading size="lg">Gestión de Multimedia</Heading>
-            <Text color="gray.600" mt={1}>
-              Administra archivos multimedia del sistema
-            </Text>
-          </Box>
-          <Button
-            leftIcon={<FaUpload />}
-            colorScheme="blue"
-            onClick={onUploadOpen}
-          >
-            Subir Archivos
-          </Button>
-        </Flex>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Gestión de Multimedia</h1>
+          <p className="text-gray-600 mt-1">Administra archivos multimedia del sistema</p>
+        </div>
+        <button
+          onClick={() => setIsUploadOpen(true)}
+          className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+        >
+          <Upload className="w-4 h-4 mr-2" />
+          Subir Archivos
+        </button>
+      </div>
 
-        {/* Estadísticas */}
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 5 }} spacing={6}>
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaImages} color="blue.500" />
-                    <Text>Total Archivos</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{multimediaStats?.totalFiles || 0}</StatNumber>
-                <StatHelpText>Archivos en el sistema</StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+      {/* Estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Images className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Total Archivos</p>
+              <p className="text-2xl font-bold text-gray-900">{multimediaStats?.totalFiles || 0}</p>
+              <p className="text-xs text-gray-400 mt-1">Archivos en el sistema</p>
+            </div>
+          </div>
+        </div>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaVideo} color="purple.500" />
-                    <Text>Videos</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{multimediaStats?.videos || 0}</StatNumber>
-                <StatHelpText>Archivos de video</StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Video className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Videos</p>
+              <p className="text-2xl font-bold text-gray-900">{multimediaStats?.videos || 0}</p>
+              <p className="text-xs text-gray-400 mt-1">Archivos de video</p>
+            </div>
+          </div>
+        </div>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaImage} color="green.500" />
-                    <Text>Imágenes</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{multimediaStats?.images || 0}</StatNumber>
-                <StatHelpText>Archivos de imagen</StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Image className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Imágenes</p>
+              <p className="text-2xl font-bold text-gray-900">{multimediaStats?.images || 0}</p>
+              <p className="text-xs text-gray-400 mt-1">Archivos de imagen</p>
+            </div>
+          </div>
+        </div>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaMicrophone} color="orange.500" />
-                    <Text>Audio</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{multimediaStats?.audio || 0}</StatNumber>
-                <StatHelpText>Archivos de audio</StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <Mic className="w-6 h-6 text-orange-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Audio</p>
+              <p className="text-2xl font-bold text-gray-900">{multimediaStats?.audio || 0}</p>
+              <p className="text-xs text-gray-400 mt-1">Archivos de audio</p>
+            </div>
+          </div>
+        </div>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaFileAlt} color="teal.500" />
-                    <Text>Documentos</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{multimediaStats?.documents || 0}</StatNumber>
-                <StatHelpText>Archivos de documentos</StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
-        </SimpleGrid>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-teal-100 rounded-lg">
+              <FileText className="w-6 h-6 text-teal-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Documentos</p>
+              <p className="text-2xl font-bold text-gray-900">{multimediaStats?.documents || 0}</p>
+              <p className="text-xs text-gray-400 mt-1">Archivos de documentos</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        {/* Filtros */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={4} wrap="wrap">
-              <Input
+      {/* Filtros */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center space-x-4">
+          <div className="flex-1 max-w-md">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
                 placeholder="Buscar archivos..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                maxW="300px"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                maxW="200px"
-              >
-                <option value="all">Todos los tipos</option>
-                <option value="image">Imágenes</option>
-                <option value="video">Videos</option>
-                <option value="audio">Audio</option>
-                <option value="document">Documentos</option>
-              </Select>
-            </HStack>
-          </CardBody>
-        </Card>
+            </div>
+          </div>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">Todos los tipos</option>
+            <option value="image">Imágenes</option>
+            <option value="video">Videos</option>
+            <option value="audio">Audio</option>
+            <option value="document">Documentos</option>
+          </select>
+        </div>
+      </div>
 
-        {/* Galería de Multimedia (acepta drag & drop global) */}
-        <Wrap
-          spacing={4}
-          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          onDrop={async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const files = Array.from(e.dataTransfer.files || []);
-            if (!files.length) return;
-            try {
-              setUploading(true);
-              let done = 0;
-              for (const f of files) {
-                await apiService.uploadMultimedia(f as File);
-                done += 1;
-                setUploadCount(done);
-              }
-              toast({ title: 'Archivos subidos', description: `${done} archivo(s) subidos`, status: 'success' });
-              queryClient.invalidateQueries('multimedia');
-              queryClient.invalidateQueries('multimediaStats');
-            } catch (err: any) {
-              toast({ title: 'Error al subir', description: err?.response?.data?.error || err?.message, status: 'error' });
-            } finally {
-              setUploading(false);
-              setUploadCount(0);
-            }
-          }}
-        >
-          {items.length === 0 && (
-            <WrapItem>
-              <Alert status="info" variant="subtle">
-                <AlertIcon />
-                No se encontraron archivos multimedia.
-              </Alert>
-            </WrapItem>
-          )}
-          {items.map((item: MultimediaItem) => (
-            <WrapItem key={item.id}>
-              <Card
-                bg={cardBg}
-                border="1px"
-                borderColor={borderColor}
-                maxW="300px"
-                cursor="pointer"
-                _hover={{ transform: 'translateY(-2px)', shadow: 'lg' }}
-                transition="all 0.2s"
-              >
-                <CardBody p={0}>
-                  <AspectRatio ratio={16 / 9}>
-                    {item.type === 'image' ? (
-                      <Image
-                        src={item.thumbnail || item.url}
-                        alt={item.name}
-                        objectFit="cover"
-                        onClick={() => handleViewItem(item)}
-                      />
-                    ) : (
-                      <Box
-                        bg={`${getTypeColor(item.type)}.100`}
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        onClick={() => handleViewItem(item)}
-                      >
-                        <Icon
-                          as={getTypeIcon(item.type)}
-                          size="3xl"
-                          color={`${getTypeColor(item.type)}.500`}
-                        />
-                      </Box>
-                    )}
-                  </AspectRatio>
-                  <Box p={4}>
-                    <VStack align="start" spacing={2}>
-                      <HStack justify="space-between" w="full">
-                        <Text fontWeight="semibold" noOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <Badge colorScheme={getTypeColor(item.type)} size="sm">
-                          {item.format.toUpperCase()}
-                        </Badge>
-                      </HStack>
-                      <Text fontSize="sm" color="gray.500" noOfLines={2}>
-                        {item.description}
-                      </Text>
-                      <HStack justify="space-between" w="full">
-                        <Text fontSize="xs" color="gray.400">
-                          {formatFileSize(item.size)}
-                        </Text>
-                        <Text fontSize="xs" color="gray.400">
-                          {item.views} vistas
-                        </Text>
-                      </HStack>
-                      <HStack spacing={1} wrap="wrap">
-                        {item.tags.slice(0, 2).map((tag, index) => (
-                          <Badge key={index} colorScheme="blue" variant="subtle" fontSize="xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {item.tags.length > 2 && (
-                          <Badge colorScheme="gray" variant="subtle" fontSize="xs">
-                            +{item.tags.length - 2}
-                          </Badge>
-                        )}
-                      </HStack>
-                      <HStack justify="space-between" w="full">
-                        <Text fontSize="xs" color="gray.500">
-                          {item.uploadedBy}
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          {new Date(item.uploadedAt).toLocaleDateString()}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between" w="full">
-                        <HStack spacing={2}>
-                          <Tooltip label="Ver detalles">
-                            <IconButton
-                              aria-label="Ver archivo"
-                              icon={<FaEye />}
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleViewItem(item)}
-                            />
-                          </Tooltip>
-                          <Tooltip label="Descargar">
-                            <IconButton
-                              aria-label="Descargar archivo"
-                              icon={<FaDownload />}
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDownload(item)}
-                            />
-                          </Tooltip>
-                        </HStack>
-                        <Menu>
-                          <MenuButton
-                            as={IconButton}
-                            aria-label="Más opciones"
-                            icon={<FaEllipsisV />}
-                            size="sm"
-                            variant="ghost"
-                          />
-                          <MenuList>
-                            <MenuItem
-                              icon={<FaTrash />}
-                              color="red.500"
-                              onClick={() => handleDeleteItem(item.id)}
-                            >
-                              Eliminar
-                            </MenuItem>
-                          </MenuList>
-                        </Menu>
-                      </HStack>
-                    </VStack>
-                  </Box>
-                </CardBody>
-              </Card>
-            </WrapItem>
-          ))}
-        </Wrap>
-
-        {pagination && pagination.totalPages > 1 && (
-          <Flex justify="center" mt={6}>
-            <HStack spacing={2}>
-              <Button
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                isDisabled={currentPage === 1}
-              >
-                Anterior
-              </Button>
-              <Text>
-                Página {pagination.page} de {pagination.totalPages}
-              </Text>
-              <Button
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, pagination.totalPages))}
-                isDisabled={currentPage === pagination.totalPages}
-              >
-                Siguiente
-              </Button>
-            </HStack>
-          </Flex>
+      {/* Galería de Multimedia */}
+      <div
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {items.length === 0 && (
+          <div className="col-span-full">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <Info className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No se encontraron archivos multimedia.</p>
+            </div>
+          </div>
         )}
-      </VStack>
+        
+        {items.map((item: MultimediaItem) => {
+          const TypeIcon = getTypeIcon(item.type);
+          const typeColor = getTypeColor(item.type);
+          
+          return (
+            <div
+              key={item.id}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+            >
+              <div className="aspect-video bg-gray-100 relative">
+                {item.type === 'image' ? (
+                  <img
+                    src={item.thumbnail || item.url}
+                    alt={item.name}
+                    className="w-full h-full object-cover"
+                    onClick={() => handleViewItem(item)}
+                  />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center bg-gray-100"
+                    onClick={() => handleViewItem(item)}
+                  >
+                    <TypeIcon className={`w-12 h-12 text-${typeColor}-500`} />
+                  </div>
+                )}
+                <div className="absolute top-2 right-2">
+                  <span className={`px-2 py-1 text-xs font-medium text-${typeColor}-600 bg-${typeColor}-100 rounded-full`}>
+                    {item.format.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-900 truncate mb-1">{item.name}</h3>
+                <p className="text-sm text-gray-500 line-clamp-2 mb-3">{item.description}</p>
+                
+                <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
+                  <span>{formatFileSize(item.size)}</span>
+                  <span>{item.views} vistas</span>
+                </div>
+                
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {item.tags.slice(0, 2).map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  {item.tags.length > 2 && (
+                    <span className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-full">
+                      +{item.tags.length - 2}
+                    </span>
+                  )}
+                </div>
+                
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+                  <span>{item.uploadedBy}</span>
+                  <span>{new Date(item.uploadedAt).toLocaleDateString()}</span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleViewItem(item)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Ver detalles"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDownload(item)}
+                      className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      title="Descargar"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Paginación */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-center space-x-2">
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Anterior
+          </button>
+          <span className="px-4 py-2 text-sm text-gray-700">
+            Página {pagination.page} de {pagination.totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, pagination.totalPages))}
+            disabled={currentPage === pagination.totalPages}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Siguiente
+          </button>
+        </div>
+      )}
 
       {/* Modal Subir Archivos */}
-      <Modal isOpen={isUploadOpen} onClose={onUploadClose} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Subir Archivos Multimedia</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={6}>
-              <Box
-                border="2px dashed"
-                borderColor="gray.300"
-                borderRadius="lg"
-                p={8}
-                textAlign="center"
-                w="full"
-                _hover={{ borderColor: 'blue.500' }}
-                transition="all 0.2s"
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                onDrop={async (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const files = Array.from(e.dataTransfer.files || []);
-                  if (!files.length) return;
-                  try {
-                    setUploading(true);
-                    let done = 0;
-                    for (const f of files) {
-                      await apiService.uploadMultimedia(f as File);
-                      done += 1;
-                      setUploadCount(done);
-                    }
-                    toast({ title: 'Archivos subidos', description: `${done} archivo(s) subidos`, status: 'success' });
-                    queryClient.invalidateQueries('multimedia');
-                    queryClient.invalidateQueries('multimediaStats');
-                    onUploadClose();
-                  } catch (err: any) {
-                    toast({ title: 'Error al subir', description: err?.response?.data?.error || err?.message, status: 'error' });
-                  } finally {
-                    setUploading(false);
-                    setUploadCount(0);
-                  }
-                }}
+      {isUploadOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">Subir Archivos Multimedia</h3>
+                <button
+                  onClick={() => setIsUploadOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors"
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
               >
-                <Icon as={FaUpload} boxSize="4xl" color="gray.400" mb={4} />
-                <Text fontSize="lg" fontWeight="semibold" mb={2}>
+                <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-lg font-semibold text-gray-900 mb-2">
                   Arrastra archivos aquí o haz clic para seleccionar
-                </Text>
-                <Text fontSize="sm" color="gray.500" mb={4}>
+                </p>
+                <p className="text-sm text-gray-500 mb-4">
                   Soporta imágenes, videos, audio y documentos
-                </Text>
-                <Input
+                </p>
+                <input
                   type="file"
                   multiple
                   accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
-                  display="none"
+                  onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+                  className="hidden"
                   id="file-upload"
-                  onChange={async (e) => {
-                    const files = Array.from(e.target.files || []);
-                    if (!files.length) return;
-                    try {
-                      setUploading(true);
-                      let done = 0;
-                      for (const f of files) {
-                        await apiService.uploadMultimedia(f as File);
-                        done += 1;
-                        setUploadCount(done);
-                      }
-                      toast({ title: 'Archivos subidos', description: `${done} archivo(s) subidos`, status: 'success' });
-                      queryClient.invalidateQueries('multimedia');
-                      queryClient.invalidateQueries('multimediaStats');
-                      onUploadClose();
-                    } catch (err: any) {
-                      toast({ title: 'Error al subir', description: err?.response?.data?.error || err?.message, status: 'error' });
-                    } finally {
-                      setUploading(false);
-                      setUploadCount(0);
-                    }
-                  }}
                 />
-                <Button
-                  as="label"
+                <label
                   htmlFor="file-upload"
-                  colorScheme="blue"
-                  cursor="pointer"
-                  isLoading={uploading}
+                  className="inline-flex items-center px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 cursor-pointer"
                 >
-                  Seleccionar Archivos
-                </Button>
+                  {uploading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  {uploading ? 'Subiendo...' : 'Seleccionar Archivos'}
+                </label>
                 {uploading && (
-                  <Text mt={3} color="gray.500">Subiendo... {uploadCount}</Text>
+                  <p className="mt-3 text-sm text-gray-500">Subiendo... {uploadCount}</p>
                 )}
-              </Box>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onUploadClose}>
-              Cancelar
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Ver Detalles */}
-      <Modal isOpen={isViewOpen} onClose={onViewClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Detalles del Archivo</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            {selectedItem && (
-              <VStack spacing={4} align="stretch">
-                <HStack>
-                  <Icon
-                    as={getTypeIcon(selectedItem.type)}
-                    color={`${getTypeColor(selectedItem.type)}.500`}
-                    size="lg"
-                  />
-                  <VStack align="start" spacing={1}>
-                    <Heading size="md">{selectedItem.name}</Heading>
-                    <Badge colorScheme={getTypeColor(selectedItem.type)}>
+      {isViewOpen && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">Detalles del Archivo</h3>
+                <button
+                  onClick={() => setIsViewOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  <div className={`p-3 bg-${getTypeColor(selectedItem.type)}-100 rounded-lg`}>
+                    <TypeIcon className={`w-8 h-8 text-${getTypeColor(selectedItem.type)}-600`} />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-semibold text-gray-900">{selectedItem.name}</h4>
+                    <span className={`px-2 py-1 text-xs font-medium text-${getTypeColor(selectedItem.type)}-600 bg-${getTypeColor(selectedItem.type)}-100 rounded-full`}>
                       {selectedItem.format.toUpperCase()}
-                    </Badge>
-                  </VStack>
-                </HStack>
+                    </span>
+                  </div>
+                </div>
 
-                <Text>{selectedItem.description}</Text>
+                <p className="text-gray-700">{selectedItem.description}</p>
 
-                <SimpleGrid columns={2} spacing={4}>
-                  <Stat>
-                    <StatLabel>Tamaño</StatLabel>
-                    <StatNumber>{formatFileSize(selectedItem.size)}</StatNumber>
-                  </Stat>
-                  <Stat>
-                    <StatLabel>Descargas</StatLabel>
-                    <StatNumber>{selectedItem.downloads}</StatNumber>
-                  </Stat>
-                  <Stat>
-                    <StatLabel>Vistas</StatLabel>
-                    <StatNumber>{selectedItem.views}</StatNumber>
-                  </Stat>
-                  <Stat>
-                    <StatLabel>Categoría</StatLabel>
-                    <StatNumber>{selectedItem.category}</StatNumber>
-                  </Stat>
-                </SimpleGrid>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-500">Tamaño</h5>
+                    <p className="text-lg font-semibold text-gray-900">{formatFileSize(selectedItem.size)}</p>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-500">Descargas</h5>
+                    <p className="text-lg font-semibold text-gray-900">{selectedItem.downloads}</p>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-500">Vistas</h5>
+                    <p className="text-lg font-semibold text-gray-900">{selectedItem.views}</p>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-500">Categoría</h5>
+                    <p className="text-lg font-semibold text-gray-900">{selectedItem.category}</p>
+                  </div>
+                </div>
 
-                <Text fontSize="sm" color="gray.500">
-                  Subido por: {selectedItem.uploadedBy}
-                </Text>
-                <Text fontSize="sm" color="gray.500">
-                  Fecha: {new Date(selectedItem.uploadedAt).toLocaleDateString()}
-                </Text>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onViewClose}>
-              Cerrar
-            </Button>
-            <Button
-              colorScheme="blue"
-              onClick={() => selectedItem && handleDownload(selectedItem)}
-            >
-              Descargar
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </Box>
+                <div className="text-sm text-gray-500">
+                  <p>Subido por: {selectedItem.uploadedBy}</p>
+                  <p>Fecha: {new Date(selectedItem.uploadedAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end mt-6 space-x-3">
+                <button
+                  onClick={() => setIsViewOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={() => handleDownload(selectedItem)}
+                  className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Descargar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

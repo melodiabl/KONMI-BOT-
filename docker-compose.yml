@@ -64,27 +64,4 @@ services:
 
   # NOTA: Caddy se ejecuta en HOST, no en contenedor
 
-  # Plantilla de subbot (usar con overrides o script)
-  subbot-template:
-    build: ./backend/full
-    restart: always
-    env_file:
-      - ./backend/full/.env
-    environment:
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_USER: appuser
-      DB_PASSWORD: superpass
-      DB_NAME: appdb
-      NODE_ENV: production
-      PORT: "0" # no expone puerto HTTP
-      TZ: America/Asuncion
-      SUBBOT_CODE: "${SUBBOT_CODE}"
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./backend/full/storage/auth/subbot-${SUBBOT_CODE}:/app/storage/auth/subbot-${SUBBOT_CODE}
-      - ./backend/full/storage/subbot-exports:/app/storage/subbot-exports
-    command: ["/bin/sh", "-c", "sleep 5 && node index.js"]
+  # subbot-template eliminado: sub-bots corren en el mismo proceso del backend

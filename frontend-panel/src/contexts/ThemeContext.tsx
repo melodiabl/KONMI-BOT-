@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ChakraProvider, ColorModeScript, useColorMode } from '@chakra-ui/react';
-import { theme } from '../theme';
+import theme from '../theme';
 
 interface ThemeContextType {
   isDarkMode: boolean;

@@ -1,13 +1,20 @@
 import db from './db.js';
 import { getSocket } from './whatsapp.js';
-import * as baileys from '@whiskeysockets/baileys';
+import * as baileys from 'AdonixBaileys';
 import { handleAI as handleAICommand, handleClasificar as handleClasificarCommand } from './commands.js';
 import { isSuperAdmin, isModerator, isPremium, getOwnerName } from './global-config.js';
+import {
+  launchSubbot,
+  deleteSubbot,
+  fetchSubbotListWithOnlineFlag,
+  getSubbotByCode
+} from './inproc-subbots.js';
 
 // Consolidación de comandos: reexportamos funciones de módulos específicos
 import {
   // Media
   handleMusic,
+  handleVideo,
   handleMeme,
   handleWallpaper,
   handleJoke,
@@ -28,11 +35,6 @@ import {
   handleLogsAdvanced,
   handleStats,
   handleExport,
-  // Sub-bots
-  handleSerbot,
-  handleBots,
-  handleDelSubbot,
-  handleQR,
   // Downloads
   handleDescargar,
   handleGuardar,
@@ -49,9 +51,7 @@ let modoAmigos = false;
 let advertenciasActivas = true;
 
 // Lista dinámica de números admin (solo el número principal del bot)
-let dynamicAdminNumbers = [
-  '595971284430', // Número principal del bot (se actualiza automáticamente)
-];
+let dynamicAdminNumbers = [];
 
 // Helper: normalizar JID (remover sufijo :<num>, convertir LID→WID, y mapear @lid)
 function normalizeJid(jid) {
@@ -76,26 +76,41 @@ function normalizeJid(jid) {
  * Verificar si un usuario es admin del grupo de WhatsApp
  * Usa el sistema global de administradores de MaycolPlus
  */
-async function isOwnerOrAdmin(usuario) {
-  // Verificar si es superadmin global
+async function isOwnerOrAdmin(usuario, grupo = null) {
+  if (grupo && grupo.endsWith('@g.us')) {
+    try {
+      const adminInGroup = await isGroupAdmin(usuario, grupo);
+      if (adminInGroup) {
+        return true;
+      }
+    } catch (error) {
+      console.error('Error verificando admin del grupo:', error?.message || error);
+    }
+  }
+
   if (isSuperAdmin(usuario)) {
     return true;
   }
-  
-  // Verificar si es moderador global
+
   if (isModerator(usuario)) {
     return true;
   }
-  
-  // Mantener compatibilidad con el sistema anterior
-  return dynamicAdminNumbers.includes(usuario);
+
+  const normalized = String(usuario).split(':')[0].replace(/[^0-9]/g, '');
+  return dynamicAdminNumbers.some((num) => String(num).replace(/[^0-9]/g, '') === normalized);
 }
 
 /**
  * Función para actualizar la lista de números admin
  */
 function updateAdminNumbers(newAdminNumbers) {
-  dynamicAdminNumbers = [...new Set([...dynamicAdminNumbers, ...newAdminNumbers])];
+  const normalized = newAdminNumbers
+    .map((num) => String(num).split(':')[0])
+    .map((num) => num.replace(/[^0-9]/g, ''))
+    .filter(Boolean);
+  const base = dynamicAdminNumbers.map((num) => num.replace(/[^0-9]/g, ''));
+  const merged = new Set([...base, ...normalized]);
+  dynamicAdminNumbers = Array.from(merged);
   console.log(`👑 Lista de admins actualizada: ${dynamicAdminNumbers.join(', ')}`);
 }
 
@@ -145,46 +160,85 @@ async function logCommand(tipo, comando, usuario, grupo) {
 
 // Helper para construir un menú de ayuda más legible y bonito
 function buildPrettyHelp(isAdmin) {
-  let text = `╭━━━━━━━  𝙆𝙊𝙉𝙈𝙄 𝘽𝙊𝙏 — 𝙈𝙀𝙉𝙐  ━━━━━━━╮\n` +
-             `┃  Versión: v2.5.0   •   Panel Web         ┃\n` +
-             `┃  Prefijos: /   !   .                    ┃\n` +
-             `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-             `🌟 *Generales*\n` +
-             `• help | menu | ayuda — Ayuda\n` +
-             `• whoami — Tu información\n` +
-             `• ia <texto> — IA (Gemini)\n` +
-             `• clasificar <texto> — Clasificar contenido\n\n` +
-             `🎬 *Media & Descargas*\n` +
-             `• music <búsqueda|url>  • meme  • wallpaper <tema>  • joke\n` +
-             `• descargar <url> <nombre> <categoria>\n` +
-             `• guardar <categoria>  • archivos [categoria]\n` +
-             `• misarchivos  • estadisticas  • limpiar  • buscararchivo <texto>\n\n` +
-             `📚 *Contenido & Aportes*\n` +
-             `• aportar <tipo> <contenido>  • myaportes [tipo]\n` +
-             `• aportes [tipo]  • pedido <contenido>  • pedidos\n` +
-             `  tipos: manhwa | manhwas_bls | series | series_videos | series_bls | anime | anime_bls | extra | extra_imagen | ilustracion\n\n` +
-             `📖 *Manhwas & Series*\n` +
-             `• manhwas  • series  • ilustraciones  • extra <nombre>\n\n` +
-             `🤖 *Subbots*\n` +
-             `• serbot  • bots  • delsubbot <id>  • qr <id>\n\n` +
-             `🗳️ *Votaciones*\n` +
-             `• crearvotacion <pregunta|opciones>\n` +
-             `• votar <opción>  • cerrarvotacion <ID>`;
+  const divider = '═══════════════════════════════════';
+  let text = `╔═══════════════════════════════════════╗\n`;
+  text += `║           🤖 *KONMI BOT* 🤖            ║\n`;
+  text += `║        *Panel de Comandos*              ║\n`;
+  text += `╚${divider}╝\n\n`;
+
+  text += '🌟 *COMANDOS ESENCIALES*\n';
+  text += '┌─────────────────────────────────────────┐\n';
+  text += '│ `help` / `menu`     →  Muestra este menú │\n';
+  text += '│ `whoami`           →  Tu ficha de usuario│\n';
+  text += '│ `ia <texto>`       →  Pregunta a Gemini  │\n';
+  text += '│ `clasificar <txt>` →  Categoriza contenido│\n';
+  text += '└─────────────────────────────────────────┘\n\n';
+
+  text += '🤖 *GESTIÓN DE SUBBOTS*\n';
+  text += '┌─────────────────────────────────────────┐\n';
+  text += '│ `qr`              →  Crear subbot QR    │\n';
+  text += '│ `code`            →  Crear subbot CODE  │\n';
+  text += '│ `bots`            →  Lista tus subbots  │\n';
+  text += '│ `delbot <id>`     →  Elimina un subbot  │\n';
+  text += '│ `delsubbot <id>`  →  Elimina un subbot  │\n';
+  text += '└─────────────────────────────────────────┘\n\n';
+
+  text += '🎧 *MEDIA & ENTRETENIMIENTO*\n';
+  text += '┌─────────────────────────────────────────┐\n';
+  text += '│ `play <búsqueda>` →  Audio de YouTube   │\n';
+  text += '│ `video <búsqueda>`→  Video de YouTube   │\n';
+  text += '│ `meme`            →  Meme aleatorio     │\n';
+  text += '│ `sticker`         →  Crear sticker      │\n';
+  text += '└─────────────────────────────────────────┘\n\n';
+
+  text += '📂 *DESCARGAS & ARCHIVOS*\n';
+  text += '┌─────────────────────────────────────────┐\n';
+  text += '│ `descargar <url> <nombre> <cat>`       │\n';
+  text += '│ `guardar <cat>` (responde a media)     │\n';
+  text += '│ `archivos [cat]`  `misarchivos`        │\n';
+  text += '└─────────────────────────────────────────┘\n\n';
+
+  text += '📚 *APORTES & PEDIDOS*\n';
+  text += '┌─────────────────────────────────────────┐\n';
+  text += '│ `aportar <tipo> <contenido>` → Enviar  │\n';
+  text += '│ `myaportes [tipo]`          → Tus aportes│\n';
+  text += '│ `aportes [tipo]`            → Todos     │\n';
+  text += '│ `pedido <tema>`             → Hacer pedido│\n';
+  text += '│ `pedidos`                   → Tus pedidos│\n';
+  text += '└─────────────────────────────────────────┘\n\n';
+
+  text += '🗳️ *VOTACIONES*\n';
+  text += '┌─────────────────────────────────────────┐\n';
+  text += '│ `crearvotacion <pregunta|op1|op2...>`  │\n';
+  text += '│ `votar <opción>`  `cerrarvotacion <ID>` │\n';
+  text += '└─────────────────────────────────────────┘\n\n';
 
   if (isAdmin) {
-    text += `\n\n🔧 *Admin & Moderación*\n` +
-            `• bot on/off  • bot global on/off  • update  • logs [tipo]\n` +
-            `• lock  • unlock  • tag <mensaje>\n` +
-            `• addmanhwa <título|autor|género|estado|desc|url|proveedor>\n` +
-            `• obtenermanhwa/extra/ilustracion/pack <nombre>\n` +
-            `• admininfo  • addadmin/deladmin <num>  • addmod/delmod <num>\n` +
-            `• getlid  • updatelid <lid>`;
+    text += '🛠️ *HERRAMIENTAS ADMIN*\n';
+    text += '┌─────────────────────────────────────────┐\n';
+    text += '│ `bot on/off`     →  Activar/desactivar │\n';
+    text += '│ `bot global on/off` →  Modo global      │\n';
+    text += '│ `update`         →  Actualizar bot      │\n';
+    text += '│ `logs [tipo]`    →  Ver logs del sistema│\n';
+    text += '│ `lock` / `unlock`→  Bloquear/desbloquear│\n';
+    text += '│ `addgroup` / `delgroup` →  Gestionar grupos│\n';
+    text += '└─────────────────────────────────────────┘\n\n';
   }
 
-  text += `\n\nℹ️ *Información*\n` +
-          `• Algunos comandos requieren permisos de Admin\n` +
-          `• El bot registra metadatos y se reflejan en el panel\n` +
-          `• Subbots con códigos temporales`;
+  text += '💡 *CONSEJOS DE USO*\n';
+  text += '┌─────────────────────────────────────────┐\n';
+  text += '│ • Usa `/`, `!` o `.` para comandos      │\n';
+  text += '│ • Algunos comandos requieren admin      │\n';
+  text += '│ • Los subbots se vencen: guarda QR/code │\n';
+  text += '│ • El bot detecta tu número automáticamente│\n';
+  text += '│ • Escribe `help <comando>` para más info│\n';
+  text += '└─────────────────────────────────────────┘\n\n';
+
+  text += `╔═══════════════════════════════════════╗\n`;
+  text += `║        🚀 *¡Disfruta usando el bot!* 🚀 ║\n`;
+  text += `║           *Versión 2.5 Completa*        ║\n`;
+  text += `╚${divider}╝\n`;
+
   return text;
 }
 
@@ -208,7 +262,7 @@ async function getDisplayMention(userJidOrNum) {
  * /help - Muestra lista de comandos disponibles (solo verifica admin por WhatsApp, no por base de datos)
  */
 async function handleHelp(usuario, grupo, isGroup) {
-  const isAdmin = await isOwnerOrAdmin(usuario);
+  const isAdmin = await isOwnerOrAdmin(usuario, grupo);
   // Nuevo formato más tipográfico y legible
   const pretty = buildPrettyHelp(isAdmin);
   await logCommand('consulta', 'help', usuario, grupo);
@@ -223,7 +277,7 @@ const handleClasificar = handleClasificarCommand;
  * /addgroup - Activa el bot en el grupo actual
  */
 async function handleAddGroup(usuario, grupo, groupName) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede activar el bot en grupos.' };
   }
   
@@ -247,7 +301,7 @@ async function handleAddGroup(usuario, grupo, groupName) {
  * /delgroup - Desactiva el bot en un grupo
  */
 async function handleDelGroup(usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede desactivar el bot en grupos.' };
   }
   
@@ -383,7 +437,7 @@ async function handleAddAporte(contenido, tipo, usuario, grupo, fecha) {
 
 /** Cambiar estado de aporte desde WhatsApp */
 async function handleAporteEstado(id, estado, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede cambiar estado de aportes.' };
   }
   const allowed = ['pendiente', 'en_revision', 'completado'];
@@ -406,7 +460,7 @@ async function handleAporteEstado(id, estado, usuario, grupo) {
  * /addmanhwa [datos] - Permite agregar un nuevo manhwa (solo Admin)
  */
 async function handleAddManhwa(datos, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede agregar manhwas.' };
   }
   
@@ -438,7 +492,7 @@ async function handleAddManhwa(datos, usuario, grupo) {
  */
 async function handleAddSerie(datos, usuario, grupo, isGroup) {
   // Verificar si el bot está activo en el grupo o usuario admin
-  if (isGroup && !await isBotActiveInGroup(grupo) && !await isOwnerOrAdmin(usuario)) {
+  if (isGroup && !await isBotActiveInGroup(grupo) && !await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ El bot no está activo en este grupo para agregar series.' };
   }
   
@@ -533,27 +587,37 @@ async function handleSeries(usuario, grupo) {
  */
 async function handlePedido(contenido, usuario, grupo, fecha) {
   try {
+    const { getSocket } = await import('./whatsapp.js');
+    const sock = getSocket();
+    const remoteJid = grupo || usuario;
+
     // Buscar en manhwas
     const manhwaEncontrado = await db.get(
       'SELECT * FROM manhwas WHERE titulo LIKE ? OR titulo LIKE ?',
       [`%${contenido}%`, `${contenido}%`]
     );
-    
+
     // Buscar en aportes
     const aporteEncontrado = await db.get(
       'SELECT * FROM aportes WHERE contenido LIKE ? OR contenido LIKE ?',
       [`%${contenido}%`, `${contenido}%`]
     );
-    
+
+    // Buscar en archivos descargados
+    const archivosEncontrados = await db.all(
+      'SELECT * FROM descargas WHERE filename LIKE ? OR filename LIKE ?',
+      [`%${contenido}%`, `${contenido}%`]
+    );
+
     // Registrar el pedido en la base de datos
     const stmt = await db.prepare(
       'INSERT INTO pedidos (texto, estado, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)'
     );
     await stmt.run(contenido, 'pendiente', usuario, grupo, fecha);
     await stmt.finalize();
-    
+
     let response = `📋 *Pedido registrado:* "${contenido}"\n\n`;
-    
+
     // Si encontró contenido, mencionarlo
     if (manhwaEncontrado) {
       response += `✅ *¡Encontrado en manhwas!*\n`;
@@ -568,7 +632,7 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
       }
       response += `\n`;
     }
-    
+
     if (aporteEncontrado) {
       response += `✅ *¡Encontrado en aportes!*\n`;
       response += `📁 **${aporteEncontrado.contenido}**\n`;
@@ -582,15 +646,89 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
       }
       response += `📅 Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
     }
-    
-    if (!manhwaEncontrado && !aporteEncontrado) {
+
+    // Buscar y enviar archivos físicos si existen
+    let archivosEnviados = 0;
+    if (archivosEncontrados.length > 0 && sock) {
+      response += `📁 *Archivos encontrados:*\n`;
+
+      for (const archivo of archivosEncontrados.slice(0, 5)) { // Máximo 5 archivos
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+
+          const archivoPath = path.join(process.cwd(), 'storage', 'downloads', archivo.category, archivo.filename);
+
+          if (fs.existsSync(archivoPath)) {
+            const fileBuffer = fs.readFileSync(archivoPath);
+            const fileExtension = path.extname(archivo.filename).toLowerCase();
+
+            let mediaType = 'document';
+            if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fileExtension)) {
+              mediaType = 'image';
+            } else if (['.mp4', '.avi', '.mkv', '.mov'].includes(fileExtension)) {
+              mediaType = 'video';
+            } else if (['.mp3', '.wav', '.m4a'].includes(fileExtension)) {
+              mediaType = 'audio';
+            }
+
+            // Enviar el archivo
+            let sentMessage;
+            if (mediaType === 'image') {
+              sentMessage = await sock.sendMessage(remoteJid, {
+                image: fileBuffer,
+                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}\n👤 Subido por: ${archivo.usuario}\n📅 ${new Date(archivo.fecha).toLocaleDateString()}`
+              });
+            } else if (mediaType === 'video') {
+              sentMessage = await sock.sendMessage(remoteJid, {
+                video: fileBuffer,
+                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}`
+              });
+            } else if (mediaType === 'audio') {
+              sentMessage = await sock.sendMessage(remoteJid, {
+                audio: fileBuffer,
+                mimetype: 'audio/mpeg'
+              });
+            } else {
+              sentMessage = await sock.sendMessage(remoteJid, {
+                document: fileBuffer,
+                fileName: archivo.filename,
+                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}`
+              });
+            }
+
+            response += `✅ *Enviado:* ${archivo.filename} (${archivo.category})\n`;
+            archivosEnviados++;
+
+            // Marcar el pedido como completado si se envió al menos un archivo
+            if (archivosEnviados === 1) {
+              await db('pedidos')
+                .where({ texto: contenido, usuario: usuario, grupo: grupo })
+                .update({ estado: 'completado', completado_por: 'bot', fecha_completado: new Date().toISOString() });
+            }
+          }
+        } catch (fileError) {
+          console.error(`Error enviando archivo ${archivo.filename}:`, fileError);
+          response += `❌ Error enviando: ${archivo.filename}\n`;
+        }
+      }
+
+      if (archivosEnviados === 0) {
+        response += `⚠️ Archivos encontrados pero no se pudieron enviar\n`;
+      }
+    }
+
+    if (!manhwaEncontrado && !aporteEncontrado && archivosEnviados === 0) {
       response += `⏳ *No encontrado en la base de datos*\n`;
       response += `Tu pedido ha sido registrado y será revisado por los administradores.\n`;
+    } else if (archivosEnviados > 0) {
+      response += `\n🎉 *¡Pedido completado automáticamente!* ✅`;
     }
-    
+
     await logCommand('comando', 'pedido', usuario, grupo);
     return { success: true, message: response };
   } catch (error) {
+    console.error('Error en handlePedido:', error);
     return { success: false, message: 'Error al procesar pedido.' };
   }
 }
@@ -684,7 +822,7 @@ async function handleIlustraciones(usuario, grupo) {
  * /logs - Muestra últimos registros de actividad (solo Admin)
  */
 async function handleLogs(usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede ver logs.' };
   }
   
@@ -716,7 +854,7 @@ async function handleLogs(usuario, grupo) {
  * /privado - Activa/desactiva el modo privado del bot
  */
 async function handlePrivado(usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede cambiar el modo privado.' };
   }
   
@@ -733,7 +871,7 @@ async function handlePrivado(usuario, grupo) {
  * /amigos - Activa/desactiva el modo amigos
  */
 async function handleAmigos(usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede cambiar el modo amigos.' };
   }
   
@@ -750,7 +888,7 @@ async function handleAmigos(usuario, grupo) {
  * /advertencias on/off - Activa o desactiva las advertencias
  */
 async function handleAdvertencias(estado, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede configurar advertencias.' };
   }
   
@@ -813,7 +951,7 @@ async function handleVotar(opcion, usuario, grupo) {
  * /crearvotacion [pregunta | opción1 | opción2...] - Crea una nueva votación
  */
 async function handleCrearVotacion(datos, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede crear votaciones.' };
   }
   
@@ -872,7 +1010,7 @@ async function handleCrearVotacion(datos, usuario, grupo) {
  * /cerrarvotacion [ID] - Cierra una votación activa
  */
 async function handleCerrarVotacion(id, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede cerrar votaciones.' };
   }
   
@@ -896,7 +1034,7 @@ async function handleCerrarVotacion(id, usuario, grupo) {
  * /obtenermanhwa [nombre] - Descarga y guarda un manhwa desde grupo proveedor
  */
 async function handleObtenerManhwa(nombre, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede obtener contenido.' };
   }
   
@@ -924,7 +1062,7 @@ async function handleObtenerManhwa(nombre, usuario, grupo) {
  * /obtenerextra [nombre] - Descarga y guarda el extra de un manhwa
  */
 async function handleObtenerExtra(nombre, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede obtener contenido.' };
   }
   
@@ -951,7 +1089,7 @@ async function handleObtenerExtra(nombre, usuario, grupo) {
  * /obtenerilustracion [nombre] - Guarda una ilustración desde grupo proveedor
  */
 async function handleObtenerIlustracion(nombre, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede obtener contenido.' };
   }
   
@@ -978,7 +1116,7 @@ async function handleObtenerIlustracion(nombre, usuario, grupo) {
  * /obtenerpack [nombre] - Guarda un pack de contenido desde grupo proveedor
  */
 async function handleObtenerPack(nombre, usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '❌ Solo Admin puede obtener contenido.' };
   }
   
@@ -1072,7 +1210,7 @@ async function handleBotOff(grupoId, usuario) {
  */
 async function handleBotGlobalOn(usuario) {
   const normalizedUsuario = normalizeUserNumber(usuario);
-  if (normalizedUsuario !== '595971284430') {
+  if (!isSuperAdmin(usuario)) {
     return { success: false, message: '⛔ Solo el bot principal puede controlar el bot globalmente.' };
   }
   try {
@@ -1201,7 +1339,7 @@ async function notifyAllGroupsAboutGlobalShutdown(usuario) {
  */
 async function handleBotGlobalOff(usuario) {
   const normalizedUsuario = normalizeUserNumber(usuario);
-  if (normalizedUsuario !== '595971284430') {
+  if (!isSuperAdmin(usuario)) {
     return { success: false, message: '⛔ Solo el bot principal puede controlar el bot globalmente.' };
   }
   try {
@@ -1315,10 +1453,10 @@ async function clearGroupOffNotices(grupoId) {
 }
 
 /**
- * /update - Actualizar configuración desde el bot principal (para subbots)
+ * /update - Actualizar configuración desde el bot principal
  */
 async function handleUpdate(usuario) {
-  if (!await isOwnerOrAdmin(usuario)) {
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
     return { success: false, message: '⛔ Solo el bot principal puede actualizar la configuración.' };
   }
   try {
@@ -1332,147 +1470,306 @@ async function handleUpdate(usuario) {
   }
 }
 
-/**
- * /qr - Generar QR de vinculación real para subbot (disponible para todos)
- */
-async function handleQRDM(usuario, grupo, isGroup) {
-  if (isGroup) {
-    return {
-      success: true,
-      message: '✅ Para obtener el código QR, escribe `/qr` al chat privado de este bot.'
-    };
-  }
+function sanitizePhoneNumber(value) {
+  if (!value) return null;
+  const digits = String(value).replace(/[^0-9]/g, '');
+  return digits.length >= 7 ? digits : null;
+}
+
+function ensureWhatsAppJid(identifier) {
+  if (!identifier) return null;
+  return identifier.includes('@') ? identifier : `${identifier}@s.whatsapp.net`;
+}
+
+function extractDigitsFromJid(jid) {
+  if (!jid) return null;
+  return sanitizePhoneNumber(jid.split('@')[0]);
+}
+
+function sanitizeCustomPairingCode(value) {
+  if (!value) return null;
+  const cleaned = String(value).toUpperCase().replace(/[^0-9A-Z]/g, '');
+  return cleaned.length === 8 ? cleaned : null;
+}
+
+async function handleSerbot(usuario, grupo, fecha, remoteJid, senderJid = null, originMessageId = null) {
   try {
-    // Verificar si ya tiene un QR activo
-    const existingQR = await db('subbots')
-      .where('status', 'pending')
-      .where('type', 'qr')
-      .where('created_at', '>', new Date(Date.now() - 10 * 60 * 1000).toISOString()) // 10 minutos
-      .first();
-    
-    if (existingQR) {
-      return {
-        success: true,
-        message: `📱 *Tu QR activo:*\n\n\`\`\`${existingQR.qr_data}\`\`\`\n\n⏰ *Tiempo restante:* ${Math.ceil((new Date(existingQR.created_at).getTime() + 10 * 60 * 1000 - Date.now()) / 1000)} segundos\n\n⚠️ *Ya tienes un QR activo. Escanéalo o espera a que expire.*`
-      };
-    }
-    
-    // Limpiar QRs expirados del usuario
-    await db('subbots')
-      .where('type', 'qr')
-      .where('status', 'pending')
-      .where('created_at', '<', new Date(Date.now() - 10 * 60 * 1000).toISOString())
-      .del();
-    
-    // Generar ID único para el subbot
-    const subbotId = `subbot_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    
-    // Crear entrada en la base de datos
-    await db('subbots').insert({
-      code: subbotId,
+    const requesterJid = ensureWhatsAppJid(senderJid || remoteJid || usuario);
+    const requesterNumber = extractDigitsFromJid(requesterJid);
+    const originChat = grupo || remoteJid || requesterJid;
+
+    const metadata = {
+      source: 'whatsapp',
+      fecha,
+      originChat,
+      requestedFromGroup: Boolean(grupo),
+      requesterJid,
+      originMessageId
+    };
+
+    const launch = await launchSubbot({
       type: 'qr',
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      last_heartbeat: new Date().toISOString()
+      createdBy: requesterNumber,
+      requestJid: requesterJid,
+      requestParticipant: requesterJid,
+      metadata
     });
-    
-    // Iniciar subbot automáticamente
-    try {
-      const { exec } = await import('child_process');
-      exec(`cd /home/admin/bot-whatsapp-panel-2.5-completo-v2 && docker-compose -f docker-compose.subbots.yml up -d subbot-${subbotId.split('_')[1]}`, (error, stdout, stderr) => {
-        if (error) {
-          console.error('Error iniciando subbot:', error);
-        } else {
-          console.log('Subbot iniciado:', stdout);
-        }
-      });
-    } catch (error) {
-      console.error('Error iniciando subbot:', error);
+
+    if (!launch.success) {
+      return { success: false, message: `❌ Error creando sub-bot: ${launch.error}` };
     }
-    
-    await logCommand('consulta', 'qr_generated', usuario, 'global');
-    
+
+    const message = Boolean(grupo)
+      ? '🤖 *Creando sub-bot*\n\n🔄 Estoy generando tu sub-bot y en unos segundos te enviaré por privado el código QR para vincularlo.'
+      : '🤖 *Creando sub-bot*\n\n🔄 Estoy generando tu sub-bot y en unos segundos te enviaré aquí mismo el código QR para vincularlo.';
+
     return {
       success: true,
-      message: `📱 *QR de subbot generado:*\n\n🆔 *ID del subbot:* \`${subbotId}\`\n\n⏰ *Válido por:* 10 minutos\n📱 *Uso:* El QR se generará automáticamente cuando escanees con WhatsApp\n\n💡 *Tip:* Usa el comando \`/code\` para vinculación manual con código de 8 dígitos`
+      message
     };
   } catch (error) {
-    console.error('Error en handleQR:', error);
-    return { success: false, message: '⛔ Error al generar QR de subbot. Intenta de nuevo.' };
+    console.error('Error en handleSerbot:', error);
+    return { success: false, message: '❌ Error al crear sub-bot' };
   }
 }
 
-/**
- * /code - Generar código de 8 dígitos para vinculación manual (disponible para todos)
- */
-async function handleCode(usuario, grupo, isGroup) {
-  if (isGroup) {
-    return {
-      success: true,
-      message: '✅ Para obtener el código de subbot, escribe `/code` al chat privado de este bot.'
-    };
-  }
+async function handleCode(usuario, grupo, remoteJid, args, senderJid = null, originMessageId = null) {
   try {
-    // Verificar si ya tiene un código activo
-    const existingCode = await db('subbots')
-      .where('status', 'pending')
-      .where('type', 'code')
-      .where('created_at', '>', new Date(Date.now() - 5 * 60 * 1000).toISOString()) // 5 minutos
-      .first();
-    
-    if (existingCode) {
+    const requesterJid = ensureWhatsAppJid(senderJid || remoteJid || usuario);
+    const fallbackNumber = extractDigitsFromJid(requesterJid);
+    const desiredNumber = fallbackNumber;
+    const customCode = 'KONMIBOT';
+    const customDisplay = 'KONMI-BOT';
+    const originChat = grupo || remoteJid || requesterJid;
+    const metadata = {
+      source: 'whatsapp',
+      originChat,
+      requestedFromGroup: Boolean(grupo),
+      requesterJid,
+      originMessageId,
+      customPairingCode: customCode,
+      customPairingDisplay: customDisplay
+    };
+    const launch = await launchSubbot({
+      type: 'code',
+      createdBy: fallbackNumber,
+      requestJid: requesterJid,
+      requestParticipant: requesterJid,
+      targetNumber: desiredNumber,
+      metadata
+    });
+    if (!launch.success) {
+      return { success: false, message: `❌ Error generando código: ${launch.error}` };
+    }
+    const message =
+      '╔═══════════════════════════════════════╗\n' +
+      '║        🤖 *SUBBOT CODE CREADO* 🤖     ║\n' +
+      '╚═══════════════════════════════════════╝\n\n' +
+      '🔐 *Código de Emparejamiento Generado*\n\n' +
+      '📱 *PASOS PARA CONECTAR:*\n' +
+      '┌─────────────────────────────────────────┐\n' +
+      '│ 1️⃣ Abre WhatsApp en tu celular         │\n' +
+      '│ 2️⃣ Ve a *Dispositivos vinculados*      │\n' +
+      '│ 3️⃣ Toca *Vincular dispositivo*         │\n' +
+      '│ 4️⃣ Selecciona *Con número*             │\n' +
+      '│ 5️⃣ Ingresa el código que te enviaré    │\n' +
+      '└─────────────────────────────────────────┘\n\n' +
+      '⏳ *Generando código de emparejamiento...*\n' +
+      '📞 *Número detectado:* `' + fallbackNumber + '`\n' +
+      '🏷️ *Nombre del subbot:* `KONMI-BOT`\n\n' +
+      '💡 *El código llegará en unos segundos*';
+    return { success: true, message };
+  } catch (error) {
+    return { success: false, message: '❌ Error generando código de pairing.' };
+  }
+}
+
+async function handleBots(usuario) {
+  try {
+    const subbots = await fetchSubbotListWithOnlineFlag();
+    if (!subbots.length) {
       return {
         success: true,
-        message: `🔑 *Tu código activo:*\n\n\`\`\`${existingCode.code}\`\`\`\n\n⏰ *Tiempo restante:* ${Math.ceil((new Date(existingCode.created_at).getTime() + 5 * 60 * 1000 - Date.now()) / 1000)} segundos\n\n⚠️ *Ya tienes un código activo. Espera a que expire o úsalo.*`
+        message: '╔═══════════════════════════════════════╗\n' +
+                '║           🤖 *TUS SUBBOTS* 🤖          ║\n' +
+                '╚═══════════════════════════════════════╝\n\n' +
+                '📭 *No tienes subbots creados*\n\n' +
+                '🚀 *CREAR NUEVO SUBBOT:*\n' +
+                '┌─────────────────────────────────────────┐\n' +
+                '│ `qr`    →  Crear subbot con QR Code    │\n' +
+                '│ `code`  →  Crear subbot con código     │\n' +
+                '└─────────────────────────────────────────┘\n\n' +
+                '💡 *Los subbots te permiten conectar múltiples cuentas de WhatsApp*'
       };
     }
     
-    // Limpiar códigos expirados del usuario
-    await db('subbots')
-      .where('type', 'code')
-      .where('status', 'pending')
-      .where('created_at', '<', new Date(Date.now() - 5 * 60 * 1000).toISOString())
-      .del();
-    
-    // Generar código de 8 dígitos numéricos para vinculación manual
-    let code;
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    do {
-      // Generar código de 8 dígitos
-      code = Math.floor(10000000 + Math.random() * 90000000).toString();
-      attempts++;
+    const lines = subbots.map((subbot, index) => {
+      const statusIcon = subbot.status === 'connected' ? '🟢' : subbot.status === 'pending' ? '🟡' : subbot.status === 'error' ? '🔴' : '⚪';
+      const onlineIcon = subbot.isOnline ? '✅' : '⏹️';
+      const typeIcon = subbot.type === 'code' ? '🔐' : '📱';
+      const statusText = subbot.status === 'connected' ? 'CONECTADO' : 
+                        subbot.status === 'pending' ? 'ESPERANDO' : 
+                        subbot.status === 'error' ? 'ERROR' : 'DESCONECTADO';
       
-      // Verificar que el código sea único
-      const codeExists = await db('subbots').where('code', code).first();
-      if (!codeExists) break;
-      
-    } while (attempts < maxAttempts);
-    
-    // Si no se pudo generar un código único después de varios intentos
-    if (attempts >= maxAttempts) {
-      return { success: false, message: '⛔ Error: No se pudo generar un código único. Intenta de nuevo.' };
-    }
-    
-    // Crear entrada en la base de datos
-    await db('subbots').insert({
-      code: code,
-      type: 'code',
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      last_heartbeat: new Date().toISOString()
-    });
-    
-    await logCommand('consulta', 'code_generated', usuario, 'global');
+      return (
+        `┌─ *${index + 1}.* ${statusIcon} \`${subbot.code}\` ${onlineIcon}\n` +
+        `│ ${typeIcon} Tipo: ${subbot.type === 'code' ? 'Pairing Code' : 'QR Code'}\n` +
+        `│ 📊 Estado: *${statusText}*\n` +
+        `│ 📅 Creado: ${new Date(subbot.created_at).toLocaleString('es-ES')}\n` +
+        `└─────────────────────────────────────────`
+      );
+    }).join('\n\n');
     
     return {
       success: true,
-      message: `🔑 *Código de vinculación generado:*\n\n\`\`\`${code}\`\`\`\n\n⏰ *Válido por:* 5 minutos\n📱 *Uso:* Ingresa este código de 8 dígitos en el dispositivo que quieres vincular\n\n💡 *Tip:* Usa el comando \`/qr\` para vinculación con código QR`
+      message: '╔═══════════════════════════════════════╗\n' +
+              '║           🤖 *TUS SUBBOTS* 🤖          ║\n' +
+              '╚═══════════════════════════════════════╝\n\n' +
+              `📊 *Total: ${subbots.length} subbot${subbots.length !== 1 ? 's' : ''}*\n\n` +
+              `${lines}\n\n` +
+              '💡 *Usa `delbot <id>` para eliminar un subbot*'
     };
   } catch (error) {
-    console.error('Error en handleCode:', error);
-    return { success: false, message: '⛔ Error al generar código de subbot. Intenta de nuevo.' };
+    return { success: false, message: '❌ Error obteniendo subbots.' };
+  }
+}
+
+async function handleDelSubbot(code, usuario) {
+  try {
+    if (!code) {
+      return { 
+        success: false, 
+        message: '╔═══════════════════════════════════════╗\n' +
+                '║         ❌ *ERROR DE USO* ❌           ║\n' +
+                '╚═══════════════════════════════════════╝\n\n' +
+                '📝 *Uso correcto:*\n' +
+                '┌─────────────────────────────────────────┐\n' +
+                '│ `delbot <subbot_id>`                   │\n' +
+                '│ `delsubbot <subbot_id>`                │\n' +
+                '└─────────────────────────────────────────┘\n\n' +
+                '💡 *Ejemplo: `delbot abc123`*'
+      };
+    }
+    const result = await deleteSubbot(code);
+    if (!result.success) {
+      return { 
+        success: false, 
+        message: '╔═══════════════════════════════════════╗\n' +
+                '║         ❌ *ERROR* ❌                  ║\n' +
+                '╚═══════════════════════════════════════╝\n\n' +
+                `🚫 *No se pudo eliminar el subbot*\n\n` +
+                `📋 *Detalles:*\n` +
+                `┌─────────────────────────────────────────┐\n` +
+                `│ ID: \`${code}\`\n` +
+                `│ Error: ${result.error}\n` +
+                `└─────────────────────────────────────────┘\n\n` +
+                `💡 *Verifica que el ID sea correcto*`
+      };
+    }
+    return {
+      success: true,
+      message: '╔═══════════════════════════════════════╗\n' +
+              '║        ✅ *SUBBOT ELIMINADO* ✅        ║\n' +
+              '╚═══════════════════════════════════════╝\n\n' +
+              `🗑️ *Subbot eliminado correctamente*\n\n` +
+              `📋 *Detalles:*\n` +
+              `┌─────────────────────────────────────────┐\n` +
+              `│ ID: \`${code}\`\n` +
+              `│ Estado: Eliminado permanentemente\n` +
+              `│ Fecha: ${new Date().toLocaleString('es-ES')}\n` +
+              `└─────────────────────────────────────────┘\n\n` +
+              `💡 *Usa \`bots\` para ver tus subbots restantes*`
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      message: '╔═══════════════════════════════════════╗\n' +
+              '║         ❌ *ERROR* ❌                  ║\n' +
+              '╚═══════════════════════════════════════╝\n\n' +
+              '🚫 *Error eliminando subbot*\n\n' +
+              '💡 *Intenta nuevamente o contacta al administrador*'
+    };
+  }
+}
+
+async function handleQR(subbotCode) {
+  try {
+    if (!subbotCode) {
+      return { 
+        success: false, 
+        message: '╔═══════════════════════════════════════╗\n' +
+                '║         ❌ *ERROR DE USO* ❌           ║\n' +
+                '╚═══════════════════════════════════════╝\n\n' +
+                '📝 *Uso correcto:*\n' +
+                '┌─────────────────────────────────────────┐\n' +
+                '│ `qr <subbot_id>`                       │\n' +
+                '└─────────────────────────────────────────┘\n\n' +
+                '💡 *Ejemplo: `qr abc123`*'
+      };
+    }
+
+    const subbot = await getSubbotByCode(subbotCode);
+    if (!subbot) {
+      return { 
+        success: false, 
+        message: '╔═══════════════════════════════════════╗\n' +
+                '║         ❌ *SUBBOT NO ENCONTRADO* ❌   ║\n' +
+                '╚═══════════════════════════════════════╝\n\n' +
+                `🚫 *No se encontró el subbot con ID: \`${subbotCode}\`*\n\n` +
+                '💡 *Usa `bots` para ver tus subbots disponibles*'
+      };
+    }
+
+    if (!subbot.qr_data) {
+      return {
+        success: true,
+        message: '╔═══════════════════════════════════════╗\n' +
+                '║        ⏳ *QR EN GENERACIÓN* ⏳        ║\n' +
+                '╚═══════════════════════════════════════╝\n\n' +
+                '🔄 *El código QR aún no está listo*\n\n' +
+                '📋 *Detalles:*\n' +
+                '┌─────────────────────────────────────────┐\n' +
+                `│ ID: \`${subbotCode}\`\n` +
+                '│ Estado: Generando QR...\n' +
+                '│ Tipo: QR Code\n' +
+                '└─────────────────────────────────────────┘\n\n' +
+                '💡 *Te avisaré aquí mismo cuando esté listo*'
+      };
+    }
+
+    const caption = '╔═══════════════════════════════════════╗\n' +
+                   '║        📱 *CÓDIGO QR SUBBOT* 📱        ║\n' +
+                   '╚═══════════════════════════════════════╝\n\n' +
+                   '🔗 *CONECTA TU SUBBOT:*\n' +
+                   '┌─────────────────────────────────────────┐\n' +
+                   '│ 1️⃣ Abre WhatsApp en tu celular         │\n' +
+                   '│ 2️⃣ Ve a *Dispositivos vinculados*      │\n' +
+                   '│ 3️⃣ Toca *Vincular dispositivo*         │\n' +
+                   '│ 4️⃣ Escanea este código QR              │\n' +
+                   '└─────────────────────────────────────────┘\n\n' +
+                   `📋 *ID del Subbot:* \`${subbotCode}\`\n` +
+                   '⏰ *El QR expira en 2 minutos*\n\n' +
+                   '💡 *¡Escanea rápido para conectar!*';
+
+    return {
+      success: true,
+      message: caption,
+      media: {
+        type: 'image',
+        data: subbot.qr_data,
+        caption
+      }
+    };
+  } catch (error) {
+    console.error('Error en handleQR:', error);
+    return { 
+      success: false, 
+      message: '╔═══════════════════════════════════════╗\n' +
+              '║         ❌ *ERROR* ❌                  ║\n' +
+              '╚═══════════════════════════════════════╝\n\n' +
+              '🚫 *Error obteniendo código QR*\n\n' +
+              '💡 *Intenta nuevamente o contacta al administrador*'
+    };
   }
 }
 
@@ -1488,19 +1785,36 @@ async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
     const registro = user?.fecha_registro ? new Date(user.fecha_registro).toLocaleDateString('es-ES') : 'N/D';
     const rol = user?.rol ? user.rol.toUpperCase() : 'USUARIO';
 
-    let info = `╭───── 👤 *Tu Información* ─────╮\n`;
-    info += `• *Nombre WA:* ${display}\n`;
-    info += `• *Número:* ${number}\n`;
-    if (user?.username) info += `• *Usuario Panel:* @${user.username}\n`;
-    info += `• *Rol:* ${rol}\n`;
-    info += `• *Registro:* ${registro}\n`;
-    info += `• *Grupo:* ${grupo || 'Privado'}\n`;
-    info += `╰──────────────────────────────╯`;
+    let info = `╔═══════════════════════════════════════╗\n`;
+    info += `║           👤 *TU INFORMACIÓN* 👤         ║\n`;
+    info += `╚═══════════════════════════════════════╝\n\n`;
+    info += `📋 *DETALLES PERSONALES:*\n`;
+    info += `┌─────────────────────────────────────────┐\n`;
+    info += `│ 👤 Nombre: *${display}*\n`;
+    info += `│ 📞 Número: \`${number}\`\n`;
+    if (user?.username) info += `│ 🖥️ Usuario Panel: @${user.username}\n`;
+    info += `│ 🏷️ Rol: *${rol}*\n`;
+    info += `│ 📅 Registro: ${registro}\n`;
+    info += `│ 💬 Chat: ${grupo ? 'Grupo' : 'Privado'}\n`;
+    info += `└─────────────────────────────────────────┘\n\n`;
+    info += `💡 *Usa \`help\` para ver todos los comandos disponibles*`;
+    
     await logCommand('consulta', 'whoami', usuario, grupo);
     return { success: true, message: info };
   } catch (e) {
     await logCommand('consulta', 'whoami', usuario, grupo);
-    return { success: true, message: `👤 Usuario: ${usuario}\nGrupo: ${grupo || 'Privado'}` };
+    return { 
+      success: true, 
+      message: `╔═══════════════════════════════════════╗\n` +
+              `║           👤 *INFORMACIÓN BÁSICA* 👤    ║\n` +
+              `╚═══════════════════════════════════════╝\n\n` +
+              `📋 *Datos disponibles:*\n` +
+              `┌─────────────────────────────────────────┐\n` +
+              `│ 👤 Usuario: \`${usuario}\`\n` +
+              `│ 💬 Chat: ${grupo || 'Privado'}\n` +
+              `└─────────────────────────────────────────┘\n\n` +
+              `💡 *Información limitada - contacta al administrador*`
+    };
   }
 }
 
@@ -1629,13 +1943,8 @@ async function handleKick(target, usuario, grupo) {
   const numero = (target || '').toString().replace(/[^0-9]/g, '');
   if (!numero) return { success: false, message: 'Uso: /kick @usuario' };
   
-  // Verificar si el bot es admin real
-  const botIsAdmin = await isBotAdmin(grupo);
-  if (!botIsAdmin) {
-    const botId = sock && sock.user ? sock.user.id : 'desconocido';
-    return { success: false, message: `❌ El bot (${botId}) no es admin real del grupo. Hazlo admin desde WhatsApp para usar este comando.` };
-  }
-  
+  // Intentar la acción incluso si la detección de admin falla; WhatsApp rechazará si no es admin.
+
   try {
     const jid = await buildParticipantJid(grupo, numero);
     await sock.groupParticipantsUpdate(grupo, [jid], 'remove');
@@ -1680,14 +1989,7 @@ async function handlePromote(target, usuario, grupo) {
   
   const numero = (target || '').toString().replace(/[^0-9]/g, '');
   if (!numero) return { success: false, message: 'Uso: /promote @usuario' };
-  
-  // Verificar si el bot es admin real
-  const botIsAdmin = await isBotAdmin(grupo);
-  if (!botIsAdmin) {
-    const botId = sock && sock.user ? sock.user.id : 'desconocido';
-    return { success: false, message: `❌ El bot (${botId}) no es admin real del grupo. Hazlo admin desde WhatsApp para usar este comando.` };
-  }
-  
+
   try {
     const jid = await buildParticipantJid(grupo, numero);
     
@@ -1744,14 +2046,7 @@ async function handleDemote(target, usuario, grupo) {
   
   const numero = (target || '').toString().replace(/[^0-9]/g, '');
   if (!numero) return { success: false, message: 'Uso: /demote @usuario' };
-  
-  // Verificar si el bot es admin real
-  const botIsAdmin = await isBotAdmin(grupo);
-  if (!botIsAdmin) {
-    const botId = sock && sock.user ? sock.user.id : 'desconocido';
-    return { success: false, message: `❌ El bot (${botId}) no es admin real del grupo. Hazlo admin desde WhatsApp para usar este comando.` };
-  }
-  
+
   try {
     const jid = await buildParticipantJid(grupo, numero);
     
@@ -1805,28 +2100,59 @@ async function isGroupAdmin(usuario, grupo) {
   try {
     const sock = getSocket();
     if (!sock || !grupo) return false;
+    // Si el mensaje proviene del mismo número del bot, considerar admin del grupo
+    try {
+      const rawBotJid = (sock.user && sock.user.id) ? sock.user.id : '';
+      const botNumber = normalizeUserNumber(rawBotJid);
+      const userNumber = normalizeUserNumber(usuario);
+      if (botNumber && userNumber && botNumber === userNumber) {
+        // Fallback: permitir comandos del propio dueño
+        console.log(`[MOD][isGroupAdmin] usuario=bot (${userNumber}) => true (fallback)`);
+        return true;
+      }
+    } catch (_) { /* ignore */ }
     
-    // Normalizar el usuario para comparación
-    const normalizedUsuario = normalizeUserNumber(usuario);
-    
+    const targetJid = normalizeJid(usuario.includes('@') ? usuario : `${normalizeUserNumber(usuario)}@s.whatsapp.net`);
+    const targetNumber = normalizeUserNumber(usuario);
+
     const groupMetadata = await sock.groupMetadata(grupo);
     const participants = groupMetadata.participants || [];
-    
-    // Buscar participante por número normalizado
-    const participant = participants.find(p => {
-      const participantNumber = normalizeUserNumber(p.id || '');
-      return participantNumber === normalizedUsuario;
+
+    const participant = participants.find((p) => {
+      const pid = p.id || '';
+      const normalizedParticipant = normalizeJid(pid);
+      const participantNumber = normalizeUserNumber(pid);
+      return (
+        normalizedParticipant === targetJid ||
+        (participantNumber && participantNumber === targetNumber) ||
+        (targetNumber && normalizedParticipant.includes(targetNumber))
+      );
     });
-    
-    return participant && (participant.admin === 'admin' || participant.admin === 'superadmin' || participant.admin === true);
+
+    if (!participant) {
+      console.warn(`[MOD][isGroupAdmin] No encontré participante target=${targetJid} group=${groupMetadata.subject || grupo} size=${participants.length}`);
+      return false;
+    }
+
+    const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin' || participant.admin === true;
+    console.log(`[MOD][isGroupAdmin] target=${targetJid} adminFlag=${participant.admin} => ${isAdmin}`);
+
+    return isAdmin;
   } catch (e) {
-    console.error('Error en isGroupAdmin:', e);
+    console.error('[MOD][isGroupAdmin] Error:', e);
     return false;
   }
 }
 
 // Helper para normalizar usuario a solo número
 function normalizeUserNumber(usuarioJid) {
+  if (!usuarioJid) return '';
+  try {
+    const decoded = baileys.jidDecode(usuarioJid);
+    if (decoded?.user) {
+      return decoded.user.split(':')[0];
+    }
+  } catch (_) {}
   return usuarioJid.split('@')[0].split(':')[0];
 }
 
@@ -1841,29 +2167,29 @@ async function isBotAdmin(grupo) {
 
     const cleanBotJid = normalizeJid(rawBotJid);
     const botBaseNumber = cleanBotJid.split('@')[0];
-    
-    // El bot principal siempre es admin para comandos globales
-    if (botBaseNumber === '595971284430') return true;
 
     const groupMetadata = await sock.groupMetadata(grupo);
     const participants = groupMetadata.participants || [];
 
     // Buscar el bot en los participantes
     const botParticipant = participants.find(p => {
-      const participantNumber = normalizeUserNumber(p.id || '');
-      return participantNumber === botBaseNumber;
+      const pid = p.id || '';
+      const normalizedParticipant = normalizeJid(pid);
+      const participantNumber = normalizeUserNumber(pid);
+      return (
+        participantNumber === botBaseNumber ||
+        normalizedParticipant.includes(botBaseNumber)
+      );
     });
 
-    if (botParticipant) {
-      return botParticipant.admin === 'admin' || 
-             botParticipant.admin === 'superadmin' || 
-             botParticipant.admin === true;
-    }
+    const botIsAdmin = !!(botParticipant && (botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin' || botParticipant.admin === true));
+    console.log(`[MOD][isBotAdmin] bot=${cleanBotJid} inGroup=${!!botParticipant} adminFlag=${botParticipant?.admin} => ${botIsAdmin}`);
+    if (botIsAdmin) return true;
 
     // Si no encontramos al bot como participante, asumir que no es admin
     return false;
   } catch (error) {
-    console.error('Error en isBotAdmin:', error);
+    console.error('[MOD][isBotAdmin] Error:', error);
     return false;
   }
 }
@@ -2083,17 +2409,13 @@ async function handleSticker(usuario, grupo, isGroup, args) {
   try {
     return {
       success: true,
-      message: `🎭 *Crear Sticker*\n\n` +
-              `📝 *Uso:* Responde a una imagen o video con \`/sticker\`\n\n` +
-              `✨ *Características:*\n` +
-              `• Convierte imágenes a stickers\n` +
-              `• Convierte videos a stickers animados\n` +
-              `• Calidad optimizada para WhatsApp\n` +
-              `• Pack personalizado del bot\n\n` +
-              `📋 *Instrucciones:*\n` +
-              `1. Envía una imagen o video\n` +
-              `2. Responde con \`/sticker\`\n` +
-              `3. ¡Listo! Tu sticker estará listo`
+      message: `🎭 *Crear Sticker*
+
+1️⃣ Envía o reenvía la imagen/video que quieres convertir.
+2️⃣ Respóndelo con \`/sticker\` (o su alias \`.s\`).
+3️⃣ Espera unos segundos y recibirás el sticker listo para usar.
+
+✨ Tip: los videos cortos (≤6s) se convierten en stickers animados.`
     };
 
   } catch (error) {
@@ -2238,250 +2560,6 @@ async function handleTwitterDownload(usuario, grupo, isGroup, args) {
   }
 }
 
-// ==================== SISTEMA DE SUBBOTS (MAYCOLPLUS) ====================
-
-/**
- * Generar QR para subbot
- */
-async function handleSubBotQR(usuario, grupo, isGroup, args) {
-  try {
-    if (isGroup) {
-      return {
-        success: true,
-        message: '✅ Para crear un subbot, escribe `/subbot` al chat privado de este bot.'
-      };
-    }
-
-    // Verificar si el usuario ya tiene un subbot activo
-    const existingSubbot = await db('subbots').where('usuario', usuario).first();
-    
-    if (existingSubbot && existingSubbot.activo) {
-      return {
-        success: false,
-        message: `🤖 *Subbot ya activo*\n\n` +
-                `Tu subbot ya está conectado y funcionando.\n` +
-                `Usa \`/subbots\` para ver la lista de subbots activos.`
-      };
-    }
-
-    // Generar código QR simulado
-    const qrCode = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==`;
-    
-    const response = `🤖 *Crear Subbot*\n\n` +
-                    `📱 *Pasos para vincular:*\n` +
-                    `1. Abre WhatsApp en tu teléfono\n` +
-                    `2. Ve a Configuración > Dispositivos vinculados\n` +
-                    `3. Toca "Vincular un dispositivo"\n` +
-                    `4. Escanea este código QR\n\n` +
-                    `⏱️ *El código expira en 30 segundos*\n` +
-                    `🔄 *Procesando conexión...*\n\n` +
-                    `✨ *Funciones del subbot:*\n` +
-                    `• Responder mensajes automáticamente\n` +
-                    `• Ejecutar comandos\n` +
-                    `• Gestionar grupos\n` +
-                    `• Acceso completo a todas las funciones`;
-
-    return {
-      success: true,
-      message: response,
-      media: {
-        type: 'image',
-        data: qrCode,
-        caption: response
-      }
-    };
-
-  } catch (error) {
-    console.error('Error en handleSubBotQR:', error);
-    return {
-      success: false,
-      message: '❌ Error al generar el código QR del subbot.'
-    };
-  }
-}
-
-/**
- * Generar código manual para subbot
- */
-async function handleSubBotCode(usuario, grupo, isGroup, args) {
-  try {
-    if (isGroup) {
-      return {
-        success: true,
-        message: '✅ Para crear un subbot con código, escribe `/subbotcode` al chat privado de este bot.'
-      };
-    }
-
-    // Verificar si el usuario ya tiene un subbot activo
-    const existingSubbot = await db('subbots').where('usuario', usuario).first();
-    
-    if (existingSubbot && existingSubbot.activo) {
-      return {
-        success: false,
-        message: `🤖 *Subbot ya activo*\n\n` +
-                `Tu subbot ya está conectado y funcionando.\n` +
-                `Usa \`/subbots\` para ver la lista de subbots activos.`
-      };
-    }
-
-    // Generar código de 8 dígitos
-    const code = Math.floor(10000000 + Math.random() * 90000000).toString();
-    
-    const response = `🤖 *Crear Subbot - Código Manual*\n\n` +
-                    `🔢 *Tu código:* \`${code}\`\n\n` +
-                    `📱 *Pasos para vincular:*\n` +
-                    `1. Abre WhatsApp en tu teléfono\n` +
-                    `2. Ve a Configuración > Dispositivos vinculados\n` +
-                    `3. Toca "Vincular un dispositivo"\n` +
-                    `4. Selecciona "Con número"\n` +
-                    `5. Introduce el código: \`${code}\`\n\n` +
-                    `⏱️ *El código expira en 2 minutos*\n` +
-                    `🔄 *Esperando conexión...*\n\n` +
-                    `✨ *Funciones del subbot:*\n` +
-                    `• Responder mensajes automáticamente\n` +
-                    `• Ejecutar comandos\n` +
-                    `• Gestionar grupos\n` +
-                    `• Acceso completo a todas las funciones`;
-
-    return {
-      success: true,
-      message: response
-    };
-
-  } catch (error) {
-    console.error('Error en handleSubBotCode:', error);
-    return {
-      success: false,
-      message: '❌ Error al generar el código del subbot.'
-    };
-  }
-}
-
-/**
- * Listar subbots activos
- */
-async function handleListSubBots(usuario, grupo, isGroup, args) {
-  try {
-    // Obtener subbots activos de la base de datos
-    const subbots = await db('subbots').where('activo', true).select('*');
-    
-    const uptime = process.uptime() * 1000;
-    const formatUptime = (ms) => {
-      const d = Math.floor(ms / 86400000);
-      const h = Math.floor(ms / 3600000) % 24;
-      const m = Math.floor(ms / 60000) % 60;
-      const s = Math.floor(ms / 1000) % 60;
-      return `${d}d ${h}h ${m}m ${s}s`;
-    };
-
-    let response = `🤖 *Subbots Activos*\n\n` +
-                  `⏱️ *Tiempo activo:* ${formatUptime(uptime)}\n` +
-                  `📊 *Total conectados:* ${subbots.length}\n\n`;
-
-    if (subbots.length > 0) {
-      response += `📋 *Lista de Subbots:*\n\n`;
-      
-      subbots.forEach((subbot, index) => {
-        const numero = subbot.usuario.replace('@s.whatsapp.net', '');
-        response += `🤖 *${index + 1}.* ${subbot.nombre || `Subbot ${numero}`}\n`;
-        response += `   📱 https://wa.me/${numero}\n`;
-        response += `   🕐 Conectado: ${new Date(subbot.ultima_conexion).toLocaleString()}\n\n`;
-      });
-    } else {
-      response += `⚠️ *No hay subbots conectados*\n\n` +
-                 `💡 *Para crear un subbot:*\n` +
-                 `• Usa \`/subbot\` para código QR\n` +
-                 `• Usa \`/subbotcode\` para código manual\n` +
-                 `• Solo funciona en chat privado`;
-    }
-
-    return {
-      success: true,
-      message: response
-    };
-
-  } catch (error) {
-    console.error('Error en handleListSubBots:', error);
-    return {
-      success: false,
-      message: '❌ Error al obtener la lista de subbots.'
-    };
-  }
-}
-
-/**
- * Gestionar subbots (solo admin)
- */
-async function handleSubBotManagement(usuario, grupo, isGroup, args) {
-  try {
-    // Verificar permisos de admin
-    if (!await isOwnerOrAdmin(usuario)) {
-      return {
-        success: false,
-        message: '❌ Solo los administradores pueden gestionar subbots.'
-      };
-    }
-
-    if (!args || args.length === 0) {
-      return {
-        success: false,
-        message: `🔧 *Gestión de Subbots*\n\n` +
-                `📝 *Comandos disponibles:*\n` +
-                `• \`/subbotlist\` - Ver todos los subbots\n` +
-                `• \`/subbotkick <numero>\` - Desconectar subbot\n` +
-                `• \`/subbotinfo <numero>\` - Info del subbot\n` +
-                `• \`/subbotrestart\` - Reiniciar todos los subbots\n\n` +
-                `✨ *Solo administradores*`
-      };
-    }
-
-    const action = args[0].toLowerCase();
-    
-    switch (action) {
-      case 'list':
-        return await handleListSubBots(usuario, grupo, isGroup, args.slice(1));
-      
-      case 'kick':
-        if (args.length < 2) {
-          return {
-            success: false,
-            message: '📝 *Uso:* `/subbotkick <numero>`'
-          };
-        }
-        
-        const numero = args[1].replace('@s.whatsapp.net', '');
-        await db('subbots').where('usuario', `${numero}@s.whatsapp.net`).update({ activo: false });
-        
-        return {
-          success: true,
-          message: `✅ Subbot ${numero} desconectado exitosamente.`
-        };
-      
-      case 'restart':
-        // Reiniciar todos los subbots
-        await db('subbots').update({ activo: false });
-        
-        return {
-          success: true,
-          message: `🔄 Todos los subbots han sido reiniciados.`
-        };
-      
-      default:
-        return {
-          success: false,
-          message: '❌ Comando de gestión no reconocido. Usa `/subbothelp` para ver opciones.'
-        };
-    }
-
-  } catch (error) {
-    console.error('Error en handleSubBotManagement:', error);
-    return {
-      success: false,
-      message: '❌ Error en la gestión de subbots.'
-    };
-  }
-}
-
 /**
  * Obtener información del LID del usuario
  */
@@ -2571,7 +2649,7 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
       const currentLid = usuario; // El usuario ya viene con el formato correcto
       
       // Actualizar en la configuración global
-      const userIndex = global.owner.findIndex(([num]) => num === '595971284430');
+      const userIndex = global.owner.findIndex(([num]) => isSuperAdmin(num));
       if (userIndex !== -1) {
         global.owner[userIndex][0] = currentLid.split('@')[0];
       }
@@ -2599,7 +2677,7 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
       const [numero, servidor] = lid.split('@');
       
       // Actualizar en la configuración global
-      const userIndex = global.owner.findIndex(([num]) => num === '595971284430');
+      const userIndex = global.owner.findIndex(([num]) => isSuperAdmin(num));
       if (userIndex !== -1) {
         global.owner[userIndex][0] = numero;
       }
@@ -2631,7 +2709,7 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
 async function handleAdminInfo(usuario, grupo, isGroup, args) {
   try {
     // Verificar permisos
-    if (!await isOwnerOrAdmin(usuario)) {
+    if (!await isOwnerOrAdmin(usuario, grupo)) {
       return {
         success: false,
         message: '❌ Solo los administradores pueden ver esta información.'
@@ -2904,6 +2982,29 @@ async function handleDelMod(usuario, grupo, isGroup, args) {
   }
 }
 
+// Helper para obtener el mensaje global OFF
+async function getGlobalOffMessage() {
+  try {
+    const row = await db('configuracion').where({ parametro: 'global_off_message' }).first();
+    return row?.valor || '❌ El bot está desactivado globalmente por el administrador.';
+  } catch {
+    return '❌ El bot está desactivado globalmente por el administrador.';
+  }
+}
+
+// En el manejador principal de comandos (ejemplo pseudocódigo, debes ubicarlo en el entrypoint de comandos)
+async function handleCommand(ctx) {
+  // ...
+  // Verificar estado global antes de ejecutar cualquier comando
+  const globalState = await db('bot_global_state').select('*').first();
+  if (!globalState || !globalState.isOn) {
+    const msg = await getGlobalOffMessage();
+    await ctx.reply(msg);
+    return;
+  }
+  // ... resto de la lógica de comandos ...
+}
+
 export {
   // Comandos básicos
   handleHelp,
@@ -2957,17 +3058,18 @@ export {
   clearMaintenanceNotifications,
   clearGroupOffNotices,
   handleUpdate,
-  handleCode,
-  handleQR,
-  handleWhoami,
-  handleTag,
-  handleReplyTag,
-  
-  // Reexportados consolidación
   handleSerbot,
   handleBots,
   handleDelSubbot,
+  handleQR,
+  handleCode,
+  handleWhoami,
+  handleTag,
+  handleReplyTag,
+
+  // Reexportados consolidación
   handleMusic,
+  handleVideo,
   handleMeme,
   handleWallpaper,
   handleJoke,
@@ -3009,13 +3111,7 @@ export {
   handleTikTokDownload,
   handleInstagramDownload,
   handleTwitterDownload,
-  
-  // Sistema de SubBots (MaycolPlus)
-  handleSubBotQR,
-  handleSubBotCode,
-  handleListSubBots,
-  handleSubBotManagement,
-  
+
   // Comandos de Administración Global
   handleAdminInfo,
   handleAddAdmin,

@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import db from './db.js';
 import { authenticateToken, authorizeRoles } from './auth.js';
-import { getQRCode, getQRCodeImage, getPairingCode, setAuthMethod, getConnectionStatus, getAvailableGroups, getSocket } from './whatsapp.js';
+import { getQRCode, getQRCodeImage, getPairingCode, getPairingNumber, setAuthMethod, getConnectionStatus, getAvailableGroups, getSocket, clearWhatsAppSession } from './whatsapp.js';
 import {
   getProviderStats,
   getProviderAportes
@@ -42,6 +42,353 @@ const storage = multer.diskStorage({
   }
 });
 const upload = multer({ storage });
+
+// ===================
+// DASHBOARD ENDPOINTS
+// ===================
+
+// Get bot status
+router.get('/bot/status', async (req, res) => {
+  try {
+    const socket = getSocket();
+    const connectionStatus = getConnectionStatus();
+    const qrCode = getQRCode();
+    const pairingCode = getPairingCode();
+    const pairingNumber = getPairingNumber();
+    
+    // Get uptime from process
+    const uptime = process.uptime();
+    const formatUptime = (seconds) => {
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+      if (hours > 0) return `${hours}h ${minutes}m`;
+      return `${minutes}m`;
+    };
+
+    // Get last activity from logs
+    const lastLog = await db('logs')
+      .orderBy('fecha', 'desc')
+      .first();
+    
+    const status = {
+      connected: connectionStatus === 'connected',
+      connectionStatus,
+      phone: socket?.user?.id || null,
+      uptime: formatUptime(uptime),
+      lastSeen: lastLog?.fecha || null,
+      qrCode: qrCode || null,
+      pairingCode: pairingCode || null,
+      pairingNumber: pairingNumber || null
+    };
+
+    res.json(status);
+  } catch (error) {
+    console.error('Error getting bot status:', error);
+    res.status(500).json({ error: 'Error getting bot status' });
+  }
+});
+
+// Get dashboard statistics
+router.get('/dashboard/stats', async (req, res) => {
+  try {
+    // Get total counts
+    const [totalUsuarios, totalGrupos, totalAportes, totalPedidos, totalSubbots] = await Promise.all([
+      db('usuarios').count('id as count').first(),
+      db('grupos').count('id as count').first(),
+      db('aportes').count('id as count').first(),
+      db('pedidos').count('id as count').first(),
+      db('subbots').count('id as count').first()
+    ]);
+
+    // Get today's stats
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [mensajesHoy, comandosHoy] = await Promise.all([
+      db('logs').whereBetween('fecha', [today.toISOString(), tomorrow.toISOString()])
+        .where('tipo', 'mensaje').count('id as count').first(),
+      db('logs').whereBetween('fecha', [today.toISOString(), tomorrow.toISOString()])
+        .whereIn('tipo', ['comando', 'ai_command', 'clasificar_command']).count('id as count').first()
+    ]);
+
+    // Get active users (users with activity in last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const usuariosActivos = await db('logs')
+      .where('fecha', '>=', weekAgo.toISOString())
+      .distinct('usuario')
+      .count('* as count')
+      .first();
+
+    // Get active groups (groups with activity in last 7 days)
+    const gruposActivos = await db('logs')
+      .where('fecha', '>=', weekAgo.toISOString())
+      .whereNotNull('grupo')
+      .distinct('grupo')
+      .count('* as count')
+      .first();
+
+    // Get total messages and commands
+    const [totalMensajes, totalComandos] = await Promise.all([
+      db('logs').where('tipo', 'mensaje').count('id as count').first(),
+      db('logs').whereIn('tipo', ['comando', 'ai_command', 'clasificar_command']).count('id as count').first()
+    ]);
+
+    const stats = {
+      totalUsuarios: parseInt(totalUsuarios.count) || 0,
+      totalGrupos: parseInt(totalGrupos.count) || 0,
+      totalAportes: parseInt(totalAportes.count) || 0,
+      totalPedidos: parseInt(totalPedidos.count) || 0,
+      totalSubbots: parseInt(totalSubbots.count) || 0,
+      totalMensajes: parseInt(totalMensajes.count) || 0,
+      totalComandos: parseInt(totalComandos.count) || 0,
+      mensajesHoy: parseInt(mensajesHoy.count) || 0,
+      comandosHoy: parseInt(comandosHoy.count) || 0,
+      usuariosActivos: parseInt(usuariosActivos.count) || 0,
+      gruposActivos: parseInt(gruposActivos.count) || 0
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting dashboard stats:', error);
+    res.status(500).json({ error: 'Error getting dashboard stats' });
+  }
+});
+
+// ===================
+// SUBBOTS ENDPOINTS
+// ===================
+
+// Get all subbots
+router.get('/subbots', authenticateToken, async (req, res) => {
+  try {
+    const subbots = await db('subbots')
+      .select('*')
+      .orderBy('fecha_creacion', 'desc');
+    
+    res.json(subbots);
+  } catch (error) {
+    console.error('Error getting subbots:', error);
+    res.status(500).json({ error: 'Error getting subbots' });
+  }
+});
+
+// Create QR subbot
+router.post('/subbots/qr', authenticateToken, async (req, res) => {
+  try {
+    const { usuario } = req.body;
+    
+    // Check subbot limit
+    const existingSubbots = await db('subbots')
+      .where('usuario', usuario)
+      .count('id as count')
+      .first();
+    
+    if (existingSubbots.count >= 3) {
+      return res.status(400).json({ error: 'Límite de sub-bots por usuario alcanzado' });
+    }
+
+    // Generate unique code
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    // Create subbot record
+    const subbot = await db('subbots').insert({
+      codigo: code,
+      tipo: 'qr',
+      usuario,
+      estado: 'activo',
+      fecha_creacion: new Date().toISOString()
+    }).returning('*');
+
+    res.json(subbot[0]);
+  } catch (error) {
+    console.error('Error creating QR subbot:', error);
+    res.status(500).json({ error: 'Error creating QR subbot' });
+  }
+});
+
+// Create CODE subbot
+router.post('/subbots/code', authenticateToken, async (req, res) => {
+  try {
+    const { usuario, numero } = req.body;
+    
+    // Check subbot limit
+    const existingSubbots = await db('subbots')
+      .where('usuario', usuario)
+      .count('id as count')
+      .first();
+    
+    if (existingSubbots.count >= 3) {
+      return res.status(400).json({ error: 'Límite de sub-bots por usuario alcanzado' });
+    }
+
+    // Generate unique code
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    // Create subbot record
+    const subbot = await db('subbots').insert({
+      codigo: code,
+      tipo: 'code',
+      usuario,
+      numero,
+      estado: 'activo',
+      fecha_creacion: new Date().toISOString()
+    }).returning('*');
+
+    res.json(subbot[0]);
+  } catch (error) {
+    console.error('Error creating CODE subbot:', error);
+    res.status(500).json({ error: 'Error creating CODE subbot' });
+  }
+});
+
+// Delete subbot
+router.delete('/subbots/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const deleted = await db('subbots')
+      .where('id', id)
+      .del();
+    
+    if (deleted === 0) {
+      return res.status(404).json({ error: 'Subbot no encontrado' });
+    }
+
+    res.json({ success: true, message: 'Subbot eliminado correctamente' });
+  } catch (error) {
+    console.error('Error deleting subbot:', error);
+    res.status(500).json({ error: 'Error deleting subbot' });
+  }
+});
+
+// ===================
+// USERS ENDPOINTS
+// ===================
+
+// Get all users
+router.get('/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await db('usuarios')
+      .select('*')
+      .orderBy('fecha_registro', 'desc');
+    
+    res.json(users);
+  } catch (error) {
+    console.error('Error getting users:', error);
+    res.status(500).json({ error: 'Error getting users' });
+  }
+});
+
+// Update user role
+router.put('/users/:id/role', authenticateToken, authorizeRoles(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rol } = req.body;
+    
+    const validRoles = ['admin', 'moderador', 'usuario'];
+    if (!validRoles.includes(rol)) {
+      return res.status(400).json({ error: 'Rol inválido' });
+    }
+
+    const updated = await db('usuarios')
+      .where('id', id)
+      .update({ rol })
+      .returning('*');
+
+    if (updated.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ error: 'Error updating user role' });
+  }
+});
+
+// ===================
+// LOGS ENDPOINTS
+// ===================
+
+// Get logs with pagination and filters
+router.get('/logs', authenticateToken, async (req, res) => {
+  try {
+    const { page = 1, limit = 50, tipo, usuario, grupo } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = db('logs').select('*');
+
+    if (tipo) {
+      query = query.where('tipo', tipo);
+    }
+    if (usuario) {
+      query = query.where('usuario', 'like', `%${usuario}%`);
+    }
+    if (grupo) {
+      query = query.where('grupo', 'like', `%${grupo}%`);
+    }
+
+    const logs = await query
+      .orderBy('fecha', 'desc')
+      .limit(limit)
+      .offset(offset);
+
+    const total = await db('logs').count('id as count').first();
+
+    res.json({
+      logs,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: total.count,
+        pages: Math.ceil(total.count / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error getting logs:', error);
+    res.status(500).json({ error: 'Error getting logs' });
+  }
+});
+
+// Get log statistics
+router.get('/logs/stats', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [totalLogs, logsToday, topCommands, topUsers] = await Promise.all([
+      db('logs').count('id as count').first(),
+      db('logs').whereBetween('fecha', [today.toISOString(), tomorrow.toISOString()])
+        .count('id as count').first(),
+      db('logs').whereIn('tipo', ['comando', 'ai_command', 'clasificar_command'])
+        .select('comando').count('id as count')
+        .groupBy('comando')
+        .orderBy('count', 'desc')
+        .limit(10),
+      db('logs').select('usuario').count('id as count')
+        .groupBy('usuario')
+        .orderBy('count', 'desc')
+        .limit(10)
+    ]);
+
+    res.json({
+      totalLogs: totalLogs.count,
+      logsToday: logsToday.count,
+      topCommands,
+      topUsers
+    });
+  } catch (error) {
+    console.error('Error getting log stats:', error);
+    res.status(500).json({ error: 'Error getting log stats' });
+  }
+});
 
 // Get votaciones
 router.get('/votaciones', async (req, res) => {
@@ -622,6 +969,18 @@ router.post('/bot/commands/test', authenticateToken, authorizeRoles('admin','own
 // System config (no-op placeholder)
 router.patch('/system/config', async (req, res) => {
   res.json({ success: true });
+});
+
+// Bot status endpoint
+router.get('/bot/status', async (req, res) => {
+  try {
+    // Importar las variables del bot principal
+    const { getBotStatus } = await import('./whatsapp.js');
+    const status = getBotStatus();
+    res.json(status);
+  } catch (error) { 
+    res.status(500).json({ error: error.message }); 
+  }
 });
 
 // Bot global state
@@ -2108,28 +2467,6 @@ router.delete('/grupos/:jid', authenticateToken, authorizeRoles('admin', 'owner'
 });
 
 // Dashboard stats endpoint
-router.get('/dashboard/stats', async (req, res) => {
-  try {
-    const usuariosCount = await db('usuarios').count('id as count').first();
-    const aportesCount = await db('aportes').count('id as count').first();
-    const pedidosCount = await db('pedidos').count('id as count').first();
-    const gruposCount = await db('grupos_autorizados').count('jid as count').first();
-    const votacionesCount = await db('votaciones').count('id as count').first();
-    const manhwasCount = await db('manhwas').count('id as count').first();
-
-
-    res.json({
-      usuarios: usuariosCount.count,
-      aportes: aportesCount.count,
-      pedidos: pedidosCount.count,
-      grupos: gruposCount.count,
-      votaciones: votacionesCount.count,
-      manhwas: manhwasCount.count
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Gestión de usuarios (solo admin y owner)
 router.delete('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
@@ -2231,7 +2568,7 @@ router.post('/usuarios/:id/reset-password', authenticateToken, authorizeRoles('a
 });
 
 // WhatsApp Bot endpoints
-router.get('/whatsapp/status', async (req, res) => {
+router.get('/whatsapp/status', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     const status = getConnectionStatus();
     res.json(status);
@@ -2240,7 +2577,7 @@ router.get('/whatsapp/status', async (req, res) => {
   }
 });
 
-router.get('/whatsapp/qr', async (req, res) => {
+router.get('/whatsapp/qr', authenticateToken, authorizeRoles('owner'), async (req, res) => {
   try {
     const qrCode = getQRCode();
     const qrCodeImage = getQRCodeImage();
@@ -2263,49 +2600,65 @@ router.get('/whatsapp/qr', async (req, res) => {
   }
 });
 
-router.get('/whatsapp/pairing-code', async (req, res) => {
+// Pairing deshabilitado para bot principal (compatibilidad)
+router.get('/whatsapp/pairing-code', authenticateToken, authorizeRoles('owner'), async (req, res) => {
   try {
     const pairingCode = getPairingCode();
+    const phoneNumber = getPairingNumber();
 
     if (!pairingCode) {
       return res.json({
         available: false,
-        message: 'No hay código de emparejamiento disponible'
+        message: 'No hay código de emparejamiento disponible',
+        phoneNumber: phoneNumber ? `+${phoneNumber}` : null
       });
     }
 
     res.json({
       available: true,
-      pairingCode: pairingCode
+      pairingCode: pairingCode,
+      phoneNumber: phoneNumber ? `+${phoneNumber}` : null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-router.post('/whatsapp/auth-method', async (req, res) => {
+router.post('/whatsapp/auth-method', authenticateToken, authorizeRoles('owner'), async (req, res) => {
   try {
-    const { method } = req.body;
+    const { method, phoneNumber } = req.body || {};
 
-    if (!method || !['qr', 'pairing'].includes(method)) {
-      return res.status(400).json({
-        error: 'Método de autenticación inválido. Use "qr" o "pairing"'
-      });
+    let normalizedNumber = null;
+    try {
+      normalizedNumber = setAuthMethod(method, { phoneNumber });
+    } catch (error) {
+      if (error.code === 'INVALID_AUTH_METHOD' || error.code === 'INVALID_PAIRING_NUMBER') {
+        return res.status(400).json({ error: error.message, code: error.code });
+      }
+      throw error;
     }
 
-    setAuthMethod(method);
+    const socket = getSocket();
+    if (socket) {
+      try {
+        socket.end();
+      } catch (socketError) {
+        console.error('Error cerrando socket para regenerar autenticación:', socketError);
+      }
+    }
 
     res.json({
       success: true,
       message: `Método de autenticación establecido: ${method}`,
-      method: method
+      method: method,
+      phoneNumber: method === 'pairing' && normalizedNumber ? `+${normalizedNumber}` : null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-router.post('/whatsapp/logout', async (req, res) => {
+router.post('/whatsapp/logout', authenticateToken, authorizeRoles('owner'), async (req, res) => {
   try {
     // Aquí podrías agregar lógica para desconectar el bot si es necesario
     // Por ahora solo devolvemos éxito
@@ -3173,6 +3526,31 @@ router.post('/bot/global-startup', async (req, res) => {
     const result = await handleBotGlobalOn('admin_panel');
     
     res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint para obtener el mensaje global de bot OFF
+router.get('/bot/global-off-message', async (req, res) => {
+  try {
+    const row = await db('configuracion').where({ parametro: 'global_off_message' }).first();
+    res.json({ message: row?.valor || '❌ El bot está desactivado globalmente por el administrador.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint para actualizar el mensaje global de bot OFF
+router.post('/bot/global-off-message', async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Mensaje inválido' });
+    }
+    await db('configuracion').insert({ parametro: 'global_off_message', valor: message, fecha_modificacion: new Date().toISOString() })
+      .onConflict('parametro').merge();
+    res.json({ success: true, message: 'Mensaje actualizado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

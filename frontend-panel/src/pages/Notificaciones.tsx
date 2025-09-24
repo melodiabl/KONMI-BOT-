@@ -1,69 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Badge,
-  IconButton,
-  useToast,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Flex,
-  Card,
-  CardBody,
-  Select,
-  useColorModeValue,
-  Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  MenuDivider,
-  Switch,
-  FormControl,
-  FormLabel,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-  Avatar,
-  Divider,
-} from '@chakra-ui/react';
-import {
-  FaSearch,
-  FaBell,
-  FaCheck,
-  FaTimes,
-  FaEye,
-  FaEllipsisV,
-  FaTrash,
-  FaEnvelope,
-  FaEnvelopeOpen,
-  FaExclamationTriangle,
-  FaInfoCircle,
-  FaCheckCircle,
-  FaClock,
-  FaUser,
-  FaCog,
-  FaFilter,
-  FaDownload,
-} from 'react-icons/fa';
+  Search,
+  Bell,
+  Check,
+  X,
+  Eye,
+  MoreVertical,
+  Mail,
+  MailOpen,
+  AlertTriangle,
+  Info,
+  CheckCircle,
+  Clock,
+  User,
+  Settings,
+  Filter,
+  Download,
+  Trash2,
+  Loader2,
+  RefreshCw,
+  X as XIcon
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService } from '../services/api';
 import { RUNTIME_CONFIG } from '../config/runtime-config';
@@ -91,11 +48,11 @@ const typeColors = {
 };
 
 const typeIcons = {
-  info: FaInfoCircle,
-  success: FaCheckCircle,
-  warning: FaExclamationTriangle,
-  error: FaExclamationTriangle,
-  system: FaCog,
+  info: Info,
+  success: CheckCircle,
+  warning: AlertTriangle,
+  error: AlertTriangle,
+  system: Settings,
 };
 
 const categoryColors = {
@@ -113,13 +70,9 @@ export const Notificaciones: React.FC = () => {
   const [readFilter, setReadFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
 
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const toast = useToast();
   const queryClient = useQueryClient();
-
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
 
   // Queries
   const { data: notificationsData, isLoading, error } = useQuery(
@@ -145,17 +98,10 @@ export const Notificaciones: React.FC = () => {
         queryClient.invalidateQueries('notificationStats');
         queryClient.invalidateQueries('notificationCategories');
         queryClient.invalidateQueries('notificationTypes');
-        toast({
-          title: 'Notificación marcada como leída',
-          status: 'success',
-        });
+        alert('Notificación marcada como leída');
       },
       onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al marcar como leída',
-          status: 'error',
-        });
+        alert(`Error al marcar como leída: ${error.response?.data?.message || 'Error desconocido'}`);
       },
     }
   );
@@ -168,17 +114,10 @@ export const Notificaciones: React.FC = () => {
         queryClient.invalidateQueries('notificationStats');
         queryClient.invalidateQueries('notificationCategories');
         queryClient.invalidateQueries('notificationTypes');
-        toast({
-          title: 'Todas las notificaciones marcadas como leídas',
-          status: 'success',
-        });
+        alert('Todas las notificaciones marcadas como leídas');
       },
       onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al marcar todas como leídas',
-          status: 'error',
-        });
+        alert(`Error al marcar todas como leídas: ${error.response?.data?.message || 'Error desconocido'}`);
       },
     }
   );
@@ -191,17 +130,10 @@ export const Notificaciones: React.FC = () => {
         queryClient.invalidateQueries('notificationStats');
         queryClient.invalidateQueries('notificationCategories');
         queryClient.invalidateQueries('notificationTypes');
-        toast({
-          title: 'Notificación eliminada',
-          status: 'success',
-        });
+        alert('Notificación eliminada');
       },
       onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al eliminar notificación',
-          status: 'error',
-        });
+        alert(`Error al eliminar notificación: ${error.response?.data?.message || 'Error desconocido'}`);
       },
     }
   );
@@ -227,7 +159,7 @@ export const Notificaciones: React.FC = () => {
     if (!notification.read) {
       handleMarkAsRead(notification.id);
     }
-    onOpen();
+    setIsViewOpen(true);
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -244,6 +176,7 @@ export const Notificaciones: React.FC = () => {
     }
   };
 
+  // Real-time updates
   useEffect(() => {
     if (!RUNTIME_CONFIG.ENABLE_REAL_TIME) {
       return;
@@ -301,391 +234,344 @@ export const Notificaciones: React.FC = () => {
 
   if (error) {
     return (
-      <Alert status="error">
-        <AlertIcon />
-        Error al cargar notificaciones: {(error as any).message}
-      </Alert>
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="flex items-center">
+          <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+          <span className="text-red-700">
+            Error al cargar notificaciones: {(error as any).message}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+          <h2 className="text-xl font-semibold">Cargando notificaciones...</h2>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
-        {/* Header */}
-        <Flex align="center" justify="space-between">
-          <Box>
-            <Heading size="lg">Notificaciones</Heading>
-            <Text color="gray.600" mt={1}>
-              Gestión y visualización de notificaciones del sistema
-            </Text>
-          </Box>
-          <HStack spacing={3}>
-            <Button
-              leftIcon={<FaCheck />}
-              colorScheme="blue"
-              variant="outline"
-              onClick={handleMarkAllAsRead}
-              isLoading={markAllAsReadMutation.isLoading}
-              isDisabled={unreadNotifications === 0}
-            >
-              Marcar todas como leídas
-            </Button>
-            <Button
-              leftIcon={<FaDownload />}
-              colorScheme="green"
-              variant="outline"
-            >
-              Exportar
-            </Button>
-          </HStack>
-        </Flex>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
+          <p className="text-gray-600 mt-1">Gestión y visualización de notificaciones del sistema</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={handleMarkAllAsRead}
+            disabled={unreadNotifications === 0 || markAllAsReadMutation.isLoading}
+            className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Check className="w-4 h-4 mr-2" />
+            {markAllAsReadMutation.isLoading ? 'Marcando...' : 'Marcar todas como leídas'}
+          </button>
+          <button className="flex items-center px-4 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100">
+            <Download className="w-4 h-4 mr-2" />
+            Exportar
+          </button>
+        </div>
+      </div>
 
-        {/* Estadísticas */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={8} justify="center">
-              <VStack>
-                <Badge colorScheme="blue" size="lg">
-                  {totalNotifications}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">Total</Text>
-              </VStack>
-              <VStack>
-                <Badge colorScheme="red" size="lg">
-                  {unreadNotifications}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">No leídas</Text>
-              </VStack>
-              <VStack>
-                <Badge colorScheme="green" size="lg">
-                  {readNotifications}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">Leídas</Text>
-              </VStack>
-              <VStack>
-                <Badge colorScheme="purple" size="lg">
-                  {categoriesCount}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">Categorías</Text>
-              </VStack>
-            </HStack>
-          </CardBody>
-        </Card>
+      {/* Estadísticas */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center space-x-8">
+          <div className="text-center">
+            <div className="text-3xl font-bold text-blue-600">{totalNotifications}</div>
+            <div className="text-sm font-medium text-gray-500">Total</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-red-600">{unreadNotifications}</div>
+            <div className="text-sm font-medium text-gray-500">No leídas</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-green-600">{readNotifications}</div>
+            <div className="text-sm font-medium text-gray-500">Leídas</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-purple-600">{categoriesCount}</div>
+            <div className="text-sm font-medium text-gray-500">Categorías</div>
+          </div>
+        </div>
+      </div>
 
-        {/* Filtros */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={4} wrap="wrap">
-              <InputGroup maxW="300px">
-                <InputLeftElement pointerEvents="none">
-                  <FaSearch color="gray.300" />
-                </InputLeftElement>
-                <Input
-                  placeholder="Buscar notificaciones..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </InputGroup>
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                maxW="200px"
-              >
-                <option value="all">Todos los tipos</option>
-                {(typesData?.types || stats?.types || ['info', 'success', 'warning', 'error', 'system']).map((typeOption: string) => (
-                  <option key={typeOption} value={typeOption}>{typeOption}</option>
-                ))}
-              </Select>
-              <Select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                maxW="200px"
-              >
-                <option value="all">Todas las categorías</option>
-                {(categoriesData?.categories || stats?.categories || ['system', 'user', 'content', 'security', 'general']).map((categoryOption: string) => (
-                  <option key={categoryOption} value={categoryOption}>{categoryOption}</option>
-                ))}
-              </Select>
-              <Select
-                value={readFilter}
-                onChange={(e) => setReadFilter(e.target.value)}
-                maxW="200px"
-              >
-                <option value="all">Todas</option>
-                <option value="unread">No leídas</option>
-                <option value="read">Leídas</option>
-              </Select>
-            </HStack>
-          </CardBody>
-        </Card>
+      {/* Filtros */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center space-x-4">
+          <div className="flex-1 max-w-md">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar notificaciones..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">Todos los tipos</option>
+            {(typesData?.types || stats?.types || ['info', 'success', 'warning', 'error', 'system']).map((typeOption: string) => (
+              <option key={typeOption} value={typeOption}>{typeOption}</option>
+            ))}
+          </select>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">Todas las categorías</option>
+            {(categoriesData?.categories || stats?.categories || ['system', 'user', 'content', 'security', 'general']).map((categoryOption: string) => (
+              <option key={categoryOption} value={categoryOption}>{categoryOption}</option>
+            ))}
+          </select>
+          <select
+            value={readFilter}
+            onChange={(e) => setReadFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">Todas</option>
+            <option value="unread">No leídas</option>
+            <option value="read">Leídas</option>
+          </select>
+        </div>
+      </div>
 
-        {/* Tabla de Notificaciones */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            {isLoading ? (
-              <Box textAlign="center" py={8}>
-                <Spinner size="xl" />
-                <Text mt={4}>Cargando notificaciones...</Text>
-              </Box>
-            ) : (
-              <Box overflowX="auto">
-                <Table variant="simple">
-                  <Thead>
-                    <Tr>
-                      <Th>Estado</Th>
-                      <Th>Título</Th>
-                      <Th>Tipo</Th>
-                      <Th>Categoría</Th>
-                      <Th>Fecha</Th>
-                      <Th>Acciones</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {notificationsData?.notifications?.length === 0 && (
-                      <Tr>
-                        <Td colSpan={6}>
-                          <Alert status="info" variant="subtle">
-                            <AlertIcon />
-                            No se encontraron notificaciones.
-                          </Alert>
-                        </Td>
-                      </Tr>
-                    )}
-                    {notificationsData?.notifications?.map((notification: Notification) => {
-                      const IconComponent = typeIcons[notification.type as keyof typeof typeIcons] || FaBell;
-                      
-                      return (
-                        <Tr 
-                          key={notification.id}
-                          bg={!notification.read ? `${typeColors[notification.type as keyof typeof typeColors]}.50` : undefined}
-                          _hover={{ bg: `${typeColors[notification.type as keyof typeof typeColors]}.100` }}
-                          cursor="pointer"
-                          onClick={() => handleViewNotification(notification)}
+      {/* Tabla de Notificaciones */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Título</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {notificationsData?.notifications?.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-8">
+                      <Info className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No se encontraron notificaciones.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {notificationsData?.notifications?.map((notification: Notification) => {
+                const IconComponent = typeIcons[notification.type as keyof typeof typeIcons] || Bell;
+                const typeColor = typeColors[notification.type as keyof typeof typeColors] || 'gray';
+                const categoryColor = categoryColors[notification.category as keyof typeof categoryColors] || 'gray';
+                
+                return (
+                  <tr 
+                    key={notification.id}
+                    className={`hover:bg-gray-50 cursor-pointer ${
+                      !notification.read ? `bg-${typeColor}-50` : ''
+                    }`}
+                    onClick={() => handleViewNotification(notification)}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        {notification.read ? (
+                          <MailOpen className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <Mail className="w-4 h-4 text-blue-500" />
+                        )}
+                        {!notification.read && (
+                          <div className={`ml-2 w-2 h-2 rounded-full bg-${typeColor}-500`}></div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        <p className={`text-sm font-semibold ${!notification.read ? 'text-blue-600' : 'text-gray-900'}`}>
+                          {notification.title}
+                        </p>
+                        <p className="text-sm text-gray-500 line-clamp-2">
+                          {notification.message}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <IconComponent className={`w-4 h-4 text-${typeColor}-500 mr-2`} />
+                        <span className={`px-2 py-1 text-xs font-medium text-${typeColor}-600 bg-${typeColor}-100 rounded-full`}>
+                          {notification.type}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs font-medium text-${categoryColor}-600 bg-${categoryColor}-100 rounded-full`}>
+                        {notification.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{formatTimestamp(notification.created_at)}</div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(notification.created_at).toLocaleDateString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewNotification(notification);
+                          }}
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Ver detalles"
                         >
-                          <Td>
-                            <HStack>
-                              {notification.read ? (
-                                <FaEnvelopeOpen color="gray" />
-                              ) : (
-                                <FaEnvelope color="blue" />
-                              )}
-                              {!notification.read && (
-                                <Box
-                                  w={2}
-                                  h={2}
-                                  borderRadius="full"
-                                  bg={`${typeColors[notification.type as keyof typeof typeColors]}.500`}
-                                />
-                              )}
-                            </HStack>
-                          </Td>
-                          <Td>
-                            <VStack align="start" spacing={1}>
-                              <Text fontWeight="semibold" color={!notification.read ? 'blue.600' : undefined}>
-                                {notification.title}
-                              </Text>
-                              <Text fontSize="sm" color="gray.500" noOfLines={2}>
-                                {notification.message}
-                              </Text>
-                            </VStack>
-                          </Td>
-                          <Td>
-                            <HStack>
-                              <Box as={IconComponent} color={`${typeColors[notification.type as keyof typeof typeColors]}.500`} />
-                              <Badge
-                                colorScheme={typeColors[notification.type as keyof typeof typeColors] || 'gray'}
-                                variant="subtle"
-                              >
-                                {notification.type}
-                              </Badge>
-                            </HStack>
-                          </Td>
-                          <Td>
-                            <Badge
-                              colorScheme={categoryColors[notification.category as keyof typeof categoryColors] || 'gray'}
-                              variant="subtle"
-                            >
-                              {notification.category}
-                            </Badge>
-                          </Td>
-                          <Td>
-                            <VStack align="start" spacing={0}>
-                              <Text fontSize="sm">{formatTimestamp(notification.created_at)}</Text>
-                              <Text fontSize="xs" color="gray.500">
-                                {new Date(notification.created_at).toLocaleDateString()}
-                              </Text>
-                            </VStack>
-                          </Td>
-                          <Td>
-                            <HStack spacing={2}>
-                              <Tooltip label="Ver detalles">
-                                <IconButton
-                                  aria-label="Ver detalles"
-                                  icon={<FaEye />}
-                                  size="sm"
-                                  variant="ghost"
-                                  colorScheme="blue"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleViewNotification(notification);
-                                  }}
-                                />
-                              </Tooltip>
-                              {!notification.read && (
-                                <Tooltip label="Marcar como leída">
-                                  <IconButton
-                                    aria-label="Marcar como leída"
-                                    icon={<FaCheck />}
-                                    size="sm"
-                                    variant="ghost"
-                                    colorScheme="green"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleMarkAsRead(notification.id);
-                                    }}
-                                  />
-                                </Tooltip>
-                              )}
-                              <Menu>
-                                <MenuButton
-                                  as={IconButton}
-                                  aria-label="Más opciones"
-                                  icon={<FaEllipsisV />}
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <MenuList>
-                                  <MenuItem icon={<FaUser />}>
-                                    Ver usuario
-                                  </MenuItem>
-                                  <MenuItem icon={<FaClock />}>
-                                    Ver historial
-                                  </MenuItem>
-                                  <MenuDivider />
-                                  <MenuItem 
-                                    icon={<FaTrash />} 
-                                    color="red.500"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete(notification.id);
-                                    }}
-                                  >
-                                    Eliminar
-                                  </MenuItem>
-                                </MenuList>
-                              </Menu>
-                            </HStack>
-                          </Td>
-                        </Tr>
-                      );
-                    })}
-                  </Tbody>
-                </Table>
-              </Box>
-            )}
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {!notification.read && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkAsRead(notification.id);
+                            }}
+                            className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Marcar como leída"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(notification.id);
+                          }}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-            {/* Paginación */}
-            {notificationsData?.pagination && (
-              <Flex justify="center" mt={6}>
-                <HStack spacing={2}>
-                  <Button
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    isDisabled={currentPage === 1}
-                  >
-                    Anterior
-                  </Button>
-                  <Text>
-                    Página {currentPage} de {notificationsData.pagination.totalPages}
-                  </Text>
-                  <Button
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    isDisabled={currentPage === notificationsData.pagination.totalPages}
-                  >
-                    Siguiente
-                  </Button>
-                </HStack>
-              </Flex>
-            )}
-          </CardBody>
-        </Card>
-      </VStack>
+        {/* Paginación */}
+        {notificationsData?.pagination && (
+          <div className="flex items-center justify-center px-6 py-4 border-t border-gray-200">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <span className="px-4 py-2 text-sm text-gray-700">
+                Página {currentPage} de {notificationsData.pagination.totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={currentPage === notificationsData.pagination.totalPages}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Modal de Detalles de Notificación */}
-      <Modal isOpen={isOpen} onClose={onClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>
-            <HStack>
-              <Box 
-                as={typeIcons[selectedNotification?.type as keyof typeof typeIcons] || FaBell} 
-                color={`${typeColors[selectedNotification?.type as keyof typeof typeColors]}.500`} 
-              />
-              <Text>Detalles de la Notificación</Text>
-            </HStack>
-          </ModalHeader>
-          <ModalBody>
-            {selectedNotification && (
-              <VStack spacing={4} align="stretch">
-                <Box>
-                  <HStack justify="space-between" mb={2}>
-                    <Text fontWeight="semibold" fontSize="lg">
-                      {selectedNotification.title}
-                    </Text>
-                    <Badge colorScheme={typeColors[selectedNotification.type as keyof typeof typeColors]}>
+      {isViewOpen && selectedNotification && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className={`p-2 bg-${typeColors[selectedNotification.type as keyof typeof typeColors]}-100 rounded-lg mr-3`}>
+                    <IconComponent className={`w-6 h-6 text-${typeColors[selectedNotification.type as keyof typeof typeColors]}-600`} />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Detalles de la Notificación</h3>
+                </div>
+                <button
+                  onClick={() => setIsViewOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XIcon className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-lg font-semibold text-gray-900">{selectedNotification.title}</h4>
+                    <span className={`px-2 py-1 text-xs font-medium text-${typeColors[selectedNotification.type as keyof typeof typeColors]}-600 bg-${typeColors[selectedNotification.type as keyof typeof typeColors]}-100 rounded-full`}>
                       {selectedNotification.type}
-                    </Badge>
-                  </HStack>
-                  <Text fontSize="sm" color="gray.600">
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">
                     {formatTimestamp(selectedNotification.created_at)} • {selectedNotification.category}
-                  </Text>
-                </Box>
+                  </p>
+                </div>
 
-                <Divider />
-
-                <Box>
-                  <Text fontWeight="semibold" mb={2}>Mensaje</Text>
-                  <Text>{selectedNotification.message}</Text>
-                </Box>
+                <div className="border-t border-gray-200 pt-4">
+                  <h5 className="font-semibold text-gray-900 mb-2">Mensaje</h5>
+                  <p className="text-gray-700">{selectedNotification.message}</p>
+                </div>
 
                 {selectedNotification.metadata && (
-                  <Box>
-                    <Text fontWeight="semibold" mb={2}>Información Adicional</Text>
-                    <Box
-                      as="pre"
-                      fontSize="sm"
-                      color="gray.600"
-                      whiteSpace="pre-wrap"
-                    >
-                      {JSON.stringify(selectedNotification.metadata, null, 2)}
-                    </Box>
-                  </Box>
+                  <div className="border-t border-gray-200 pt-4">
+                    <h5 className="font-semibold text-gray-900 mb-2">Información Adicional</h5>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <pre className="text-sm text-gray-600 whitespace-pre-wrap">
+                        {JSON.stringify(selectedNotification.metadata, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
                 )}
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <HStack spacing={3}>
-              {selectedNotification && !selectedNotification.read && (
-                <Button
-                  leftIcon={<FaCheck />}
-                  colorScheme="green"
-                  onClick={() => {
-                    handleMarkAsRead(selectedNotification.id);
-                    onClose();
-                  }}
+              </div>
+              
+              <div className="flex justify-end mt-6 space-x-3">
+                {!selectedNotification.read && (
+                  <button
+                    onClick={() => {
+                      handleMarkAsRead(selectedNotification.id);
+                      setIsViewOpen(false);
+                    }}
+                    className="flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    Marcar como leída
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsViewOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
                 >
-                  Marcar como leída
-                </Button>
-              )}
-              <Button onClick={onClose}>Cerrar</Button>
-            </HStack>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </Box>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

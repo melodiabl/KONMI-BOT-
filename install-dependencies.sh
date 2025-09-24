@@ -11,11 +11,6 @@ npm install
 echo "🔧 Instalando dependencias adicionales..."
 npm install yt-search ytdl-core axios qrcode pino chalk
 
-# Instalar dependencias del template de sub-bot
-echo "🤖 Instalando dependencias del template de sub-bot..."
-cd ../../subbot-template
-npm install
-
 # Crear directorios necesarios
 echo "📁 Creando directorios necesarios..."
 cd ../backend/full

@@ -20,7 +20,7 @@ export function getGeminiClient() {
   return cachedClient;
 }
 
-export function getGeminiModel(model = 'gemini-pro') {
+export function getGeminiModel(model = 'gemini-1.5-flash') {
   return getGeminiClient().getGenerativeModel({ model });
 }
 

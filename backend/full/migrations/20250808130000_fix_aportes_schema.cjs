@@ -21,6 +21,8 @@ exports.up = async function up(knex) {
   // Check columns
   const hasContenido = await knex.schema.hasColumn('aportes', 'contenido');
   const hasFecha = await knex.schema.hasColumn('aportes', 'fecha');
+  const hasFechaAporte = await knex.schema.hasColumn('aportes', 'fecha_aporte');
+  const hasTitulo = await knex.schema.hasColumn('aportes', 'titulo');
   const hasGrupo = await knex.schema.hasColumn('aportes', 'grupo');
 
   // If already aligned, ensure missing 'grupo' column exists and exit
@@ -46,17 +48,34 @@ exports.up = async function up(knex) {
   // Attempt to migrate data from old structure (titulo, fecha_aporte)
   try {
     // Use COALESCE to be resilient if some columns are missing
-    await knex.raw(`
+    const contenidoExpr = hasContenido
+      ? 'COALESCE(aportes.contenido, aportes.titulo)'
+      : hasTitulo
+        ? 'aportes.titulo'
+        : `'Contenido'`;
+
+    const fechaCandidates = [];
+    if (hasFecha) fechaCandidates.push('aportes.fecha');
+    if (hasFechaAporte) fechaCandidates.push('aportes.fecha_aporte');
+    const fechaExpr = fechaCandidates.length
+      ? `COALESCE(${fechaCandidates.join(', ')}, CURRENT_TIMESTAMP)`
+      : 'CURRENT_TIMESTAMP';
+
+    const grupoExpr = hasGrupo ? 'aportes.grupo' : 'NULL';
+
+    const insertSql = `
       INSERT INTO aportes_tmp (id, contenido, tipo, usuario, grupo, fecha)
-      SELECT 
-        id,
-        COALESCE(titulo, contenido) AS contenido,
-        tipo,
-        usuario,
-        NULL AS grupo,
-        COALESCE(fecha, fecha_aporte, CURRENT_TIMESTAMP) AS fecha
+      SELECT
+        aportes.id,
+        ${contenidoExpr} AS contenido,
+        aportes.tipo,
+        aportes.usuario,
+        ${grupoExpr} AS grupo,
+        ${fechaExpr} AS fecha
       FROM aportes
-    `);
+    `;
+
+    await knex.raw(insertSql);
   } catch (e) {
     // If insertion fails (e.g., old table empty or columns missing), ignore
   }

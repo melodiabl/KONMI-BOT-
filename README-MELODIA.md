@@ -78,8 +78,8 @@ npm start
 ### 👑 **Comandos de Administrador**
 - `/serbot` - Crear nuevo sub-bot
 - `/bots` - Listar todos los sub-bots
-- `/delsubbot <id>` - Eliminar sub-bot
-- `/qr <id>` - Obtener QR del sub-bot
+- `/delsubbot ` - Eliminar sub-bot
+- `/qr - Obtener QR del sub-bot
 - `/cleansession` - Limpiar sesiones y generar QR
 - `/logs [tipo]` - Ver logs del sistema
 - `/stats` - Estadísticas del bot
@@ -115,17 +115,10 @@ bot-whatsapp-panel-2.5-completo-v2/
 ├── backend/
 │   └── full/
 │       ├── commands.js              # Comandos básicos
-│       ├── commands-ai.js           # Comandos de IA
-│       ├── commands-media.js        # Comandos de media
-│       ├── commands-entertainment.js # Comandos de entretenimiento
-│       ├── commands-subbot.js       # Comandos de sub-bots
-│       ├── commands-logs.js         # Comandos de logs
-│       ├── commands-help.js         # Comando de ayuda
+│
 │       ├── whatsapp.js              # Handler principal
 │       └── index.js                 # Servidor principal
-├── subbot-template/
-│   ├── index.js                     # Template del sub-bot
-│   └── package.json                 # Dependencias del sub-bot
+
 ├── frontend-panel/                  # Panel web (opcional)
 └── install-dependencies.sh          # Script de instalación
 ```

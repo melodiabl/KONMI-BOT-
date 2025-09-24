@@ -1,59 +1,117 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
   HStack,
-  Heading,
   Text,
-  SimpleGrid,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Heading,
   Stat,
   StatLabel,
   StatNumber,
   StatHelpText,
   StatArrow,
-  Card,
-  CardBody,
-  CardHeader,
-  Progress,
   Badge,
-  Icon,
-  useColorModeValue,
-  Flex,
-  Spacer,
-  Button,
-  useToast,
-  Spinner,
+  Switch,
+  Textarea,
   Alert,
   AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  IconButton,
+  Spinner,
+  Flex,
+  Grid,
+  GridItem,
+  Divider,
+  useDisclosure,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  useToast,
+  Tooltip,
+  Icon,
+  Spacer
 } from '@chakra-ui/react';
 import {
-  FaUsers,
-  FaUsersCog,
-  FaWhatsapp,
-  FaCheckCircle,
-  FaTimesCircle,
-  FaClock,
-  FaChartLine,
-  FaExclamationTriangle,
-  FaPlay,
-  FaStop,
-  FaSync,
-} from 'react-icons/fa';
+  FiUsers,
+  FiMessageSquare,
+  FiBot,
+  FiActivity,
+  FiAlertTriangle,
+  FiCheckCircle,
+  FiXCircle,
+  FiClock,
+  FiBarChart3,
+  FiRefreshCw,
+  FiPower,
+  FiPowerOff,
+  FiSettings,
+  FiTrendingUp,
+  FiTrendingDown,
+  FiEye,
+  FiEyeOff,
+  FiGlobe,
+  FiSmartphone,
+  FiWifi,
+  FiWifiOff
+} from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apiService, getBotStatus, getStats, getUsuarioStats, getGroupStats } from '../services/api';
+import { apiService, getBotStatus, getStats } from '../services/api';
+
+interface DashboardStats {
+  totalUsuarios: number;
+  totalGrupos: number;
+  totalAportes: number;
+  totalPedidos: number;
+  totalSubbots: number;
+  totalMensajes: number;
+  totalComandos: number;
+  usuariosActivos: number;
+  gruposActivos: number;
+  aportesHoy: number;
+  pedidosHoy: number;
+  comandosHoy: number;
+  actividadDiaria: Array<{
+    fecha: string;
+    usuarios: number;
+    grupos: number;
+    mensajes: number;
+  }>;
+}
+
+interface BotStatus {
+  connected: boolean;
+  phone?: string;
+  uptime?: string;
+  lastSeen?: string;
+  isConnected?: boolean;
+}
 
 export const Dashboard: React.FC = () => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showGlobalControls, setShowGlobalControls] = useState(false);
+  const [globalOffMessage, setGlobalOffMessage] = useState('');
+  const [isEditingMessage, setIsEditingMessage] = useState(false);
   const toast = useToast();
+
   const queryClient = useQueryClient();
 
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
-
   // Queries
-  const { data: botStatus, isLoading: botLoading } = useQuery('botStatus', getBotStatus);
-  const { data: stats, isLoading: statsLoading } = useQuery('dashboardStats', getStats);
-  const { data: userStats } = useQuery('userStats', getUsuarioStats);
-  const { data: groupStats } = useQuery('groupStats', getGroupStats);
+  const { data: botStatus, isLoading: botLoading, error: botError } = useQuery<BotStatus>('botStatus', getBotStatus, {
+    refetchInterval: 5000,
+  });
+
+  const { data: stats, isLoading: statsLoading, error: statsError } = useQuery<DashboardStats>('dashboardStats', getStats);
+
+  const { data: globalState } = useQuery('botGlobalState', apiService.getBotGlobalState);
+  const { data: globalOffMessageData } = useQuery('botGlobalOffMessage', apiService.getBotGlobalOffMessage);
 
   // Mutations
   const restartBotMutation = useMutation(apiService.restartBot, {
@@ -61,15 +119,19 @@ export const Dashboard: React.FC = () => {
       queryClient.invalidateQueries('botStatus');
       toast({
         title: 'Bot reiniciado',
-        description: 'El bot ha sido reiniciado exitosamente',
+        description: 'El bot se ha reiniciado exitosamente',
         status: 'success',
+        duration: 3000,
+        isClosable: true,
       });
     },
     onError: (error: any) => {
       toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Error al reiniciar el bot',
+        title: 'Error al reiniciar',
+        description: error.response?.data?.message || 'Error desconocido',
         status: 'error',
+        duration: 5000,
+        isClosable: true,
       });
     },
   });
@@ -79,26 +141,85 @@ export const Dashboard: React.FC = () => {
       queryClient.invalidateQueries('botStatus');
       toast({
         title: 'Bot desconectado',
-        description: 'El bot ha sido desconectado exitosamente',
+        description: 'El bot se ha desconectado exitosamente',
         status: 'success',
+        duration: 3000,
+        isClosable: true,
       });
     },
     onError: (error: any) => {
       toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Error al desconectar el bot',
+        title: 'Error al desconectar',
+        description: error.response?.data?.message || 'Error desconocido',
         status: 'error',
+        duration: 5000,
+        isClosable: true,
       });
     },
   });
 
-  const formatUptime = (seconds?: number | string) => {
-    if (!seconds) return '0h 0m';
-    const totalSeconds = typeof seconds === 'string' ? parseFloat(seconds) : seconds;
-    if (!Number.isFinite(totalSeconds)) return '0h 0m';
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
+  const setGlobalStateMutation = useMutation(apiService.setBotGlobalState, {
+    onSuccess: () => {
+      queryClient.invalidateQueries('botGlobalState');
+      toast({
+        title: 'Estado actualizado',
+        description: 'El estado global del bot ha sido actualizado',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error al actualizar estado',
+        description: error.response?.data?.message || 'Error desconocido',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    },
+  });
+
+  const setGlobalOffMessageMutation = useMutation(apiService.setBotGlobalOffMessage, {
+    onSuccess: () => {
+      queryClient.invalidateQueries('botGlobalOffMessage');
+      setIsEditingMessage(false);
+      toast({
+        title: 'Mensaje actualizado',
+        description: 'El mensaje global OFF ha sido actualizado',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error al actualizar mensaje',
+        description: error.response?.data?.message || 'Error desconocido',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    },
+  });
+
+  // Effects
+  useEffect(() => {
+    if (globalOffMessageData?.message) {
+      setGlobalOffMessage(globalOffMessageData.message);
+    }
+  }, [globalOffMessageData]);
+
+  // Handlers
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([
+      queryClient.invalidateQueries('botStatus'),
+      queryClient.invalidateQueries('dashboardStats'),
+      queryClient.invalidateQueries('botGlobalState'),
+      queryClient.invalidateQueries('botGlobalOffMessage')
+    ]);
+    setTimeout(() => setIsRefreshing(false), 1000);
   };
 
   const handleRestartBot = () => {
@@ -113,33 +234,78 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleToggleGlobalState = () => {
+    const newState = !globalState?.isOn;
+    setGlobalStateMutation.mutate(newState);
+  };
+
+  const handleSaveGlobalOffMessage = () => {
+    if (globalOffMessage.trim()) {
+      setGlobalOffMessageMutation.mutate(globalOffMessage);
+    }
+  };
+
+  const formatUptime = (uptime?: string) => {
+    if (!uptime) return '0h 0m';
+    return uptime;
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toString();
+  };
+
+  const getStatusColor = (connected: boolean) => {
+    return connected ? 'text-green-500' : 'text-red-500';
+  };
+
+  const getStatusIcon = (connected: boolean) => {
+    return connected ? FiCheckCircle : FiXCircle;
+  };
+
   if (botLoading || statsLoading) {
     return (
-      <Box textAlign="center" py={10}>
-        <Spinner size="xl" />
-        <Heading mt={4}>Cargando dashboard...</Heading>
-      </Box>
+      <Flex align="center" justify="center" minH="50vh">
+        <VStack spacing={4}>
+          <Spinner size="xl" color="blue.500" />
+          <Text fontSize="xl" fontWeight="semibold">Cargando dashboard...</Text>
+        </VStack>
+      </Flex>
     );
   }
 
+  if (botError || statsError) {
+    return (
+      <Alert status="error" borderRadius="lg">
+        <AlertIcon />
+        <AlertTitle>Error al cargar datos:</AlertTitle>
+        <AlertDescription>
+          {(botError as any)?.message || (statsError as any)?.message}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const isConnected = botStatus?.connected || botStatus?.isConnected;
+  const StatusIcon = getStatusIcon(isConnected);
+
   return (
-    <Box>
       <VStack spacing={6} align="stretch">
         {/* Header */}
-        <Flex align="center" justify="space-between">
+      <Flex justify="space-between" align="center">
           <Box>
-            <Heading size="lg">Dashboard</Heading>
-            <Text color="gray.600" mt={1}>
-              Panel de control y estadísticas del sistema
-            </Text>
+          <Heading size="lg" color="gray.900">Dashboard</Heading>
+          <Text color="gray.600" mt={1}>Panel de control y estadísticas del sistema</Text>
           </Box>
           <HStack spacing={3}>
             <Button
-              leftIcon={<FaSync />}
-              colorScheme="blue"
+            onClick={handleRefresh}
+            isLoading={isRefreshing}
+            loadingText="Actualizando..."
+            leftIcon={<Icon as={FiRefreshCw} />}
               variant="outline"
-              onClick={() => queryClient.invalidateQueries()}
-              isLoading={botLoading || statsLoading}
+            size="sm"
             >
               Actualizar
             </Button>
@@ -147,296 +313,373 @@ export const Dashboard: React.FC = () => {
         </Flex>
 
         {/* Estado del Bot */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
+      <Card>
           <CardHeader>
             <HStack>
-              <Icon as={FaWhatsapp} color="green.500" />
-              <Heading size="md">Estado del Bot</Heading>
+            <Icon as={FiBot} w={6} h={6} color="green.500" />
+            <Heading size="md" color="gray.900">Estado del Bot</Heading>
             </HStack>
           </CardHeader>
           <CardBody>
-            <SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}>
-              <Stat>
-                <StatLabel>Estado de Conexión</StatLabel>
-                <StatNumber color={botStatus?.connected ? 'green.400' : 'red.400'}>
-                  {botStatus?.connected ? 'Conectado' : 'Desconectado'}
+        
+          <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }} gap={6} mb={6}>
+            <Stat textAlign="center">
+              <Flex justify="center" mb={2}>
+                <Icon as={StatusIcon} w={8} h={8} color={isConnected ? "green.500" : "red.500"} />
+              </Flex>
+              <StatLabel color="gray.500">Estado de Conexión</StatLabel>
+              <StatNumber color={isConnected ? "green.500" : "red.500"}>
+                {isConnected ? 'Conectado' : 'Desconectado'}
                 </StatNumber>
-                <StatHelpText>
-                  <Icon as={botStatus?.connected ? FaCheckCircle : FaTimesCircle} mr={1} />
-                  {botStatus?.connected ? 'Bot activo' : 'Bot inactivo'}
+              <StatHelpText color="gray.400">
+                {isConnected ? 'Bot activo' : 'Bot inactivo'}
                 </StatHelpText>
               </Stat>
               
-              <Stat>
-                <StatLabel>Número de Teléfono</StatLabel>
-                <StatNumber fontSize="lg">
+            <Stat textAlign="center">
+              <Flex justify="center" mb={2}>
+                <Icon as={FiSmartphone} w={8} h={8} color="blue.500" />
+              </Flex>
+              <StatLabel color="gray.500">Número de Teléfono</StatLabel>
+              <StatNumber color="gray.900">
                   {botStatus?.phone || 'No disponible'}
                 </StatNumber>
-                <StatHelpText>WhatsApp conectado</StatHelpText>
+              <StatHelpText color="gray.400">WhatsApp conectado</StatHelpText>
               </Stat>
               
-              <Stat>
-                <StatLabel>Tiempo Activo</StatLabel>
-                <StatNumber>{formatUptime(botStatus?.uptime)}</StatNumber>
-                <StatHelpText>
-                  <Icon as={FaClock} mr={1} />
-                  Uptime del bot
-                </StatHelpText>
+            <Stat textAlign="center">
+              <Flex justify="center" mb={2}>
+                <Icon as={FiClock} w={8} h={8} color="purple.500" />
+              </Flex>
+              <StatLabel color="gray.500">Tiempo Activo</StatLabel>
+              <StatNumber color="gray.900">{formatUptime(botStatus?.uptime)}</StatNumber>
+              <StatHelpText color="gray.400">Uptime del bot</StatHelpText>
               </Stat>
               
-              <Stat>
-                <StatLabel>Última Actividad</StatLabel>
-                <StatNumber fontSize="sm">
+            <Stat textAlign="center">
+              <Flex justify="center" mb={2}>
+                <Icon as={FiActivity} w={8} h={8} color="orange.500" />
+              </Flex>
+              <StatLabel color="gray.500">Última Actividad</StatLabel>
+              <StatNumber color="gray.900" fontSize="sm">
                   {botStatus?.lastSeen ? new Date(botStatus.lastSeen).toLocaleString() : 'N/A'}
                 </StatNumber>
-                <StatHelpText>Última vez activo</StatHelpText>
+              <StatHelpText color="gray.400">Última vez activo</StatHelpText>
               </Stat>
-            </SimpleGrid>
-            
-            <HStack mt={6} spacing={4}>
-              <Button
-                leftIcon={<FaPlay />}
-                colorScheme="green"
-                onClick={handleRestartBot}
-                isLoading={restartBotMutation.isLoading}
-                isDisabled={!botStatus?.connected}
-              >
-                Reiniciar Bot
-              </Button>
-              <Button
-                leftIcon={<FaStop />}
-                colorScheme="red"
-                variant="outline"
-                onClick={handleDisconnectBot}
-                isLoading={disconnectBotMutation.isLoading}
-                isDisabled={!botStatus?.connected}
-              >
-                Desconectar Bot
-              </Button>
+          </Grid>
+        
+          <Flex justify="center" gap={4}>
+            <Button
+              onClick={handleRestartBot}
+              isDisabled={!isConnected || restartBotMutation.isLoading}
+              isLoading={restartBotMutation.isLoading}
+              loadingText="Reiniciando..."
+              leftIcon={<Icon as={FiPower} />}
+              colorScheme="green"
+              size="md"
+            >
+              Reiniciar Bot
+            </Button>
+            <Button
+              onClick={handleDisconnectBot}
+              isDisabled={!isConnected || disconnectBotMutation.isLoading}
+              isLoading={disconnectBotMutation.isLoading}
+              loadingText="Desconectando..."
+              leftIcon={<Icon as={FiPowerOff} />}
+              colorScheme="red"
+              size="md"
+            >
+              Desconectar Bot
+            </Button>
+          </Flex>
+        </CardBody>
+      </Card>
+
+      {/* Control Global del Bot */}
+      <Card>
+        <CardHeader>
+          <Flex justify="space-between" align="center">
+            <HStack>
+              <Icon as={FiGlobe} w={6} h={6} color="blue.500" />
+              <Heading size="md" color="gray.900">Control Global del Bot</Heading>
+            </HStack>
+            <Button
+              onClick={() => setShowGlobalControls(!showGlobalControls)}
+              leftIcon={<Icon as={showGlobalControls ? FiEyeOff : FiEye} />}
+              variant="outline"
+              size="sm"
+            >
+              {showGlobalControls ? 'Ocultar' : 'Mostrar'} Controles
+            </Button>
+          </Flex>
+        </CardHeader>
+        <CardBody>
+
+          {showGlobalControls && (
+            <VStack spacing={4} align="stretch">
+              <Flex justify="space-between" align="center" p={4} bg="gray.50" borderRadius="lg">
+                <Box>
+                  <Heading size="sm" color="gray.900">Estado Global</Heading>
+                  <Text fontSize="sm" color="gray.600">
+                    Controla si el bot responde a comandos en todos los grupos y chats privados
+                  </Text>
+                </Box>
+                <HStack spacing={3}>
+                  <Badge colorScheme={globalState?.isOn ? "green" : "red"} variant="solid">
+                    {globalState?.isOn ? 'ACTIVO' : 'INACTIVO'}
+                  </Badge>
+                  <Switch
+                    isChecked={globalState?.isOn}
+                    onChange={handleToggleGlobalState}
+                    isDisabled={setGlobalStateMutation.isLoading}
+                    colorScheme="green"
+                    size="lg"
+                  />
+                </HStack>
+              </Flex>
+
+              <Box p={4} bg="gray.50" borderRadius="lg">
+                <Heading size="sm" color="gray.900" mb={2}>Mensaje cuando el bot está OFF</Heading>
+                <Text fontSize="sm" color="gray.600" mb={3}>
+                  Este mensaje se mostrará cuando alguien use un comando mientras el bot esté globalmente desactivado
+                </Text>
+                {isEditingMessage ? (
+                  <VStack spacing={3} align="stretch">
+                    <Textarea
+                      value={globalOffMessage}
+                      onChange={(e) => setGlobalOffMessage(e.target.value)}
+                      placeholder="Ingresa el mensaje que se mostrará cuando el bot esté OFF..."
+                      rows={3}
+                    />
+                    <HStack spacing={2}>
+                      <Button
+                        onClick={handleSaveGlobalOffMessage}
+                        isLoading={setGlobalOffMessageMutation.isLoading}
+                        loadingText="Guardando..."
+                        colorScheme="blue"
+                        size="sm"
+                      >
+                        Guardar
+                      </Button>
+                      <Button
+                        onClick={() => setIsEditingMessage(false)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Cancelar
+                      </Button>
+                    </HStack>
+                  </VStack>
+                ) : (
+                  <VStack spacing={3} align="stretch">
+                    <Box p={3} bg="white" border="1px" borderColor="gray.200" borderRadius="lg">
+                      <Text color="gray.900">{globalOffMessage || 'No hay mensaje configurado'}</Text>
+                    </Box>
+                    <Button
+                      onClick={() => setIsEditingMessage(true)}
+                      leftIcon={<Icon as={FiSettings} />}
+                      colorScheme="blue"
+                      variant="outline"
+                      size="sm"
+                    >
+                      Editar Mensaje
+                    </Button>
+                  </VStack>
+                )}
+              </Box>
+            </VStack>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* Estadísticas Generales */}
+      <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }} gap={6}>
+        <Card>
+          <CardBody>
+            <HStack>
+              <Box p={2} bg="blue.100" borderRadius="lg">
+                <Icon as={FiUsers} w={6} h={6} color="blue.600" />
+              </Box>
+              <Box>
+                <Text fontSize="sm" color="gray.500" fontWeight="medium">Total Usuarios</Text>
+                <Text fontSize="2xl" fontWeight="bold" color="gray.900">{formatNumber(stats?.totalUsuarios || 0)}</Text>
+                <HStack>
+                  <Icon as={FiTrendingUp} w={3} h={3} color="green.600" />
+                  <Text fontSize="xs" color="green.600">
+                    {stats?.usuariosActivos || 0} activos
+                  </Text>
+                </HStack>
+              </Box>
             </HStack>
           </CardBody>
         </Card>
 
-        {/* Estadísticas Generales */}
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6}>
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaUsers} color="blue.500" />
-                    <Text>Total Usuarios</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{userStats?.totalUsuarios || 0}</StatNumber>
-                <StatHelpText>
-                  <StatArrow type="increase" />
-                  {userStats?.usuariosActivos || 0} activos
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+        <Card>
+          <CardBody>
+            <HStack>
+              <Box p={2} bg="green.100" borderRadius="lg">
+                <Icon as={FiUsers} w={6} h={6} color="green.600" />
+              </Box>
+              <Box>
+                <Text fontSize="sm" color="gray.500" fontWeight="medium">Total Grupos</Text>
+                <Text fontSize="2xl" fontWeight="bold" color="gray.900">{formatNumber(stats?.totalGrupos || 0)}</Text>
+                <HStack>
+                  <Icon as={FiTrendingUp} w={3} h={3} color="green.600" />
+                  <Text fontSize="xs" color="green.600">
+                    {stats?.gruposActivos || 0} bot activo
+                  </Text>
+                </HStack>
+              </Box>
+            </HStack>
+          </CardBody>
+        </Card>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaUsersCog} color="green.500" />
-                    <Text>Total Grupos</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{groupStats?.totalGrupos || 0}</StatNumber>
-                <StatHelpText>
-                  <StatArrow type="increase" />
-                  {groupStats?.gruposActivos || 0} bot activo
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+        <Card>
+          <CardBody>
+            <HStack>
+              <Box p={2} bg="purple.100" borderRadius="lg">
+                <Icon as={FiMessageSquare} w={6} h={6} color="purple.600" />
+              </Box>
+              <Box>
+                <Text fontSize="sm" color="gray.500" fontWeight="medium">Total Aportes</Text>
+                <Text fontSize="2xl" fontWeight="bold" color="gray.900">{formatNumber(stats?.totalAportes || 0)}</Text>
+                <HStack>
+                  <Icon as={FiTrendingUp} w={3} h={3} color="green.600" />
+                  <Text fontSize="xs" color="green.600">
+                    Contenido compartido
+                  </Text>
+                </HStack>
+              </Box>
+            </HStack>
+          </CardBody>
+        </Card>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaChartLine} color="purple.500" />
-                    <Text>Total Aportes</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{stats?.totalAportes || 0}</StatNumber>
-                <StatHelpText>
-                  <StatArrow type="increase" />
-                  Contenido compartido
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+        <Card>
+          <CardBody>
+            <HStack>
+              <Box p={2} bg="orange.100" borderRadius="lg">
+                <Icon as={FiAlertTriangle} w={6} h={6} color="orange.600" />
+              </Box>
+              <Box>
+                <Text fontSize="sm" color="gray.500" fontWeight="medium">Pedidos Pendientes</Text>
+                <Text fontSize="2xl" fontWeight="bold" color="gray.900">{formatNumber(stats?.totalPedidos || 0)}</Text>
+                <HStack>
+                  <Icon as={FiTrendingDown} w={3} h={3} color="red.600" />
+                  <Text fontSize="xs" color="red.600">
+                    Requieren atención
+                  </Text>
+                </HStack>
+              </Box>
+            </HStack>
+          </CardBody>
+        </Card>
+      </Grid>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaExclamationTriangle} color="orange.500" />
-                    <Text>Pedidos Pendientes</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{stats?.pedidosPendientes || 0}</StatNumber>
-                <StatHelpText>
-                  <StatArrow type="decrease" />
-                  Requieren atención
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
-        </SimpleGrid>
+      {/* Estadísticas Adicionales */}
+      <Grid templateColumns={{ base: "1fr", lg: "repeat(3, 1fr)" }} gap={6}>
+        <Card>
+          <CardBody>
+            <Heading size="sm" color="gray.900" mb={4}>Actividad de Hoy</Heading>
+            <VStack spacing={3} align="stretch">
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Aportes</Text>
+                <Text fontSize="lg" fontWeight="semibold" color="gray.900">{stats?.aportesHoy || 0}</Text>
+              </Flex>
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Pedidos</Text>
+                <Text fontSize="lg" fontWeight="semibold" color="gray.900">{stats?.pedidosHoy || 0}</Text>
+              </Flex>
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Comandos</Text>
+                <Text fontSize="lg" fontWeight="semibold" color="gray.900">{stats?.comandosHoy || 0}</Text>
+              </Flex>
+            </VStack>
+          </CardBody>
+        </Card>
 
-        {/* Detalles de Usuarios y Grupos */}
-        <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-          {/* Usuarios por Rol */}
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardHeader>
-              <Heading size="md">Usuarios por Rol</Heading>
-            </CardHeader>
-            <CardBody>
-              <VStack spacing={4} align="stretch">
-                <HStack justify="space-between">
-                  <HStack>
-                    <Badge colorScheme="red">Admin</Badge>
-                    <Text fontSize="sm">Administradores</Text>
-                  </HStack>
-                  <Text fontWeight="semibold">{userStats?.totalAdmins || 0}</Text>
-                </HStack>
-                <Progress value={(userStats?.totalAdmins || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="red" />
-                
-                <HStack justify="space-between">
-                  <HStack>
-                    <Badge colorScheme="blue">Creador</Badge>
-                    <Text fontSize="sm">Creadores</Text>
-                  </HStack>
-                  <Text fontWeight="semibold">{userStats?.totalCreadores || 0}</Text>
-                </HStack>
-                <Progress value={(userStats?.totalCreadores || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="blue" />
-                
-                <HStack justify="space-between">
-                  <HStack>
-                    <Badge colorScheme="green">Moderador</Badge>
-                    <Text fontSize="sm">Moderadores</Text>
-                  </HStack>
-                  <Text fontWeight="semibold">{userStats?.totalModeradores || 0}</Text>
-                </HStack>
-                <Progress value={(userStats?.totalModeradores || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="green" />
-                
-                <HStack justify="space-between">
-                  <HStack>
-                    <Badge colorScheme="gray">Usuario</Badge>
-                    <Text fontSize="sm">Usuarios</Text>
-                  </HStack>
-                  <Text fontWeight="semibold">{userStats?.totalUsuarios - (userStats?.totalAdmins || 0) - (userStats?.totalCreadores || 0) - (userStats?.totalModeradores || 0) || 0}</Text>
-                </HStack>
-                <Progress value={(userStats?.totalUsuarios - (userStats?.totalAdmins || 0) - (userStats?.totalCreadores || 0) - (userStats?.totalModeradores || 0) || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="gray" />
-              </VStack>
-            </CardBody>
-          </Card>
+        <Card>
+          <CardBody>
+            <Heading size="sm" color="gray.900" mb={4}>Sistema</Heading>
+            <VStack spacing={3} align="stretch">
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Subbots</Text>
+                <Text fontSize="lg" fontWeight="semibold" color="gray.900">{stats?.totalSubbots || 0}</Text>
+              </Flex>
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Mensajes</Text>
+                <Text fontSize="lg" fontWeight="semibold" color="gray.900">{formatNumber(stats?.totalMensajes || 0)}</Text>
+              </Flex>
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Comandos</Text>
+                <Text fontSize="lg" fontWeight="semibold" color="gray.900">{formatNumber(stats?.totalComandos || 0)}</Text>
+              </Flex>
+            </VStack>
+          </CardBody>
+        </Card>
 
-          {/* Estado de Grupos */}
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardHeader>
-              <Heading size="md">Estado de Grupos</Heading>
-            </CardHeader>
-            <CardBody>
-              <VStack spacing={4} align="stretch">
-                <HStack justify="space-between">
-                  <HStack>
-                    <Badge colorScheme="green">Bot activo</Badge>
-                    <Text fontSize="sm">Grupos con bot activado</Text>
-                  </HStack>
-                  <Text fontWeight="semibold">{groupStats?.gruposActivos || 0}</Text>
+        <Card>
+          <CardBody>
+            <Heading size="sm" color="gray.900" mb={4}>Estado de Conexión</Heading>
+            <VStack spacing={3} align="stretch">
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Estado</Text>
+                <HStack>
+                  <Icon as={StatusIcon} w={4} h={4} color={isConnected ? "green.500" : "red.500"} />
+                  <Text fontSize="sm" fontWeight="medium" color={isConnected ? "green.500" : "red.500"}>
+                    {isConnected ? 'Conectado' : 'Desconectado'}
+                  </Text>
                 </HStack>
-                <Progress value={(groupStats?.gruposActivos || 0) / (groupStats?.totalGrupos || 1) * 100} colorScheme="green" />
-                
-                <HStack justify="space-between">
-                  <HStack>
-                    <Badge colorScheme="blue">Proveedores</Badge>
-                    <Text fontSize="sm">Grupos proveedores</Text>
-                  </HStack>
-                  <Text fontWeight="semibold">{groupStats?.gruposProveedores || 0}</Text>
-                </HStack>
-                <Progress value={(groupStats?.gruposProveedores || 0) / (groupStats?.totalGrupos || 1) * 100} colorScheme="blue" />
-                
-                <HStack justify="space-between">
-                  <HStack>
-                    <Badge colorScheme="red">Bot inactivo</Badge>
-                    <Text fontSize="sm">Grupos sin bot</Text>
-                  </HStack>
-                  <Text fontWeight="semibold">{(groupStats?.totalGrupos || 0) - (groupStats?.gruposActivos || 0)}</Text>
-                </HStack>
-                <Progress value={((groupStats?.totalGrupos || 0) - (groupStats?.gruposActivos || 0)) / (groupStats?.totalGrupos || 1) * 100} colorScheme="red" />
-              </VStack>
-            </CardBody>
-          </Card>
-        </SimpleGrid>
+              </Flex>
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Uptime</Text>
+                <Text fontSize="sm" fontWeight="medium" color="gray.900">{formatUptime(botStatus?.uptime)}</Text>
+              </Flex>
+              <Flex justify="space-between" align="center">
+                <Text fontSize="sm" color="gray.600">Global</Text>
+                <Text fontSize="sm" fontWeight="medium" color={globalState?.isOn ? "green.600" : "red.600"}>
+                  {globalState?.isOn ? 'ON' : 'OFF'}
+                </Text>
+              </Flex>
+            </VStack>
+          </CardBody>
+        </Card>
+      </Grid>
 
-        {/* Alertas y Notificaciones */}
-        {(!botStatus?.connected || (stats?.pedidosPendientes || 0) > 0) && (
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardHeader>
-              <Heading size="md">Alertas del Sistema</Heading>
-            </CardHeader>
-            <CardBody>
-              <VStack spacing={3} align="stretch">
-                {!botStatus?.connected && (
-                  <Alert status="error">
-                    <AlertIcon />
-                    <Box>
-                      <Text fontWeight="semibold">Bot desconectado</Text>
-                      <Text fontSize="sm">El bot de WhatsApp no está conectado. Revisa la conexión.</Text>
-                    </Box>
-                  </Alert>
-                )}
-                
-                {(stats?.pedidosPendientes || 0) > 0 && (
-                  <Alert status="warning">
-                    <AlertIcon />
-                    <Box>
-                      <Text fontWeight="semibold">Pedidos pendientes</Text>
-                      <Text fontSize="sm">Hay {stats.pedidosPendientes} pedidos que requieren atención.</Text>
-                    </Box>
-                  </Alert>
-                )}
-              </VStack>
-            </CardBody>
-          </Card>
-        )}
-      </VStack>
-    </Box>
+      {/* Alertas */}
+      {(!isConnected || (stats?.totalPedidos || 0) > 0) && (
+        <Card>
+          <CardBody>
+            <Heading size="sm" color="gray.900" mb={4}>Alertas del Sistema</Heading>
+            <VStack spacing={3} align="stretch">
+              {!isConnected && (
+                <Alert status="error" borderRadius="lg">
+                  <AlertIcon />
+                  <Box>
+                    <AlertTitle>Bot desconectado</AlertTitle>
+                    <AlertDescription>
+                      El bot de WhatsApp no está conectado. Revisa la conexión.
+                    </AlertDescription>
+                  </Box>
+                </Alert>
+              )}
+              
+              {(stats?.totalPedidos || 0) > 0 && (
+                <Alert status="warning" borderRadius="lg">
+                  <AlertIcon />
+                  <Box>
+                    <AlertTitle>Pedidos pendientes</AlertTitle>
+                    <AlertDescription>
+                      Hay {stats?.totalPedidos} pedidos que requieren atención.
+                    </AlertDescription>
+                  </Box>
+                </Alert>
+              )}
+            </VStack>
+          </CardBody>
+        </Card>
+      )}
+    </VStack>
   );
 };
 
 export default Dashboard;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

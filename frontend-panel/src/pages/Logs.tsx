@@ -1,570 +1,515 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Badge,
-  IconButton,
-  useToast,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Flex,
-  Card,
-  CardBody,
-  Select,
-  useColorModeValue,
-  Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  MenuDivider,
-  Switch,
-  FormControl,
-  FormLabel,
-  Textarea,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-  Code,
-  Accordion,
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
-} from '@chakra-ui/react';
-import {
-  FaSearch,
-  FaDownload,
-  FaTrash,
-  FaEye,
-  FaEllipsisV,
-  FaSync,
-  FaFilter,
-  FaExclamationTriangle,
-  FaInfoCircle,
-  FaBug,
-  FaTimes,
-  FaCheck,
-  FaClock,
-  FaServer,
-  FaUser,
-  FaFileAlt,
-} from 'react-icons/fa';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { apiService } from '../services/api';
+  FileText, 
+  Search, 
+  Filter, 
+  RefreshCw, 
+  Download, 
+  Calendar,
+  User,
+  MessageSquare,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Eye,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 
-interface LogEntry {
+interface Log {
   id: number;
-  level: string;
-  message: string;
-  timestamp: string;
-  service?: string;
-  user_id?: number;
-  metadata?: any;
-  stack_trace?: string;
+  usuario: string;
+  comando: string;
+  detalles: string;
+  grupo: string;
+  fecha: string;
+  tipo: string;
 }
 
-const levelColors = {
-  error: 'red',
-  warn: 'orange',
-  info: 'blue',
-  debug: 'gray',
-  trace: 'purple',
-};
+interface LogStats {
+  totalLogs: number;
+  logsToday: number;
+  topCommands: Array<{ comando: string; count: number }>;
+  topUsers: Array<{ usuario: string; count: number }>;
+}
 
-const levelIcons = {
-  error: FaExclamationTriangle,
-  warn: FaExclamationTriangle,
-  info: FaInfoCircle,
-  debug: FaBug,
-  trace: FaServer,
-};
-
-export const Logs: React.FC = () => {
+const Logs: React.FC = () => {
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [stats, setStats] = useState<LogStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [levelFilter, setLevelFilter] = useState('');
-  const [serviceFilter, setServiceFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [userFilter, setUserFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
-  const [refreshInterval, setRefreshInterval] = useState(5000); // 5 segundos
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedLog, setSelectedLog] = useState<Log | null>(null);
+  const [showLogModal, setShowLogModal] = useState(false);
 
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const toast = useToast();
-  const queryClient = useQueryClient();
+  const logsPerPage = 50;
 
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  useEffect(() => {
+    loadLogs();
+    loadStats();
+  }, [currentPage, typeFilter, userFilter, groupFilter]);
 
-  // Queries
-  const { data: logsData, isLoading, error } = useQuery(
-    ['logs', currentPage, searchTerm, levelFilter, serviceFilter],
-    () => apiService.getLogs(currentPage, 50, levelFilter),
-    {
-      refetchInterval: autoRefresh ? refreshInterval : false,
-    }
-  );
+  const loadLogs = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: logsPerPage.toString()
+      });
 
-  // Mutations
-  const clearLogsMutation = useMutation(
-    () => apiService.clearLogs(),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('logs');
-        toast({
-          title: 'Logs limpiados',
-          description: 'Los logs han sido limpiados exitosamente',
-          status: 'success',
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al limpiar logs',
-          status: 'error',
-        });
-      },
-    }
-  );
+      if (typeFilter !== 'all') params.append('tipo', typeFilter);
+      if (userFilter) params.append('usuario', userFilter);
+      if (groupFilter) params.append('grupo', groupFilter);
 
-  const exportLogsMutation = useMutation(
-    () => apiService.exportLogs(),
-    {
-      onSuccess: (data) => {
-        // Crear y descargar archivo
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `logs-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+      const response = await fetch(`/api/logs?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
 
-        toast({
-          title: 'Logs exportados',
-          description: 'Los logs han sido exportados exitosamente',
-          status: 'success',
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al exportar logs',
-          status: 'error',
-        });
-      },
-    }
-  );
-
-  const handleClearLogs = () => {
-    if (window.confirm('¿Estás seguro de que quieres limpiar todos los logs? Esta acción no se puede deshacer.')) {
-      clearLogsMutation.mutate();
-    }
-  };
-
-  const handleExportLogs = () => {
-    exportLogsMutation.mutate();
-  };
-
-  const handleViewLog = (log: LogEntry) => {
-    setSelectedLog(log);
-    onOpen();
-  };
-
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return {
-      date: date.toLocaleDateString(),
-      time: date.toLocaleTimeString(),
-      full: date.toLocaleString(),
-    };
-  };
-
-  const truncateMessage = (message: string, maxLength: number = 100) => {
-    if (message.length <= maxLength) return message;
-    return message.substring(0, maxLength) + '...';
-  };
-
-  const getLogLevelStats = () => {
-    if (!logsData?.logs) return {};
-    
-    const stats = { error: 0, warn: 0, info: 0, debug: 0, trace: 0 };
-    logsData.logs.forEach((log: LogEntry) => {
-      if (stats[log.level as keyof typeof stats] !== undefined) {
-        stats[log.level as keyof typeof stats]++;
+      if (response.ok) {
+        const data = await response.json();
+        setLogs(data.logs || []);
+        setTotalPages(data.pagination?.pages || 1);
+        setError(null);
+      } else {
+        setError('Error al cargar logs');
       }
-    });
-    return stats;
+    } catch (err) {
+      setError('Error de conexión');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const levelStats = getLogLevelStats();
+  const loadStats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/logs/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
 
-  if (error) {
-    return (
-      <Alert status="error">
-        <AlertIcon />
-        Error al cargar logs: {(error as any).message}
-      </Alert>
-    );
-  }
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error('Error loading stats:', err);
+    }
+  };
+
+  const handleSearch = () => {
+    setCurrentPage(1);
+    loadLogs();
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setTypeFilter('all');
+    setUserFilter('');
+    setGroupFilter('');
+    setCurrentPage(1);
+  };
+
+  const viewLog = (log: Log) => {
+    setSelectedLog(log);
+    setShowLogModal(true);
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'comando': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'ai_command': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'clasificar_command': return 'bg-green-100 text-green-800 border-green-200';
+      case 'mensaje': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'error': return 'bg-red-100 text-red-800 border-red-200';
+      case 'sistema': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'comando': return <MessageSquare className="w-4 h-4" />;
+      case 'ai_command': return <MessageSquare className="w-4 h-4" />;
+      case 'clasificar_command': return <MessageSquare className="w-4 h-4" />;
+      case 'mensaje': return <MessageSquare className="w-4 h-4" />;
+      case 'error': return <AlertCircle className="w-4 h-4" />;
+      case 'sistema': return <Clock className="w-4 h-4" />;
+      default: return <FileText className="w-4 h-4" />;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('es-ES');
+  };
+
+  const formatDateShort = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES');
+  };
+
+  const filteredLogs = logs.filter(log => {
+    if (!searchTerm) return true;
+    return log.comando.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           log.detalles.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           log.usuario.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <Flex align="center" justify="space-between">
-          <Box>
-            <Heading size="lg">Logs del Sistema</Heading>
-            <Text color="gray.600" mt={1}>
-              Monitoreo y gestión de logs del sistema
-            </Text>
-          </Box>
-          <HStack spacing={3}>
-            <Button
-              leftIcon={<FaSync />}
-              colorScheme="blue"
-              variant="outline"
-              onClick={() => queryClient.invalidateQueries('logs')}
-              isLoading={isLoading}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <FileText className="w-8 h-8 text-blue-600" />
+                Logs del Sistema
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Monitorea la actividad y eventos del bot
+              </p>
+            </div>
+            <button
+              onClick={loadLogs}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
             >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Actualizar
-            </Button>
-            <Button
-              leftIcon={<FaDownload />}
-              colorScheme="green"
-              variant="outline"
-              onClick={handleExportLogs}
-              isLoading={exportLogsMutation.isLoading}
-            >
-              Exportar
-            </Button>
-            <Button
-              leftIcon={<FaTrash />}
-              colorScheme="red"
-              variant="outline"
-              onClick={handleClearLogs}
-              isLoading={clearLogsMutation.isLoading}
-            >
-              Limpiar
-            </Button>
-          </HStack>
-        </Flex>
+            </button>
+          </div>
+        </div>
 
-        {/* Estadísticas de Niveles */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={8} justify="center">
-              <VStack>
-                <Badge colorScheme="red" size="lg">
-                  {(levelStats as any).error || 0}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">Error</Text>
-              </VStack>
-              <VStack>
-                <Badge colorScheme="orange" size="lg">
-                  {(levelStats as any).warn || 0}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">Warning</Text>
-              </VStack>
-              <VStack>
-                <Badge colorScheme="blue" size="lg">
-                  {(levelStats as any).info || 0}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">Info</Text>
-              </VStack>
-              <VStack>
-                <Badge colorScheme="gray" size="lg">
-                  {(levelStats as any).debug || 0}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">Debug</Text>
-              </VStack>
-              <VStack>
-                <Badge colorScheme="purple" size="lg">
-                  {(levelStats as any).trace || 0}
-                </Badge>
-                <Text fontSize="sm" fontWeight="semibold">Trace</Text>
-              </VStack>
-            </HStack>
-          </CardBody>
-        </Card>
+        {/* Error */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span className="text-red-700">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-500 hover:text-red-700"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Estadísticas */}
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Logs</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalLogs}</p>
+                </div>
+                <FileText className="w-8 h-8 text-blue-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Hoy</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.logsToday}</p>
+                </div>
+                <Calendar className="w-8 h-8 text-green-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Comandos Top</p>
+                  <p className="text-2xl font-bold text-purple-600">{stats.topCommands.length}</p>
+                </div>
+                <MessageSquare className="w-8 h-8 text-purple-500" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Usuarios Activos</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats.topUsers.length}</p>
+                </div>
+                <User className="w-8 h-8 text-orange-500" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filtros */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <HStack spacing={4} wrap="wrap">
-              <InputGroup maxW="300px">
-                <InputLeftElement pointerEvents="none">
-                  <FaSearch color="gray.300" />
-                </InputLeftElement>
-                <Input
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="md:col-span-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
                   placeholder="Buscar en logs..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-              </InputGroup>
-              <Select
-                placeholder="Filtrar por nivel"
-                value={levelFilter}
-                onChange={(e) => setLevelFilter(e.target.value)}
-                maxW="200px"
+              </div>
+            </div>
+            <div>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="error">Error</option>
-                <option value="warn">Warning</option>
-                <option value="info">Info</option>
-                <option value="debug">Debug</option>
-                <option value="trace">Trace</option>
-              </Select>
-              <Select
-                placeholder="Filtrar por servicio"
-                value={serviceFilter}
-                onChange={(e) => setServiceFilter(e.target.value)}
-                maxW="200px"
+                <option value="all">Todos los tipos</option>
+                <option value="comando">Comandos</option>
+                <option value="ai_command">IA</option>
+                <option value="clasificar_command">Clasificar</option>
+                <option value="mensaje">Mensajes</option>
+                <option value="error">Errores</option>
+                <option value="sistema">Sistema</option>
+              </select>
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="Filtrar por usuario..."
+                value={userFilter}
+                onChange={(e) => setUserFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSearch}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                <option value="api">API</option>
-                <option value="bot">Bot</option>
-                <option value="database">Database</option>
-                <option value="auth">Auth</option>
-              </Select>
-              <FormControl display="flex" alignItems="center" maxW="200px">
-                <FormLabel mb="0" fontSize="sm">
-                  Auto-refresh
-                </FormLabel>
-                <Switch
-                  isChecked={autoRefresh}
-                  onChange={(e) => setAutoRefresh(e.target.checked)}
-                  colorScheme="blue"
-                />
-              </FormControl>
-            </HStack>
-          </CardBody>
-        </Card>
+                Buscar
+              </button>
+              <button
+                onClick={handleClearFilters}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Tabla de Logs */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            {isLoading ? (
-              <Box textAlign="center" py={8}>
-                <Spinner size="xl" />
-                <Text mt={4}>Cargando logs...</Text>
-              </Box>
-            ) : (
-              <Box overflowX="auto">
-                <Table variant="simple" size="sm">
-                  <Thead>
-                    <Tr>
-                      <Th>Nivel</Th>
-                      <Th>Mensaje</Th>
-                      <Th>Servicio</Th>
-                      <Th>Timestamp</Th>
-                      <Th>Acciones</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {logsData?.logs?.map((log: LogEntry) => {
-                      const IconComponent = levelIcons[log.level as keyof typeof levelIcons] || FaInfoCircle;
-                      const timestamp = formatTimestamp(log.timestamp);
-                      
-                      return (
-                        <Tr key={log.id}>
-                          <Td>
-                            <HStack>
-                              <Box as={IconComponent} color={`${levelColors[log.level as keyof typeof levelColors]}.500`} />
-                              <Badge
-                                colorScheme={levelColors[log.level as keyof typeof levelColors] || 'gray'}
-                                variant="subtle"
-                              >
-                                {log.level.toUpperCase()}
-                              </Badge>
-                            </HStack>
-                          </Td>
-                          <Td>
-                            <VStack align="start" spacing={1}>
-                              <Text fontSize="sm" fontWeight="medium">
-                                {truncateMessage(log.message)}
-                              </Text>
-                              {log.metadata && (
-                                <Text fontSize="xs" color="gray.500">
-                                  {JSON.stringify(log.metadata).substring(0, 50)}...
-                                </Text>
-                              )}
-                            </VStack>
-                          </Td>
-                          <Td>
-                            <Text fontSize="sm" color="gray.600">
-                              {log.service || 'N/A'}
-                            </Text>
-                          </Td>
-                          <Td>
-                            <VStack align="start" spacing={0}>
-                              <Text fontSize="sm">{timestamp.date}</Text>
-                              <Text fontSize="xs" color="gray.500">{timestamp.time}</Text>
-                            </VStack>
-                          </Td>
-                          <Td>
-                            <HStack spacing={2}>
-                              <Tooltip label="Ver detalles">
-                                <IconButton
-                                  aria-label="Ver detalles"
-                                  icon={<FaEye />}
-                                  size="sm"
-                                  variant="ghost"
-                                  colorScheme="blue"
-                                  onClick={() => handleViewLog(log)}
-                                />
-                              </Tooltip>
-                              <Menu>
-                                <MenuButton
-                                  as={IconButton}
-                                  aria-label="Más opciones"
-                                  icon={<FaEllipsisV />}
-                                  size="sm"
-                                  variant="ghost"
-                                />
-                                <MenuList>
-                                  <MenuItem icon={<FaFileAlt />}>
-                                    Copiar mensaje
-                                  </MenuItem>
-                                  <MenuItem icon={<FaUser />}>
-                                    Ver usuario
-                                  </MenuItem>
-                                  <MenuDivider />
-                                  <MenuItem icon={<FaTrash />} color="red.500">
-                                    Eliminar log
-                                  </MenuItem>
-                                </MenuList>
-                              </Menu>
-                            </HStack>
-                          </Td>
-                        </Tr>
-                      );
-                    })}
-                  </Tbody>
-                </Table>
-              </Box>
-            )}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Registro de Actividad</h2>
+            <p className="text-gray-600 mt-1">
+              Página {currentPage} de {totalPages} - {filteredLogs.length} logs mostrados
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center">
+              <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
+              <p className="text-gray-600">Cargando logs...</p>
+            </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="p-8 text-center">
+              <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay logs</h3>
+              <p className="text-gray-600">No se encontraron logs con los filtros aplicados</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Fecha
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Tipo
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Usuario
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Comando
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Detalles
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Grupo
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            {formatDateShort(log.fecha)}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {new Date(log.fecha).toLocaleTimeString('es-ES')}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getTypeColor(log.tipo)}`}>
+                            {getTypeIcon(log.tipo)}
+                            {log.tipo}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-gray-400" />
+                            {log.usuario}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                          {log.comando}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                          {log.detalles}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {log.grupo || '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => viewLog(log)}
+                            className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                            title="Ver detalles"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
             {/* Paginación */}
-            {logsData?.pagination && (
-              <Flex justify="center" mt={6}>
-                <HStack spacing={2}>
-                  <Button
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    isDisabled={currentPage === 1}
-                  >
+              {totalPages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Mostrando página {currentPage} de {totalPages}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
                     Anterior
-                  </Button>
-                  <Text>
-                    Página {currentPage} de {logsData.pagination.totalPages}
-                  </Text>
-                  <Button
-                    size="sm"
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    isDisabled={currentPage === logsData.pagination.totalPages}
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Siguiente
-                  </Button>
-                </HStack>
-              </Flex>
-            )}
-          </CardBody>
-        </Card>
-      </VStack>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
       {/* Modal de Detalles del Log */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>
-            <HStack>
-              <Box 
-                as={levelIcons[selectedLog?.level as keyof typeof levelIcons] || FaInfoCircle} 
-                color={`${levelColors[selectedLog?.level as keyof typeof levelColors]}.500`} 
-              />
-              <Text>Detalles del Log</Text>
-            </HStack>
-          </ModalHeader>
-          <ModalBody>
-            {selectedLog && (
-              <VStack spacing={4} align="stretch">
-                <Box>
-                  <Text fontWeight="semibold" mb={2}>Información General</Text>
-                  <HStack justify="space-between">
-                    <Text fontSize="sm">ID: {selectedLog.id}</Text>
-                    <Badge colorScheme={levelColors[selectedLog.level as keyof typeof levelColors]}>
-                      {selectedLog.level.toUpperCase()}
-                    </Badge>
-                  </HStack>
-                  <Text fontSize="sm">Servicio: {selectedLog.service || 'N/A'}</Text>
-                  <Text fontSize="sm">Timestamp: {formatTimestamp(selectedLog.timestamp).full}</Text>
-                </Box>
-
-                <Box>
-                  <Text fontWeight="semibold" mb={2}>Mensaje</Text>
-                  <Code p={3} borderRadius="md" display="block" whiteSpace="pre-wrap">
-                    {selectedLog.message}
-                  </Code>
-                </Box>
-
-                {selectedLog.metadata && (
-                  <Box>
-                    <Text fontWeight="semibold" mb={2}>Metadatos</Text>
-                    <Code p={3} borderRadius="md" display="block">
-                      {JSON.stringify(selectedLog.metadata, null, 2)}
-                    </Code>
-                  </Box>
-                )}
-
-                {selectedLog.stack_trace && (
-                  <Accordion allowToggle>
-                    <AccordionItem>
-                      <AccordionButton>
-                        <Box flex="1" textAlign="left">
-                          <Text fontWeight="semibold">Stack Trace</Text>
-                        </Box>
-                        <AccordionIcon />
-                      </AccordionButton>
-                      <AccordionPanel>
-                        <Code p={3} borderRadius="md" display="block" whiteSpace="pre-wrap" fontSize="xs">
-                          {selectedLog.stack_trace}
-                        </Code>
-                      </AccordionPanel>
-                    </AccordionItem>
-                  </Accordion>
-                )}
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button onClick={onClose}>Cerrar</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </Box>
+        {showLogModal && selectedLog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Detalles del Log
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ID
+                  </label>
+                  <p className="text-sm text-gray-900 font-mono">{selectedLog.id}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha
+                  </label>
+                  <p className="text-sm text-gray-900">{formatDate(selectedLog.fecha)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo
+                  </label>
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getTypeColor(selectedLog.tipo)}`}>
+                    {getTypeIcon(selectedLog.tipo)}
+                    {selectedLog.tipo}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Usuario
+                  </label>
+                  <p className="text-sm text-gray-900">{selectedLog.usuario}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Comando
+                  </label>
+                  <p className="text-sm text-gray-900 font-mono bg-gray-100 p-2 rounded">{selectedLog.comando}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Detalles
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-100 p-2 rounded whitespace-pre-wrap">{selectedLog.detalles}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Grupo
+                  </label>
+                  <p className="text-sm text-gray-900">{selectedLog.grupo || 'No especificado'}</p>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowLogModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
 export default Logs;
+
+
+
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-import * as baileys from '@whiskeysockets/baileys';
+import * as baileys from 'AdonixBaileys';
 const { makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion } = baileys;
 import { Boom } from '@hapi/boom';
 import fs from 'fs';
@@ -16,8 +16,6 @@ import {
   handleSeries,
   handleAddAporte,
   handleAddSerie,
-  handlePedido,
-  handlePedidos,
   handleExtra,
   handleIlustraciones,
   handleAddGroup,
@@ -48,6 +46,7 @@ import {
   wasUserNotifiedAboutMaintenance,
   markUserAsNotifiedAboutMaintenance,
   clearMaintenanceNotifications,
+  clearGroupOffNotices,
   handleUpdate,
   handleCode,
   handleWhoami,
@@ -63,11 +62,13 @@ import {
   handleLogs as handleLogsCommand,
   handleConfig,
   handleAportar,
+  handlePedido,
+  handlePedidos,
   handleRegistrarUsuario,
   handleResetPassword,
   handleMiInfo,
   handleCleanSession
-} from './commands.js';
+} from './handler.js';
 
 // Consolidated: import handlers from commands-complete
 import {
@@ -100,9 +101,8 @@ import {
   handleBuscarArchivo
 } from './commands-complete.js';
 
-import {
-  processProviderMessage
-} from './auto-provider-handler.js';
+import { processProviderMessage } from './auto-provider-handler.js';
+import { onSubbotEvent } from './inproc-subbots.js';
 
 // nose xd
 
@@ -110,6 +110,7 @@ let sock;
 let qrCode = null;
 let qrCodeImage = null;
 let pairingCode = null;
+let pairingPhoneNumber = null;
 let connectionStatus = 'disconnected';
 let lastConnection = null;
 let connectionStartTime = null;
@@ -119,12 +120,149 @@ let maxConnectionAttempts = 10;
 let healthCheckInterval = null;
 let authMethod = 'qr'; // 'qr' o 'pairing'
 
-// Protección contra spam - evitar respuestas múltiples
-const processedMessages = new Map();
-const SPAM_PROTECTION_TIME = 5000; // 5 segundos
+// Función para obtener el estado del bot
+export function getBotStatus() {
+  return {
+    status: connectionStatus,
+    isConnected: connectionStatus === 'connected',
+    qrCode: qrCode,
+    qrCodeImage: qrCodeImage,
+    pairingCode: pairingCode,
+    pairingPhoneNumber: pairingPhoneNumber,
+    authMethod: authMethod,
+    lastConnection: lastConnection,
+    connectionStartTime: connectionStartTime,
+    lastActivity: lastActivity,
+    connectionAttempts: connectionAttempts,
+    maxConnectionAttempts: maxConnectionAttempts
+  };
+}
 
-// Lista de números admin (se actualiza automáticamente)
-let adminNumbers = new Set();
+function sanitizePhoneNumberInput(value) {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  return digits;
+}
+
+function ensureWhatsAppJid(identifier) {
+  if (!identifier) return null;
+  return String(identifier).includes('@') ? String(identifier) : `${identifier}@s.whatsapp.net`;
+}
+
+function parseSubbotMetadata(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw;
+  try { return JSON.parse(raw); } catch (_) { return {}; }
+}
+
+function getRequesterMention(metadata, subbot) {
+  const requester = ensureWhatsAppJid(metadata?.requesterJid || subbot?.request_participant || subbot?.request_jid);
+  if (!requester) return { text: 'Tú', jid: null };
+  const text = `@${String(requester).split('@')[0]}`;
+  return { text, jid: requester };
+}
+
+// Enviar QR y códigos de sub‑bots por privado (y avisar en el grupo si aplica)
+onSubbotEvent('qr_ready', async ({ subbot, data }) => {
+  try {
+    if (!data?.qrImage) return;
+    if (!sock) return;
+    const requesterChat = subbot?.request_jid || ensureWhatsAppJid(subbot?.request_participant);
+    if (!requesterChat) return;
+    const caption = [
+      '📱 *QR listo para tu sub-bot*',
+      '',
+      `• Sub-bot: ${subbot.code}`,
+      '',
+      '1. Abre WhatsApp en tu teléfono',
+      '2. Ve a *Configuración → Dispositivos vinculados*',
+      '3. Toca *Vincular dispositivo*',
+      '4. Escanea este código'
+    ].join('\n');
+    const buffer = Buffer.from(data.qrImage, 'base64');
+    await sock.sendMessage(requesterChat, { image: buffer, caption });
+    const meta = parseSubbotMetadata(subbot?.metadata);
+    if (meta?.requestedFromGroup && meta.originChat) {
+      const { text, jid } = getRequesterMention(meta, subbot);
+      const notify = `📱 ${text}, tu sub-bot ${subbot.code} ya tiene el QR. Revisa tu privado.`;
+      await sock.sendMessage(meta.originChat, { text: notify, mentions: jid ? [jid] : undefined });
+      if (meta.originMessageId) {
+        try {
+          await sock.sendMessage(meta.originChat, { react: { text: '✅', key: { id: meta.originMessageId, remoteJid: meta.originChat, fromMe: false } } });
+          // Intento de borrar el mensaje del solicitante (si el bot es admin y la plataforma lo permite)
+          if (jid) {
+            try {
+              await sock.sendMessage(meta.originChat, { delete: { id: meta.originMessageId, remoteJid: meta.originChat, fromMe: false, participant: jid } });
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.error('Error enviando QR de subbot:', e);
+  }
+});
+
+onSubbotEvent('pairing_code', async ({ subbot, data }) => {
+  try {
+    if (!data?.code) return;
+    if (!sock) return;
+    const requesterChat = subbot?.request_jid || ensureWhatsAppJid(subbot?.request_participant);
+    if (!requesterChat) return;
+    const number = subbot?.target_number || data.targetNumber || '';
+    const display = data.displayCode || 'KONMI-BOT';
+    const raw = data.code || display.replace(/[^0-9A-Z]/g, '');
+    const lines = [
+      '🔐 *Vinculación por Código Manual (8 dígitos)*',
+      '',
+      `• Sub-bot: ${subbot.code}`,
+      number ? `• Número: +${number}` : null,
+      `• Código: *${display}*`,
+      raw && display !== raw ? `• Código sin formato: *${raw}*` : null,
+      '',
+      '🧭 *Pasos:*',
+      '1. WhatsApp → Más opciones → Dispositivos vinculados',
+      '2. Vincular un dispositivo',
+      '3. Seleccionar *Con número* e ingresar el código'
+    ].filter(Boolean).join('\n');
+    await sock.sendMessage(requesterChat, { text: lines });
+    const meta = parseSubbotMetadata(subbot?.metadata);
+    if (meta?.requestedFromGroup && meta.originChat) {
+      const { text: mention, jid } = getRequesterMention(meta, subbot);
+      const notify = `🔐 ${mention}, tu sub-bot ${subbot.code} ya tiene el código (*${display}*). Revisa tu privado.`;
+      await sock.sendMessage(meta.originChat, { text: notify, mentions: jid ? [jid] : undefined });
+      if (meta.originMessageId) {
+        try {
+          await sock.sendMessage(meta.originChat, { react: { text: '✅', key: { id: meta.originMessageId, remoteJid: meta.originChat, fromMe: false } } });
+          if (jid) {
+            try {
+              await sock.sendMessage(meta.originChat, { delete: { id: meta.originMessageId, remoteJid: meta.originChat, fromMe: false, participant: jid } });
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.error('Error enviando pairing de subbot:', e);
+  }
+});
+
+// Sistema para rastrear usuarios esperando media para comandos como /aportar
+// Estructura: { usuario: { command: string, tipo: string, timeout: number } }
+const waitingForMedia = new Map();
+const MEDIA_WAIT_TIMEOUT = 120000; // 2 minutos para esperar media
+
+// Función para limpiar timeouts de espera de media
+setInterval(() => {
+  const now = Date.now();
+  for (const [user, data] of waitingForMedia.entries()) {
+    if (now > data.timeout) {
+      waitingForMedia.delete(user);
+      console.log(`⏰ Timeout de espera de media para usuario ${user}`);
+    }
+  }
+}, 30000); // Verificar cada 30 segundos
 
 // Helper para normalizar usuario a solo número
 function normalizeUserNumber(usuarioJid) {
@@ -275,7 +413,10 @@ async function handleMessage(message) {
 
   const remoteJid = message.key.remoteJid;
   const isGroup = remoteJid.endsWith('@g.us');
-  const sender = message.key.participant || remoteJid;
+  let sender = message.key.participant || remoteJid;
+  if (message.key.fromMe && sock?.user?.id) {
+    sender = sock.user.id;
+  }
   const usuario = sender.split('@')[0];
   const grupo = isGroup ? remoteJid : null;
 
@@ -367,48 +508,10 @@ async function handleMessage(message) {
       result = await handleHelp(usuario, grupo, isGroup);
       break;
 
-    // Comando principal para elegir método de autenticación
+    // Desactivar /connect: indicar rutas soportadas
     case '/connect':
-      if (args.length === 0) {
-        await sock.sendMessage(remoteJid, {
-          text: '🔗 *Métodos de conexión disponibles:*\n\n' +
-                '1️⃣ *Escanear código QR*\n' +
-                '   Usa `/connect qr` para generar código QR\n\n' +
-                '2️⃣ *Código de 8 dígitos*\n' +
-                '   Usa `/connect code <número>` para ingresar código\n\n' +
-                'Ejemplo: `/connect code 595971284430`'
-        });
-        return;
-      }
-
-      if (args[0] === 'qr') {
-        // Generar QR para escanear
-        setAuthMethod('qr');
-        // Forzar reconexión para generar nuevo QR
-        if (sock) {
-          sock.end();
-        }
-        result = { message: '🔄 Generando código QR para escanear...' };
-      } else if (args[0] === 'code' && args[1]) {
-        // Usar código de emparejamiento
-        const phoneNumber = args[1];
-        setAuthMethod('pairing');
-        try {
-          pairingCode = await sock.requestPairingCode(phoneNumber);
-          result = {
-            message: `🔢 *Código de emparejamiento generado:*\n\n` +
-                    `📱 Número: ${phoneNumber}\n` +
-                    `🔑 Código: *${pairingCode}*\n\n` +
-                    `Ingresa este código de 8 dígitos en WhatsApp para conectar.`
-          };
-        } catch (error) {
-          result = { message: '❌ Error generando código de emparejamiento. Verifica el número.' };
-        }
-      } else {
-        await sock.sendMessage(remoteJid, { text: 'Uso: /connect qr o /connect code <número>' });
-        return;
-      }
-      break;
+      await sock.sendMessage(remoteJid, { text: 'ℹ️ Comando deshabilitado. Usa `/serbot` (QR) o `/code <número>` para sub-bots; el bot principal se conecta desde el panel.' });
+      return;
 
     case '/ia':
       if (args.length === 0) {
@@ -458,10 +561,39 @@ async function handleMessage(message) {
         await sock.sendMessage(remoteJid, { text: 'Uso: /aportar <tipo> <contenido>\n\nEjemplos:\n/aportar manhwa Jinx cap 45\n/aportar ilustracion Fanart de Jinx' });
         return;
       }
-      {
+
+      // Verificar si hay media en el mensaje actual
+      const hasMedia = message.message.imageMessage ||
+                       message.message.videoMessage ||
+                       message.message.documentMessage ||
+                       message.message.audioMessage;
+
+      if (hasMedia) {
+        // Si hay media, procesar directamente
         const tipoAporte = args[0];
         const contenidoAporte = args.slice(1).join(' ');
         result = await handleAportar(contenidoAporte, tipoAporte, usuario, grupo, fecha);
+      } else {
+        // Si no hay media, marcar al usuario como esperando media
+        const tipoAporte = args[0];
+        const contenidoAporte = args.slice(1).join(' ');
+
+        // Limpiar cualquier espera anterior del usuario
+        waitingForMedia.delete(usuario);
+
+        // Marcar al usuario como esperando media
+        waitingForMedia.set(usuario, {
+          command: 'aportar',
+          tipo: tipoAporte,
+          contenido: contenidoAporte,
+          grupo: grupo,
+          timeout: Date.now() + MEDIA_WAIT_TIMEOUT
+        });
+
+        await sock.sendMessage(remoteJid, {
+          text: `✅ Comando registrado: /aportar ${tipoAporte} ${contenidoAporte}\n\n📎 Ahora envía la imagen, video o documento que quieres aportar.\n\n⏰ Tienes 2 minutos para enviar el archivo.`
+        });
+        return;
       }
       break;
 
@@ -541,7 +673,12 @@ async function handleMessage(message) {
       break;
 
     case '/code':
-      result = await handleCode(usuario);
+      if (!args.length) args = ['auto'];
+      result = await handleCode(usuario, grupo, remoteJid, args, sender, message.key?.id || null);
+      if (args.length === 1 && args[0] === 'auto') {
+        // Mensaje de ayuda corto cuando no se pasan argumentos
+        await sock.sendMessage(remoteJid, { text: '🧩 Usando tu número automáticamente. También puedes usar `/code auto` o `/code <número> [ALIAS8]`.' });
+      }
       break;
 
     // Eliminado: '/qr' sin argumentos (obsoleto). Usar '/qr <subbot_id>' más abajo.
@@ -807,7 +944,7 @@ async function handleMessage(message) {
 
     // Comandos de Sub-bots
     case '/serbot':
-      result = await handleSerbot(usuario, grupo, fecha);
+      result = await handleSerbot(usuario, grupo, fecha, remoteJid, sender, message.key?.id || null);
       break;
 
     case '/bots':
@@ -1048,22 +1185,23 @@ async function connectToWhatsApp(authPath) {
       }
     });
 
-    // Si se solicita pairing code, generarlo
+    // Si se solicita pairing code, generarlo (silencioso en logs)
     if (authMethod === 'pairing') {
       try {
-        console.log('🔢 Solicitando código de emparejamiento...');
-        pairingCode = await sock.requestPairingCode('595971284430');
-        console.log(`\n🔢 Código de emparejamiento generado: ${pairingCode}`);
-        console.log('┌─────────────────────────────────────────────────────────┐');
-        console.log('│     Ingresa este código en tu WhatsApp para conectar   │');
-        console.log('└─────────────────────────────────────────────────────────┘');
-        console.log(`\n📱 Código: ${pairingCode}\n`);
-        console.log('⏳ Esperando ingreso del código...\n');
-        connectionStatus = 'waiting_for_pairing';
-        qrCode = null;
-        qrCodeImage = null;
+        const target = pairingPhoneNumber || process.env.AUTH_PREFERRED_PHONE || '';
+        const normalized = sanitizePhoneNumberInput(target);
+        if (!normalized) {
+          connectionStatus = 'waiting_for_number';
+        } else {
+          if (sock?.authState?.creds) sock.authState.creds.usePairingCode = true;
+          pairingCode = await sock.requestPairingCode(normalized);
+          // No imprimir el código en logs por seguridad
+          connectionStatus = 'waiting_for_pairing';
+          qrCode = null;
+          qrCodeImage = null;
+        }
       } catch (error) {
-        console.error('❌ Error generando código de emparejamiento:', error);
+        console.error('❌ Error generando código de emparejamiento:', error?.message || error);
         connectionStatus = 'error';
       }
     }
@@ -1090,20 +1228,12 @@ async function connectToWhatsApp(authPath) {
           width: 300 // Tamaño más grande para mejor escaneo
         });
         
-        // Mostrar QR en terminal
-        console.log('\n📱 QR Code para conectar WhatsApp:');
-        console.log('┌─────────────────────────────────────────────────────────┐');
-        console.log('│  Escanea este código QR con tu WhatsApp para conectar  │');
-        console.log('└─────────────────────────────────────────────────────────┘');
-        
-        // Generar QR para terminal (ASCII)
+        // Mostrar QR en terminal (ASCII)
         const qrTerminal = await QRCode.toString(qr, { 
           type: 'terminal',
           small: true 
         });
         console.log(qrTerminal);
-        
-        console.log('📱 QR Code también disponible en el panel web: http://localhost');
         console.log('⏳ Esperando escaneo...\n');
       } catch (error) {
         console.error('❌ Error generando imagen QR:', error);
@@ -1224,10 +1354,11 @@ async function connectToWhatsApp(authPath) {
       lastActivity = Date.now();
       
       const message = m.messages[0];
-      if (!message.key.fromMe && message.message) {
+      if (message?.message) {
         try {
           const remoteJid = message.key.remoteJid;
           const isGroup = remoteJid.endsWith('@g.us');
+          const isFromMe = !!message.key.fromMe;
           // Capturar y guardar nombre de WhatsApp del remitente
           try {
             const senderJid = (message.key.participant || message.key.remoteJid || '').toString();
@@ -1271,7 +1402,7 @@ async function connectToWhatsApp(authPath) {
             
             // Es un comando, procesar solo una vez
             await handleMessage(message);
-          } else if (isGroup) {
+          } else if (isGroup && !isFromMe) {
             // No es comando, pero está en grupo - procesar como proveedor automático
             try {
               const providerResult = await processProviderMessage(message, remoteJid, 'Grupo');
@@ -1282,6 +1413,48 @@ async function connectToWhatsApp(authPath) {
               // Error silencioso para no interrumpir el flujo normal
               if (providerError.message !== 'No es grupo proveedor') {
                 console.error('⚠️ Error procesando proveedor automático:', providerError.message);
+              }
+            }
+          } else if (!isFromMe) {
+            // Verificar si el usuario está esperando media para completar un comando
+            const usuario = (message.key.participant || message.key.remoteJid || '').split('@')[0];
+            const waitingData = waitingForMedia.get(usuario);
+
+            if (waitingData && waitingData.command === 'aportar') {
+              // Usuario está esperando media para completar /aportar
+              try {
+                const hasMedia = message.message.imageMessage ||
+                                 message.message.videoMessage ||
+                                 message.message.documentMessage ||
+                                 message.message.audioMessage;
+
+                if (hasMedia) {
+                  // Procesar como aporte con la media recibida
+                  const result = await handleAportar(waitingData.contenido, waitingData.tipo, usuario, waitingData.grupo, new Date().toISOString());
+
+                  if (result && result.success) {
+                    await sock.sendMessage(remoteJid, {
+                      text: `✅ ¡Aporte completado exitosamente!\n\n📝 ${result.message}`
+                    });
+                  } else {
+                    await sock.sendMessage(remoteJid, {
+                      text: `❌ Error al procesar el aporte: ${result?.message || 'Error desconocido'}`
+                    });
+                  }
+
+                  // Limpiar la espera
+                  waitingForMedia.delete(usuario);
+                } else {
+                  await sock.sendMessage(remoteJid, {
+                    text: '📎 Por favor, envía una imagen, video o documento para completar tu aporte.\n\n⏰ Tienes 2 minutos para enviar el archivo.'
+                  });
+                }
+              } catch (error) {
+                console.error('Error procesando media para aporte:', error);
+                await sock.sendMessage(remoteJid, {
+                  text: '❌ Error al procesar el archivo. Intenta nuevamente.'
+                });
+                waitingForMedia.delete(usuario);
               }
             }
           }
@@ -1321,9 +1494,35 @@ function getPairingCode() {
   return pairingCode;
 }
 
-function setAuthMethod(method) {
+function getPairingNumber() {
+  return pairingPhoneNumber;
+}
+
+function setAuthMethod(method, options = {}) {
+  if (!['qr', 'pairing'].includes(method)) {
+    const error = new Error('Método de autenticación inválido. Usa "qr" o "pairing".');
+    error.code = 'INVALID_AUTH_METHOD';
+    throw error;
+  }
+  if (method === 'pairing') {
+    const normalized = sanitizePhoneNumberInput(options.phoneNumber || pairingPhoneNumber);
+    if (!normalized) {
+      const error = new Error('Número de teléfono inválido. Usa solo dígitos con código de país, ejemplo: 595974154768.');
+      error.code = 'INVALID_PAIRING_NUMBER';
+      throw error;
+    }
+    pairingPhoneNumber = normalized;
+    pairingCode = null;
+  } else {
+    pairingPhoneNumber = null;
+    pairingCode = null;
+  }
   authMethod = method;
   console.log(`🔧 Método de autenticación establecido: ${method}`);
+  if (authMethod === 'pairing') {
+    console.log(`📲 Número configurado para pairing: +${pairingPhoneNumber}`);
+  }
+  return pairingPhoneNumber;
 }
 
 function getConnectionStatus() {
@@ -1404,4 +1603,28 @@ async function getAvailableGroups() {
   }
 }
 
-export { connectToWhatsApp, getQRCode, getQRCodeImage, getPairingCode, setAuthMethod, getConnectionStatus, getSocket, getAvailableGroups };
+// Borrar sesión de WhatsApp (archivos de autenticación) y resetear estado
+async function clearWhatsAppSession() {
+  try {
+    if (sock) {
+      try { await sock.logout(); } catch (_) {}
+      try { sock.end(); } catch (_) {}
+    }
+  } catch (_) {}
+  try {
+    const authPath = path.join(process.cwd(), 'backend', 'full', 'storage', 'baileys_full');
+    if (fs.existsSync(authPath)) {
+      fs.rmSync(authPath, { recursive: true, force: true });
+      console.log('🧹 Sesión de WhatsApp eliminada:', authPath);
+    }
+  } catch (e) {
+    console.error('❌ Error eliminando sesión:', e?.message || e);
+  }
+  qrCode = null;
+  qrCodeImage = null;
+  pairingCode = null;
+  pairingPhoneNumber = null;
+  connectionStatus = 'disconnected';
+}
+
+export { connectToWhatsApp, getQRCode, getQRCodeImage, getPairingCode, getPairingNumber, setAuthMethod, getConnectionStatus, getSocket, getAvailableGroups, clearWhatsAppSession };

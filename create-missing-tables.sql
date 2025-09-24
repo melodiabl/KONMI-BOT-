@@ -121,6 +121,36 @@ CREATE TABLE IF NOT EXISTS subbot_qrs (
     qr_data TEXT
 );
 
+-- Tabla principal de subbots
+CREATE TABLE IF NOT EXISTS subbots (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(100) UNIQUE NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'qr',
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    created_by VARCHAR(30),
+    request_jid VARCHAR(150),
+    request_participant VARCHAR(150),
+    target_number VARCHAR(30),
+    qr_data TEXT,
+    pairing_code VARCHAR(12),
+    api_token VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_heartbeat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB
+);
+
+-- Tabla de logs del bot
+CREATE TABLE IF NOT EXISTS logs (
+    id SERIAL PRIMARY KEY,
+    tipo VARCHAR(50) NOT NULL,
+    comando VARCHAR(100) NOT NULL,
+    usuario VARCHAR(100) NOT NULL,
+    grupo VARCHAR(150),
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    detalles TEXT
+);
+
 -- Insertar configuración inicial
 INSERT INTO configuracion (clave, valor, descripcion) VALUES 
 ('bot_name', 'KONMI BOT', 'Nombre del bot'),
@@ -129,7 +159,6 @@ INSERT INTO configuracion (clave, valor, descripcion) VALUES
 ('modo_amigos', 'false', 'Modo amigos del bot'),
 ('advertencias_activas', 'true', 'Sistema de advertencias activo')
 ON CONFLICT (clave) DO NOTHING;
-
 
 
 

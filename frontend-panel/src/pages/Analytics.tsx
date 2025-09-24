@@ -1,64 +1,25 @@
 import React, { useState } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  Select,
-  useToast,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Flex,
-  SimpleGrid,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  StatArrow,
-  Progress,
-  Badge,
-  Icon,
-  useColorModeValue,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Divider,
-  Grid,
-  GridItem,
-} from '@chakra-ui/react';
-import {
-  FaChartLine,
-  FaUsers,
-  FaWhatsapp,
-  FaFileAlt,
-  FaClock,
-  FaDownload,
-  FaCalendar,
-  FaArrowUp,
-  FaArrowDown,
-  FaExclamationTriangle,
-  FaCheckCircle,
-  FaEye,
-  FaServer,
-  FaDatabase,
-  FaNetworkWired,
-  FaMobile,
-  FaDesktop,
-} from 'react-icons/fa';
+  BarChart3,
+  Users,
+  MessageSquare,
+  FileText,
+  Clock,
+  Download,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Eye,
+  EyeOff,
+  Calendar,
+  Server,
+  Database,
+  Network,
+  Smartphone,
+  Desktop,
+  Loader2,
+  RefreshCw
+} from 'lucide-react';
 import { useQuery } from 'react-query';
 import { apiService, getUsuarioStats, getGroupStats, getAporteStats, getPedidoStats, getStats } from '../services/api';
 
@@ -109,10 +70,7 @@ interface AnalyticsData {
 export const Analytics: React.FC = () => {
   const [timeRange, setTimeRange] = useState('7d');
   const [activeTab, setActiveTab] = useState(0);
-
-  const toast = useToast();
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Queries
   const { data: analyticsData, isLoading, error } = useQuery(
@@ -124,18 +82,24 @@ export const Analytics: React.FC = () => {
   const { data: groupStats } = useQuery('groupStats', getGroupStats);
   const { data: aporteStats } = useQuery('aporteStats', getAporteStats);
   const { data: pedidoStats } = useQuery('pedidoStats', getPedidoStats);
+  const { data: generalStats } = useQuery('dashboardStats', getStats);
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    // Simulate refresh
+    setTimeout(() => setIsRefreshing(false), 1000);
+  };
 
   const getGrowthColor = (growth: number) => {
-    if (growth > 0) return 'green';
-    if (growth < 0) return 'red';
-    return 'gray';
+    if (growth > 0) return 'text-green-500';
+    if (growth < 0) return 'text-red-500';
+    return 'text-gray-500';
   };
 
   const getGrowthIcon = (growth: number) => {
-    if (growth > 0) return FaArrowUp;
-    if (growth < 0) return FaArrowDown;
-    return FaClock;
+    if (growth > 0) return TrendingUp;
+    if (growth < 0) return TrendingDown;
+    return Activity;
   };
 
   const formatNumber = (num: number) => {
@@ -148,538 +112,576 @@ export const Analytics: React.FC = () => {
     return `${num.toFixed(1)}%`;
   };
 
+  const tabs = [
+    { id: 0, name: 'Resumen', icon: BarChart3 },
+    { id: 1, name: 'Usuarios', icon: Users },
+    { id: 2, name: 'Contenido', icon: FileText },
+    { id: 3, name: 'Rendimiento', icon: Server },
+  ];
+
   if (error) {
     return (
-      <Alert status="error">
-        <AlertIcon />
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="flex items-center">
+          <Activity className="w-5 h-5 text-red-500 mr-2" />
+          <span className="text-red-700">
         Error al cargar analíticas: {(error as any).message}
-      </Alert>
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+          <h2 className="text-xl font-semibold">Cargando analíticas...</h2>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
+    <div className="space-y-6">
         {/* Header */}
-        <Flex align="center" justify="space-between">
-          <Box>
-            <Heading size="lg">Analíticas del Sistema</Heading>
-            <Text color="gray.600" mt={1}>
-              Métricas y estadísticas detalladas del sistema
-            </Text>
-          </Box>
-          <HStack spacing={3}>
-            <Select
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Analíticas del Sistema</h1>
+          <p className="text-gray-600 mt-1">Métricas y estadísticas detalladas del sistema</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              maxW="200px"
+            className="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="1d">Último día</option>
               <option value="7d">Últimos 7 días</option>
               <option value="30d">Últimos 30 días</option>
               <option value="90d">Últimos 90 días</option>
-            </Select>
-            <Button
-              leftIcon={<FaDownload />}
-              colorScheme="blue"
-              variant="outline"
-            >
+          </select>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Actualizar
+          </button>
+          <button className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100">
+            <Download className="w-4 h-4 mr-2" />
               Exportar
-            </Button>
-          </HStack>
-        </Flex>
+          </button>
+        </div>
+      </div>
 
         {/* Métricas Principales */}
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6}>
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaUsers} color="blue.500" />
-                    <Text>Usuarios Totales</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{formatNumber(userStats?.totalUsuarios || 0)}</StatNumber>
-                <StatHelpText>
-                  <StatArrow type="increase" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Users className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Usuarios Totales</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(userStats?.totalUsuarios || 0)}</p>
+              <p className="text-xs text-green-600 flex items-center">
+                <TrendingUp className="w-3 h-3 mr-1" />
                   {analyticsData?.trends?.usersGrowth || 0}% vs período anterior
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+              </p>
+            </div>
+          </div>
+        </div>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaWhatsapp} color="green.500" />
-                    <Text>Grupos Activos</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{formatNumber(groupStats?.totalGrupos || 0)}</StatNumber>
-                <StatHelpText>
-                  <StatArrow type="increase" />
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <MessageSquare className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Grupos Activos</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(groupStats?.totalGrupos || 0)}</p>
+              <p className="text-xs text-green-600 flex items-center">
+                <TrendingUp className="w-3 h-3 mr-1" />
                   {analyticsData?.trends?.groupsGrowth || 0}% vs período anterior
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+              </p>
+            </div>
+          </div>
+        </div>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaFileAlt} color="purple.500" />
-                    <Text>Aportes</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{formatNumber(aporteStats?.totalAportes || 0)}</StatNumber>
-                <StatHelpText>
-                  <StatArrow type="increase" />
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <FileText className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Aportes</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(aporteStats?.totalAportes || 0)}</p>
+              <p className="text-xs text-green-600 flex items-center">
+                <TrendingUp className="w-3 h-3 mr-1" />
                   {analyticsData?.trends?.aportesGrowth || 0}% vs período anterior
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
+              </p>
+            </div>
+          </div>
+        </div>
 
-          <Card bg={cardBg} border="1px" borderColor={borderColor}>
-            <CardBody>
-              <Stat>
-                <StatLabel>
-                  <HStack>
-                    <Icon as={FaClock} color="orange.500" />
-                    <Text>Pedidos</Text>
-                  </HStack>
-                </StatLabel>
-                <StatNumber>{formatNumber(pedidoStats?.totalPedidos || 0)}</StatNumber>
-                <StatHelpText>
-                  <StatArrow type="increase" />
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <Clock className="w-6 h-6 text-orange-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Pedidos</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(pedidoStats?.totalPedidos || 0)}</p>
+              <p className="text-xs text-green-600 flex items-center">
+                <TrendingUp className="w-3 h-3 mr-1" />
                   {analyticsData?.trends?.pedidosGrowth || 0}% vs período anterior
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
-        </SimpleGrid>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
         {/* Tabs de Análisis Detallado */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <Tabs index={activeTab} onChange={setActiveTab}>
-              <TabList>
-                <Tab>
-                  <HStack>
-                    <Icon as={FaChartLine} />
-                    <Text>Resumen</Text>
-                  </HStack>
-                </Tab>
-                <Tab>
-                  <HStack>
-                    <Icon as={FaUsers} />
-                    <Text>Usuarios</Text>
-                  </HStack>
-                </Tab>
-                <Tab>
-                  <HStack>
-                    <Icon as={FaFileAlt} />
-                    <Text>Contenido</Text>
-                  </HStack>
-                </Tab>
-                <Tab>
-                  <HStack>
-                    <Icon as={FaServer} />
-                    <Text>Rendimiento</Text>
-                  </HStack>
-                </Tab>
-              </TabList>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon className="w-5 h-5 mr-2" />
+                  {tab.name}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
 
-              <TabPanels>
+        <div className="p-6">
                 {/* Resumen General */}
-                <TabPanel>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Resumen General</Heading>
+          {activeTab === 0 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">Resumen General</h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Engagement */}
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Engagement</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Usuarios Activos Diarios</span>
+                      <span className="text-lg font-semibold text-gray-900">
+                        {formatNumber(analyticsData?.engagement?.dailyActiveUsers || 0)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full" 
+                        style={{ width: `${Math.min((analyticsData?.engagement?.dailyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100, 100)}%` }}
+                      ></div>
+                    </div>
                     
-                    <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-                      {/* Engagement */}
-                      <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                        <CardHeader>
-                          <Heading size="sm">Engagement</Heading>
-                        </CardHeader>
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Usuarios Activos Diarios</Text>
-                              <Text fontWeight="semibold">
-                                {formatNumber(analyticsData?.engagement?.dailyActiveUsers || 0)}
-                              </Text>
-                            </HStack>
-                            <Progress 
-                              value={(analyticsData?.engagement?.dailyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100} 
-                              colorScheme="blue" 
-                            />
-                            
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Usuarios Activos Semanales</Text>
-                              <Text fontWeight="semibold">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Usuarios Activos Semanales</span>
+                      <span className="text-lg font-semibold text-gray-900">
                                 {formatNumber(analyticsData?.engagement?.weeklyActiveUsers || 0)}
-                              </Text>
-                            </HStack>
-                            <Progress 
-                              value={(analyticsData?.engagement?.weeklyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100} 
-                              colorScheme="green" 
-                            />
-                            
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Usuarios Activos Mensuales</Text>
-                              <Text fontWeight="semibold">
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full" 
+                        style={{ width: `${Math.min((analyticsData?.engagement?.weeklyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Usuarios Activos Mensuales</span>
+                      <span className="text-lg font-semibold text-gray-900">
                                 {formatNumber(analyticsData?.engagement?.monthlyActiveUsers || 0)}
-                              </Text>
-                            </HStack>
-                            <Progress 
-                              value={(analyticsData?.engagement?.monthlyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100} 
-                              colorScheme="purple" 
-                            />
-                          </VStack>
-                        </CardBody>
-                      </Card>
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-purple-600 h-2 rounded-full" 
+                        style={{ width: `${Math.min((analyticsData?.engagement?.monthlyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
 
                       {/* Tendencias */}
-                      <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                        <CardHeader>
-                          <Heading size="sm">Tendencias</Heading>
-                        </CardHeader>
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            {analyticsData?.trends && Object.entries(analyticsData.trends).map(([key, value]) => (
-                              <HStack key={key} justify="space-between">
-                                <Text fontSize="sm" textTransform="capitalize">
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tendencias</h3>
+                  <div className="space-y-4">
+                    {analyticsData?.trends && Object.entries(analyticsData.trends).map(([key, value]) => {
+                      const GrowthIcon = getGrowthIcon(value as number);
+                      return (
+                        <div key={key} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 capitalize">
                                   {key.replace('Growth', '')}
-                                </Text>
-                                <HStack>
-                                  <Icon 
-                                    as={getGrowthIcon(value as number)} 
-                                    color={`${getGrowthColor(value as number)}.500`} 
-                                  />
-                                  <Text 
-                                    fontWeight="semibold" 
-                                    color={`${getGrowthColor(value as number)}.500`}
-                                  >
+                          </span>
+                          <div className="flex items-center">
+                            <GrowthIcon className={`w-4 h-4 mr-2 ${getGrowthColor(value as number)}`} />
+                            <span className={`text-sm font-semibold ${getGrowthColor(value as number)}`}>
                                     {(value as number) > 0 ? '+' : ''}{(value as number)}%
-                                  </Text>
-                                </HStack>
-                              </HStack>
-                            ))}
-                          </VStack>
-                        </CardBody>
-                      </Card>
-                    </SimpleGrid>
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
 
                     {/* Top Content */}
-                    <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                      <CardHeader>
-                        <Heading size="sm">Contenido Más Popular</Heading>
-                      </CardHeader>
-                      <CardBody>
-                        <Table variant="simple" size="sm">
-                          <Thead>
-                            <Tr>
-                              <Th>Título</Th>
-                              <Th>Tipo</Th>
-                              <Th>Vistas</Th>
-                              <Th>Me gusta</Th>
-                              <Th>Compartidos</Th>
-                            </Tr>
-                          </Thead>
-                          <Tbody>
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Contenido Más Popular</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Título</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vistas</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Me gusta</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Compartidos</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
                             {analyticsData?.topContent?.slice(0, 5).map((content) => (
-                              <Tr key={content.id}>
-                                <Td>
-                                  <Text fontWeight="medium">{content.title}</Text>
-                                </Td>
-                                <Td>
-                                  <Badge colorScheme="blue" variant="subtle">
+                        <tr key={content.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {content.title}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full">
                                     {content.type}
-                                  </Badge>
-                                </Td>
-                                <Td>{formatNumber(content.views)}</Td>
-                                <Td>{formatNumber(content.likes)}</Td>
-                                <Td>{formatNumber(content.shares)}</Td>
-                              </Tr>
-                            ))}
-                          </Tbody>
-                        </Table>
-                      </CardBody>
-                    </Card>
-                  </VStack>
-                </TabPanel>
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatNumber(content.views)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatNumber(content.likes)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatNumber(content.shares)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
                 {/* Análisis de Usuarios */}
-                <TabPanel>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Análisis de Usuarios</Heading>
+          {activeTab === 1 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">Análisis de Usuarios</h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Distribución por Rol</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-red-600 bg-red-100 rounded-full mr-2">Admin</span>
+                        <span className="text-sm text-gray-600">Administradores</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{userStats?.totalAdmins || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-red-600 h-2 rounded-full" 
+                        style={{ width: `${(userStats?.totalAdmins || 0) / (userStats?.totalUsuarios || 1) * 100}%` }}
+                      ></div>
+                    </div>
                     
-                    <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-                      <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                        <CardHeader>
-                          <Heading size="sm">Distribución por Rol</Heading>
-                        </CardHeader>
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="red">Admin</Badge>
-                                <Text fontSize="sm">Administradores</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{userStats?.totalAdmins || 0}</Text>
-                            </HStack>
-                            <Progress value={(userStats?.totalAdmins || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="red" />
-                            
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="blue">Creador</Badge>
-                                <Text fontSize="sm">Creadores</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{userStats?.totalCreadores || 0}</Text>
-                            </HStack>
-                            <Progress value={(userStats?.totalCreadores || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="blue" />
-                            
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="green">Moderador</Badge>
-                                <Text fontSize="sm">Moderadores</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{userStats?.totalModeradores || 0}</Text>
-                            </HStack>
-                            <Progress value={(userStats?.totalModeradores || 0) / (userStats?.totalUsuarios || 1) * 100} colorScheme="green" />
-                            
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="gray">Usuario</Badge>
-                                <Text fontSize="sm">Usuarios</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full mr-2">Creador</span>
+                        <span className="text-sm text-gray-600">Creadores</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{userStats?.totalCreadores || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full" 
+                        style={{ width: `${(userStats?.totalCreadores || 0) / (userStats?.totalUsuarios || 1) * 100}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-green-600 bg-green-100 rounded-full mr-2">Moderador</span>
+                        <span className="text-sm text-gray-600">Moderadores</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{userStats?.totalModeradores || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full" 
+                        style={{ width: `${(userStats?.totalModeradores || 0) / (userStats?.totalUsuarios || 1) * 100}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-full mr-2">Usuario</span>
+                        <span className="text-sm text-gray-600">Usuarios</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {(userStats?.totalUsuarios || 0) - (userStats?.totalAdmins || 0) - (userStats?.totalCreadores || 0) - (userStats?.totalModeradores || 0)}
-                              </Text>
-                            </HStack>
-                            <Progress 
-                              value={((userStats?.totalUsuarios || 0) - (userStats?.totalAdmins || 0) - (userStats?.totalCreadores || 0) - (userStats?.totalModeradores || 0)) / (userStats?.totalUsuarios || 1) * 100} 
-                              colorScheme="gray" 
-                            />
-                          </VStack>
-                        </CardBody>
-                      </Card>
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-gray-600 h-2 rounded-full" 
+                        style={{ width: `${((userStats?.totalUsuarios || 0) - (userStats?.totalAdmins || 0) - (userStats?.totalCreadores || 0) - (userStats?.totalModeradores || 0)) / (userStats?.totalUsuarios || 1) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
 
-                      <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                        <CardHeader>
-                          <Heading size="sm">Actividad de Usuarios</Heading>
-                        </CardHeader>
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Tiempo Promedio de Sesión</Text>
-                              <Text fontWeight="semibold">
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Actividad de Usuarios</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Tiempo Promedio de Sesión</span>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {analyticsData?.engagement?.averageSessionTime || '0m'}
-                              </Text>
-                            </HStack>
-                            
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Tasa de Rebote</Text>
-                              <Text fontWeight="semibold">
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Tasa de Rebote</span>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {formatPercentage(analyticsData?.engagement?.bounceRate || 0)}
-                              </Text>
-                            </HStack>
-                            
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Usuarios Activos</Text>
-                              <Text fontWeight="semibold">
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Usuarios Activos</span>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {formatNumber(analyticsData?.overview?.activeUsers || 0)}
-                              </Text>
-                            </HStack>
-                          </VStack>
-                        </CardBody>
-                      </Card>
-                    </SimpleGrid>
-                  </VStack>
-                </TabPanel>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
                 {/* Análisis de Contenido */}
-                <TabPanel>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Análisis de Contenido</Heading>
+          {activeTab === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">Análisis de Contenido</h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Estados de Aportes</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-green-600 bg-green-100 rounded-full mr-2">Aprobados</span>
+                        <span className="text-sm text-gray-600">Aportes aprobados</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{aporteStats?.aportesAprobados || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full" 
+                        style={{ width: `${(aporteStats?.aportesAprobados || 0) / (aporteStats?.totalAportes || 1) * 100}%` }}
+                      ></div>
+                    </div>
                     
-                    <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-                      <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                        <CardHeader>
-                          <Heading size="sm">Estados de Aportes</Heading>
-                        </CardHeader>
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="green">Aprobados</Badge>
-                                <Text fontSize="sm">Aportes aprobados</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{aporteStats?.aportesAprobados || 0}</Text>
-                            </HStack>
-                            <Progress value={(aporteStats?.aportesAprobados || 0) / (aporteStats?.totalAportes || 1) * 100} colorScheme="green" />
-                            
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="yellow">Pendientes</Badge>
-                                <Text fontSize="sm">En revisión</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{aporteStats?.aportesPendientes || 0}</Text>
-                            </HStack>
-                            <Progress value={(aporteStats?.aportesPendientes || 0) / (aporteStats?.totalAportes || 1) * 100} colorScheme="yellow" />
-                            
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="red">Rechazados</Badge>
-                                <Text fontSize="sm">Aportes rechazados</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{aporteStats?.aportesRechazados || 0}</Text>
-                            </HStack>
-                            <Progress value={(aporteStats?.aportesRechazados || 0) / (aporteStats?.totalAportes || 1) * 100} colorScheme="red" />
-                          </VStack>
-                        </CardBody>
-                      </Card>
-
-                      <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                        <CardHeader>
-                          <Heading size="sm">Estados de Pedidos</Heading>
-                        </CardHeader>
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="green">Completados</Badge>
-                                <Text fontSize="sm">Pedidos finalizados</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{pedidoStats?.pedidosCompletados || 0}</Text>
-                            </HStack>
-                            <Progress value={(pedidoStats?.pedidosCompletados || 0) / (pedidoStats?.totalPedidos || 1) * 100} colorScheme="green" />
-                            
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="yellow">Pendientes</Badge>
-                                <Text fontSize="sm">En espera</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{pedidoStats?.pedidosPendientes || 0}</Text>
-                            </HStack>
-                            <Progress value={(pedidoStats?.pedidosPendientes || 0) / (pedidoStats?.totalPedidos || 1) * 100} colorScheme="yellow" />
-                            
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge colorScheme="blue">En Proceso</Badge>
-                                <Text fontSize="sm">En desarrollo</Text>
-                              </HStack>
-                              <Text fontWeight="semibold">{pedidoStats?.pedidosEnProceso || 0}</Text>
-                            </HStack>
-                            <Progress value={(pedidoStats?.pedidosEnProceso || 0) / (pedidoStats?.totalPedidos || 1) * 100} colorScheme="blue" />
-                          </VStack>
-                        </CardBody>
-                      </Card>
-                    </SimpleGrid>
-                  </VStack>
-                </TabPanel>
-
-                {/* Análisis de Rendimiento */}
-                <TabPanel>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Análisis de Rendimiento</Heading>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-yellow-600 bg-yellow-100 rounded-full mr-2">Pendientes</span>
+                        <span className="text-sm text-gray-600">En revisión</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{aporteStats?.aportesPendientes || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-yellow-600 h-2 rounded-full" 
+                        style={{ width: `${(aporteStats?.aportesPendientes || 0) / (aporteStats?.totalAportes || 1) * 100}%` }}
+                      ></div>
+                    </div>
                     
-                    <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-                      <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                        <CardHeader>
-                          <Heading size="sm">Métricas del Sistema</Heading>
-                        </CardHeader>
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Tiempo de Respuesta</Text>
-                              <Text fontWeight="semibold">
-                                {analyticsData?.performance?.responseTime || 0}ms
-                              </Text>
-                            </HStack>
-                            <Progress 
-                              value={Math.min((analyticsData?.performance?.responseTime || 0) / 1000 * 100, 100)} 
-                              colorScheme={analyticsData?.performance?.responseTime < 500 ? 'green' : 'orange'} 
-                            />
-                            
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Uptime</Text>
-                              <Text fontWeight="semibold">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-red-600 bg-red-100 rounded-full mr-2">Rechazados</span>
+                        <span className="text-sm text-gray-600">Aportes rechazados</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{aporteStats?.aportesRechazados || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-red-600 h-2 rounded-full" 
+                        style={{ width: `${(aporteStats?.aportesRechazados || 0) / (aporteStats?.totalAportes || 1) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Estados de Pedidos</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-green-600 bg-green-100 rounded-full mr-2">Completados</span>
+                        <span className="text-sm text-gray-600">Pedidos finalizados</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{pedidoStats?.pedidosCompletados || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full" 
+                        style={{ width: `${(pedidoStats?.pedidosCompletados || 0) / (pedidoStats?.totalPedidos || 1) * 100}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-yellow-600 bg-yellow-100 rounded-full mr-2">Pendientes</span>
+                        <span className="text-sm text-gray-600">En espera</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{pedidoStats?.pedidosPendientes || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-yellow-600 h-2 rounded-full" 
+                        style={{ width: `${(pedidoStats?.pedidosPendientes || 0) / (pedidoStats?.totalPedidos || 1) * 100}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full mr-2">En Proceso</span>
+                        <span className="text-sm text-gray-600">En desarrollo</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{pedidoStats?.pedidosEnProceso || 0}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full" 
+                        style={{ width: `${(pedidoStats?.pedidosEnProceso || 0) / (pedidoStats?.totalPedidos || 1) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Análisis de Rendimiento */}
+          {activeTab === 3 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">Análisis de Rendimiento</h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Métricas del Sistema</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Tiempo de Respuesta</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {analyticsData?.performance?.responseTime || 0}ms
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${analyticsData?.performance?.responseTime < 500 ? 'bg-green-600' : 'bg-orange-600'}`}
+                        style={{ width: `${Math.min((analyticsData?.performance?.responseTime || 0) / 1000 * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Uptime</span>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {formatPercentage(analyticsData?.performance?.uptime || 0)}
-                              </Text>
-                            </HStack>
-                            <Progress value={analyticsData?.performance?.uptime || 0} colorScheme="green" />
-                            
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Tasa de Error</Text>
-                              <Text fontWeight="semibold">
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full" 
+                        style={{ width: `${analyticsData?.performance?.uptime || 0}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Tasa de Error</span>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {formatPercentage(analyticsData?.performance?.errorRate || 0)}
-                              </Text>
-                            </HStack>
-                            <Progress 
-                              value={analyticsData?.performance?.errorRate || 0} 
-                              colorScheme={analyticsData?.performance?.errorRate < 5 ? 'green' : 'red'} 
-                            />
-                          </VStack>
-                        </CardBody>
-                      </Card>
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${analyticsData?.performance?.errorRate < 5 ? 'bg-green-600' : 'bg-red-600'}`}
+                        style={{ width: `${analyticsData?.performance?.errorRate || 0}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
 
-                      <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                        <CardHeader>
-                          <Heading size="sm">Throughput</Heading>
-                        </CardHeader>
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Requests/min</Text>
-                              <Text fontWeight="semibold">
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Throughput</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Requests/min</span>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {formatNumber(analyticsData?.performance?.throughput || 0)}
-                              </Text>
-                            </HStack>
-                            <Progress 
-                              value={Math.min((analyticsData?.performance?.throughput || 0) / 1000 * 100, 100)} 
-                              colorScheme="blue" 
-                            />
-                            
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Bot Uptime</Text>
-                              <Text fontWeight="semibold">
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full" 
+                        style={{ width: `${Math.min((analyticsData?.performance?.throughput || 0) / 1000 * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Bot Uptime</span>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {analyticsData?.overview?.botUptime || '0h 0m'}
-                              </Text>
-                            </HStack>
-                            
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Grupos Autorizados</Text>
-                              <Text fontWeight="semibold">
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Grupos Autorizados</span>
+                      <span className="text-sm font-semibold text-gray-900">
                                 {groupStats?.gruposAutorizados || 0} / {groupStats?.totalGrupos || 0}
-                              </Text>
-                            </HStack>
-                            <Progress 
-                              value={(groupStats?.gruposAutorizados || 0) / (groupStats?.totalGrupos || 1) * 100} 
-                              colorScheme="green" 
-                            />
-                          </VStack>
-                        </CardBody>
-                      </Card>
-                    </SimpleGrid>
-                  </VStack>
-                </TabPanel>
-              </TabPanels>
-            </Tabs>
-          </CardBody>
-        </Card>
-      </VStack>
-    </Box>
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full" 
+                        style={{ width: `${(groupStats?.gruposAutorizados || 0) / (groupStats?.totalGrupos || 1) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
 export default Analytics;
-
-
-

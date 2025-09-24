@@ -1,6 +1,7 @@
 import db from './db.js';
 import { analyzeContentWithAI } from './gemini-ai-handler.js';
 import { chatWithAI, analyzeManhwaContent } from './ai-chat-handler.js';
+import { addAporte } from './handler.js';
 
 /**
  * Handle the /aportar command to save a new aporte in the database.
@@ -40,11 +41,11 @@ function normalizeAporteTipo(raw) {
   return map[v] || v.replace(/\s+/g, '_');
 }
 
-async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
+export async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
   try {
     const tipoNorm = normalizeAporteTipo(tipo);
-    await db('aportes').insert({ contenido, tipo: tipoNorm, usuario, grupo, fecha });
-    return { success: true, message: `Aporte guardado correctamente para el usuario ${usuario}.` };
+    // Usar el handler principal
+    return await addAporte({ contenido, tipo: tipoNorm, usuario, grupo, fecha });
   } catch (error) {
     return { success: false, message: error.message };
   }
@@ -83,7 +84,7 @@ async function handleAI(pregunta, usuario, grupo, fecha) {
       detalles: JSON.stringify({
         pregunta,
         respuesta: aiResult.response,
-        modelo: aiResult.model || 'gemini-pro',
+        modelo: aiResult.model || 'gemini-1.5-flash',
         timestamp: fecha
       })
     });

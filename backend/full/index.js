@@ -1,12 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import { connectToWhatsApp, getAvailableGroups } from './whatsapp.js';
+import readline from 'readline';
+import { connectToWhatsApp, getAvailableGroups, getQRCode, getQRCodeImage, getConnectionStatus, getSocket, setAuthMethod } from './whatsapp.js';
+import apiRouter from './api.js';
+import { router as authRouter, authenticateToken, authorizeRoles } from './auth.js';
+import subbotRouter from './subbot-api.js';
+import { getAuthDefaults } from './global-config.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import db from './db.js';
 import config from './config.js';
-import subbotApi from './subbot-api.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,227 +32,127 @@ app.use('/media', express.static(join(__dirname, 'storage')));
 //   app.use(express.static(frontendDistPath));
 // }
 
-// Example API endpoint: get dashboard stats
-app.get('/api/dashboard/stats', async (req, res) => {
+
+async function promptAuthMethodIfNeeded() {
+  // Forzar QR para el bot principal. Pairing deshabilitado por solicitud.
   try {
-    const usuariosCount = await db('usuarios').count('id as count').first();
-    const aportesCount = await db('aportes').count('id as count').first();
-    const pedidosCount = await db('pedidos').count('id as count').first();
-    // Contar grupos con entry o estimar a partir de registros; si no hay tabla, devolver 0
-    let gruposCount = { count: 0 };
-    try {
-      gruposCount = await db('grupos_autorizados').count('id as count').first();
-    } catch (_) {
-      gruposCount = { count: 0 };
-    }
-
-    res.json({
-      usuarios: usuariosCount.count,
-      aportes: aportesCount.count,
-      pedidos: pedidosCount.count,
-      grupos: gruposCount.count,
-    });
+    setAuthMethod('qr');
+    console.log('🔧 Autenticación del bot principal: QR (pairing deshabilitado)');
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.warn(`⚠️ No se pudo fijar modo QR: ${error.message}`);
   }
-});
-
-// Endpoint para recibir notificaciones de sub-bots
-app.post('/api/subbot/event', async (req, res) => {
-  try {
-    const { subbotId, event, data, timestamp } = req.body;
-    
-    console.log(`📱 Sub-bot ${subbotId} - Evento: ${event}`);
-    
-    // Guardar pairing code si es el evento correspondiente
-    if (event === 'pairing_code' && data.code) {
-      await db('subbots').where('code', subbotId).update({
-        pairing_code: data.code,
-        status: 'waiting_pairing',
-        last_heartbeat: new Date().toISOString()
-      });
-      return res.json({ success: true });
-    }
-
-    // Actualizar estado del sub-bot en la base de datos
-    await db('subbots').where('code', subbotId).update({
-      status: event === 'connected' ? 'connected' : 
-              event === 'disconnected' ? 'disconnected' : 
-              event === 'qr_ready' ? 'qr_ready' : 'pending',
-      last_heartbeat: new Date().toISOString(),
-      qr_data: event === 'qr_ready' ? data.qrData : null
-    });
-
-    // Si es un evento de QR listo, guardar la ruta del QR
-    if (event === 'qr_ready' && data.qrPath) {
-      await db('subbots').where('code', subbotId).update({
-        qr_path: data.qrPath
-      });
-    }
-
-    // Si el sub-bot se conecta, limpiar el pairing code
-    if (event === 'connected') {
-      await db('subbots').where('code', subbotId).update({
-        pairing_code: null
-      });
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error processing subbot event:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-
-// Endpoint para consultar pairing code y estado de sub-bot
-app.get('/api/subbot/:id/pairing-code', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const subbot = await db('subbots').where('code', id).first();
-    if (!subbot) {
-      return res.status(404).json({ error: 'Sub-bot no encontrado' });
-    }
-    res.json({
-      pairing_code: subbot.pairing_code,
-      status: subbot.status,
-      connected: subbot.status === 'connected',
-      last_heartbeat: subbot.last_heartbeat
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get bot connection status
-app.get('/api/bot/status', async (req, res) => {
-  try {
-    const status = getConnectionStatus();
-    const sock = getSocket();
-    
-    // Obtener información adicional del socket si está disponible
-    let phone = null;
-    if (sock && sock.user) {
-      phone = sock.user.id.split('@')[0];
-    }
-    
-    res.json({
-      ...status,
-      connected: status.isConnected,
-      phone: phone,
-      lastSeen: status.timestamp
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-import apiRouter from './api.js';
-import { router as authRouter } from './auth.js';
-import { getQRCode, getQRCodeImage, getConnectionStatus, getSocket } from './whatsapp.js';
+}
 
 // Rutas de autenticación
 app.use('/api/auth', authRouter);
 
-// Rutas de subbots
-app.use('/api/subbot', subbotApi);
+// Rutas de subbots (panel e in-proc manager)
+app.use('/api/subbot', subbotRouter);
 
-// Rutas de API
+// Rutas principales de la API
 app.use('/api', apiRouter);
 
+
 // Endpoints de WhatsApp bajo /api
-app.get('/api/whatsapp/qr', (req, res) => {
+app.get('/api/whatsapp/qr', authenticateToken, authorizeRoles('owner'), (_req, res) => {
   const qrImage = getQRCodeImage();
   const status = getConnectionStatus();
-  
+
   if (qrImage) {
-    // Extraer solo la parte base64 de la imagen
     const base64Data = qrImage.replace(/^data:image\/png;base64,/, '');
-    res.json({ 
-      qr: base64Data, 
-      qrImage: qrImage,
-      status: 'waiting_for_scan' 
+    return res.json({
+      qr: base64Data,
+      qrImage,
+      status: 'waiting_for_scan'
     });
-  } else {
-    res.json({ qr: null, qrImage: null, status });
   }
+
+  res.json({ qr: null, qrImage: null, status });
 });
 
-// Endpoint de QR para el bot (compatibilidad con frontend)
-app.get('/api/bot/qr', (req, res) => {
+app.get('/api/bot/qr', authenticateToken, authorizeRoles('owner'), (_req, res) => {
   const qrImage = getQRCodeImage();
   const qrCode = getQRCode();
   const status = getConnectionStatus();
-  
+
   if (qrImage) {
-    // Extraer solo la parte base64 de la imagen
     const base64Data = qrImage.replace(/^data:image\/png;base64,/, '');
-    res.json({ 
+    return res.json({
       available: true,
-      qr: base64Data, 
-      qrCode: qrCode,
+      qr: base64Data,
+      qrCode,
       qrCodeImage: qrImage,
-      status: 'waiting_for_scan' 
-    });
-  } else if (qrCode) {
-    res.json({ 
-      available: true,
-      qr: qrCode, 
-      qrCode: qrCode,
-      qrCodeImage: null,
-      status: 'waiting_for_scan' 
-    });
-  } else {
-    res.json({ 
-      available: false,
-      qr: null, 
-      qrCode: null,
-      qrCodeImage: null,
-      status: status.status,
-      message: 'No hay código QR disponible' 
+      status: 'waiting_for_scan'
     });
   }
+
+  if (qrCode) {
+    return res.json({
+      available: true,
+      qr: qrCode,
+      qrCode,
+      qrCodeImage: null,
+      status: 'waiting_for_scan'
+    });
+  }
+
+  res.json({
+    available: false,
+    qr: null,
+    qrCode: null,
+    qrCodeImage: null,
+    status: status.status,
+    message: 'No hay código QR disponible'
+  });
 });
 
-app.get('/api/whatsapp/status', (req, res) => {
+app.get('/api/whatsapp/status', authenticateToken, authorizeRoles('admin', 'owner'), (_req, res) => {
   const status = getConnectionStatus();
   res.json({ status });
 });
 
-app.post('/api/whatsapp/logout', async (req, res) => {
+app.post('/api/whatsapp/logout', authenticateToken, authorizeRoles('owner'), async (_req, res) => {
   try {
     const sock = getSocket();
     if (sock) {
       await sock.logout();
-      res.json({ success: true, message: 'Desconectado exitosamente' });
-    } else {
-      res.json({ success: false, message: 'No hay conexión activa' });
+      return res.json({ success: true, message: 'Desconectado exitosamente' });
     }
+    return res.json({ success: false, message: 'No hay conexión activa' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Compat endpoints for frontend
-app.post('/api/bot/disconnect', async (req, res) => {
+// Compatibilidad con versiones anteriores del panel
+app.post('/api/bot/disconnect', authenticateToken, authorizeRoles('owner'), async (_req, res) => {
   try {
     const sock = getSocket();
-    if (sock) { await sock.logout(); return res.json({ success: true }); }
+    if (sock) {
+      await sock.logout();
+      return res.json({ success: true });
+    }
     return res.json({ success: false, message: 'No hay conexión activa' });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
-app.post('/api/bot/restart', async (req, res) => {
+app.post('/api/bot/restart', authenticateToken, authorizeRoles('owner'), async (_req, res) => {
   try {
     const sock = getSocket();
-    if (sock) { try { await sock.logout(); } catch (_) {} }
-    // Reconnect with same auth directory
+    if (sock) {
+      try { await sock.logout(); } catch (_) {}
+    }
     await connectToWhatsApp(join(__dirname, 'storage', 'baileys_full'));
     return res.json({ success: true });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 // Endpoint para obtener grupos disponibles del bot
-app.get('/api/whatsapp/groups', async (req, res) => {
+app.get('/api/whatsapp/groups', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     const groups = await getAvailableGroups();
     res.json(groups);
@@ -278,6 +182,7 @@ app.get('/api/health', (req, res) => {
 
 // Start the bot connection and server
 async function start() {
+  await promptAuthMethodIfNeeded();
   await connectToWhatsApp(join(__dirname, 'storage', 'baileys_full'));
   app.listen(port, config.server.host, () => {
     console.log(`🚀 Backend server listening on port ${port}`);

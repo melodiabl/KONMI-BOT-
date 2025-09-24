@@ -5,10 +5,11 @@ import ytdl from 'ytdl-core';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
-import { spawn } from 'child_process';
-import QRCode from 'qrcode';
-import chalk from 'chalk';
-import { 
+import { PassThrough } from 'stream';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegPath from 'ffmpeg-static';
+import Jimp from 'jimp';
+import {
   downloadFile,
   processWhatsAppMedia,
   listDownloads,
@@ -17,6 +18,172 @@ import {
   checkDiskSpace
 } from './file-manager.js';
 import { normalizeAporteTipo, logControlAction } from './commands.js';
+import { createProgressNotifier } from './utils/progress-notifier.js';
+import { execFile } from 'child_process';
+
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+}
+
+function streamToBuffer(readable) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    readable.on('data', (chunk) => chunks.push(chunk));
+    readable.on('end', () => resolve(Buffer.concat(chunks)));
+    readable.on('error', reject);
+  });
+}
+
+function sanitizeFilename(value) {
+  if (!value) return `media_${Date.now()}`;
+  return value.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
+}
+
+const YT_API_KEY = process.env.YT_API_KEY || process.env.YOUTUBE_API_KEY;
+const YT_COOKIES_FILE = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE;
+const YT_COOKIES_RAW = process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES;
+
+function parseCookiesFromFile(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    const pairs = [];
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+      const parts = line.split('\t');
+      if (parts.length >= 7) {
+        const name = parts[5];
+        const value = parts[6];
+        if (name) pairs.push(`${name}=${value}`);
+        continue;
+      }
+      const eqIndex = line.indexOf('=');
+      if (eqIndex > 0) {
+        const name = line.slice(0, eqIndex).trim();
+        const value = line.slice(eqIndex + 1).trim();
+        if (name) pairs.push(`${name}=${value}`);
+      }
+    }
+    return pairs.length ? pairs.join('; ') : null;
+  } catch (error) {
+    console.warn('⚠️ No se pudo leer archivo de cookies:', error?.message || error);
+    return null;
+  }
+}
+
+function normalizeCookieString(raw) {
+  if (!raw) return null;
+  const tokens = raw
+    .split(/;|\n|\r/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  return tokens.length ? tokens.join('; ') : null;
+}
+
+const YT_COOKIE_HEADER = (() => {
+  const inline = normalizeCookieString(YT_COOKIES_RAW);
+  if (inline) return inline;
+  if (YT_COOKIES_FILE) return parseCookiesFromFile(YT_COOKIES_FILE);
+  return null;
+})();
+
+function withYoutubeHeaders(config = {}) {
+  if (!YT_COOKIE_HEADER) return config;
+  const headers = { ...(config.headers || {}), Cookie: YT_COOKIE_HEADER };
+  return { ...config, headers };
+}
+
+function getYtdlRequestOptions() {
+  return YT_COOKIE_HEADER ? { headers: { cookie: YT_COOKIE_HEADER } } : undefined;
+}
+
+function buildSocketResolver(chatId) {
+  if (!chatId) return null;
+  let cachedSock = null;
+  return async () => {
+    if (cachedSock && typeof cachedSock.sendMessage === 'function') {
+      return cachedSock;
+    }
+    try {
+      const mod = await import('./whatsapp.js');
+      cachedSock = mod.getSocket?.();
+      return cachedSock;
+    } catch (error) {
+      console.error('Error obteniendo socket para progreso:', error?.message || error);
+      return null;
+    }
+  };
+}
+
+function truncate(text, max = 60) {
+  if (!text) return '';
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(0, max - 3))}...`;
+}
+
+function parseISODuration(duration) {
+  if (!duration) return '00:00';
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return duration;
+  const hours = parseInt(match[1] || '0', 10);
+  const minutes = parseInt(match[2] || '0', 10);
+  const seconds = parseInt(match[3] || '0', 10);
+  const parts = [];
+  if (hours) parts.push(String(hours).padStart(2, '0'));
+  parts.push(String(hours ? minutes : minutes).padStart(2, '0'));
+  parts.push(String(seconds).padStart(2, '0'));
+  return parts.join(':');
+}
+
+async function searchYouTube(query) {
+  if (!YT_API_KEY || !query) return null;
+  try {
+    const searchRes = await axios.get('https://www.googleapis.com/youtube/v3/search', withYoutubeHeaders({
+      params: {
+        key: YT_API_KEY,
+        q: query,
+        part: 'snippet',
+        type: 'video',
+        maxResults: 1,
+        safeSearch: 'none'
+      }
+    }));
+
+    const item = searchRes.data.items?.[0];
+    if (!item) return null;
+    const videoId = item.id?.videoId;
+    if (!videoId) return null;
+
+    const detailsRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', withYoutubeHeaders({
+      params: {
+        key: YT_API_KEY,
+        id: videoId,
+        part: 'snippet,contentDetails,statistics'
+      }
+    }));
+
+    const details = detailsRes.data.items?.[0];
+    if (!details) return null;
+
+    const snippet = details.snippet || {};
+    const stats = details.statistics || {};
+    const contentDetails = details.contentDetails || {};
+
+    return {
+      id: videoId,
+      title: snippet.title || query,
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      duration: parseISODuration(contentDetails.duration),
+      views: stats.viewCount ? Number(stats.viewCount).toLocaleString('es-ES') : '—',
+      thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || null,
+      author: snippet.channelTitle || 'YouTube'
+    };
+  } catch (error) {
+    console.error('Error consultando YouTube Data API:', error?.message || error);
+    return null;
+  }
+}
 
 // ===============
 // Media commands
@@ -25,43 +192,316 @@ import { normalizeAporteTipo, logControlAction } from './commands.js';
 /**
  * /music, /meme, /wallpaper, /joke
  */
-async function handleMusic(query, usuario, grupo, fecha) {
+async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
+  const resolveSocket = buildSocketResolver(chatId) || (async () => null);
+  const notifier = createProgressNotifier({
+    resolveSocket,
+    chatId,
+    title: '🎧 Descarga de audio',
+    icon: '🎧'
+  });
+
   try {
     if (!query) {
-      return { success: true, message: `╭─❍「 🎵 Melodia Music ✦ 」
-│
-├─ Envía el nombre de una canción o artista
-│
-├─ Ejemplos:
-│   ⇝ .music bad bunny
-│   ⇝ .music despacito
-│   ⇝ .music https://youtube.com/watch?v=...
-╰─✦` };
+      return {
+        success: true,
+        message: `╭─❍「 🎵 Melodia Music ✦ 」\n│\n├─ Envía el nombre de una canción o artista\n│\n├─ Ejemplos:\n│   ⇝ .play bad bunny\n│   ⇝ .play despacito\n│   ⇝ .play https://youtube.com/watch?v=...\n╰─✦`
+      };
     }
-    const res = await yts(query);
-    if (!res || !res.videos || res.videos.length === 0) {
-      return { success: true, message: '❌ No encontré resultados para esa búsqueda.' };
+
+    await notifier.update(5, 'Analizando consulta…', {
+      details: [`Consulta: ${truncate(query)}`]
+    });
+
+    // Primero obtener información del video
+    let ytQuery = query.startsWith('http') ? query : `ytsearch1:${query}`;
+    const infoArgs = [
+      ytQuery,
+      '--cookies', '/home/admin/all_cookies.txt',
+      '--print', '%(title)s|%(uploader)s|%(duration_string)s|%(view_count)s|%(webpage_url)s|%(thumbnail)s|%(description)s|%(upload_date)s',
+      '--no-warnings',
+      '--quiet'
+    ];
+
+    await notifier.update(15, 'Obteniendo información…', { icon: '🔎' });
+
+    const infoResult = await new Promise((resolve, reject) => {
+      execFile('yt-dlp', infoArgs, { maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
+        if (err) return reject(err);
+        resolve(stdout.trim());
+      });
+    });
+
+    const [title, author, duration, views, url, thumbnail, description, uploadDate] = infoResult.split('|');
+    
+    await notifier.update(25, 'Información obtenida', {
+      details: [
+        `Título: ${truncate(title, 40)}`,
+        `Artista: ${author}`,
+        duration ? `Duración: ${duration}` : null
+      ].filter(Boolean),
+      icon: '✅'
+    });
+
+    // Ahora descargar con progreso real
+    const outputDir = '/tmp';
+    const outputTemplate = `${outputDir}/ytmusic_%(title)s.%(ext)s`;
+    const downloadArgs = [
+      ytQuery,
+      '--extract-audio',
+      '--audio-format', 'mp3',
+      '--audio-quality', '0',
+      '--no-playlist',
+      '--cookies', '/home/admin/all_cookies.txt',
+      '-o', outputTemplate,
+      '--progress',
+      '--newline',
+      '--no-warnings'
+    ];
+
+    await notifier.update(30, 'Iniciando descarga…', { icon: '⬇️' });
+
+    const downloadResult = await new Promise((resolve, reject) => {
+      const child = execFile('yt-dlp', downloadArgs, { maxBuffer: 1024 * 1024 * 10 });
+      
+      let lastProgress = 30;
+      child.stdout.on('data', async (data) => {
+        const output = data.toString();
+        // Parsear progreso de yt-dlp: [download] 45.2% of 12.34MiB at 1.23MiB/s ETA 00:05
+        const progressMatch = output.match(/\[download\]\s+(\d+\.?\d*)%/);
+        if (progressMatch) {
+          const percent = Math.min(parseFloat(progressMatch[1]), 90);
+          const progressPercent = 30 + Math.round((percent / 100) * 50);
+          
+          if (progressPercent > lastProgress + 2) { // Actualizar cada 2%
+            lastProgress = progressPercent;
+            await notifier.update(progressPercent, `Descargando audio… ${percent}%`, { icon: '⬇️' }).catch(() => {});
+          }
+        }
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) resolve('success');
+        else reject(new Error(`yt-dlp exited with code ${code}`));
+      });
+    });
+
+    const filename = `${outputDir}/ytmusic_${sanitizeFilename(title)}.mp3`;
+    if (!fs.existsSync(filename)) {
+      await notifier.fail('No se pudo descargar el audio');
+      return { success: false, message: '❌ No se pudo descargar el audio.' };
     }
-    const video = res.videos[0];
+    
+    await notifier.update(95, 'Procesando archivo…', { icon: '🛠️' });
+    
+    const audioBuffer = fs.readFileSync(filename);
+    fs.unlinkSync(filename);
+
+    // Formatear información rica
+    const viewsFormatted = views ? Number(views).toLocaleString('es-ES') : '—';
+    const uploadYear = uploadDate ? uploadDate.substring(0, 4) : '—';
+    
+    const richMessage = `╔═══════════════════════════════════════╗\n` +
+                       `║           🎵 *AUDIO DESCARGADO* 🎵      ║\n` +
+                       `╚═══════════════════════════════════════╝\n\n` +
+                       `🎵 *${title}*\n` +
+                       `👤 *Artista:* ${author}\n` +
+                       `⏱️ *Duración:* ${duration || '—'}\n` +
+                       `👀 *Vistas:* ${viewsFormatted}\n` +
+                       `📅 *Año:* ${uploadYear}\n` +
+                       `🔗 *Enlace:* ${url}\n\n` +
+                       `⬇️ *Enviando audio...*`;
+
+    await notifier.complete('Audio listo ✅', {
+      details: [
+        `Título: ${truncate(title, 48)}`,
+        `Artista: ${author}`,
+        duration ? `Duración: ${duration}` : null,
+        views ? `Vistas: ${viewsFormatted}` : null
+      ].filter(Boolean),
+      icon: '✅'
+    });
+
     return {
       success: true,
-      message: `╭─❍「 🎵 *${video.title}* ✦ 」
-│
-├─ 🎶 Duración: ${video.duration}
-├─ 👀 Vistas: ${video.views}
-├─ 🔗 URL: ${video.url}
-│
-├─ Descargando audio... ⏳
-╰─✦`,
+      message: richMessage,
       media: {
         type: 'audio',
-        url: video.url,
-        thumbnail: video.thumbnail,
-        title: video.title
-      }
+        data: audioBuffer,
+        mimetype: 'audio/mpeg',
+        filename: `${sanitizeFilename(title)}.mp3`
+      },
+      // Enviar también la imagen como media separada si hay thumbnail
+      ...(thumbnail && {
+        image: {
+          type: 'image',
+          url: thumbnail,
+          caption: `🎵 ${title} - ${author}`
+        }
+      })
     };
   } catch (error) {
-    return { success: false, message: '❌ Error procesando /music' };
+    console.error('Error en handleMusic:', error);
+    await notifier.fail('Error procesando el audio');
+    return { success: false, message: '❌ Error procesando el audio. Intenta con otra canción.' };
+  }
+}
+
+async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
+  const resolveSocket = buildSocketResolver(chatId) || (async () => null);
+  const notifier = createProgressNotifier({
+    resolveSocket,
+    chatId,
+    title: '📺 Descarga de video',
+    icon: '📺'
+  });
+
+  try {
+    if (!query) {
+      return {
+        success: true,
+        message: '🎬 Usa: .video <búsqueda|url>'
+      };
+    }
+
+    await notifier.update(5, 'Analizando consulta…', {
+      details: [`Consulta: ${truncate(query)}`]
+    });
+
+    // Primero obtener información del video
+    let ytQuery = query.startsWith('http') ? query : `ytsearch1:${query}`;
+    const infoArgs = [
+      ytQuery,
+      '--cookies', '/home/admin/all_cookies.txt',
+      '--print', '%(title)s|%(uploader)s|%(duration_string)s|%(view_count)s|%(webpage_url)s|%(thumbnail)s|%(description)s|%(upload_date)s|%(width)s|%(height)s',
+      '--no-warnings',
+      '--quiet'
+    ];
+
+    await notifier.update(15, 'Obteniendo información…', { icon: '🔎' });
+
+    const infoResult = await new Promise((resolve, reject) => {
+      execFile('yt-dlp', infoArgs, { maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
+        if (err) return reject(err);
+        resolve(stdout.trim());
+      });
+    });
+
+    const [title, author, duration, views, url, thumbnail, description, uploadDate, width, height] = infoResult.split('|');
+    
+    await notifier.update(25, 'Información obtenida', {
+      details: [
+        `Título: ${truncate(title, 40)}`,
+        `Canal: ${author}`,
+        duration ? `Duración: ${duration}` : null,
+        width && height ? `Resolución: ${width}x${height}` : null
+      ].filter(Boolean),
+      icon: '✅'
+    });
+
+    // Ahora descargar con progreso real
+    const outputDir = '/tmp';
+    const outputTemplate = `${outputDir}/ytvideo_%(title)s.%(ext)s`;
+    const downloadArgs = [
+      ytQuery,
+      '-f', 'best[height<=720]/best', // Preferir 720p o menos para WhatsApp
+      '--no-playlist',
+      '--cookies', '/home/admin/all_cookies.txt',
+      '-o', outputTemplate,
+      '--progress',
+      '--newline',
+      '--no-warnings'
+    ];
+
+    await notifier.update(30, 'Iniciando descarga…', { icon: '⬇️' });
+
+    const downloadResult = await new Promise((resolve, reject) => {
+      const child = execFile('yt-dlp', downloadArgs, { maxBuffer: 1024 * 1024 * 10 });
+      
+      let lastProgress = 30;
+      child.stdout.on('data', async (data) => {
+        const output = data.toString();
+        // Parsear progreso de yt-dlp: [download] 45.2% of 12.34MiB at 1.23MiB/s ETA 00:05
+        const progressMatch = output.match(/\[download\]\s+(\d+\.?\d*)%/);
+        if (progressMatch) {
+          const percent = Math.min(parseFloat(progressMatch[1]), 90);
+          const progressPercent = 30 + Math.round((percent / 100) * 50);
+          
+          if (progressPercent > lastProgress + 2) { // Actualizar cada 2%
+            lastProgress = progressPercent;
+            await notifier.update(progressPercent, `Descargando video… ${percent}%`, { icon: '⬇️' }).catch(() => {});
+          }
+        }
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) resolve('success');
+        else reject(new Error(`yt-dlp exited with code ${code}`));
+      });
+    });
+
+    const filename = `${outputDir}/ytvideo_${sanitizeFilename(title)}.mp4`;
+    if (!fs.existsSync(filename)) {
+      await notifier.fail('No se pudo descargar el video');
+      return { success: false, message: '❌ No se pudo descargar el video.' };
+    }
+    
+    await notifier.update(95, 'Procesando archivo…', { icon: '🛠️' });
+    
+    const videoBuffer = fs.readFileSync(filename);
+    fs.unlinkSync(filename);
+
+    // Formatear información rica
+    const viewsFormatted = views ? Number(views).toLocaleString('es-ES') : '—';
+    const uploadYear = uploadDate ? uploadDate.substring(0, 4) : '—';
+    const resolution = width && height ? `${width}x${height}` : '—';
+    
+    const richMessage = `╔═══════════════════════════════════════╗\n` +
+                       `║          🎬 *VIDEO DESCARGADO* 🎬       ║\n` +
+                       `╚═══════════════════════════════════════╝\n\n` +
+                       `🎬 *${title}*\n` +
+                       `👤 *Canal:* ${author}\n` +
+                       `⏱️ *Duración:* ${duration || '—'}\n` +
+                       `👀 *Vistas:* ${viewsFormatted}\n` +
+                       `📅 *Año:* ${uploadYear}\n` +
+                       `📺 *Resolución:* ${resolution}\n` +
+                       `🔗 *Enlace:* ${url}\n\n` +
+                       `⬇️ *Enviando video...*`;
+
+    await notifier.complete('Video listo ✅', {
+      details: [
+        `Título: ${truncate(title, 48)}`,
+        `Canal: ${author}`,
+        duration ? `Duración: ${duration}` : null,
+        views ? `Vistas: ${viewsFormatted}` : null,
+        resolution !== '—' ? `Resolución: ${resolution}` : null
+      ].filter(Boolean),
+      icon: '✅'
+    });
+
+    return {
+      success: true,
+      message: richMessage,
+      media: {
+        type: 'video',
+        data: videoBuffer,
+        mimetype: 'video/mp4',
+        filename: `${sanitizeFilename(title)}.mp4`,
+        caption: title
+      },
+      // Enviar también la imagen como media separada si hay thumbnail
+      ...(thumbnail && {
+        image: {
+          type: 'image',
+          url: thumbnail,
+          caption: `🎬 ${title} - ${author}`
+        }
+      })
+    };
+  } catch (error) {
+    console.error('Error en handleVideo:', error);
+    await notifier.fail('Error procesando el video');
+    return { success: false, message: '❌ Error procesando el video. Intenta con otro enlace.' };
   }
 }
 
@@ -72,11 +512,10 @@ async function handleMeme(usuario, grupo, fecha) {
     if (!memeData || !memeData.url) return { success: true, message: '❌ No se pudo obtener el meme.' };
     return {
       success: true,
-      message: `╭─❍「 😂 Meme ✦ 」
-│
-├─ ${memeData.title}
-├─ r/${memeData.subreddit}
-╰─✦`,
+      message: `😂 *${memeData.title}*
+📌 r/${memeData.subreddit}
+
+👀 Disfruta tu meme del día`,
       media: { type: 'image', url: memeData.url, caption: memeData.title }
     };
   } catch (error) {
@@ -87,13 +526,16 @@ async function handleMeme(usuario, grupo, fecha) {
 async function handleWallpaper(query, usuario, grupo, fecha) {
   try {
     if (!query) {
-      return { success: true, message: '🖼️ Usa: .wallpaper <tema>' };
+      return { success: true, message: '🖼️ Usa: .wallpaper <tema> (ej. .wallpaper galaxy)' };
     }
     const res = await axios.get(`https://picsum.photos/800/600?random=${Date.now()}`);
     const url = res.request?.res?.responseUrl || `https://picsum.photos/800/600?random=${Date.now()}`;
     return {
       success: true,
-      message: `🖼️ Wallpaper de ${query}`,
+      message: `🖼️ *Wallpaper listo*
+Tema: ${query}
+
+Mantén pulsado para guardar o poner de fondo.`,
       media: { type: 'image', url, caption: `Wallpaper de ${query}` }
     };
   } catch (error) {
@@ -107,7 +549,9 @@ async function handleJoke(usuario, grupo, fecha) {
     const jokeData = res.data;
     if (!jokeData || jokeData.error) return { success: true, message: '❌ No se pudo obtener el chiste' };
     const jokeText = jokeData.type === 'single' ? jokeData.joke : `${jokeData.setup}\n\n${jokeData.delivery}`;
-    return { success: true, message: `😄 ${jokeText}` };
+    return { success: true, message: `😄 *Humor Konmi*
+
+${jokeText}` };
   } catch (error) {
     return { success: false, message: '❌ Error al obtener chiste' };
   }
@@ -126,7 +570,7 @@ async function handleAIEnhanced(pregunta, usuario, grupo, fecha) {
     if (!apiKey) return { success: false, message: '❌ Configura GEMINI_API_KEY' };
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `Eres Melodia, una asistente de IA amigable y útil en español. Responde de forma clara y concisa.\n\nPregunta del usuario: ${pregunta}`;
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -156,7 +600,7 @@ async function handleTranslate(text, targetLang, usuario, grupo, fecha) {
     if (!apiKey) return { success: false, message: '❌ Configura GEMINI_API_KEY' };
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const translatePrompt = `Traduce el siguiente texto al idioma ${targetLang}. Solo devuelve la traducción:\n\nTexto: ${text}`;
     const result = await model.generateContent(translatePrompt);
     const translation = (await result.response).text();
@@ -274,7 +718,6 @@ async function handleStatus(usuario, grupo, fecha) {
     const totalMemory = os.totalmem();
     const usedMemory = totalMemory - freeMemory;
     const totalUsers = await db('usuarios').count('id as count').first();
-    const totalSubbots = await db('subbots').count('id as count').first();
     const totalLogs = await db('logs').count('id as count').first();
     const totalAportes = await db('aportes').count('id as count').first();
     const totalPedidos = await db('pedidos').count('id as count').first();
@@ -299,7 +742,7 @@ async function handleStatus(usuario, grupo, fecha) {
       return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     };
 
-    const message = `╭─❍「 📊 Estado ✦ 」\n│\n├─ Uptime: ${formatUptime(uptime)}\n├─ Memoria: ${formatBytes(memoryUsage.heapUsed)} / ${formatBytes(memoryUsage.heapTotal)}\n├─ Sistema: ${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}\n├─ CPU: ${cpuUsage[0].toFixed(2)} (1m), ${cpuUsage[1].toFixed(2)} (5m), ${cpuUsage[2].toFixed(2)} (15m)\n│\n├─ Usuarios: ${totalUsers.count}\n├─ Sub-bots: ${totalSubbots.count}\n├─ Logs: ${totalLogs.count} (${recentLogs.count} 24h)\n├─ Aportes: ${totalAportes.count}\n├─ Pedidos: ${totalPedidos.count}\n╰─✦`;
+    const message = `╭─❍「 📊 Estado ✦ 」\n│\n├─ Uptime: ${formatUptime(uptime)}\n├─ Memoria: ${formatBytes(memoryUsage.heapUsed)} / ${formatBytes(memoryUsage.heapTotal)}\n├─ Sistema: ${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}\n├─ CPU: ${cpuUsage[0].toFixed(2)} (1m), ${cpuUsage[1].toFixed(2)} (5m), ${cpuUsage[2].toFixed(2)} (15m)\n│\n├─ Usuarios: ${totalUsers.count}\n├─ Logs: ${totalLogs.count} (${recentLogs.count} 24h)\n├─ Aportes: ${totalAportes.count}\n├─ Pedidos: ${totalPedidos.count}\n╰─✦`;
     return { success: true, message };
   } catch (error) {
     return { success: false, message: '❌ Error al obtener estado' };
@@ -392,14 +835,13 @@ async function handleStats(usuario, grupo, fecha) {
     }
     const totalUsers = await db('usuarios').count('id as count').first();
     const totalLogs = await db('logs').count('id as count').first();
-    const totalSubbots = await db('subbots').count('id as count').first();
     const totalAportes = await db('aportes').count('id as count').first();
     const totalPedidos = await db('pedidos').count('id as count').first();
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const recentLogs = await db('logs').where('fecha', '>=', yesterday.toISOString()).count('id as count').first();
     const topCommands = await db('logs').select('comando').count('id as count').groupBy('comando').orderBy('count', 'desc').limit(5);
-    let message = `╭─❍「 📊 Stats ✦ 」\n│\n├─ Usuarios: ${totalUsers.count}\n├─ Sub-bots: ${totalSubbots.count}\n├─ Logs: ${totalLogs.count}\n├─ Aportes: ${totalAportes.count}\n├─ Pedidos: ${totalPedidos.count}\n├─ Logs 24h: ${recentLogs.count}\n│\n├─ 🔥 Comandos más usados:\n`;
+    let message = `╭─❍「 📊 Stats ✦ 」\n│\n├─ Usuarios: ${totalUsers.count}\n├─ Logs: ${totalLogs.count}\n├─ Aportes: ${totalAportes.count}\n├─ Pedidos: ${totalPedidos.count}\n├─ Logs 24h: ${recentLogs.count}\n│\n├─ 🔥 Comandos más usados:\n`;
     topCommands.forEach((cmd, i) => {
       const comando = String(cmd.comando || '').replace(/_/g, ' ').toLowerCase();
       message += `├─ ${i + 1}. ${comando} (${cmd.count})\n`;
@@ -458,90 +900,6 @@ async function handleExport(format, usuario, grupo, fecha) {
     return { success: true, message: `📤 Archivo exportado: ${filename}\n📁 Ubicación: ${filepath}` };
   } catch (error) {
     return { success: false, message: '❌ Error al exportar logs' };
-  }
-}
-
-// ================
-// Sub-bots bundle
-// ================
-
-async function handleSerbot(usuario, grupo, fecha) {
-  try {
-    const whatsappNumber = usuario.split('@')[0];
-    const user = await db('usuarios').where({ whatsapp_number: whatsappNumber }).select('rol').first();
-    if (!user || user.rol !== 'admin') return { success: true, message: '❌ Solo administradores pueden crear sub-bots' };
-    const subbotId = `subbot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const subbotDir = path.join(process.cwd(), 'jadibots', subbotId);
-    if (!fs.existsSync(subbotDir)) fs.mkdirSync(subbotDir, { recursive: true });
-    await db('subbots').insert({ code: subbotId, nombre: `Sub-bot ${subbotId.split('_')[1]}`, status: 'pending', created_by: whatsappNumber, created_at: new Date().toISOString() });
-    const subbotConfig = { id: subbotId, created: new Date().toISOString(), createdBy: whatsappNumber, status: 'pending', qrGenerated: false, qrData: null };
-    fs.writeFileSync(path.join(subbotDir, 'subbot.json'), JSON.stringify(subbotConfig, null, 2));
-    setTimeout(async () => {
-      try {
-        const subbotProcess = spawn('node', [path.join(process.cwd(), 'subbot-template', 'index.js')], { cwd: subbotDir, env: { ...process.env, SUBBOT_ID: subbotId, SUBBOT_DIR: subbotDir } });
-        subbotProcess.stdout.on('data', (data) => console.log(`Sub-bot ${subbotId}: ${data}`));
-        subbotProcess.stderr.on('data', (data) => console.error(`Sub-bot ${subbotId} error: ${data}`));
-        subbotProcess.on('close', (code) => console.log(`Sub-bot ${subbotId} process exited with code ${code}`));
-      } catch (error) {
-        console.error('Error starting sub-bot:', error);
-      }
-    }, 1000);
-    await logControlAction(usuario, 'CREATE_SUBBOT', `Sub-bot creado: ${subbotId}`, grupo);
-    return { success: true, message: `🤖 Sub-bot creado. ID: \`${subbotId}\`` };
-  } catch (error) {
-    return { success: false, message: '❌ Error al crear sub-bot' };
-  }
-}
-
-async function handleBots(usuario, grupo, fecha) {
-  try {
-    const subbots = await db('subbots').select('*').orderBy('created_at', 'desc');
-    if (subbots.length === 0) return { success: true, message: '🤖 No hay sub-bots creados' };
-    let message = '🤖 Lista de Sub-bots\n\n';
-    subbots.forEach((bot, index) => {
-      const status = bot.status === 'connected' ? '🟢' : bot.status === 'pending' ? '🟡' : bot.status === 'disconnected' ? '🔴' : '⚪';
-      message += `${index + 1}. ${status} ${bot.nombre}\n  ID: \`${bot.code}\`\n  Creado: ${new Date(bot.created_at).toLocaleDateString()}\n  Por: ${bot.created_by}\n\n`;
-    });
-    message += `📊 Total: ${subbots.length}`;
-    return { success: true, message };
-  } catch (error) {
-    return { success: false, message: '❌ Error al obtener lista de sub-bots' };
-  }
-}
-
-async function handleDelSubbot(subbotId, usuario, grupo, fecha) {
-  try {
-    const whatsappNumber = usuario.split('@')[0];
-    const user = await db('usuarios').where({ whatsapp_number: whatsappNumber }).select('rol').first();
-    if (!user || user.rol !== 'admin') return { success: true, message: '❌ Solo administradores pueden eliminar sub-bots' };
-    const subbot = await db('subbots').where('code', subbotId).first();
-    if (!subbot) return { success: true, message: '❌ Sub-bot no encontrado' };
-    await db('subbots').where('code', subbotId).del();
-    const subbotDir = path.join(process.cwd(), 'jadibots', subbotId);
-    if (fs.existsSync(subbotDir)) fs.rmSync(subbotDir, { recursive: true, force: true });
-    await logControlAction(usuario, 'DELETE_SUBBOT', `Sub-bot eliminado: ${subbotId}`, grupo);
-    return { success: true, message: `🗑️ Sub-bot eliminado: \`${subbotId}\`` };
-  } catch (error) {
-    return { success: false, message: '❌ Error al eliminar sub-bot' };
-  }
-}
-
-async function handleQR(subbotId, usuario, grupo, fecha) {
-  try {
-    const subbot = await db('subbots').where('code', subbotId).first();
-    if (!subbot) return { success: true, message: `❌ Sub-bot no encontrado` };
-    if (subbot.status !== 'qr_ready' && subbot.status !== 'connected') {
-      return { success: true, message: `⏳ QR en preparación... Estado: ${subbot.status}` };
-    }
-    const subbotDir = path.join(process.cwd(), 'jadibots', subbotId);
-    const qrFile = path.join(subbotDir, 'qr.png');
-    if (!fs.existsSync(qrFile)) {
-      return { success: true, message: `❌ QR no disponible para \`${subbotId}\`` };
-    }
-    const qrBuffer = fs.readFileSync(qrFile);
-    return { success: true, message: `📱 QR de sub-bot: \`${subbotId}\``, qrImage: qrBuffer };
-  } catch (error) {
-    return { success: false, message: '❌ Error al obtener QR' };
   }
 }
 
@@ -734,6 +1092,7 @@ async function handleBuscarArchivo(nombre, usuario, grupo) {
 export {
   // Media
   handleMusic,
+  handleVideo,
   handleMeme,
   handleWallpaper,
   handleJoke,
@@ -754,11 +1113,6 @@ export {
   handleLogsAdvanced,
   handleStats,
   handleExport,
-  // Sub-bots
-  handleSerbot,
-  handleBots,
-  handleDelSubbot,
-  handleQR,
   // Downloads
   handleDescargar,
   handleGuardar,

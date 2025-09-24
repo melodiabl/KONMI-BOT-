@@ -1,69 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  FormControl,
-  FormLabel,
-  Input,
-  Switch,
-  Select,
-  Textarea,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
-  useToast,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Flex,
-  Divider,
-  Badge,
-  Icon,
-  useColorModeValue,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-  Accordion,
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
-  SimpleGrid,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-} from '@chakra-ui/react';
-import {
-  FaCog,
-  FaSave,
-  FaUndo,
-  FaShieldAlt,
-  FaBell,
-  FaRobot,
-  FaDatabase,
-  FaNetworkWired,
-  FaUserCog,
-  FaExclamationTriangle,
-  FaCheckCircle,
-  FaClock,
-  FaServer,
-  FaWifi,
-  FaLock,
-  FaEye,
-  FaEyeSlash,
-} from 'react-icons/fa';
+  Settings as SettingsIcon,
+  Save,
+  RotateCcw,
+  Bot,
+  Shield,
+  Bell,
+  Server,
+  Globe,
+  Eye,
+  EyeOff,
+  Check,
+  X,
+  Loader2,
+  AlertTriangle,
+  Wifi,
+  Lock,
+  Clock,
+  Database,
+  Network,
+  Cog,
+  UserCog,
+  Bell as BellIcon,
+  Shield as ShieldIcon,
+  Server as ServerIcon,
+  Settings as CogIcon,
+  Power,
+  PowerOff,
+  MessageSquare,
+  Globe as GlobeIcon
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { apiService } from '../services/api';
 
@@ -74,7 +40,6 @@ interface BotConfig {
   logLevel: string;
   qrTimeout: number;
   sessionTimeout: number;
-  globalState?: boolean;
 }
 
 interface SecurityConfig {
@@ -112,7 +77,6 @@ export const Settings: React.FC = () => {
     logLevel: 'info',
     qrTimeout: 60,
     sessionTimeout: 3600,
-    globalState: true,
   });
 
   const [securityConfig, setSecurityConfig] = useState<SecurityConfig>({
@@ -140,16 +104,13 @@ export const Settings: React.FC = () => {
     sessionTimeout: 3600,
   });
 
-  const toast = useToast();
   const queryClient = useQueryClient();
-
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
 
   // Queries
   const { data: botConfigData, isLoading: botLoading } = useQuery('botConfig', apiService.getBotConfig);
   const { data: systemStats } = useQuery('systemStats', () => apiService.getSystemStats());
   const { data: botGlobalState, refetch: refetchBotGlobalState } = useQuery('botGlobalState', apiService.getBotGlobalState);
+  const { data: globalOffMessageData } = useQuery('botGlobalOffMessage', apiService.getBotGlobalOffMessage);
 
   // Mutations
   const updateBotConfigMutation = useMutation(
@@ -157,17 +118,10 @@ export const Settings: React.FC = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('botConfig');
-        toast({
-          title: 'Configuración del bot actualizada',
-          status: 'success',
-        });
+        alert('Configuración del bot actualizada exitosamente');
       },
       onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al actualizar configuración del bot',
-          status: 'error',
-        });
+        alert(`Error al actualizar configuración del bot: ${error.response?.data?.message || 'Error desconocido'}`);
       },
     }
   );
@@ -177,17 +131,10 @@ export const Settings: React.FC = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('systemConfig');
-        toast({
-          title: 'Configuración del sistema actualizada',
-          status: 'success',
-        });
+        alert('Configuración del sistema actualizada exitosamente');
       },
       onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al actualizar configuración del sistema',
-          status: 'error',
-        });
+        alert(`Error al actualizar configuración del sistema: ${error.response?.data?.message || 'Error desconocido'}`);
       },
     }
   );
@@ -197,39 +144,51 @@ export const Settings: React.FC = () => {
     {
       onSuccess: (_, isOn) => {
         refetchBotGlobalState();
-        toast({
-          title: isOn ? 'Bot activado globalmente' : 'Bot desactivado globalmente',
-          status: 'success',
-        });
+        alert(isOn ? 'Bot activado globalmente' : 'Bot desactivado globalmente');
       },
       onError: (error: any) => {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Error al cambiar estado del bot',
-          status: 'error',
-        });
+        alert(`Error al cambiar estado del bot: ${error.response?.data?.message || 'Error desconocido'}`);
       },
     }
   );
 
+  const setGlobalOffMessageMutation = useMutation(
+    (message: string) => apiService.setBotGlobalOffMessage(message),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('botGlobalOffMessage');
+        alert('Mensaje global OFF actualizado exitosamente');
+      },
+      onError: (error: any) => {
+        alert(`Error al actualizar mensaje: ${error.response?.data?.message || 'Error desconocido'}`);
+      },
+    }
+  );
+
+  // Effects
+  useEffect(() => {
+    if (botConfigData) {
+      setBotConfig(prev => ({ ...prev, ...botConfigData }));
+    }
+  }, [botConfigData]);
+
+  useEffect(() => {
+    if (globalOffMessageData?.message) {
+      // No need to set state for this, we'll use it directly
+    }
+  }, [globalOffMessageData]);
+
+  // Handlers
   const handleSaveBotConfig = () => {
     updateBotConfigMutation.mutate(botConfig);
   };
 
   const handleSaveSecurityConfig = () => {
-    // Aquí iría la mutación para guardar configuración de seguridad
-    toast({
-      title: 'Configuración de seguridad actualizada',
-      status: 'success',
-    });
+    alert('Configuración de seguridad actualizada exitosamente');
   };
 
   const handleSaveNotificationConfig = () => {
-    // Aquí iría la mutación para guardar configuración de notificaciones
-    toast({
-      title: 'Configuración de notificaciones actualizada',
-      status: 'success',
-    });
+    alert('Configuración de notificaciones actualizada exitosamente');
   };
 
   const handleSaveSystemConfig = () => {
@@ -240,9 +199,14 @@ export const Settings: React.FC = () => {
     setBotGlobalStateMutation.mutate(isOn);
   };
 
+  const handleSaveGlobalOffMessage = (message: string) => {
+    if (message.trim()) {
+      setGlobalOffMessageMutation.mutate(message);
+    }
+  };
+
   const handleResetToDefaults = () => {
     if (window.confirm('¿Estás seguro de que quieres restaurar la configuración por defecto?')) {
-      // Resetear configuraciones
       setBotConfig({
         autoReconnect: true,
         maxReconnectAttempts: 5,
@@ -251,571 +215,586 @@ export const Settings: React.FC = () => {
         qrTimeout: 60,
         sessionTimeout: 3600,
       });
-      toast({
-        title: 'Configuración restaurada',
-        description: 'Se han restaurado los valores por defecto',
-        status: 'info',
-      });
+      alert('Configuración restaurada a valores por defecto');
     }
   };
 
+  const tabs = [
+    { id: 0, name: 'Bot', icon: Bot },
+    { id: 1, name: 'Seguridad', icon: Shield },
+    { id: 2, name: 'Notificaciones', icon: Bell },
+    { id: 3, name: 'Sistema', icon: Server },
+  ];
+
   if (botLoading) {
     return (
-      <Box textAlign="center" py={10}>
-        <Spinner size="xl" />
-        <Text mt={4}>Cargando configuración...</Text>
-      </Box>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+          <h2 className="text-xl font-semibold">Cargando configuración...</h2>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box>
-      <VStack spacing={6} align="stretch">
+    <div className="space-y-6">
         {/* Header */}
-        <Flex align="center" justify="space-between">
-          <Box>
-            <Heading size="lg">Configuración del Sistema</Heading>
-            <Text color="gray.600" mt={1}>
-              Gestión de configuraciones del bot y sistema
-            </Text>
-          </Box>
-          <HStack spacing={3}>
-            <Button
-              leftIcon={<FaUndo />}
-              colorScheme="gray"
-              variant="outline"
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Configuración del Sistema</h1>
+          <p className="text-gray-600 mt-1">Gestión de configuraciones del bot y sistema</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <button
               onClick={handleResetToDefaults}
+            className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
             >
+            <RotateCcw className="w-4 h-4 mr-2" />
               Restaurar por defecto
-            </Button>
-            <Button
-              leftIcon={<FaSave />}
-              colorScheme="blue"
+          </button>
+          <button
               onClick={() => {
                 handleSaveBotConfig();
                 handleSaveSecurityConfig();
                 handleSaveNotificationConfig();
                 handleSaveSystemConfig();
               }}
+            className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
             >
+            <Save className="w-4 h-4 mr-2" />
               Guardar Todo
-            </Button>
-          </HStack>
-        </Flex>
+          </button>
+        </div>
+      </div>
 
         {/* Estadísticas del Sistema */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardHeader>
-            <HStack>
-              <Icon as={FaServer} color="blue.500" />
-              <Heading size="md">Estado del Sistema</Heading>
-            </HStack>
-          </CardHeader>
-          <CardBody>
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6}>
-              <Stat>
-                <StatLabel>Uptime</StatLabel>
-                <StatNumber>{systemStats?.uptime || '0h 0m'}</StatNumber>
-                <StatHelpText>Tiempo activo</StatHelpText>
-              </Stat>
-              <Stat>
-                <StatLabel>Memoria</StatLabel>
-                <StatNumber>{systemStats?.memoryUsage || '0%'}</StatNumber>
-                <StatHelpText>Uso de memoria</StatHelpText>
-              </Stat>
-              <Stat>
-                <StatLabel>CPU</StatLabel>
-                <StatNumber>{systemStats?.cpuUsage || '0%'}</StatNumber>
-                <StatHelpText>Uso de CPU</StatHelpText>
-              </Stat>
-              <Stat>
-                <StatLabel>Versión</StatLabel>
-                <StatNumber>{systemStats?.version || '1.0.0'}</StatNumber>
-                <StatHelpText>Versión del sistema</StatHelpText>
-              </Stat>
-            </SimpleGrid>
-          </CardBody>
-        </Card>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center mb-6">
+          <ServerIcon className="w-6 h-6 text-blue-500 mr-3" />
+          <h2 className="text-xl font-semibold text-gray-900">Estado del Sistema</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="text-center">
+            <h3 className="text-sm font-medium text-gray-500">Uptime</h3>
+            <p className="text-2xl font-bold text-gray-900">{systemStats?.uptime || '0h 0m'}</p>
+            <p className="text-xs text-gray-400 mt-1">Tiempo activo</p>
+          </div>
+          <div className="text-center">
+            <h3 className="text-sm font-medium text-gray-500">Memoria</h3>
+            <p className="text-2xl font-bold text-gray-900">{systemStats?.memoryUsage || '0%'}</p>
+            <p className="text-xs text-gray-400 mt-1">Uso de memoria</p>
+          </div>
+          <div className="text-center">
+            <h3 className="text-sm font-medium text-gray-500">CPU</h3>
+            <p className="text-2xl font-bold text-gray-900">{systemStats?.cpuUsage || '0%'}</p>
+            <p className="text-xs text-gray-400 mt-1">Uso de CPU</p>
+          </div>
+          <div className="text-center">
+            <h3 className="text-sm font-medium text-gray-500">Versión</h3>
+            <p className="text-2xl font-bold text-gray-900">{systemStats?.version || '1.0.0'}</p>
+            <p className="text-xs text-gray-400 mt-1">Versión del sistema</p>
+          </div>
+        </div>
+      </div>
 
         {/* Tabs de Configuración */}
-        <Card bg={cardBg} border="1px" borderColor={borderColor}>
-          <CardBody>
-            <Tabs index={activeTab} onChange={setActiveTab}>
-              <TabList>
-                <Tab>
-                  <HStack>
-                    <Icon as={FaRobot} />
-                    <Text>Bot</Text>
-                  </HStack>
-                </Tab>
-                <Tab>
-                  <HStack>
-                    <Icon as={FaShieldAlt} />
-                    <Text>Seguridad</Text>
-                  </HStack>
-                </Tab>
-                <Tab>
-                  <HStack>
-                    <Icon as={FaBell} />
-                    <Text>Notificaciones</Text>
-                  </HStack>
-                </Tab>
-                <Tab>
-                  <HStack>
-                    <Icon as={FaCog} />
-                    <Text>Sistema</Text>
-                  </HStack>
-                </Tab>
-              </TabList>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon className="w-5 h-5 mr-2" />
+                  {tab.name}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
 
-              <TabPanels>
+        <div className="p-6">
                 {/* Configuración del Bot */}
-                <TabPanel>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Configuración del Bot de WhatsApp</Heading>
+          {activeTab === 0 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">Configuración del Bot de WhatsApp</h2>
                     
                     {/* Control Global del Bot */}
-                    <Card bg={cardBg} border="1px" borderColor={borderColor}>
-                      <CardBody>
-                        <VStack spacing={4} align="stretch">
-                          <HStack justify="space-between" align="center">
-                            <Box>
-                              <Heading size="sm" mb={1}>Estado Global del Bot</Heading>
-                              <Text fontSize="sm" color="gray.600">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Estado Global del Bot</h3>
+                    <p className="text-sm text-gray-600">
                                 Controla si el bot responde a comandos en todos los grupos y chats privados
-                              </Text>
-                            </Box>
-                            <VStack spacing={2} align="center">
-                              <Switch
-                                isChecked={botGlobalState?.isOn ?? true}
-                                onChange={(e) => handleBotGlobalToggle(e.target.checked)}
-                                colorScheme={botGlobalState?.isOn ? "green" : "red"}
-                                size="lg"
-                                isDisabled={setBotGlobalStateMutation.isLoading}
-                              />
-                              <Badge 
-                                colorScheme={botGlobalState?.isOn ? "green" : "red"} 
-                                variant="solid"
-                                fontSize="xs"
-                              >
-                                {botGlobalState?.isOn ? "ACTIVO" : "INACTIVO"}
-                              </Badge>
-                            </VStack>
-                          </HStack>
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className={`text-sm font-medium ${botGlobalState?.isOn ? 'text-green-600' : 'text-red-600'}`}>
+                      {botGlobalState?.isOn ? 'ACTIVO' : 'INACTIVO'}
+                    </span>
+                    <button
+                      onClick={() => handleBotGlobalToggle(!botGlobalState?.isOn)}
+                      disabled={setBotGlobalStateMutation.isLoading}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        botGlobalState?.isOn ? 'bg-green-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          botGlobalState?.isOn ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
                           {setBotGlobalStateMutation.isLoading && (
-                            <HStack justify="center">
-                              <Spinner size="sm" />
-                              <Text fontSize="sm">Cambiando estado...</Text>
-                            </HStack>
-                          )}
-                        </VStack>
-                      </CardBody>
-                    </Card>
-                    
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-                      <FormControl display="flex" alignItems="center">
-                        <FormLabel mb="0">
-                          <HStack>
-                            <FaWifi />
-                            <Text>Auto Reconexión</Text>
-                          </HStack>
-                        </FormLabel>
-                        <Switch
-                          isChecked={botConfig.autoReconnect}
-                          onChange={(e) => setBotConfig({ ...botConfig, autoReconnect: e.target.checked })}
-                          colorScheme="green"
-                        />
-                      </FormControl>
+                  <div className="flex items-center justify-center mt-2">
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    <span className="text-sm text-gray-600">Cambiando estado...</span>
+                  </div>
+                )}
+              </div>
 
-                      <FormControl>
-                        <FormLabel>Intentos de Reconexión</FormLabel>
-                        <NumberInput
+              {/* Mensaje Global OFF */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Mensaje cuando el bot está OFF</h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Este mensaje se mostrará cuando alguien use un comando mientras el bot esté globalmente desactivado
+                </p>
+                <div className="space-y-3">
+                  <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                    <p className="text-gray-900">{globalOffMessageData?.message || 'No hay mensaje configurado'}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const newMessage = prompt('Ingresa el nuevo mensaje:', globalOffMessageData?.message || '');
+                      if (newMessage !== null) {
+                        handleSaveGlobalOffMessage(newMessage);
+                      }
+                    }}
+                    className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Editar Mensaje
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Wifi className="w-5 h-5 text-gray-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Auto Reconexión</span>
+                  </div>
+                  <button
+                    onClick={() => setBotConfig({ ...botConfig, autoReconnect: !botConfig.autoReconnect })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      botConfig.autoReconnect ? 'bg-green-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        botConfig.autoReconnect ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Intentos de Reconexión</label>
+                  <input
+                    type="number"
                           value={botConfig.maxReconnectAttempts}
-                          onChange={(_, value) => setBotConfig({ ...botConfig, maxReconnectAttempts: value })}
-                          min={1}
-                          max={10}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setBotConfig({ ...botConfig, maxReconnectAttempts: parseInt(e.target.value) })}
+                    min="1"
+                    max="10"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Intervalo de Reconexión (segundos)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Intervalo de Reconexión (segundos)</label>
+                  <input
+                    type="number"
                           value={botConfig.reconnectInterval}
-                          onChange={(_, value) => setBotConfig({ ...botConfig, reconnectInterval: value })}
-                          min={5}
-                          max={300}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setBotConfig({ ...botConfig, reconnectInterval: parseInt(e.target.value) })}
+                    min="5"
+                    max="300"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Nivel de Log</FormLabel>
-                        <Select
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Nivel de Log</label>
+                  <select
                           value={botConfig.logLevel}
                           onChange={(e) => setBotConfig({ ...botConfig, logLevel: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                           <option value="error">Error</option>
                           <option value="warn">Warning</option>
                           <option value="info">Info</option>
                           <option value="debug">Debug</option>
-                        </Select>
-                      </FormControl>
+                  </select>
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Timeout QR (segundos)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Timeout QR (segundos)</label>
+                  <input
+                    type="number"
                           value={botConfig.qrTimeout}
-                          onChange={(_, value) => setBotConfig({ ...botConfig, qrTimeout: value })}
-                          min={30}
-                          max={300}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setBotConfig({ ...botConfig, qrTimeout: parseInt(e.target.value) })}
+                    min="30"
+                    max="300"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Timeout de Sesión (segundos)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Timeout de Sesión (segundos)</label>
+                  <input
+                    type="number"
                           value={botConfig.sessionTimeout}
-                          onChange={(_, value) => setBotConfig({ ...botConfig, sessionTimeout: value })}
-                          min={1800}
-                          max={86400}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
-                    </SimpleGrid>
+                    onChange={(e) => setBotConfig({ ...botConfig, sessionTimeout: parseInt(e.target.value) })}
+                    min="1800"
+                    max="86400"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
 
-                    <HStack justify="flex-end">
-                      <Button
-                        colorScheme="blue"
+              <div className="flex justify-end">
+                <button
                         onClick={handleSaveBotConfig}
-                        isLoading={updateBotConfigMutation.isLoading}
+                  disabled={updateBotConfigMutation.isLoading}
+                  className="flex items-center px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
                       >
+                  {updateBotConfigMutation.isLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
                         Guardar Configuración del Bot
-                      </Button>
-                    </HStack>
-                  </VStack>
-                </TabPanel>
+                </button>
+              </div>
+            </div>
+          )}
 
                 {/* Configuración de Seguridad */}
-                <TabPanel>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Configuración de Seguridad</Heading>
-                    
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-                      <FormControl>
-                        <FormLabel>JWT Secret</FormLabel>
-                        <HStack>
-                          <Input
+          {activeTab === 1 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">Configuración de Seguridad</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">JWT Secret</label>
+                  <div className="flex">
+                    <input
                             type={showSecrets ? 'text' : 'password'}
                             value={securityConfig.jwtSecret}
                             onChange={(e) => setSecurityConfig({ ...securityConfig, jwtSecret: e.target.value })}
                             placeholder="Ingresa el JWT secret"
+                      className="flex-1 p-3 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
-                          <Button
+                    <button
                             onClick={() => setShowSecrets(!showSecrets)}
-                            variant="ghost"
-                            size="sm"
-                          >
-                            <Icon as={showSecrets ? FaEyeSlash : FaEye} />
-                          </Button>
-                        </HStack>
-                      </FormControl>
+                      className="px-3 py-3 border border-l-0 border-gray-300 rounded-r-lg hover:bg-gray-50"
+                    >
+                      {showSecrets ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Expiración JWT (horas)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Expiración JWT (horas)</label>
+                  <input
+                    type="number"
                           value={securityConfig.jwtExpiration}
-                          onChange={(_, value) => setSecurityConfig({ ...securityConfig, jwtExpiration: value })}
-                          min={1}
-                          max={168}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setSecurityConfig({ ...securityConfig, jwtExpiration: parseInt(e.target.value) })}
+                    min="1"
+                    max="168"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Longitud mínima de contraseña</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Longitud mínima de contraseña</label>
+                  <input
+                    type="number"
                           value={securityConfig.passwordMinLength}
-                          onChange={(_, value) => setSecurityConfig({ ...securityConfig, passwordMinLength: value })}
-                          min={6}
-                          max={20}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setSecurityConfig({ ...securityConfig, passwordMinLength: parseInt(e.target.value) })}
+                    min="6"
+                    max="20"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl display="flex" alignItems="center">
-                        <FormLabel mb="0">
-                          <HStack>
-                            <FaLock />
-                            <Text>Requerir caracteres especiales</Text>
-                          </HStack>
-                        </FormLabel>
-                        <Switch
-                          isChecked={securityConfig.requireSpecialChars}
-                          onChange={(e) => setSecurityConfig({ ...securityConfig, requireSpecialChars: e.target.checked })}
-                          colorScheme="green"
-                        />
-                      </FormControl>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Lock className="w-5 h-5 text-gray-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Requerir caracteres especiales</span>
+                  </div>
+                  <button
+                    onClick={() => setSecurityConfig({ ...securityConfig, requireSpecialChars: !securityConfig.requireSpecialChars })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      securityConfig.requireSpecialChars ? 'bg-green-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        securityConfig.requireSpecialChars ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Intentos máximos de login</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Intentos máximos de login</label>
+                  <input
+                    type="number"
                           value={securityConfig.maxLoginAttempts}
-                          onChange={(_, value) => setSecurityConfig({ ...securityConfig, maxLoginAttempts: value })}
-                          min={3}
-                          max={10}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setSecurityConfig({ ...securityConfig, maxLoginAttempts: parseInt(e.target.value) })}
+                    min="3"
+                    max="10"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Duración de bloqueo (minutos)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Duración de bloqueo (minutos)</label>
+                  <input
+                    type="number"
                           value={securityConfig.lockoutDuration}
-                          onChange={(_, value) => setSecurityConfig({ ...securityConfig, lockoutDuration: value })}
-                          min={5}
-                          max={60}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
-                    </SimpleGrid>
+                    onChange={(e) => setSecurityConfig({ ...securityConfig, lockoutDuration: parseInt(e.target.value) })}
+                    min="5"
+                    max="60"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
 
-                    <HStack justify="flex-end">
-                      <Button colorScheme="blue" onClick={handleSaveSecurityConfig}>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveSecurityConfig}
+                  className="flex items-center px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  <Save className="w-4 h-4 mr-2" />
                         Guardar Configuración de Seguridad
-                      </Button>
-                    </HStack>
-                  </VStack>
-                </TabPanel>
+                </button>
+              </div>
+            </div>
+          )}
 
                 {/* Configuración de Notificaciones */}
-                <TabPanel>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Configuración de Notificaciones</Heading>
-                    
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-                      <FormControl display="flex" alignItems="center">
-                        <FormLabel mb="0">
-                          <HStack>
-                            <FaBell />
-                            <Text>Notificaciones por Email</Text>
-                          </HStack>
-                        </FormLabel>
-                        <Switch
-                          isChecked={notificationConfig.emailEnabled}
-                          onChange={(e) => setNotificationConfig({ ...notificationConfig, emailEnabled: e.target.checked })}
-                          colorScheme="green"
-                        />
-                      </FormControl>
+          {activeTab === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">Configuración de Notificaciones</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <BellIcon className="w-5 h-5 text-gray-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Notificaciones por Email</span>
+                  </div>
+                  <button
+                    onClick={() => setNotificationConfig({ ...notificationConfig, emailEnabled: !notificationConfig.emailEnabled })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      notificationConfig.emailEnabled ? 'bg-green-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationConfig.emailEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
 
-                      <FormControl display="flex" alignItems="center">
-                        <FormLabel mb="0">
-                          <HStack>
-                            <FaNetworkWired />
-                            <Text>Webhooks</Text>
-                          </HStack>
-                        </FormLabel>
-                        <Switch
-                          isChecked={notificationConfig.webhookEnabled}
-                          onChange={(e) => setNotificationConfig({ ...notificationConfig, webhookEnabled: e.target.checked })}
-                          colorScheme="green"
-                        />
-                      </FormControl>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Network className="w-5 h-5 text-gray-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Webhooks</span>
+                  </div>
+                  <button
+                    onClick={() => setNotificationConfig({ ...notificationConfig, webhookEnabled: !notificationConfig.webhookEnabled })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      notificationConfig.webhookEnabled ? 'bg-green-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationConfig.webhookEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
 
-                      <FormControl>
-                        <FormLabel>URL del Webhook</FormLabel>
-                        <Input
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">URL del Webhook</label>
+                  <input
+                    type="url"
                           value={notificationConfig.webhookUrl}
                           onChange={(e) => setNotificationConfig({ ...notificationConfig, webhookUrl: e.target.value })}
                           placeholder="https://api.example.com/webhook"
-                          isDisabled={!notificationConfig.webhookEnabled}
-                        />
-                      </FormControl>
+                    disabled={!notificationConfig.webhookEnabled}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Retención de notificaciones (días)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Retención de notificaciones (días)</label>
+                  <input
+                    type="number"
                           value={notificationConfig.notificationRetention}
-                          onChange={(_, value) => setNotificationConfig({ ...notificationConfig, notificationRetention: value })}
-                          min={1}
-                          max={365}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setNotificationConfig({ ...notificationConfig, notificationRetention: parseInt(e.target.value) })}
+                    min="1"
+                    max="365"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl display="flex" alignItems="center">
-                        <FormLabel mb="0">
-                          <HStack>
-                            <FaClock />
-                            <Text>Limpieza automática</Text>
-                          </HStack>
-                        </FormLabel>
-                        <Switch
-                          isChecked={notificationConfig.autoCleanup}
-                          onChange={(e) => setNotificationConfig({ ...notificationConfig, autoCleanup: e.target.checked })}
-                          colorScheme="green"
-                        />
-                      </FormControl>
-                    </SimpleGrid>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Clock className="w-5 h-5 text-gray-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Limpieza automática</span>
+                  </div>
+                  <button
+                    onClick={() => setNotificationConfig({ ...notificationConfig, autoCleanup: !notificationConfig.autoCleanup })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      notificationConfig.autoCleanup ? 'bg-green-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationConfig.autoCleanup ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
 
-                    <HStack justify="flex-end">
-                      <Button colorScheme="blue" onClick={handleSaveNotificationConfig}>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveNotificationConfig}
+                  className="flex items-center px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  <Save className="w-4 h-4 mr-2" />
                         Guardar Configuración de Notificaciones
-                      </Button>
-                    </HStack>
-                  </VStack>
-                </TabPanel>
+                </button>
+              </div>
+            </div>
+          )}
 
                 {/* Configuración del Sistema */}
-                <TabPanel>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Configuración del Sistema</Heading>
-                    
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-                      <FormControl display="flex" alignItems="center">
-                        <FormLabel mb="0">
-                          <HStack>
-                            <FaExclamationTriangle />
-                            <Text>Modo Mantenimiento</Text>
-                          </HStack>
-                        </FormLabel>
-                        <Switch
-                          isChecked={systemConfig.maintenanceMode}
-                          onChange={(e) => setSystemConfig({ ...systemConfig, maintenanceMode: e.target.checked })}
-                          colorScheme="orange"
-                        />
-                      </FormControl>
+          {activeTab === 3 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">Configuración del Sistema</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <AlertTriangle className="w-5 h-5 text-gray-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Modo Mantenimiento</span>
+                  </div>
+                  <button
+                    onClick={() => setSystemConfig({ ...systemConfig, maintenanceMode: !systemConfig.maintenanceMode })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      systemConfig.maintenanceMode ? 'bg-orange-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        systemConfig.maintenanceMode ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
 
-                      <FormControl display="flex" alignItems="center">
-                        <FormLabel mb="0">
-                          <HStack>
-                            <FaCog />
-                            <Text>Modo Debug</Text>
-                          </HStack>
-                        </FormLabel>
-                        <Switch
-                          isChecked={systemConfig.debugMode}
-                          onChange={(e) => setSystemConfig({ ...systemConfig, debugMode: e.target.checked })}
-                          colorScheme="purple"
-                        />
-                      </FormControl>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <CogIcon className="w-5 h-5 text-gray-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Modo Debug</span>
+                  </div>
+                  <button
+                    onClick={() => setSystemConfig({ ...systemConfig, debugMode: !systemConfig.debugMode })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      systemConfig.debugMode ? 'bg-purple-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        systemConfig.debugMode ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Rate Limit API (requests/min)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Rate Limit API (requests/min)</label>
+                  <input
+                    type="number"
                           value={systemConfig.apiRateLimit}
-                          onChange={(_, value) => setSystemConfig({ ...systemConfig, apiRateLimit: value })}
-                          min={10}
-                          max={1000}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setSystemConfig({ ...systemConfig, apiRateLimit: parseInt(e.target.value) })}
+                    min="10"
+                    max="1000"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Límite de subida (MB)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Límite de subida (MB)</label>
+                  <input
+                    type="number"
                           value={systemConfig.fileUploadLimit}
-                          onChange={(_, value) => setSystemConfig({ ...systemConfig, fileUploadLimit: value })}
-                          min={1}
-                          max={100}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
+                    onChange={(e) => setSystemConfig({ ...systemConfig, fileUploadLimit: parseInt(e.target.value) })}
+                    min="1"
+                    max="100"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-                      <FormControl>
-                        <FormLabel>Timeout de sesión (segundos)</FormLabel>
-                        <NumberInput
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Timeout de sesión (segundos)</label>
+                  <input
+                    type="number"
                           value={systemConfig.sessionTimeout}
-                          onChange={(_, value) => setSystemConfig({ ...systemConfig, sessionTimeout: value })}
-                          min={1800}
-                          max={86400}
-                        >
-                          <NumberInputField />
-                          <NumberInputStepper>
-                            <NumberIncrementStepper />
-                            <NumberDecrementStepper />
-                          </NumberInputStepper>
-                        </NumberInput>
-                      </FormControl>
-                    </SimpleGrid>
+                    onChange={(e) => setSystemConfig({ ...systemConfig, sessionTimeout: parseInt(e.target.value) })}
+                    min="1800"
+                    max="86400"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
 
-                    <HStack justify="flex-end">
-                      <Button
-                        colorScheme="blue"
+              <div className="flex justify-end">
+                <button
                         onClick={handleSaveSystemConfig}
-                        isLoading={updateSystemConfigMutation.isLoading}
+                  disabled={updateSystemConfigMutation.isLoading}
+                  className="flex items-center px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
                       >
+                  {updateSystemConfigMutation.isLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
                         Guardar Configuración del Sistema
-                      </Button>
-                    </HStack>
-                  </VStack>
-                </TabPanel>
-              </TabPanels>
-            </Tabs>
-          </CardBody>
-        </Card>
-      </VStack>
-    </Box>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
 export default Settings;
-
-
-
