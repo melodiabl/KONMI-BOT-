@@ -1,4 +1,4 @@
-import db from './db.js';
+﻿import db from './db.js';
 import { getSocket } from './whatsapp.js';
 import * as baileys from 'AdonixBaileys';
 import { handleAI as handleAICommand, handleClasificar as handleClasificarCommand } from './commands.js';
@@ -18,7 +18,7 @@ import {
   handleStatusBot
 } from './subbot-commands.js';
 
-// Consolidación de comandos: reexportamos funciones de módulos específicos
+// ConsolidaciÃ³n de comandos: reexportamos funciones de mÃ³dulos especÃ­ficos
 import {
   // Media
   handleMusic,
@@ -53,26 +53,26 @@ import {
   handleBuscarArchivo
 } from './commands-extended.js';
 
-// Variables globales para configuración del bot
+// Variables globales para configuraciÃ³n del bot
 let modoPrivado = false;
 let modoAmigos = false;
 let advertenciasActivas = true;
 
-// Lista dinámica de números admin (solo el número principal del bot)
+// Lista dinÃ¡mica de nÃºmeros admin (solo el nÃºmero principal del bot)
 let dynamicAdminNumbers = [];
 
-// Helper: normalizar JID (remover sufijo :<num>, convertir LID→WID, y mapear @lid)
+// Helper: normalizar JID (remover sufijo :<num>, convertir LIDâ†’WID, y mapear @lid)
 function normalizeJid(jid) {
   if (!jid) return '';
   let withoutDevice = jid.replace(/:\d+/, '');
-  // Mapear sufijo @lid a servidor clásico
+  // Mapear sufijo @lid a servidor clÃ¡sico
   if (withoutDevice.endsWith('@lid')) {
     withoutDevice = withoutDevice.replace(/@lid$/, '@s.whatsapp.net');
   }
   try {
     const decoded = baileys.jidDecode(withoutDevice);
     if (decoded && decoded.user && decoded.server) {
-      // Forzar servidor clásico
+      // Forzar servidor clÃ¡sico
       const server = decoded.server === 'lid' ? 's.whatsapp.net' : decoded.server;
       return `${decoded.user}@${server}`;
     }
@@ -109,7 +109,7 @@ async function isOwnerOrAdmin(usuario, grupo = null) {
 }
 
 /**
- * Función para actualizar la lista de números admin
+ * FunciÃ³n para actualizar la lista de nÃºmeros admin
  */
 function updateAdminNumbers(newAdminNumbers) {
   const normalized = newAdminNumbers
@@ -119,11 +119,11 @@ function updateAdminNumbers(newAdminNumbers) {
   const base = dynamicAdminNumbers.map((num) => num.replace(/[^0-9]/g, ''));
   const merged = new Set([...base, ...normalized]);
   dynamicAdminNumbers = Array.from(merged);
-  console.log(`👑 Lista de admins actualizada: ${dynamicAdminNumbers.join(', ')}`);
+  console.log(`ðŸ‘‘ Lista de admins actualizada: ${dynamicAdminNumbers.join(', ')}`);
 }
 
 /**
- * Verificar si el bot está activo en un grupo
+ * Verificar si el bot estÃ¡ activo en un grupo
  */
 async function isBotActiveInGroup(grupoId) {
   try {
@@ -133,7 +133,7 @@ async function isBotActiveInGroup(grupoId) {
       return false; // Bot globalmente desactivado
     }
     
-    // Verificar estado específico del grupo
+    // Verificar estado especÃ­fico del grupo
     const grupo = await db('grupos_autorizados').where({ jid: grupoId }).first();
     return !grupo || grupo.bot_enabled !== false; // Por defecto activo si no hay registro
   } catch (error) {
@@ -166,91 +166,91 @@ async function logCommand(tipo, comando, usuario, grupo) {
   }
 }
 
-// Helper para construir un menú de ayuda más legible y bonito
+// Helper para construir un menÃº de ayuda mÃ¡s legible y bonito
 function buildPrettyHelp(isAdmin) {
-  const divider = '═══════════════════════════════════';
-  let text = `╔═══════════════════════════════════════╗\n`;
-  text += `║           🤖 *KONMI BOT* 🤖            ║\n`;
-  text += `║        *Panel de Comandos*              ║\n`;
-  text += `╚${divider}╝\n\n`;
+  const divider = 'â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•';
+  let text = `â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n`;
+  text += `â•‘           ðŸ¤– *KONMI BOT* ðŸ¤–            â•‘\n`;
+  text += `â•‘        *Panel de Comandos*              â•‘\n`;
+  text += `â•š${divider}â•\n\n`;
 
-  text += '🌟 *COMANDOS ESENCIALES*\n';
-  text += '┌─────────────────────────────────────────┐\n';
-  text += '│ `help` / `menu`     →  Muestra este menú │\n';
-  text += '│ `whoami`           →  Tu ficha de usuario│\n';
-  text += '│ `ia <texto>`       →  Pregunta a Gemini  │\n';
-  text += '│ `clasificar <txt>` →  Categoriza contenido│\n';
-  text += '└─────────────────────────────────────────┘\n\n';
+  text += 'ðŸŒŸ *COMANDOS ESENCIALES*\n';
+  text += 'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n';
+  text += 'â”‚ `help` / `menu`     â†’  Muestra este menÃº â”‚\n';
+  text += 'â”‚ `whoami`           â†’  Tu ficha de usuarioâ”‚\n';
+  text += 'â”‚ `ia <texto>`       â†’  Pregunta a Gemini  â”‚\n';
+  text += 'â”‚ `clasificar <txt>` â†’  Categoriza contenidoâ”‚\n';
+  text += 'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n';
 
-  text += '🤖 *GESTIÓN DE SUBBOTS*\n';
-  text += '┌─────────────────────────────────────────┐\n';
-  text += '│ `qr`              →  Crear subbot QR    │\n';
-  text += '│ `code`            →  Crear subbot CODE  │\n';
-  text += '│ `bots`            →  Lista tus subbots  │\n';
-  text += '│ `delbot <id>`     →  Elimina un subbot  │\n';
-  text += '│ `delsubbot <id>`  →  Elimina un subbot  │\n';
-  text += '└─────────────────────────────────────────┘\n\n';
+  text += 'ðŸ¤– *GESTIÃ“N DE SUBBOTS*\n';
+  text += 'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n';
+  text += 'â”‚ `qr`              â†’  Crear subbot QR    â”‚\n';
+  text += 'â”‚ `code`            â†’  Crear subbot CODE  â”‚\n';
+  text += 'â”‚ `bots`            â†’  Lista tus subbots  â”‚\n';
+  text += 'â”‚ `delbot <id>`     â†’  Elimina un subbot  â”‚\n';
+  text += 'â”‚ `delsubbot <id>`  â†’  Elimina un subbot  â”‚\n';
+  text += 'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n';
 
-  text += '🎧 *MEDIA & ENTRETENIMIENTO*\n';
-  text += '┌─────────────────────────────────────────┐\n';
-  text += '│ `play <búsqueda>` →  Audio de YouTube   │\n';
-  text += '│ `video <búsqueda>`→  Video de YouTube   │\n';
-  text += '│ `meme`            →  Meme aleatorio     │\n';
-  text += '│ `sticker`         →  Crear sticker      │\n';
-  text += '└─────────────────────────────────────────┘\n\n';
+  text += 'ðŸŽ§ *MEDIA & ENTRETENIMIENTO*\n';
+  text += 'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n';
+  text += 'â”‚ `play <bÃºsqueda>` â†’  Audio de YouTube   â”‚\n';
+  text += 'â”‚ `video <bÃºsqueda>`â†’  Video de YouTube   â”‚\n';
+  text += 'â”‚ `meme`            â†’  Meme aleatorio     â”‚\n';
+  text += 'â”‚ `sticker`         â†’  Crear sticker      â”‚\n';
+  text += 'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n';
 
-  text += '📂 *DESCARGAS & ARCHIVOS*\n';
-  text += '┌─────────────────────────────────────────┐\n';
-  text += '│ `descargar <url> <nombre> <cat>`       │\n';
-  text += '│ `guardar <cat>` (responde a media)     │\n';
-  text += '│ `archivos [cat]`  `misarchivos`        │\n';
-  text += '└─────────────────────────────────────────┘\n\n';
+  text += 'ðŸ“‚ *DESCARGAS & ARCHIVOS*\n';
+  text += 'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n';
+  text += 'â”‚ `descargar <url> <nombre> <cat>`       â”‚\n';
+  text += 'â”‚ `guardar <cat>` (responde a media)     â”‚\n';
+  text += 'â”‚ `archivos [cat]`  `misarchivos`        â”‚\n';
+  text += 'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n';
 
-  text += '📚 *APORTES & PEDIDOS*\n';
-  text += '┌─────────────────────────────────────────┐\n';
-  text += '│ `aportar <tipo> <contenido>` → Enviar  │\n';
-  text += '│ `myaportes [tipo]`          → Tus aportes│\n';
-  text += '│ `aportes [tipo]`            → Todos     │\n';
-  text += '│ `pedido <tema>`             → Hacer pedido│\n';
-  text += '│ `pedidos`                   → Tus pedidos│\n';
-  text += '└─────────────────────────────────────────┘\n\n';
+  text += 'ðŸ“š *APORTES & PEDIDOS*\n';
+  text += 'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n';
+  text += 'â”‚ `aportar <tipo> <contenido>` â†’ Enviar  â”‚\n';
+  text += 'â”‚ `myaportes [tipo]`          â†’ Tus aportesâ”‚\n';
+  text += 'â”‚ `aportes [tipo]`            â†’ Todos     â”‚\n';
+  text += 'â”‚ `pedido <tema>`             â†’ Hacer pedidoâ”‚\n';
+  text += 'â”‚ `pedidos`                   â†’ Tus pedidosâ”‚\n';
+  text += 'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n';
 
-  text += '🗳️ *VOTACIONES*\n';
-  text += '┌─────────────────────────────────────────┐\n';
-  text += '│ `crearvotacion <pregunta|op1|op2...>`  │\n';
-  text += '│ `votar <opción>`  `cerrarvotacion <ID>` │\n';
-  text += '└─────────────────────────────────────────┘\n\n';
+  text += 'ðŸ—³ï¸ *VOTACIONES*\n';
+  text += 'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n';
+  text += 'â”‚ `crearvotacion <pregunta|op1|op2...>`  â”‚\n';
+  text += 'â”‚ `votar <opciÃ³n>`  `cerrarvotacion <ID>` â”‚\n';
+  text += 'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n';
 
   if (isAdmin) {
-    text += '🛠️ *HERRAMIENTAS ADMIN*\n';
-    text += '┌─────────────────────────────────────────┐\n';
-    text += '│ `bot on/off`     →  Activar/desactivar │\n';
-    text += '│ `bot global on/off` →  Modo global      │\n';
-    text += '│ `update`         →  Actualizar bot      │\n';
-    text += '│ `logs [tipo]`    →  Ver logs del sistema│\n';
-    text += '│ `lock` / `unlock`→  Bloquear/desbloquear│\n';
-    text += '│ `addgroup` / `delgroup` →  Gestionar grupos│\n';
-    text += '└─────────────────────────────────────────┘\n\n';
+    text += 'ðŸ› ï¸ *HERRAMIENTAS ADMIN*\n';
+    text += 'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n';
+    text += 'â”‚ `bot on/off`     â†’  Activar/desactivar â”‚\n';
+    text += 'â”‚ `bot global on/off` â†’  Modo global      â”‚\n';
+    text += 'â”‚ `update`         â†’  Actualizar bot      â”‚\n';
+    text += 'â”‚ `logs [tipo]`    â†’  Ver logs del sistemaâ”‚\n';
+    text += 'â”‚ `lock` / `unlock`â†’  Bloquear/desbloquearâ”‚\n';
+    text += 'â”‚ `addgroup` / `delgroup` â†’  Gestionar gruposâ”‚\n';
+    text += 'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n';
   }
 
-  text += '💡 *CONSEJOS DE USO*\n';
-  text += '┌─────────────────────────────────────────┐\n';
-  text += '│ • Usa `/`, `!` o `.` para comandos      │\n';
-  text += '│ • Algunos comandos requieren admin      │\n';
-  text += '│ • Los subbots se vencen: guarda QR/code │\n';
-  text += '│ • El bot detecta tu número automáticamente│\n';
-  text += '│ • Escribe `help <comando>` para más info│\n';
-  text += '└─────────────────────────────────────────┘\n\n';
+  text += 'ðŸ’¡ *CONSEJOS DE USO*\n';
+  text += 'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n';
+  text += 'â”‚ â€¢ Usa `/`, `!` o `.` para comandos      â”‚\n';
+  text += 'â”‚ â€¢ Algunos comandos requieren admin      â”‚\n';
+  text += 'â”‚ â€¢ Los subbots se vencen: guarda QR/code â”‚\n';
+  text += 'â”‚ â€¢ El bot detecta tu nÃºmero automÃ¡ticamenteâ”‚\n';
+  text += 'â”‚ â€¢ Escribe `help <comando>` para mÃ¡s infoâ”‚\n';
+  text += 'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n';
 
-  text += `╔═══════════════════════════════════════╗\n`;
-  text += `║        🚀 *¡Disfruta usando el bot!* 🚀 ║\n`;
-  text += `║           *Versión 2.5 Completa*        ║\n`;
-  text += `╚${divider}╝\n`;
+  text += `â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n`;
+  text += `â•‘        ðŸš€ *Â¡Disfruta usando el bot!* ðŸš€ â•‘\n`;
+  text += `â•‘           *VersiÃ³n 2.5 Completa*        â•‘\n`;
+  text += `â•š${divider}â•\n`;
 
   return text;
 }
 
-// Resolver nombre mostrable a partir de un JID/número: @username, @NombreWA o @numero
+// Resolver nombre mostrable a partir de un JID/nÃºmero: @username, @NombreWA o @numero
 async function getDisplayMention(userJidOrNum) {
   try {
     const num = String(userJidOrNum || '').split('@')[0].split(':')[0];
@@ -271,7 +271,7 @@ async function getDisplayMention(userJidOrNum) {
  */
 async function handleHelp(usuario, grupo, isGroup) {
   const isAdmin = await isOwnerOrAdmin(usuario, grupo);
-  // Nuevo formato más tipográfico y legible
+  // Nuevo formato mÃ¡s tipogrÃ¡fico y legible
   const pretty = buildPrettyHelp(isAdmin);
   await logCommand('consulta', 'help', usuario, grupo);
   return { success: true, message: pretty };
@@ -286,7 +286,7 @@ const handleClasificar = handleClasificarCommand;
  */
 async function handleAddGroup(usuario, grupo, groupName) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede activar el bot en grupos.' };
+    return { success: false, message: 'âŒ Solo Admin puede activar el bot en grupos.' };
   }
   
   try {
@@ -299,7 +299,7 @@ async function handleAddGroup(usuario, grupo, groupName) {
     }).onConflict('jid').merge(['nombre', 'bot_enabled']);
     
     await logCommand('administracion', 'addgroup', usuario, grupo);
-    return { success: true, message: '✅ Bot activado en el grupo correctamente.' };
+    return { success: true, message: 'âœ… Bot activado en el grupo correctamente.' };
   } catch (error) {
     return { success: false, message: 'Error al activar bot en el grupo.' };
   }
@@ -310,7 +310,7 @@ async function handleAddGroup(usuario, grupo, groupName) {
  */
 async function handleDelGroup(usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede desactivar el bot en grupos.' };
+    return { success: false, message: 'âŒ Solo Admin puede desactivar el bot en grupos.' };
   }
   
   try {
@@ -319,7 +319,7 @@ async function handleDelGroup(usuario, grupo) {
     });
     
     await logCommand('administracion', 'delgroup', usuario, grupo);
-    return { success: true, message: '✅ Bot desactivado en el grupo correctamente.' };
+    return { success: true, message: 'âœ… Bot desactivado en el grupo correctamente.' };
   } catch (error) {
     return { success: false, message: 'Error al desactivar bot en el grupo.' };
   }
@@ -332,43 +332,43 @@ async function handleMyAportes(usuario, grupo, filtroTipo = null) {
   try {
     let rows = await db('aportes').where({ usuario }).orderBy('fecha', 'desc').limit(50);
     if (filtroTipo) rows = rows.filter(r => r.tipo === filtroTipo);
-    if (rows.length === 0) return { success: true, message: '📝 No tienes aportes registrados.' };
+    if (rows.length === 0) return { success: true, message: 'ðŸ“ No tienes aportes registrados.' };
     const byTipo = rows.reduce((acc, r) => {
       (acc[r.tipo || 'sin_tipo'] ||= []).push(r);
       return acc;
     }, {});
     const order = ['manhwa', 'manhwas_bls', 'series', 'series_videos', 'series_bls', 'anime', 'anime_bls', 'extra_imagen', 'ilustracion', 'extra'];
-    let message = `📝 *Tus Aportes (${rows.length})*\n`;
+    let message = `ðŸ“ *Tus Aportes (${rows.length})*\n`;
     const tipos = Object.keys(byTipo).sort((a,b) => order.indexOf(a) - order.indexOf(b));
     for (const tipo of tipos) {
-      message += `\n• ${tipo.toUpperCase()} (${byTipo[tipo].length})\n`;
+      message += `\nâ€¢ ${tipo.toUpperCase()} (${byTipo[tipo].length})\n`;
       byTipo[tipo].slice(0, 10).forEach((r, i) => {
         const fecha = new Date(r.fecha).toLocaleDateString('es-ES');
-        message += `  ${i + 1}. ${r.contenido} — ${fecha}\n`;
+        message += `  ${i + 1}. ${r.contenido} â€” ${fecha}\n`;
       });
     }
     await logCommand('consulta', 'myaportes', usuario, grupo);
     return { success: true, message };
   } catch (error) {
-    return { success: false, message: '❌ Error al obtener tus aportes.' };
+    return { success: false, message: 'âŒ Error al obtener tus aportes.' };
   }
 }
 
 /**
- * /aportes - Lista todos los aportes (solo si el bot está activo)
+ * /aportes - Lista todos los aportes (solo si el bot estÃ¡ activo)
  */
 async function handleAportes(usuario, grupo, isGroup, filtroTipo = null) {
   if (isGroup && !await isBotActiveInGroup(grupo)) {
-    return { success: false, message: '❌ El bot no está activo en este grupo.' };
+    return { success: false, message: 'âŒ El bot no estÃ¡ activo en este grupo.' };
   }
   
   try {
     let aportes = await db('aportes').orderBy('fecha', 'desc').limit(50);
     if (filtroTipo) aportes = aportes.filter(a => a.tipo === filtroTipo);
     if (aportes.length === 0) {
-      return { success: true, message: '📝 No hay aportes registrados.' };
+      return { success: true, message: 'ðŸ“ No hay aportes registrados.' };
     }
-    // Resolver nombres de usuario a partir del número (JID)
+    // Resolver nombres de usuario a partir del nÃºmero (JID)
     const uniqueNums = [...new Set(aportes.map(a => String(a.usuario).split('@')[0].split(':')[0]))];
     const users = await db('usuarios').whereIn('whatsapp_number', uniqueNums).select('whatsapp_number','username');
     const nameByNumber = Object.fromEntries(users.map(u => [u.whatsapp_number, u.username]));
@@ -381,16 +381,16 @@ async function handleAportes(usuario, grupo, isGroup, filtroTipo = null) {
 
     const byTipo = aportes.reduce((acc, r) => { (acc[r.tipo || 'sin_tipo'] ||= []).push(r); return acc; }, {});
     const order = ['manhwa', 'manhwas_bls', 'series', 'series_videos', 'series_bls', 'anime', 'anime_bls', 'extra_imagen', 'ilustracion', 'extra'];
-    let message = `📝 *Aportes (${aportes.length})*\n`;
+    let message = `ðŸ“ *Aportes (${aportes.length})*\n`;
     const tipos = Object.keys(byTipo).sort((a,b) => order.indexOf(a) - order.indexOf(b));
     for (const tipo of tipos) {
-      message += `\n• ${tipo.toUpperCase()} (${byTipo[tipo].length})\n`;
+      message += `\nâ€¢ ${tipo.toUpperCase()} (${byTipo[tipo].length})\n`;
       byTipo[tipo].slice(0, 10).forEach((r, i) => {
         const fecha = new Date(r.fecha).toLocaleDateString('es-ES');
         const num = String(r.usuario).split('@')[0].split(':')[0];
         const resolved = nameByNumber[num] || waByNumber[num] || num;
         const uname = `@${resolved}`;
-        message += `  ${i + 1}. ${r.contenido} — ${uname} — ${fecha}\n`;
+        message += `  ${i + 1}. ${r.contenido} â€” ${uname} â€” ${fecha}\n`;
       });
     }
     
@@ -409,16 +409,16 @@ async function handleManhwas(usuario, grupo) {
     const manhwas = await db.all('SELECT * FROM manhwas ORDER BY titulo');
     
     if (manhwas.length === 0) {
-      return { success: true, message: '📚 No hay manhwas registrados.' };
+      return { success: true, message: 'ðŸ“š No hay manhwas registrados.' };
     }
     
-    let message = `📚 *Manhwas disponibles (${manhwas.length}):*\n\n`;
+    let message = `ðŸ“š *Manhwas disponibles (${manhwas.length}):*\n\n`;
     manhwas.forEach((manhwa, index) => {
       message += `${index + 1}. *${manhwa.titulo}*\n`;
-      message += `   👤 Autor: ${manhwa.autor}\n`;
-      message += `   📊 Estado: ${manhwa.estado}\n`;
+      message += `   ðŸ‘¤ Autor: ${manhwa.autor}\n`;
+      message += `   ðŸ“Š Estado: ${manhwa.estado}\n`;
       if (manhwa.descripcion) {
-        message += `   📝 ${manhwa.descripcion.substring(0, 50)}...\n`;
+        message += `   ðŸ“ ${manhwa.descripcion.substring(0, 50)}...\n`;
       }
       message += `\n`;
     });
@@ -437,7 +437,7 @@ async function handleAddAporte(contenido, tipo, usuario, grupo, fecha) {
   try {
     await db('aportes').insert({ contenido, tipo, usuario, grupo, fecha });
     await logCommand('comando', 'addaporte', usuario, grupo);
-    return { success: true, message: `✅ Aporte de tipo "${tipo}" guardado correctamente.` };
+    return { success: true, message: `âœ… Aporte de tipo "${tipo}" guardado correctamente.` };
   } catch (error) {
     return { success: false, message: 'Error al guardar aporte.' };
   }
@@ -446,19 +446,19 @@ async function handleAddAporte(contenido, tipo, usuario, grupo, fecha) {
 /** Cambiar estado de aporte desde WhatsApp */
 async function handleAporteEstado(id, estado, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede cambiar estado de aportes.' };
+    return { success: false, message: 'âŒ Solo Admin puede cambiar estado de aportes.' };
   }
   const allowed = ['pendiente', 'en_revision', 'completado'];
   const normalized = (estado || '').toLowerCase();
   if (!allowed.includes(normalized)) {
-    return { success: false, message: '❌ Estado inválido. Usa: pendiente | en_revision | completado' };
+    return { success: false, message: 'âŒ Estado invÃ¡lido. Usa: pendiente | en_revision | completado' };
   }
   try {
     const aporte = await db('aportes').where({ id }).first();
-    if (!aporte) return { success: false, message: `❌ Aporte #${id} no encontrado.` };
+    if (!aporte) return { success: false, message: `âŒ Aporte #${id} no encontrado.` };
     await db('aportes').where({ id }).update({ estado: normalized, procesado_por: usuario, fecha_procesado: new Date().toISOString() });
     await logCommand('administracion', 'aporteestado', usuario, grupo);
-    return { success: true, message: `✅ Aporte #${id} actualizado a "${normalized}".` };
+    return { success: true, message: `âœ… Aporte #${id} actualizado a "${normalized}".` };
   } catch (e) {
     return { success: false, message: 'Error al actualizar estado de aporte.' };
   }
@@ -469,14 +469,14 @@ async function handleAporteEstado(id, estado, usuario, grupo) {
  */
 async function handleAddManhwa(datos, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede agregar manhwas.' };
+    return { success: false, message: 'âŒ Solo Admin puede agregar manhwas.' };
   }
   
   try {
-    // Parsear datos: título|autor|género|estado|descripción|url|proveedor
+    // Parsear datos: tÃ­tulo|autor|gÃ©nero|estado|descripciÃ³n|url|proveedor
     const parts = datos.split('|');
     if (parts.length < 4) {
-      return { success: false, message: '❌ Formato: título|autor|género|estado|descripción|url|proveedor' };
+      return { success: false, message: 'âŒ Formato: tÃ­tulo|autor|gÃ©nero|estado|descripciÃ³n|url|proveedor' };
     }
     
     const [titulo, autor, genero, estado, descripcion = '', url = '', proveedor = 'General'] = parts;
@@ -489,29 +489,29 @@ async function handleAddManhwa(datos, usuario, grupo) {
     await stmt.finalize();
     
     await logCommand('administracion', 'addmanhwa', usuario, grupo);
-    return { success: true, message: `✅ Manhwa "${titulo}" agregado correctamente.` };
+    return { success: true, message: `âœ… Manhwa "${titulo}" agregado correctamente.` };
   } catch (error) {
     return { success: false, message: 'Error al agregar manhwa.' };
   }
 }
 
 /**
- * /addserie [datos] - Permite agregar una nueva serie (cualquier usuario si el bot está activo)
+ * /addserie [datos] - Permite agregar una nueva serie (cualquier usuario si el bot estÃ¡ activo)
  */
 async function handleAddSerie(datos, usuario, grupo, isGroup) {
-  // Verificar si el bot está activo en el grupo o usuario admin
+  // Verificar si el bot estÃ¡ activo en el grupo o usuario admin
   if (isGroup && !await isBotActiveInGroup(grupo) && !await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ El bot no está activo en este grupo para agregar series.' };
+    return { success: false, message: 'âŒ El bot no estÃ¡ activo en este grupo para agregar series.' };
   }
   
   try {
-    // Parsear datos con formato más simple: título|género|estado|descripción
+    // Parsear datos con formato mÃ¡s simple: tÃ­tulo|gÃ©nero|estado|descripciÃ³n
     const parts = datos.split('|');
     if (parts.length < 2) {
-      return { success: false, message: '❌ Formato: título|género|estado|descripción\nEjemplo: /addserie Attack on Titan|Acción|Finalizada|Serie sobre titanes' };
+      return { success: false, message: 'âŒ Formato: tÃ­tulo|gÃ©nero|estado|descripciÃ³n\nEjemplo: /addserie Attack on Titan|AcciÃ³n|Finalizada|Serie sobre titanes' };
     }
     
-    const [titulo, genero = 'Serie', estado = 'En emisión', descripcion = ''] = parts;
+    const [titulo, genero = 'Serie', estado = 'En emisiÃ³n', descripcion = ''] = parts;
     const fecha_registro = new Date().toISOString();
     
     // Verificar si la serie ya existe
@@ -521,7 +521,7 @@ async function handleAddSerie(datos, usuario, grupo, isGroup) {
     );
     
     if (serieExistente) {
-      return { success: false, message: `❌ La serie "${titulo}" ya existe en la base de datos.` };
+      return { success: false, message: `âŒ La serie "${titulo}" ya existe en la base de datos.` };
     }
     
     const stmt = await db.prepare(
@@ -530,7 +530,7 @@ async function handleAddSerie(datos, usuario, grupo, isGroup) {
     await stmt.run(titulo, 'Varios', `Serie - ${genero}`, estado, descripcion, '', 'Series', fecha_registro, usuario);
     await stmt.finalize();
     
-    // También registrar como aporte
+    // TambiÃ©n registrar como aporte
     const stmtAporte = await db.prepare(
       'INSERT INTO aportes (contenido, tipo, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)'
     );
@@ -541,7 +541,7 @@ async function handleAddSerie(datos, usuario, grupo, isGroup) {
     const mention = await getDisplayMention(usuario);
     return { 
       success: true, 
-      message: `✅ *Serie agregada correctamente:*\n\n📺 **${titulo}**\n🏷️ Género: ${genero}\n📊 Estado: ${estado}\n📝 ${descripcion}\n👤 Agregada por: ${mention}` 
+      message: `âœ… *Serie agregada correctamente:*\n\nðŸ“º **${titulo}**\nðŸ·ï¸ GÃ©nero: ${genero}\nðŸ“Š Estado: ${estado}\nðŸ“ ${descripcion}\nðŸ‘¤ Agregada por: ${mention}` 
     };
   } catch (error) {
     return { success: false, message: 'Error al agregar serie.' };
@@ -559,10 +559,10 @@ async function handleSeries(usuario, grupo) {
     );
     
     if (series.length === 0) {
-      return { success: true, message: '📺 No hay series registradas.' };
+      return { success: true, message: 'ðŸ“º No hay series registradas.' };
     }
     
-    // Resolver nombres de quien registró
+    // Resolver nombres de quien registrÃ³
     const nums = [...new Set(series.map(s => String(s.usuario_registro || '').split('@')[0].split(':')[0]))].filter(Boolean);
     const dbUsers = nums.length ? await db('usuarios').whereIn('whatsapp_number', nums).select('whatsapp_number','username') : [];
     const nameByNumber = Object.fromEntries(dbUsers.map(u => [u.whatsapp_number, u.username]));
@@ -570,17 +570,17 @@ async function handleSeries(usuario, grupo) {
     const waNames = missing.length ? await db('wa_contacts').whereIn('wa_number', missing).select('wa_number','display_name') : [];
     const waByNumber = Object.fromEntries(waNames.map(w => [w.wa_number, w.display_name]));
 
-    let message = `📺 *Series disponibles (${series.length}):*\n\n`;
+    let message = `ðŸ“º *Series disponibles (${series.length}):*\n\n`;
     series.forEach((serie, index) => {
       message += `${index + 1}. **${serie.titulo}**\n`;
-      message += `   🏷️ ${serie.genero.replace('Serie - ', '')}\n`;
-      message += `   📊 Estado: ${serie.estado}\n`;
+      message += `   ðŸ·ï¸ ${serie.genero.replace('Serie - ', '')}\n`;
+      message += `   ðŸ“Š Estado: ${serie.estado}\n`;
       if (serie.descripcion) {
-        message += `   📝 ${serie.descripcion.substring(0, 60)}...\n`;
+        message += `   ðŸ“ ${serie.descripcion.substring(0, 60)}...\n`;
       }
       const num = String(serie.usuario_registro || '').split('@')[0].split(':')[0];
       const uname = num ? `@${nameByNumber[num] || waByNumber[num] || num}` : '@usuario';
-      message += `   👤 Por: ${uname}\n\n`;
+      message += `   ðŸ‘¤ Por: ${uname}\n\n`;
     });
     
     await logCommand('consulta', 'series', usuario, grupo);
@@ -624,43 +624,43 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
     await stmt.run(contenido, 'pendiente', usuario, grupo, fecha);
     await stmt.finalize();
 
-    let response = `📋 *Pedido registrado:* "${contenido}"\n\n`;
+    let response = `ðŸ“‹ *Pedido registrado:* "${contenido}"\n\n`;
 
-    // Si encontró contenido, mencionarlo
+    // Si encontrÃ³ contenido, mencionarlo
     if (manhwaEncontrado) {
-      response += `✅ *¡Encontrado en manhwas!*\n`;
-      response += `📚 **${manhwaEncontrado.titulo}**\n`;
-      response += `👤 Autor: ${manhwaEncontrado.autor}\n`;
-      response += `📊 Estado: ${manhwaEncontrado.estado}\n`;
+      response += `âœ… *Â¡Encontrado en manhwas!*\n`;
+      response += `ðŸ“š **${manhwaEncontrado.titulo}**\n`;
+      response += `ðŸ‘¤ Autor: ${manhwaEncontrado.autor}\n`;
+      response += `ðŸ“Š Estado: ${manhwaEncontrado.estado}\n`;
       if (manhwaEncontrado.descripcion) {
-        response += `📝 ${manhwaEncontrado.descripcion}\n`;
+        response += `ðŸ“ ${manhwaEncontrado.descripcion}\n`;
       }
       if (manhwaEncontrado.url) {
-        response += `🔗 ${manhwaEncontrado.url}\n`;
+        response += `ðŸ”— ${manhwaEncontrado.url}\n`;
       }
       response += `\n`;
     }
 
     if (aporteEncontrado) {
-      response += `✅ *¡Encontrado en aportes!*\n`;
-      response += `📁 **${aporteEncontrado.contenido}**\n`;
-      response += `🏷️ Tipo: ${aporteEncontrado.tipo}\n`;
+      response += `âœ… *Â¡Encontrado en aportes!*\n`;
+      response += `ðŸ“ **${aporteEncontrado.contenido}**\n`;
+      response += `ðŸ·ï¸ Tipo: ${aporteEncontrado.tipo}\n`;
       {
         const num = String(aporteEncontrado.usuario || '').split('@')[0].split(':')[0];
         const u = await db('usuarios').where({ whatsapp_number: num }).select('username').first();
         const wa = u?.username ? null : await db('wa_contacts').where({ wa_number: num }).select('display_name').first();
         const mention = `@${u?.username || wa?.display_name || num}`;
-        response += `👤 Aportado por: ${mention}\n`;
+        response += `ðŸ‘¤ Aportado por: ${mention}\n`;
       }
-      response += `📅 Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
+      response += `ðŸ“… Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
     }
 
-    // Buscar y enviar archivos físicos si existen
+    // Buscar y enviar archivos fÃ­sicos si existen
     let archivosEnviados = 0;
     if (archivosEncontrados.length > 0 && sock) {
-      response += `📁 *Archivos encontrados:*\n`;
+      response += `ðŸ“ *Archivos encontrados:*\n`;
 
-      for (const archivo of archivosEncontrados.slice(0, 5)) { // Máximo 5 archivos
+      for (const archivo of archivosEncontrados.slice(0, 5)) { // MÃ¡ximo 5 archivos
         try {
           const fs = await import('fs');
           const path = await import('path');
@@ -685,12 +685,12 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
             if (mediaType === 'image') {
               sentMessage = await sock.sendMessage(remoteJid, {
                 image: fileBuffer,
-                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}\n👤 Subido por: ${archivo.usuario}\n📅 ${new Date(archivo.fecha).toLocaleDateString()}`
+                caption: `ðŸ“ ${archivo.filename}\nðŸ·ï¸ ${archivo.category}\nðŸ‘¤ Subido por: ${archivo.usuario}\nðŸ“… ${new Date(archivo.fecha).toLocaleDateString()}`
               });
             } else if (mediaType === 'video') {
               sentMessage = await sock.sendMessage(remoteJid, {
                 video: fileBuffer,
-                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}`
+                caption: `ðŸ“ ${archivo.filename}\nðŸ·ï¸ ${archivo.category}`
               });
             } else if (mediaType === 'audio') {
               sentMessage = await sock.sendMessage(remoteJid, {
@@ -701,14 +701,14 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
               sentMessage = await sock.sendMessage(remoteJid, {
                 document: fileBuffer,
                 fileName: archivo.filename,
-                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}`
+                caption: `ðŸ“ ${archivo.filename}\nðŸ·ï¸ ${archivo.category}`
               });
             }
 
-            response += `✅ *Enviado:* ${archivo.filename} (${archivo.category})\n`;
+            response += `âœ… *Enviado:* ${archivo.filename} (${archivo.category})\n`;
             archivosEnviados++;
 
-            // Marcar el pedido como completado si se envió al menos un archivo
+            // Marcar el pedido como completado si se enviÃ³ al menos un archivo
             if (archivosEnviados === 1) {
               await db('pedidos')
                 .where({ texto: contenido, usuario: usuario, grupo: grupo })
@@ -717,20 +717,20 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
           }
         } catch (fileError) {
           console.error(`Error enviando archivo ${archivo.filename}:`, fileError);
-          response += `❌ Error enviando: ${archivo.filename}\n`;
+          response += `âŒ Error enviando: ${archivo.filename}\n`;
         }
       }
 
       if (archivosEnviados === 0) {
-        response += `⚠️ Archivos encontrados pero no se pudieron enviar\n`;
+        response += `âš ï¸ Archivos encontrados pero no se pudieron enviar\n`;
       }
     }
 
     if (!manhwaEncontrado && !aporteEncontrado && archivosEnviados === 0) {
-      response += `⏳ *No encontrado en la base de datos*\n`;
-      response += `Tu pedido ha sido registrado y será revisado por los administradores.\n`;
+      response += `â³ *No encontrado en la base de datos*\n`;
+      response += `Tu pedido ha sido registrado y serÃ¡ revisado por los administradores.\n`;
     } else if (archivosEnviados > 0) {
-      response += `\n🎉 *¡Pedido completado automáticamente!* ✅`;
+      response += `\nðŸŽ‰ *Â¡Pedido completado automÃ¡ticamente!* âœ…`;
     }
 
     await logCommand('comando', 'pedido', usuario, grupo);
@@ -752,15 +752,15 @@ async function handlePedidos(usuario, grupo) {
     );
     
     if (pedidos.length === 0) {
-      return { success: true, message: '📋 No tienes pedidos registrados.' };
+      return { success: true, message: 'ðŸ“‹ No tienes pedidos registrados.' };
     }
     
-    let message = `📋 *Tus pedidos (${pedidos.length}):*\n\n`;
+    let message = `ðŸ“‹ *Tus pedidos (${pedidos.length}):*\n\n`;
     pedidos.forEach((pedido, index) => {
       const fecha = new Date(pedido.fecha).toLocaleDateString();
-      const estado = pedido.estado === 'pendiente' ? '⏳' : pedido.estado === 'completado' ? '✅' : '❌';
+      const estado = pedido.estado === 'pendiente' ? 'â³' : pedido.estado === 'completado' ? 'âœ…' : 'âŒ';
       message += `${index + 1}. ${estado} ${pedido.texto}\n`;
-      message += `   📅 ${fecha} - Estado: ${pedido.estado}\n\n`;
+      message += `   ðŸ“… ${fecha} - Estado: ${pedido.estado}\n\n`;
     });
     
     await logCommand('consulta', 'pedidos', usuario, grupo);
@@ -793,7 +793,7 @@ async function handleExtra(nombre, usuario, grupo, fecha) {
     await stmt.finalize();
     
     await logCommand('comando', 'extra', usuario, grupo);
-    return { success: true, message: `✅ Extra "${nombre}" registrado correctamente.` };
+    return { success: true, message: `âœ… Extra "${nombre}" registrado correctamente.` };
   } catch (error) {
     return { success: false, message: 'Error al registrar extra.' };
   }
@@ -809,14 +809,14 @@ async function handleIlustraciones(usuario, grupo) {
     );
     
     if (ilustraciones.length === 0) {
-      return { success: true, message: '🎨 No hay ilustraciones registradas.' };
+      return { success: true, message: 'ðŸŽ¨ No hay ilustraciones registradas.' };
     }
     
-    let message = `🎨 *Ilustraciones disponibles (${ilustraciones.length}):*\n\n`;
+    let message = `ðŸŽ¨ *Ilustraciones disponibles (${ilustraciones.length}):*\n\n`;
     ilustraciones.forEach((ilustracion, index) => {
       const fecha = new Date(ilustracion.fecha).toLocaleDateString();
       message += `${index + 1}. Por @${ilustracion.usuario}\n`;
-      message += `   📅 ${fecha}\n\n`;
+      message += `   ðŸ“… ${fecha}\n\n`;
     });
     
     await logCommand('consulta', 'ilustraciones', usuario, grupo);
@@ -827,11 +827,11 @@ async function handleIlustraciones(usuario, grupo) {
 }
 
 /**
- * /logs - Muestra últimos registros de actividad (solo Admin)
+ * /logs - Muestra Ãºltimos registros de actividad (solo Admin)
  */
 async function handleLogs(usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede ver logs.' };
+    return { success: false, message: 'âŒ Solo Admin puede ver logs.' };
   }
   
   try {
@@ -840,15 +840,15 @@ async function handleLogs(usuario, grupo) {
     );
     
     if (logs.length === 0) {
-      return { success: true, message: '📊 No hay logs registrados.' };
+      return { success: true, message: 'ðŸ“Š No hay logs registrados.' };
     }
     
-    let message = `📊 *Últimos logs (${logs.length}):*\n\n`;
+    let message = `ðŸ“Š *Ãšltimos logs (${logs.length}):*\n\n`;
     logs.forEach((log, index) => {
       const fecha = new Date(log.fecha).toLocaleString();
       message += `${index + 1}. *${log.comando}* (${log.tipo})\n`;
-      message += `   👤 @${log.usuario}\n`;
-      message += `   📅 ${fecha}\n\n`;
+      message += `   ðŸ‘¤ @${log.usuario}\n`;
+      message += `   ðŸ“… ${fecha}\n\n`;
     });
     
     await logCommand('consulta', 'logs', usuario, grupo);
@@ -863,7 +863,7 @@ async function handleLogs(usuario, grupo) {
  */
 async function handlePrivado(usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede cambiar el modo privado.' };
+    return { success: false, message: 'âŒ Solo Admin puede cambiar el modo privado.' };
   }
   
   modoPrivado = !modoPrivado;
@@ -871,7 +871,7 @@ async function handlePrivado(usuario, grupo) {
   await logCommand('configuracion', 'privado', usuario, grupo);
   return { 
     success: true, 
-    message: `🔒 Modo privado ${modoPrivado ? 'activado' : 'desactivado'}.` 
+    message: `ðŸ”’ Modo privado ${modoPrivado ? 'activado' : 'desactivado'}.` 
   };
 }
 
@@ -880,7 +880,7 @@ async function handlePrivado(usuario, grupo) {
  */
 async function handleAmigos(usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede cambiar el modo amigos.' };
+    return { success: false, message: 'âŒ Solo Admin puede cambiar el modo amigos.' };
   }
   
   modoAmigos = !modoAmigos;
@@ -888,7 +888,7 @@ async function handleAmigos(usuario, grupo) {
   await logCommand('configuracion', 'amigos', usuario, grupo);
   return { 
     success: true, 
-    message: `👥 Modo amigos ${modoAmigos ? 'activado' : 'desactivado'}.` 
+    message: `ðŸ‘¥ Modo amigos ${modoAmigos ? 'activado' : 'desactivado'}.` 
   };
 }
 
@@ -897,7 +897,7 @@ async function handleAmigos(usuario, grupo) {
  */
 async function handleAdvertencias(estado, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede configurar advertencias.' };
+    return { success: false, message: 'âŒ Solo Admin puede configurar advertencias.' };
   }
   
   if (estado === 'on') {
@@ -905,39 +905,39 @@ async function handleAdvertencias(estado, usuario, grupo) {
   } else if (estado === 'off') {
     advertenciasActivas = false;
   } else {
-    return { success: false, message: '❌ Uso: /advertencias on o /advertencias off' };
+    return { success: false, message: 'âŒ Uso: /advertencias on o /advertencias off' };
   }
   
   await logCommand('configuracion', 'advertencias', usuario, grupo);
   return { 
     success: true, 
-    message: `⚠️ Advertencias ${advertenciasActivas ? 'activadas' : 'desactivadas'}.` 
+    message: `âš ï¸ Advertencias ${advertenciasActivas ? 'activadas' : 'desactivadas'}.` 
   };
 }
 
 /**
- * /votar [opción] - Permite votar en una votación activa
+ * /votar [opciÃ³n] - Permite votar en una votaciÃ³n activa
  */
 async function handleVotar(opcion, usuario, grupo) {
   try {
-    // Buscar votación activa
+    // Buscar votaciÃ³n activa
     const votacion = await db.get(
       'SELECT * FROM votaciones WHERE estado = ? ORDER BY fecha_inicio DESC LIMIT 1',
       ['activa']
     );
     
     if (!votacion) {
-      return { success: false, message: '❌ No hay votaciones activas.' };
+      return { success: false, message: 'âŒ No hay votaciones activas.' };
     }
     
-    // Verificar si ya votó
+    // Verificar si ya votÃ³
     const votoExistente = await db.get(
       'SELECT * FROM votos WHERE votacion_id = ? AND usuario = ?',
       [votacion.id, usuario]
     );
     
     if (votoExistente) {
-      return { success: false, message: '❌ Ya has votado en esta votación.' };
+      return { success: false, message: 'âŒ Ya has votado en esta votaciÃ³n.' };
     }
     
     // Registrar voto
@@ -949,29 +949,29 @@ async function handleVotar(opcion, usuario, grupo) {
     await stmt.finalize();
     
     await logCommand('comando', 'votar', usuario, grupo);
-    return { success: true, message: `✅ Voto registrado: "${opcion}"` };
+    return { success: true, message: `âœ… Voto registrado: "${opcion}"` };
   } catch (error) {
     return { success: false, message: 'Error al registrar voto.' };
   }
 }
 
 /**
- * /crearvotacion [pregunta | opción1 | opción2...] - Crea una nueva votación
+ * /crearvotacion [pregunta | opciÃ³n1 | opciÃ³n2...] - Crea una nueva votaciÃ³n
  */
 async function handleCrearVotacion(datos, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede crear votaciones.' };
+    return { success: false, message: 'âŒ Solo Admin puede crear votaciones.' };
   }
   
   try {
     const parts = datos.split('|').map(part => part.trim());
     if (parts.length < 3) {
-      return { success: false, message: '❌ Formato: pregunta | opción1 | opción2 | ...\n\nEjemplo: /crearvotacion ¿Cuál es tu manhwa favorito? | Solo Leveling | Tower of God | The Beginning After The End' };
+      return { success: false, message: 'âŒ Formato: pregunta | opciÃ³n1 | opciÃ³n2 | ...\n\nEjemplo: /crearvotacion Â¿CuÃ¡l es tu manhwa favorito? | Solo Leveling | Tower of God | The Beginning After The End' };
     }
     
     const [titulo, ...opciones] = parts;
     const fecha_inicio = new Date().toISOString();
-    const fecha_fin = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 días
+    const fecha_fin = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 dÃ­as
     
     const stmt = await db.prepare(
       'INSERT INTO votaciones (titulo, descripcion, opciones, fecha_inicio, fecha_fin, estado, creador) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -981,24 +981,24 @@ async function handleCrearVotacion(datos, usuario, grupo) {
     
     const votacionId = result.lastID;
     
-    // Crear mensaje de votación para el grupo
-    let mensajeVotacion = `🗳️ *NUEVA VOTACIÓN INICIADA*\n\n`;
-    mensajeVotacion += `📋 **${titulo}**\n\n`;
-    mensajeVotacion += `📊 *Opciones disponibles:*\n`;
+    // Crear mensaje de votaciÃ³n para el grupo
+    let mensajeVotacion = `ðŸ—³ï¸ *NUEVA VOTACIÃ“N INICIADA*\n\n`;
+    mensajeVotacion += `ðŸ“‹ **${titulo}**\n\n`;
+    mensajeVotacion += `ðŸ“Š *Opciones disponibles:*\n`;
     
     opciones.forEach((opcion, index) => {
       mensajeVotacion += `${index + 1}. ${opcion}\n`;
     });
     
-    mensajeVotacion += `\n⏰ *Duración:* 7 días\n`;
+    mensajeVotacion += `\nâ° *DuraciÃ³n:* 7 dÃ­as\n`;
     {
       const mention = await getDisplayMention(usuario);
-      mensajeVotacion += `👤 *Creada por:* ${mention}\n`;
+      mensajeVotacion += `ðŸ‘¤ *Creada por:* ${mention}\n`;
     }
-    mensajeVotacion += `🆔 *ID:* #${votacionId}\n\n`;
-    mensajeVotacion += `💡 *Para votar usa:* /votar [opción]\n`;
-    mensajeVotacion += `📝 *Ejemplo:* /votar ${opciones[0]}\n\n`;
-    mensajeVotacion += `_¡Participa y haz que tu voz sea escuchada!_ 🎯`;
+    mensajeVotacion += `ðŸ†” *ID:* #${votacionId}\n\n`;
+    mensajeVotacion += `ðŸ’¡ *Para votar usa:* /votar [opciÃ³n]\n`;
+    mensajeVotacion += `ðŸ“ *Ejemplo:* /votar ${opciones[0]}\n\n`;
+    mensajeVotacion += `_Â¡Participa y haz que tu voz sea escuchada!_ ðŸŽ¯`;
     
     await logCommand('administracion', 'crearvotacion', usuario, grupo);
 
@@ -1009,17 +1009,17 @@ async function handleCrearVotacion(datos, usuario, grupo) {
       votacionId: votacionId
     };
   } catch (error) {
-    console.error('Error al crear votación:', error);
-    return { success: false, message: 'Error al crear votación.' };
+    console.error('Error al crear votaciÃ³n:', error);
+    return { success: false, message: 'Error al crear votaciÃ³n.' };
   }
 }
 
 /**
- * /cerrarvotacion [ID] - Cierra una votación activa
+ * /cerrarvotacion [ID] - Cierra una votaciÃ³n activa
  */
 async function handleCerrarVotacion(id, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede cerrar votaciones.' };
+    return { success: false, message: 'âŒ Solo Admin puede cerrar votaciones.' };
   }
   
   try {
@@ -1030,28 +1030,28 @@ async function handleCerrarVotacion(id, usuario, grupo) {
     await stmt.finalize();
     
     await logCommand('administracion', 'cerrarvotacion', usuario, grupo);
-    return { success: true, message: `✅ Votación #${id} cerrada correctamente.` };
+    return { success: true, message: `âœ… VotaciÃ³n #${id} cerrada correctamente.` };
   } catch (error) {
-    return { success: false, message: 'Error al cerrar votación.' };
+    return { success: false, message: 'Error al cerrar votaciÃ³n.' };
   }
 }
 
-// Comandos de obtención desde grupos proveedor (solo Admin)
+// Comandos de obtenciÃ³n desde grupos proveedor (solo Admin)
 
 /**
  * /obtenermanhwa [nombre] - Descarga y guarda un manhwa desde grupo proveedor
  */
 async function handleObtenerManhwa(nombre, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede obtener contenido.' };
+    return { success: false, message: 'âŒ Solo Admin puede obtener contenido.' };
   }
   
   if (!await isProviderGroup(grupo)) {
-    return { success: false, message: '❌ Este comando solo funciona en grupos proveedor.' };
+    return { success: false, message: 'âŒ Este comando solo funciona en grupos proveedor.' };
   }
   
   try {
-    // Simular obtención de manhwa
+    // Simular obtenciÃ³n de manhwa
     const fecha = new Date().toISOString();
     const stmt = await db.prepare(
       'INSERT INTO aportes (contenido, tipo, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)'
@@ -1060,7 +1060,7 @@ async function handleObtenerManhwa(nombre, usuario, grupo) {
     await stmt.finalize();
     
     await logCommand('obtencion', 'obtenermanhwa', usuario, grupo);
-    return { success: true, message: `✅ Manhwa "${nombre}" obtenido y guardado.` };
+    return { success: true, message: `âœ… Manhwa "${nombre}" obtenido y guardado.` };
   } catch (error) {
     return { success: false, message: 'Error al obtener manhwa.' };
   }
@@ -1071,11 +1071,11 @@ async function handleObtenerManhwa(nombre, usuario, grupo) {
  */
 async function handleObtenerExtra(nombre, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede obtener contenido.' };
+    return { success: false, message: 'âŒ Solo Admin puede obtener contenido.' };
   }
   
   if (!await isProviderGroup(grupo)) {
-    return { success: false, message: '❌ Este comando solo funciona en grupos proveedor.' };
+    return { success: false, message: 'âŒ Este comando solo funciona en grupos proveedor.' };
   }
   
   try {
@@ -1087,22 +1087,22 @@ async function handleObtenerExtra(nombre, usuario, grupo) {
     await stmt.finalize();
     
     await logCommand('obtencion', 'obtenerextra', usuario, grupo);
-    return { success: true, message: `✅ Extra "${nombre}" obtenido y guardado.` };
+    return { success: true, message: `âœ… Extra "${nombre}" obtenido y guardado.` };
   } catch (error) {
     return { success: false, message: 'Error al obtener extra.' };
   }
 }
 
 /**
- * /obtenerilustracion [nombre] - Guarda una ilustración desde grupo proveedor
+ * /obtenerilustracion [nombre] - Guarda una ilustraciÃ³n desde grupo proveedor
  */
 async function handleObtenerIlustracion(nombre, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede obtener contenido.' };
+    return { success: false, message: 'âŒ Solo Admin puede obtener contenido.' };
   }
   
   if (!await isProviderGroup(grupo)) {
-    return { success: false, message: '❌ Este comando solo funciona en grupos proveedor.' };
+    return { success: false, message: 'âŒ Este comando solo funciona en grupos proveedor.' };
   }
   
   try {
@@ -1114,9 +1114,9 @@ async function handleObtenerIlustracion(nombre, usuario, grupo) {
     await stmt.finalize();
     
     await logCommand('obtencion', 'obtenerilustracion', usuario, grupo);
-    return { success: true, message: `✅ Ilustración "${nombre}" obtenida y guardada.` };
+    return { success: true, message: `âœ… IlustraciÃ³n "${nombre}" obtenida y guardada.` };
   } catch (error) {
-    return { success: false, message: 'Error al obtener ilustración.' };
+    return { success: false, message: 'Error al obtener ilustraciÃ³n.' };
   }
 }
 
@@ -1125,11 +1125,11 @@ async function handleObtenerIlustracion(nombre, usuario, grupo) {
  */
 async function handleObtenerPack(nombre, usuario, grupo) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede obtener contenido.' };
+    return { success: false, message: 'âŒ Solo Admin puede obtener contenido.' };
   }
   
   if (!await isProviderGroup(grupo)) {
-    return { success: false, message: '❌ Este comando solo funciona en grupos proveedor.' };
+    return { success: false, message: 'âŒ Este comando solo funciona en grupos proveedor.' };
   }
   
   try {
@@ -1141,7 +1141,7 @@ async function handleObtenerPack(nombre, usuario, grupo) {
     await stmt.finalize();
     
     await logCommand('obtencion', 'obtenerpack', usuario, grupo);
-    return { success: true, message: `✅ Pack "${nombre}" obtenido y guardado.` };
+    return { success: true, message: `âœ… Pack "${nombre}" obtenido y guardado.` };
   } catch (error) {
     return { success: false, message: 'Error al obtener pack.' };
   }
@@ -1154,14 +1154,14 @@ async function handleBotOn(grupoId, usuario) {
   try {
     const normalizedUsuario = normalizeUserNumber(usuario);
     
-    // Verificar si el bot ya está activado en este grupo
+    // Verificar si el bot ya estÃ¡ activado en este grupo
     const isCurrentlyDeactivated = await db('grupos_desactivados').where('jid', grupoId).first();
     
     if (!isCurrentlyDeactivated) {
-      // El bot ya está activado, informar sin spam
+      // El bot ya estÃ¡ activado, informar sin spam
       return {
         success: true,
-        message: '🤖 *El bot ya está activado en este grupo.*\n\nPuedes usar todos los comandos disponibles.'
+        message: 'ðŸ¤– *El bot ya estÃ¡ activado en este grupo.*\n\nPuedes usar todos los comandos disponibles.'
       };
     }
     
@@ -1172,10 +1172,10 @@ async function handleBotOn(grupoId, usuario) {
     await logCommand('administracion', 'bot_on', normalizedUsuario, grupoId);
     return {
       success: true,
-      message: '🤖 *Bot activado en este grupo.*\n\n¡Ahora puedes usar todos los comandos!'
+      message: 'ðŸ¤– *Bot activado en este grupo.*\n\nÂ¡Ahora puedes usar todos los comandos!'
     };
   } catch (error) {
-    return { success: false, message: '⛔ Error al activar el bot.' };
+    return { success: false, message: 'â›” Error al activar el bot.' };
   }
 }
 
@@ -1186,14 +1186,14 @@ async function handleBotOff(grupoId, usuario) {
   try {
     const normalizedUsuario = normalizeUserNumber(usuario);
     
-    // Verificar si el bot ya está desactivado en este grupo
+    // Verificar si el bot ya estÃ¡ desactivado en este grupo
     const isCurrentlyDeactivated = await db('grupos_desactivados').where('jid', grupoId).first();
     
     if (isCurrentlyDeactivated) {
-      // El bot ya está desactivado, informar sin spam
+      // El bot ya estÃ¡ desactivado, informar sin spam
       return {
         success: true,
-        message: '🤖 *El bot ya está desactivado en este grupo.*\n\nUsa `/bot on` para reactivarlo.'
+        message: 'ðŸ¤– *El bot ya estÃ¡ desactivado en este grupo.*\n\nUsa `/bot on` para reactivarlo.'
       };
     }
     
@@ -1206,10 +1206,10 @@ async function handleBotOff(grupoId, usuario) {
     await logCommand('administracion', 'bot_off', normalizedUsuario, grupoId);
     return {
       success: true,
-      message: '🤖 *Bot desactivado en este grupo.*\n\nUsa `/bot on` para reactivarlo.'
+      message: 'ðŸ¤– *Bot desactivado en este grupo.*\n\nUsa `/bot on` para reactivarlo.'
     };
   } catch (error) {
-    return { success: false, message: '⛔ Error al desactivar el bot.' };
+    return { success: false, message: 'â›” Error al desactivar el bot.' };
   }
 }
 
@@ -1219,17 +1219,17 @@ async function handleBotOff(grupoId, usuario) {
 async function handleBotGlobalOn(usuario) {
   const normalizedUsuario = normalizeUserNumber(usuario);
   if (!isSuperAdmin(usuario)) {
-    return { success: false, message: '⛔ Solo el bot principal puede controlar el bot globalmente.' };
+    return { success: false, message: 'â›” Solo el bot principal puede controlar el bot globalmente.' };
   }
   try {
-    // Verificar si el bot ya está activado globalmente
+    // Verificar si el bot ya estÃ¡ activado globalmente
     const currentState = await db('bot_global_state').orderBy('fecha_cambio', 'desc').first();
     const isCurrentlyActive = !currentState || currentState.estado === 'on';
     
     if (isCurrentlyActive) {
       return {
         success: true,
-        message: '🌍 *El bot ya está activado globalmente.*\n\nEl bot está funcionando en todos los grupos.'
+        message: 'ðŸŒ *El bot ya estÃ¡ activado globalmente.*\n\nEl bot estÃ¡ funcionando en todos los grupos.'
       };
     }
     
@@ -1245,10 +1245,10 @@ async function handleBotGlobalOn(usuario) {
     await logCommand('administracion', 'bot_global_on', normalizedUsuario, 'global');
     return {
       success: true,
-      message: '🌍 *Bot activado globalmente.*\n\n¡El bot está funcionando en todos los grupos!'
+      message: 'ðŸŒ *Bot activado globalmente.*\n\nÂ¡El bot estÃ¡ funcionando en todos los grupos!'
     };
   } catch (error) {
-    return { success: false, message: '⛔ Error al activar el bot globalmente.' };
+    return { success: false, message: 'â›” Error al activar el bot globalmente.' };
   }
 }
 
@@ -1261,28 +1261,28 @@ async function notifyAllGroupsAboutGlobalShutdown(usuario) {
     const sock = getSocket();
     
     if (!sock) {
-      console.log('⚠️ No hay conexión de WhatsApp para enviar notificaciones');
-      return { success: false, message: 'No hay conexión de WhatsApp' };
+      console.log('âš ï¸ No hay conexiÃ³n de WhatsApp para enviar notificaciones');
+      return { success: false, message: 'No hay conexiÃ³n de WhatsApp' };
     }
 
     // Obtener todos los grupos activos
     const grupos = await db('grupos').select('jid', 'nombre').where('bot_enabled', true);
     const notificationResults = [];
     
-    const notificationMessage = `🔧 *NOTIFICACIÓN GLOBAL*\n\n` +
+    const notificationMessage = `ðŸ”§ *NOTIFICACIÃ“N GLOBAL*\n\n` +
       `El bot ha sido desactivado globalmente por el administrador.\n` +
-      `El bot no responderá a ningún comando hasta que se reactive.\n\n` +
+      `El bot no responderÃ¡ a ningÃºn comando hasta que se reactive.\n\n` +
       `Solo el administrador puede reactivarlo usando:\n` +
-      `• \`/bot global on\` (comando)\n` +
-      `• Panel de administración\n\n` +
-      `_Esta notificación se envió a todos los grupos activos._`;
+      `â€¢ \`/bot global on\` (comando)\n` +
+      `â€¢ Panel de administraciÃ³n\n\n` +
+      `_Esta notificaciÃ³n se enviÃ³ a todos los grupos activos._`;
 
-    // Enviar notificación a cada grupo
+    // Enviar notificaciÃ³n a cada grupo
     for (const grupo of grupos) {
       try {
         await sock.sendMessage(grupo.jid, { text: notificationMessage });
         
-        // Registrar la notificación enviada
+        // Registrar la notificaciÃ³n enviada
         await db('notificaciones_globales').insert({
           grupo_jid: grupo.jid,
           grupo_nombre: grupo.nombre,
@@ -1299,13 +1299,13 @@ async function notifyAllGroupsAboutGlobalShutdown(usuario) {
           status: 'success'
         });
         
-        console.log(`✅ Notificación enviada a grupo: ${grupo.nombre}`);
+        console.log(`âœ… NotificaciÃ³n enviada a grupo: ${grupo.nombre}`);
         
-        // Pequeña pausa para evitar spam
+        // PequeÃ±a pausa para evitar spam
         await new Promise(resolve => setTimeout(resolve, 1000));
         
       } catch (error) {
-        console.error(`❌ Error enviando notificación a ${grupo.nombre}:`, error);
+        console.error(`âŒ Error enviando notificaciÃ³n a ${grupo.nombre}:`, error);
         
         // Registrar el error
         await db('notificaciones_globales').insert({
@@ -1337,7 +1337,7 @@ async function notifyAllGroupsAboutGlobalShutdown(usuario) {
     };
     
   } catch (error) {
-    console.error('Error en notificación global:', error);
+    console.error('Error en notificaciÃ³n global:', error);
     return { success: false, message: 'Error enviando notificaciones globales' };
   }
 }
@@ -1348,17 +1348,17 @@ async function notifyAllGroupsAboutGlobalShutdown(usuario) {
 async function handleBotGlobalOff(usuario) {
   const normalizedUsuario = normalizeUserNumber(usuario);
   if (!isSuperAdmin(usuario)) {
-    return { success: false, message: '⛔ Solo el bot principal puede controlar el bot globalmente.' };
+    return { success: false, message: 'â›” Solo el bot principal puede controlar el bot globalmente.' };
   }
   try {
-    // Verificar si el bot ya está desactivado globalmente
+    // Verificar si el bot ya estÃ¡ desactivado globalmente
     const currentState = await db('bot_global_state').orderBy('fecha_cambio', 'desc').first();
     const isCurrentlyActive = !currentState || currentState.estado === 'on';
     
     if (!isCurrentlyActive) {
       return {
         success: true,
-        message: '🌍 *El bot ya está desactivado globalmente.*\n\nEl bot no responderá a ningún comando hasta que se reactive.'
+        message: 'ðŸŒ *El bot ya estÃ¡ desactivado globalmente.*\n\nEl bot no responderÃ¡ a ningÃºn comando hasta que se reactive.'
       };
     }
     
@@ -1374,14 +1374,14 @@ async function handleBotGlobalOff(usuario) {
     
     await logCommand('administracion', 'bot_global_off', normalizedUsuario, 'global');
     
-    let message = '🌍 *Bot desactivado globalmente.*\n\n';
+    let message = 'ðŸŒ *Bot desactivado globalmente.*\n\n';
     if (notificationResult.success) {
-      message += `📢 Notificaciones enviadas:\n` +
-        `• Grupos notificados: ${notificationResult.successfulNotifications}/${notificationResult.totalGroups}\n` +
-        `• Exitosas: ${notificationResult.successfulNotifications}\n` +
-        `• Fallidas: ${notificationResult.failedNotifications}\n\n`;
+      message += `ðŸ“¢ Notificaciones enviadas:\n` +
+        `â€¢ Grupos notificados: ${notificationResult.successfulNotifications}/${notificationResult.totalGroups}\n` +
+        `â€¢ Exitosas: ${notificationResult.successfulNotifications}\n` +
+        `â€¢ Fallidas: ${notificationResult.failedNotifications}\n\n`;
     }
-    message += 'El bot no responderá a ningún comando hasta que se reactive.';
+    message += 'El bot no responderÃ¡ a ningÃºn comando hasta que se reactive.';
     
     return {
       success: true,
@@ -1389,12 +1389,12 @@ async function handleBotGlobalOff(usuario) {
       notificationDetails: notificationResult
     };
   } catch (error) {
-    return { success: false, message: '⛔ Error al desactivar el bot globalmente.' };
+    return { success: false, message: 'â›” Error al desactivar el bot globalmente.' };
   }
 }
 
 /**
- * Verificar si el bot está activado globalmente
+ * Verificar si el bot estÃ¡ activado globalmente
  */
 async function isBotGloballyActive() {
   try {
@@ -1416,7 +1416,7 @@ async function wasUserNotifiedAboutMaintenance(usuario, grupo = null) {
       .first();
     return !!notification;
   } catch (error) {
-    console.error('Error al verificar notificación de mantenimiento:', error);
+    console.error('Error al verificar notificaciÃ³n de mantenimiento:', error);
     return false;
   }
 }
@@ -1442,7 +1442,7 @@ async function markUserAsNotifiedAboutMaintenance(usuario, grupo = null) {
 async function clearMaintenanceNotifications() {
   try {
     await db('usuarios_notificados_mantenimiento').del();
-    console.log('🧹 Notificaciones de mantenimiento limpiadas');
+    console.log('ðŸ§¹ Notificaciones de mantenimiento limpiadas');
   } catch (error) {
     console.error('Error al limpiar notificaciones de mantenimiento:', error);
   }
@@ -1454,27 +1454,27 @@ async function clearMaintenanceNotifications() {
 async function clearGroupOffNotices(grupoId) {
   try {
     await db('avisos_grupo_off').where('grupo_jid', grupoId).del();
-    console.log(`🧹 Avisos de grupo ${grupoId} limpiados`);
+    console.log(`ðŸ§¹ Avisos de grupo ${grupoId} limpiados`);
   } catch (error) {
     console.error('Error al limpiar avisos de grupo:', error);
   }
 }
 
 /**
- * /update - Actualizar configuración desde el bot principal
+ * /update - Actualizar configuraciÃ³n desde el bot principal
  */
 async function handleUpdate(usuario) {
   if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: '⛔ Solo el bot principal puede actualizar la configuración.' };
+    return { success: false, message: 'â›” Solo el bot principal puede actualizar la configuraciÃ³n.' };
   }
   try {
     await logCommand('administracion', 'update_config', usuario, 'global');
     return {
       success: true,
-      message: '🔄 *Actualizando configuración desde el bot principal...*\n\n📥 *Descargando:*\n• Comandos actualizados\n• Configuraciones de sistema\n• Lista de admins\n• Parámetros de funcionamiento\n\n⏳ *Proceso completado*\n✅ *Configuración sincronizada exitosamente*'
+      message: 'ðŸ”„ *Actualizando configuraciÃ³n desde el bot principal...*\n\nðŸ“¥ *Descargando:*\nâ€¢ Comandos actualizados\nâ€¢ Configuraciones de sistema\nâ€¢ Lista de admins\nâ€¢ ParÃ¡metros de funcionamiento\n\nâ³ *Proceso completado*\nâœ… *ConfiguraciÃ³n sincronizada exitosamente*'
     };
   } catch (error) {
-    return { success: false, message: '⛔ Error al actualizar la configuración.' };
+    return { success: false, message: 'â›” Error al actualizar la configuraciÃ³n.' };
   }
 }
 
@@ -1524,12 +1524,12 @@ async function handleSerbot(usuario, grupo, fecha, remoteJid, senderJid = null, 
     });
 
     if (!launch.success) {
-      return { success: false, message: `❌ Error creando sub-bot: ${launch.error}` };
+      return { success: false, message: `âŒ Error creando sub-bot: ${launch.error}` };
     }
 
     const message = Boolean(grupo)
-      ? '🤖 *Creando sub-bot*\n\n🔄 Estoy generando tu sub-bot y en unos segundos te enviaré por privado el código QR para vincularlo.'
-      : '🤖 *Creando sub-bot*\n\n🔄 Estoy generando tu sub-bot y en unos segundos te enviaré aquí mismo el código QR para vincularlo.';
+      ? 'ðŸ¤– *Creando sub-bot*\n\nðŸ”„ Estoy generando tu sub-bot y en unos segundos te enviarÃ© por privado el cÃ³digo QR para vincularlo.'
+      : 'ðŸ¤– *Creando sub-bot*\n\nðŸ”„ Estoy generando tu sub-bot y en unos segundos te enviarÃ© aquÃ­ mismo el cÃ³digo QR para vincularlo.';
 
     return {
       success: true,
@@ -1537,7 +1537,7 @@ async function handleSerbot(usuario, grupo, fecha, remoteJid, senderJid = null, 
     };
   } catch (error) {
     console.error('Error en handleSerbot:', error);
-    return { success: false, message: '❌ Error al crear sub-bot' };
+    return { success: false, message: 'âŒ Error al crear sub-bot' };
   }
 }
 
@@ -1567,28 +1567,28 @@ async function handleCode(usuario, grupo, remoteJid, args, senderJid = null, ori
       metadata
     });
     if (!launch.success) {
-      return { success: false, message: `❌ Error generando código: ${launch.error}` };
+      return { success: false, message: `âŒ Error generando cÃ³digo: ${launch.error}` };
     }
     const message =
-      '╔═══════════════════════════════════════╗\n' +
-      '║        🤖 *SUBBOT CODE CREADO* 🤖     ║\n' +
-      '╚═══════════════════════════════════════╝\n\n' +
-      '🔐 *Código de Emparejamiento Generado*\n\n' +
-      '📱 *PASOS PARA CONECTAR:*\n' +
-      '┌─────────────────────────────────────────┐\n' +
-      '│ 1️⃣ Abre WhatsApp en tu celular         │\n' +
-      '│ 2️⃣ Ve a *Dispositivos vinculados*      │\n' +
-      '│ 3️⃣ Toca *Vincular dispositivo*         │\n' +
-      '│ 4️⃣ Selecciona *Con número*             │\n' +
-      '│ 5️⃣ Ingresa el código que te enviaré    │\n' +
-      '└─────────────────────────────────────────┘\n\n' +
-      '⏳ *Generando código de emparejamiento...*\n' +
-      '📞 *Número detectado:* `' + fallbackNumber + '`\n' +
-      '🏷️ *Nombre del subbot:* `KONMI-BOT`\n\n' +
-      '💡 *El código llegará en unos segundos*';
+      'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+      'â•‘        ðŸ¤– *SUBBOT CODE CREADO* ðŸ¤–     â•‘\n' +
+      'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+      'ðŸ” *CÃ³digo de Emparejamiento Generado*\n\n' +
+      'ðŸ“± *PASOS PARA CONECTAR:*\n' +
+      'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n' +
+      'â”‚ 1ï¸âƒ£ Abre WhatsApp en tu celular         â”‚\n' +
+      'â”‚ 2ï¸âƒ£ Ve a *Dispositivos vinculados*      â”‚\n' +
+      'â”‚ 3ï¸âƒ£ Toca *Vincular dispositivo*         â”‚\n' +
+      'â”‚ 4ï¸âƒ£ Selecciona *Con nÃºmero*             â”‚\n' +
+      'â”‚ 5ï¸âƒ£ Ingresa el cÃ³digo que te enviarÃ©    â”‚\n' +
+      'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n' +
+      'â³ *Generando cÃ³digo de emparejamiento...*\n' +
+      'ðŸ“ž *NÃºmero detectado:* `' + fallbackNumber + '`\n' +
+      'ðŸ·ï¸ *Nombre del subbot:* `KONMI-BOT`\n\n' +
+      'ðŸ’¡ *El cÃ³digo llegarÃ¡ en unos segundos*';
     return { success: true, message };
   } catch (error) {
-    return { success: false, message: '❌ Error generando código de pairing.' };
+    return { success: false, message: 'âŒ Error generando cÃ³digo de pairing.' };
   }
 }
 
@@ -1598,47 +1598,47 @@ async function handleBots(usuario) {
     if (!subbots.length) {
       return {
         success: true,
-        message: '╔═══════════════════════════════════════╗\n' +
-                '║           🤖 *TUS SUBBOTS* 🤖          ║\n' +
-                '╚═══════════════════════════════════════╝\n\n' +
-                '📭 *No tienes subbots creados*\n\n' +
-                '🚀 *CREAR NUEVO SUBBOT:*\n' +
-                '┌─────────────────────────────────────────┐\n' +
-                '│ `qr`    →  Crear subbot con QR Code    │\n' +
-                '│ `code`  →  Crear subbot con código     │\n' +
-                '└─────────────────────────────────────────┘\n\n' +
-                '💡 *Los subbots te permiten conectar múltiples cuentas de WhatsApp*'
+        message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+                'â•‘           ðŸ¤– *TUS SUBBOTS* ðŸ¤–          â•‘\n' +
+                'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+                'ðŸ“­ *No tienes subbots creados*\n\n' +
+                'ðŸš€ *CREAR NUEVO SUBBOT:*\n' +
+                'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n' +
+                'â”‚ `qr`    â†’  Crear subbot con QR Code    â”‚\n' +
+                'â”‚ `code`  â†’  Crear subbot con cÃ³digo     â”‚\n' +
+                'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n' +
+                'ðŸ’¡ *Los subbots te permiten conectar mÃºltiples cuentas de WhatsApp*'
       };
     }
     
     const lines = subbots.map((subbot, index) => {
-      const statusIcon = subbot.status === 'connected' ? '🟢' : subbot.status === 'pending' ? '🟡' : subbot.status === 'error' ? '🔴' : '⚪';
-      const onlineIcon = subbot.isOnline ? '✅' : '⏹️';
-      const typeIcon = subbot.type === 'code' ? '🔐' : '📱';
+      const statusIcon = subbot.status === 'connected' ? 'ðŸŸ¢' : subbot.status === 'pending' ? 'ðŸŸ¡' : subbot.status === 'error' ? 'ðŸ”´' : 'âšª';
+      const onlineIcon = subbot.isOnline ? 'âœ…' : 'â¹ï¸';
+      const typeIcon = subbot.type === 'code' ? 'ðŸ”' : 'ðŸ“±';
       const statusText = subbot.status === 'connected' ? 'CONECTADO' : 
                         subbot.status === 'pending' ? 'ESPERANDO' : 
                         subbot.status === 'error' ? 'ERROR' : 'DESCONECTADO';
       
       return (
-        `┌─ *${index + 1}.* ${statusIcon} \`${subbot.code}\` ${onlineIcon}\n` +
-        `│ ${typeIcon} Tipo: ${subbot.type === 'code' ? 'Pairing Code' : 'QR Code'}\n` +
-        `│ 📊 Estado: *${statusText}*\n` +
-        `│ 📅 Creado: ${new Date(subbot.created_at).toLocaleString('es-ES')}\n` +
-        `└─────────────────────────────────────────`
+        `â”Œâ”€ *${index + 1}.* ${statusIcon} \`${subbot.code}\` ${onlineIcon}\n` +
+        `â”‚ ${typeIcon} Tipo: ${subbot.type === 'code' ? 'Pairing Code' : 'QR Code'}\n` +
+        `â”‚ ðŸ“Š Estado: *${statusText}*\n` +
+        `â”‚ ðŸ“… Creado: ${new Date(subbot.created_at).toLocaleString('es-ES')}\n` +
+        `â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€`
       );
     }).join('\n\n');
     
     return {
       success: true,
-      message: '╔═══════════════════════════════════════╗\n' +
-              '║           🤖 *TUS SUBBOTS* 🤖          ║\n' +
-              '╚═══════════════════════════════════════╝\n\n' +
-              `📊 *Total: ${subbots.length} subbot${subbots.length !== 1 ? 's' : ''}*\n\n` +
+      message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+              'â•‘           ðŸ¤– *TUS SUBBOTS* ðŸ¤–          â•‘\n' +
+              'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+              `ðŸ“Š *Total: ${subbots.length} subbot${subbots.length !== 1 ? 's' : ''}*\n\n` +
               `${lines}\n\n` +
-              '💡 *Usa `delbot <id>` para eliminar un subbot*'
+              'ðŸ’¡ *Usa `delbot <id>` para eliminar un subbot*'
     };
   } catch (error) {
-    return { success: false, message: '❌ Error obteniendo subbots.' };
+    return { success: false, message: 'âŒ Error obteniendo subbots.' };
   }
 }
 
@@ -1647,55 +1647,55 @@ async function handleDelSubbot(code, usuario) {
     if (!code) {
       return { 
         success: false, 
-        message: '╔═══════════════════════════════════════╗\n' +
-                '║         ❌ *ERROR DE USO* ❌           ║\n' +
-                '╚═══════════════════════════════════════╝\n\n' +
-                '📝 *Uso correcto:*\n' +
-                '┌─────────────────────────────────────────┐\n' +
-                '│ `delbot <subbot_id>`                   │\n' +
-                '│ `delsubbot <subbot_id>`                │\n' +
-                '└─────────────────────────────────────────┘\n\n' +
-                '💡 *Ejemplo: `delbot abc123`*'
+        message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+                'â•‘         âŒ *ERROR DE USO* âŒ           â•‘\n' +
+                'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+                'ðŸ“ *Uso correcto:*\n' +
+                'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n' +
+                'â”‚ `delbot <subbot_id>`                   â”‚\n' +
+                'â”‚ `delsubbot <subbot_id>`                â”‚\n' +
+                'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n' +
+                'ðŸ’¡ *Ejemplo: `delbot abc123`*'
       };
     }
     const result = await deleteSubbot(code);
     if (!result.success) {
       return { 
         success: false, 
-        message: '╔═══════════════════════════════════════╗\n' +
-                '║         ❌ *ERROR* ❌                  ║\n' +
-                '╚═══════════════════════════════════════╝\n\n' +
-                `🚫 *No se pudo eliminar el subbot*\n\n` +
-                `📋 *Detalles:*\n` +
-                `┌─────────────────────────────────────────┐\n` +
-                `│ ID: \`${code}\`\n` +
-                `│ Error: ${result.error}\n` +
-                `└─────────────────────────────────────────┘\n\n` +
-                `💡 *Verifica que el ID sea correcto*`
+        message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+                'â•‘         âŒ *ERROR* âŒ                  â•‘\n' +
+                'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+                `ðŸš« *No se pudo eliminar el subbot*\n\n` +
+                `ðŸ“‹ *Detalles:*\n` +
+                `â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n` +
+                `â”‚ ID: \`${code}\`\n` +
+                `â”‚ Error: ${result.error}\n` +
+                `â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n` +
+                `ðŸ’¡ *Verifica que el ID sea correcto*`
       };
     }
     return {
       success: true,
-      message: '╔═══════════════════════════════════════╗\n' +
-              '║        ✅ *SUBBOT ELIMINADO* ✅        ║\n' +
-              '╚═══════════════════════════════════════╝\n\n' +
-              `🗑️ *Subbot eliminado correctamente*\n\n` +
-              `📋 *Detalles:*\n` +
-              `┌─────────────────────────────────────────┐\n` +
-              `│ ID: \`${code}\`\n` +
-              `│ Estado: Eliminado permanentemente\n` +
-              `│ Fecha: ${new Date().toLocaleString('es-ES')}\n` +
-              `└─────────────────────────────────────────┘\n\n` +
-              `💡 *Usa \`bots\` para ver tus subbots restantes*`
+      message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+              'â•‘        âœ… *SUBBOT ELIMINADO* âœ…        â•‘\n' +
+              'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+              `ðŸ—‘ï¸ *Subbot eliminado correctamente*\n\n` +
+              `ðŸ“‹ *Detalles:*\n` +
+              `â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n` +
+              `â”‚ ID: \`${code}\`\n` +
+              `â”‚ Estado: Eliminado permanentemente\n` +
+              `â”‚ Fecha: ${new Date().toLocaleString('es-ES')}\n` +
+              `â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n` +
+              `ðŸ’¡ *Usa \`bots\` para ver tus subbots restantes*`
     };
   } catch (error) {
     return { 
       success: false, 
-      message: '╔═══════════════════════════════════════╗\n' +
-              '║         ❌ *ERROR* ❌                  ║\n' +
-              '╚═══════════════════════════════════════╝\n\n' +
-              '🚫 *Error eliminando subbot*\n\n' +
-              '💡 *Intenta nuevamente o contacta al administrador*'
+      message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+              'â•‘         âŒ *ERROR* âŒ                  â•‘\n' +
+              'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+              'ðŸš« *Error eliminando subbot*\n\n' +
+              'ðŸ’¡ *Intenta nuevamente o contacta al administrador*'
     };
   }
 }
@@ -1705,14 +1705,14 @@ async function handleQR(subbotCode) {
     if (!subbotCode) {
       return { 
         success: false, 
-        message: '╔═══════════════════════════════════════╗\n' +
-                '║         ❌ *ERROR DE USO* ❌           ║\n' +
-                '╚═══════════════════════════════════════╝\n\n' +
-                '📝 *Uso correcto:*\n' +
-                '┌─────────────────────────────────────────┐\n' +
-                '│ `qr <subbot_id>`                       │\n' +
-                '└─────────────────────────────────────────┘\n\n' +
-                '💡 *Ejemplo: `qr abc123`*'
+        message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+                'â•‘         âŒ *ERROR DE USO* âŒ           â•‘\n' +
+                'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+                'ðŸ“ *Uso correcto:*\n' +
+                'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n' +
+                'â”‚ `qr <subbot_id>`                       â”‚\n' +
+                'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n' +
+                'ðŸ’¡ *Ejemplo: `qr abc123`*'
       };
     }
 
@@ -1720,44 +1720,44 @@ async function handleQR(subbotCode) {
     if (!subbot) {
       return { 
         success: false, 
-        message: '╔═══════════════════════════════════════╗\n' +
-                '║         ❌ *SUBBOT NO ENCONTRADO* ❌   ║\n' +
-                '╚═══════════════════════════════════════╝\n\n' +
-                `🚫 *No se encontró el subbot con ID: \`${subbotCode}\`*\n\n` +
-                '💡 *Usa `bots` para ver tus subbots disponibles*'
+        message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+                'â•‘         âŒ *SUBBOT NO ENCONTRADO* âŒ   â•‘\n' +
+                'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+                `ðŸš« *No se encontrÃ³ el subbot con ID: \`${subbotCode}\`*\n\n` +
+                'ðŸ’¡ *Usa `bots` para ver tus subbots disponibles*'
       };
     }
 
     if (!subbot.qr_data) {
       return {
         success: true,
-        message: '╔═══════════════════════════════════════╗\n' +
-                '║        ⏳ *QR EN GENERACIÓN* ⏳        ║\n' +
-                '╚═══════════════════════════════════════╝\n\n' +
-                '🔄 *El código QR aún no está listo*\n\n' +
-                '📋 *Detalles:*\n' +
-                '┌─────────────────────────────────────────┐\n' +
-                `│ ID: \`${subbotCode}\`\n` +
-                '│ Estado: Generando QR...\n' +
-                '│ Tipo: QR Code\n' +
-                '└─────────────────────────────────────────┘\n\n' +
-                '💡 *Te avisaré aquí mismo cuando esté listo*'
+        message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+                'â•‘        â³ *QR EN GENERACIÃ“N* â³        â•‘\n' +
+                'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+                'ðŸ”„ *El cÃ³digo QR aÃºn no estÃ¡ listo*\n\n' +
+                'ðŸ“‹ *Detalles:*\n' +
+                'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n' +
+                `â”‚ ID: \`${subbotCode}\`\n` +
+                'â”‚ Estado: Generando QR...\n' +
+                'â”‚ Tipo: QR Code\n' +
+                'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n' +
+                'ðŸ’¡ *Te avisarÃ© aquÃ­ mismo cuando estÃ© listo*'
       };
     }
 
-    const caption = '╔═══════════════════════════════════════╗\n' +
-                   '║        📱 *CÓDIGO QR SUBBOT* 📱        ║\n' +
-                   '╚═══════════════════════════════════════╝\n\n' +
-                   '🔗 *CONECTA TU SUBBOT:*\n' +
-                   '┌─────────────────────────────────────────┐\n' +
-                   '│ 1️⃣ Abre WhatsApp en tu celular         │\n' +
-                   '│ 2️⃣ Ve a *Dispositivos vinculados*      │\n' +
-                   '│ 3️⃣ Toca *Vincular dispositivo*         │\n' +
-                   '│ 4️⃣ Escanea este código QR              │\n' +
-                   '└─────────────────────────────────────────┘\n\n' +
-                   `📋 *ID del Subbot:* \`${subbotCode}\`\n` +
-                   '⏰ *El QR expira en 2 minutos*\n\n' +
-                   '💡 *¡Escanea rápido para conectar!*';
+    const caption = 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+                   'â•‘        ðŸ“± *CÃ“DIGO QR SUBBOT* ðŸ“±        â•‘\n' +
+                   'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+                   'ðŸ”— *CONECTA TU SUBBOT:*\n' +
+                   'â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n' +
+                   'â”‚ 1ï¸âƒ£ Abre WhatsApp en tu celular         â”‚\n' +
+                   'â”‚ 2ï¸âƒ£ Ve a *Dispositivos vinculados*      â”‚\n' +
+                   'â”‚ 3ï¸âƒ£ Toca *Vincular dispositivo*         â”‚\n' +
+                   'â”‚ 4ï¸âƒ£ Escanea este cÃ³digo QR              â”‚\n' +
+                   'â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n' +
+                   `ðŸ“‹ *ID del Subbot:* \`${subbotCode}\`\n` +
+                   'â° *El QR expira en 2 minutos*\n\n' +
+                   'ðŸ’¡ *Â¡Escanea rÃ¡pido para conectar!*';
 
     return {
       success: true,
@@ -1772,17 +1772,17 @@ async function handleQR(subbotCode) {
     console.error('Error en handleQR:', error);
     return { 
       success: false, 
-      message: '╔═══════════════════════════════════════╗\n' +
-              '║         ❌ *ERROR* ❌                  ║\n' +
-              '╚═══════════════════════════════════════╝\n\n' +
-              '🚫 *Error obteniendo código QR*\n\n' +
-              '💡 *Intenta nuevamente o contacta al administrador*'
+      message: 'â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n' +
+              'â•‘         âŒ *ERROR* âŒ                  â•‘\n' +
+              'â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n' +
+              'ðŸš« *Error obteniendo cÃ³digo QR*\n\n' +
+              'ðŸ’¡ *Intenta nuevamente o contacta al administrador*'
     };
   }
 }
 
 /**
- * /whoami - Mostrar información del usuario
+ * /whoami - Mostrar informaciÃ³n del usuario
  */
 async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
   try {
@@ -1793,19 +1793,19 @@ async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
     const registro = user?.fecha_registro ? new Date(user.fecha_registro).toLocaleDateString('es-ES') : 'N/D';
     const rol = user?.rol ? user.rol.toUpperCase() : 'USUARIO';
 
-    let info = `╔═══════════════════════════════════════╗\n`;
-    info += `║           👤 *TU INFORMACIÓN* 👤         ║\n`;
-    info += `╚═══════════════════════════════════════╝\n\n`;
-    info += `📋 *DETALLES PERSONALES:*\n`;
-    info += `┌─────────────────────────────────────────┐\n`;
-    info += `│ 👤 Nombre: *${display}*\n`;
-    info += `│ 📞 Número: \`${number}\`\n`;
-    if (user?.username) info += `│ 🖥️ Usuario Panel: @${user.username}\n`;
-    info += `│ 🏷️ Rol: *${rol}*\n`;
-    info += `│ 📅 Registro: ${registro}\n`;
-    info += `│ 💬 Chat: ${grupo ? 'Grupo' : 'Privado'}\n`;
-    info += `└─────────────────────────────────────────┘\n\n`;
-    info += `💡 *Usa \`help\` para ver todos los comandos disponibles*`;
+    let info = `â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n`;
+    info += `â•‘           ðŸ‘¤ *TU INFORMACIÃ“N* ðŸ‘¤         â•‘\n`;
+    info += `â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n`;
+    info += `ðŸ“‹ *DETALLES PERSONALES:*\n`;
+    info += `â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n`;
+    info += `â”‚ ðŸ‘¤ Nombre: *${display}*\n`;
+    info += `â”‚ ðŸ“ž NÃºmero: \`${number}\`\n`;
+    if (user?.username) info += `â”‚ ðŸ–¥ï¸ Usuario Panel: @${user.username}\n`;
+    info += `â”‚ ðŸ·ï¸ Rol: *${rol}*\n`;
+    info += `â”‚ ðŸ“… Registro: ${registro}\n`;
+    info += `â”‚ ðŸ’¬ Chat: ${grupo ? 'Grupo' : 'Privado'}\n`;
+    info += `â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n`;
+    info += `ðŸ’¡ *Usa \`help\` para ver todos los comandos disponibles*`;
     
     await logCommand('consulta', 'whoami', usuario, grupo);
     return { success: true, message: info };
@@ -1813,15 +1813,15 @@ async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
     await logCommand('consulta', 'whoami', usuario, grupo);
     return { 
       success: true, 
-      message: `╔═══════════════════════════════════════╗\n` +
-              `║           👤 *INFORMACIÓN BÁSICA* 👤    ║\n` +
-              `╚═══════════════════════════════════════╝\n\n` +
-              `📋 *Datos disponibles:*\n` +
-              `┌─────────────────────────────────────────┐\n` +
-              `│ 👤 Usuario: \`${usuario}\`\n` +
-              `│ 💬 Chat: ${grupo || 'Privado'}\n` +
-              `└─────────────────────────────────────────┘\n\n` +
-              `💡 *Información limitada - contacta al administrador*`
+      message: `â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n` +
+              `â•‘           ðŸ‘¤ *INFORMACIÃ“N BÃSICA* ðŸ‘¤    â•‘\n` +
+              `â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n` +
+              `ðŸ“‹ *Datos disponibles:*\n` +
+              `â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n` +
+              `â”‚ ðŸ‘¤ Usuario: \`${usuario}\`\n` +
+              `â”‚ ðŸ’¬ Chat: ${grupo || 'Privado'}\n` +
+              `â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\n` +
+              `ðŸ’¡ *InformaciÃ³n limitada - contacta al administrador*`
     };
   }
 }
@@ -1831,17 +1831,17 @@ async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
  */
 async function handleTag(mensaje, usuario, grupo) {
   if (!grupo || !grupo.endsWith('@g.us')) {
-    return { success: false, message: '❌ Este comando solo funciona en grupos.' };
+    return { success: false, message: 'âŒ Este comando solo funciona en grupos.' };
   }
 
   try {
     const sock = getSocket();
-    if (!sock) return { success: false, message: '❌ Bot no conectado.' };
+    if (!sock) return { success: false, message: 'âŒ Bot no conectado.' };
 
     // Verificar si el usuario es admin del grupo
     const isAdmin = await isGroupAdmin(usuario, grupo);
     if (!isAdmin) {
-      return { success: false, message: '❌ Solo Admin puede usar este comando.' };
+      return { success: false, message: 'âŒ Solo Admin puede usar este comando.' };
     }
 
     // Obtener metadata del grupo
@@ -1853,7 +1853,7 @@ async function handleTag(mensaje, usuario, grupo) {
 
     // Crear el mensaje con menciones invisibles
     const message = {
-      text: mensaje || '📢 *Aviso para todos*\n\n¡Atención general!',
+      text: mensaje || 'ðŸ“¢ *Aviso para todos*\n\nÂ¡AtenciÃ³n general!',
       mentions: mentions
     };
 
@@ -1862,10 +1862,10 @@ async function handleTag(mensaje, usuario, grupo) {
 
     await logCommand('moderacion', 'tag', usuario, grupo);
 
-    return { success: true, message: '✅ Mensaje enviado a todos los miembros del grupo.' };
+    return { success: true, message: 'âœ… Mensaje enviado a todos los miembros del grupo.' };
   } catch (error) {
     console.error('Error en handleTag:', error);
-    return { success: false, message: '❌ Error al enviar mensaje a todos.' };
+    return { success: false, message: 'âŒ Error al enviar mensaje a todos.' };
   }
 }
 
@@ -1874,20 +1874,20 @@ async function handleTag(mensaje, usuario, grupo) {
  */
 async function handleReplyTag(mensaje, usuario, grupo, quotedMessage) {
   if (!grupo || !grupo.endsWith('@g.us')) {
-    return { success: false, message: '❌ Este comando solo funciona en grupos.' };
+    return { success: false, message: 'âŒ Este comando solo funciona en grupos.' };
   }
   try {
     const sock = getSocket();
-    if (!sock) return { success: false, message: '❌ Bot no conectado.' };
+    if (!sock) return { success: false, message: 'âŒ Bot no conectado.' };
     if (!quotedMessage || !quotedMessage.key) {
-      return { success: false, message: 'ℹ️ Responde a un mensaje para mencionar a su autor.' };
+      return { success: false, message: 'â„¹ï¸ Responde a un mensaje para mencionar a su autor.' };
     }
     const mentionJid = quotedMessage.key.participant || quotedMessage.key.remoteJid;
-    const text = mensaje || '📣 Respuesta para ti';
+    const text = mensaje || 'ðŸ“£ Respuesta para ti';
     await logCommand('moderacion', 'replytag', usuario, grupo);
     return { success: true, message: text, mentions: mentionJid ? [mentionJid] : undefined, replyTo: quotedMessage };
   } catch (e) {
-    return { success: false, message: '❌ Error al responder con mención.' };
+    return { success: false, message: 'âŒ Error al responder con menciÃ³n.' };
   }
 }
 
@@ -1896,20 +1896,20 @@ async function handleReplyTag(mensaje, usuario, grupo, quotedMessage) {
  */
 async function handleLock(usuario, grupo) {
   if (!await isGroupAdmin(usuario, grupo)) {
-    return { success: false, message: '⛔ Solo Admin puede bloquear el grupo.' };
+    return { success: false, message: 'â›” Solo Admin puede bloquear el grupo.' };
   }
   const sock = getSocket();
-  if (!sock) return { success: false, message: '⛔ Bot no conectado.' };
-  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: '⛔ Este comando solo funciona en grupos.' };
+  if (!sock) return { success: false, message: 'â›” Bot no conectado.' };
+  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: 'â›” Este comando solo funciona en grupos.' };
   try {
     await sock.groupSettingUpdate(grupo, 'announcement');
     await logCommand('moderacion', 'lock', usuario, grupo);
     return {
       success: true,
-      message: `🔒 Grupo bloqueado. Solo admins pueden escribir.`
+      message: `ðŸ”’ Grupo bloqueado. Solo admins pueden escribir.`
     };
   } catch (error) {
-    return { success: false, message: '⛔ No se pudo bloquear el grupo.' };
+    return { success: false, message: 'â›” No se pudo bloquear el grupo.' };
   }
 }
 
@@ -1918,40 +1918,40 @@ async function handleLock(usuario, grupo) {
  */
 async function handleUnlock(usuario, grupo) {
   if (!await isGroupAdmin(usuario, grupo)) {
-    return { success: false, message: '⛔ Solo Admin puede desbloquear el grupo.' };
+    return { success: false, message: 'â›” Solo Admin puede desbloquear el grupo.' };
   }
   const sock = getSocket();
-  if (!sock) return { success: false, message: '⛔ Bot no conectado.' };
-  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: '⛔ Este comando solo funciona en grupos.' };
+  if (!sock) return { success: false, message: 'â›” Bot no conectado.' };
+  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: 'â›” Este comando solo funciona en grupos.' };
   try {
     await sock.groupSettingUpdate(grupo, 'not_announcement');
     await logCommand('moderacion', 'unlock', usuario, grupo);
     return {
       success: true,
-      message: `🔓 Grupo desbloqueado. Todos pueden escribir.`
+      message: `ðŸ”“ Grupo desbloqueado. Todos pueden escribir.`
     };
   } catch (error) {
-    return { success: false, message: '⛔ No se pudo desbloquear el grupo.' };
+    return { success: false, message: 'â›” No se pudo desbloquear el grupo.' };
   }
 }
 
 // Funciones de utilidad existentes
 
 /**
- * Moderación de grupos vía WhatsApp (requiere que el bot sea admin del grupo)
+ * ModeraciÃ³n de grupos vÃ­a WhatsApp (requiere que el bot sea admin del grupo)
  */
 async function handleKick(target, usuario, grupo) {
   if (!await isGroupAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede expulsar miembros.' };
+    return { success: false, message: 'âŒ Solo Admin puede expulsar miembros.' };
   }
   const sock = getSocket();
-  if (!sock) return { success: false, message: '❌ Bot no conectado.' };
-  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: '❌ Este comando solo funciona en grupos.' };
+  if (!sock) return { success: false, message: 'âŒ Bot no conectado.' };
+  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: 'âŒ Este comando solo funciona en grupos.' };
   
   const numero = (target || '').toString().replace(/[^0-9]/g, '');
   if (!numero) return { success: false, message: 'Uso: /kick @usuario' };
   
-  // Intentar la acción incluso si la detección de admin falla; WhatsApp rechazará si no es admin.
+  // Intentar la acciÃ³n incluso si la detecciÃ³n de admin falla; WhatsApp rechazarÃ¡ si no es admin.
 
   try {
     const jid = await buildParticipantJid(grupo, numero);
@@ -1978,22 +1978,22 @@ async function handleKick(target, usuario, grupo) {
     
     return { 
       success: true, 
-      message: `✅ Usuario expulsado: @${displayName}`,
+      message: `âœ… Usuario expulsado: @${displayName}`,
       mentions: [mentionJid]
     };
   } catch (error) {
     console.error('Error en handleKick:', error);
-    return { success: false, message: '❌ No se pudo expulsar. Asegúrate de que el bot sea admin del grupo.' };
+    return { success: false, message: 'âŒ No se pudo expulsar. AsegÃºrate de que el bot sea admin del grupo.' };
   }
 }
 
 async function handlePromote(target, usuario, grupo) {
   if (!await isGroupAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede promover miembros.' };
+    return { success: false, message: 'âŒ Solo Admin puede promover miembros.' };
   }
   const sock = getSocket();
-  if (!sock) return { success: false, message: '❌ Bot no conectado.' };
-  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: '❌ Este comando solo funciona en grupos.' };
+  if (!sock) return { success: false, message: 'âŒ Bot no conectado.' };
+  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: 'âŒ Este comando solo funciona en grupos.' };
   
   const numero = (target || '').toString().replace(/[^0-9]/g, '');
   if (!numero) return { success: false, message: 'Uso: /promote @usuario' };
@@ -2009,7 +2009,7 @@ async function handlePromote(target, usuario, grupo) {
     });
     
     if (participant && (participant.admin === 'admin' || participant.admin === 'superadmin')) {
-      return { success: false, message: 'ℹ️ El usuario ya es admin.' };
+      return { success: false, message: 'â„¹ï¸ El usuario ya es admin.' };
     }
     
     await sock.groupParticipantsUpdate(grupo, [jid], 'promote');
@@ -2035,22 +2035,22 @@ async function handlePromote(target, usuario, grupo) {
     
     return {
       success: true,
-      message: `✅ Usuario promovido a admin: @${displayName}`,
+      message: `âœ… Usuario promovido a admin: @${displayName}`,
       mentions: [mentionJid]
     };
   } catch (error) {
     console.error('Error en handlePromote:', error);
-    return { success: false, message: '❌ No se pudo promover. Asegúrate de que el bot sea admin del grupo.' };
+    return { success: false, message: 'âŒ No se pudo promover. AsegÃºrate de que el bot sea admin del grupo.' };
   }
 }
 
 async function handleDemote(target, usuario, grupo) {
   if (!await isGroupAdmin(usuario, grupo)) {
-    return { success: false, message: '❌ Solo Admin puede degradar miembros.' };
+    return { success: false, message: 'âŒ Solo Admin puede degradar miembros.' };
   }
   const sock = getSocket();
-  if (!sock) return { success: false, message: '❌ Bot no conectado.' };
-  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: '❌ Este comando solo funciona en grupos.' };
+  if (!sock) return { success: false, message: 'âŒ Bot no conectado.' };
+  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: 'âŒ Este comando solo funciona en grupos.' };
   
   const numero = (target || '').toString().replace(/[^0-9]/g, '');
   if (!numero) return { success: false, message: 'Uso: /demote @usuario' };
@@ -2066,7 +2066,7 @@ async function handleDemote(target, usuario, grupo) {
     });
     
     if (participant && (!participant.admin || participant.admin === null)) {
-      return { success: false, message: 'ℹ️ El usuario ya NO es admin.' };
+      return { success: false, message: 'â„¹ï¸ El usuario ya NO es admin.' };
     }
     
     await sock.groupParticipantsUpdate(grupo, [jid], 'demote');
@@ -2092,12 +2092,12 @@ async function handleDemote(target, usuario, grupo) {
     
     return {
       success: true,
-      message: `✅ Usuario degradado de admin: @${displayName}`,
+      message: `âœ… Usuario degradado de admin: @${displayName}`,
       mentions: [mentionJid]
     };
   } catch (error) {
     console.error('Error en handleDemote:', error);
-    return { success: false, message: '❌ No se pudo degradar. Asegúrate de que el bot sea admin del grupo.' };
+    return { success: false, message: 'âŒ No se pudo degradar. AsegÃºrate de que el bot sea admin del grupo.' };
   }
 }
 
@@ -2108,13 +2108,13 @@ async function isGroupAdmin(usuario, grupo) {
   try {
     const sock = getSocket();
     if (!sock || !grupo) return false;
-    // Si el mensaje proviene del mismo número del bot, considerar admin del grupo
+    // Si el mensaje proviene del mismo nÃºmero del bot, considerar admin del grupo
     try {
       const rawBotJid = (sock.user && sock.user.id) ? sock.user.id : '';
       const botNumber = normalizeUserNumber(rawBotJid);
       const userNumber = normalizeUserNumber(usuario);
       if (botNumber && userNumber && botNumber === userNumber) {
-        // Fallback: permitir comandos del propio dueño
+        // Fallback: permitir comandos del propio dueÃ±o
         console.log(`[MOD][isGroupAdmin] usuario=bot (${userNumber}) => true (fallback)`);
         return true;
       }
@@ -2138,7 +2138,7 @@ async function isGroupAdmin(usuario, grupo) {
     });
 
     if (!participant) {
-      console.warn(`[MOD][isGroupAdmin] No encontré participante target=${targetJid} group=${groupMetadata.subject || grupo} size=${participants.length}`);
+      console.warn(`[MOD][isGroupAdmin] No encontrÃ© participante target=${targetJid} group=${groupMetadata.subject || grupo} size=${participants.length}`);
       return false;
     }
 
@@ -2152,7 +2152,7 @@ async function isGroupAdmin(usuario, grupo) {
   }
 }
 
-// Helper para normalizar usuario a solo número
+// Helper para normalizar usuario a solo nÃºmero
 function normalizeUserNumber(usuarioJid) {
   if (!usuarioJid) return '';
   try {
@@ -2205,8 +2205,8 @@ async function isBotAdmin(grupo) {
 async function handleDebugAdmin(usuario, grupo) {
   try {
     const sock = getSocket();
-    if (!sock) return { success: false, message: '⛔ Bot no conectado.' };
-    if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: '⛔ Este comando solo funciona en grupos.' };
+    if (!sock) return { success: false, message: 'â›” Bot no conectado.' };
+    if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: 'â›” Este comando solo funciona en grupos.' };
 
     const rawBotJid = (sock.user && sock.user.id) ? sock.user.id : '';
     const cleanBotJid = normalizeJid(rawBotJid);
@@ -2224,21 +2224,21 @@ async function handleDebugAdmin(usuario, grupo) {
     const asAdmin = participants.find(p => normalizeJid(p.id || '') === cleanBotJid && (p.admin === 'admin' || p.admin === 'superadmin'));
 
     const lines = [];
-    lines.push('🧪 Debug admin del bot');
-    lines.push(`• rawBotJid: ${rawBotJid}`);
-    lines.push(`• cleanBotJid: ${cleanBotJid}`);
-    lines.push(`• botBaseNumber: ${botBaseNumber}`);
-    lines.push(`• foundExact(raw): ${foundExact}`);
-    lines.push(`• foundClean(no sufijo): ${foundClean}`);
-    lines.push(`• foundBase(startsWith): ${foundBase}`);
-    lines.push(`• isAdminFlag: ${asAdmin ? 'true' : 'false'}`);
-    lines.push(`• group: ${groupMetadata.subject || grupo}`);
-    lines.push('• sampleParticipants (10):');
+    lines.push('ðŸ§ª Debug admin del bot');
+    lines.push(`â€¢ rawBotJid: ${rawBotJid}`);
+    lines.push(`â€¢ cleanBotJid: ${cleanBotJid}`);
+    lines.push(`â€¢ botBaseNumber: ${botBaseNumber}`);
+    lines.push(`â€¢ foundExact(raw): ${foundExact}`);
+    lines.push(`â€¢ foundClean(no sufijo): ${foundClean}`);
+    lines.push(`â€¢ foundBase(startsWith): ${foundBase}`);
+    lines.push(`â€¢ isAdminFlag: ${asAdmin ? 'true' : 'false'}`);
+    lines.push(`â€¢ group: ${groupMetadata.subject || grupo}`);
+    lines.push('â€¢ sampleParticipants (10):');
     sample.forEach((jid, idx) => lines.push(`  - [${idx+1}] ${jid}`));
 
     return { success: true, message: lines.join('\n') };
   } catch (e) {
-    return { success: false, message: '⛔ Error en debugadmin.' };
+    return { success: false, message: 'â›” Error en debugadmin.' };
   }
 }
 
@@ -2264,16 +2264,16 @@ async function getParticipantName(grupo, numero) {
     const meta = await sock.groupMetadata(grupo);
     const participants = meta.participants || [];
     
-    console.log(`🔍 Buscando participante con número: ${numero}`);
-    console.log(`📊 Total participantes: ${participants.length}`);
+    console.log(`ðŸ” Buscando participante con nÃºmero: ${numero}`);
+    console.log(`ðŸ“Š Total participantes: ${participants.length}`);
     
-    // Buscar participante por número (más flexible)
+    // Buscar participante por nÃºmero (mÃ¡s flexible)
     const participant = participants.find(p => {
       const pid = p.id || '';
-      // Buscar por número en cualquier parte del JID
+      // Buscar por nÃºmero en cualquier parte del JID
       const found = pid.includes(numero);
       if (found) {
-        console.log(`✅ Encontrado por número: ${pid}`);
+        console.log(`âœ… Encontrado por nÃºmero: ${pid}`);
         console.log(`   - notify: ${p.notify}`);
         console.log(`   - name: ${p.name}`);
         console.log(`   - admin: ${p.admin}`);
@@ -2294,25 +2294,25 @@ async function getParticipantName(grupo, numero) {
       
       if (possibleNames.length > 0) {
         const realName = possibleNames[0].trim();
-        console.log(`📝 Usando nombre real: ${realName}`);
+        console.log(`ðŸ“ Usando nombre real: ${realName}`);
         return realName;
       }
       
       // Si no hay nombre, usar el ID limpio
       const cleanId = participant.id.split('@')[0];
-      console.log(`📝 Usando ID limpio: ${cleanId}`);
+      console.log(`ðŸ“ Usando ID limpio: ${cleanId}`);
       return cleanId || numero;
     }
     
-    // Si no encontramos por número directo, buscar por JID normalizado
+    // Si no encontramos por nÃºmero directo, buscar por JID normalizado
     const normalizedTarget = `${numero}@s.whatsapp.net`;
-    console.log(`🔍 Buscando por JID normalizado: ${normalizedTarget}`);
+    console.log(`ðŸ” Buscando por JID normalizado: ${normalizedTarget}`);
     
     const participantByJid = participants.find(p => {
       const normalized = normalizeJid(p.id || '');
       const found = normalized === normalizedTarget;
       if (found) {
-        console.log(`✅ Encontrado por JID normalizado: ${p.id} -> ${normalized}`);
+        console.log(`âœ… Encontrado por JID normalizado: ${p.id} -> ${normalized}`);
       }
       return found;
     });
@@ -2328,12 +2328,12 @@ async function getParticipantName(grupo, numero) {
       
       if (possibleNames.length > 0) {
         const realName = possibleNames[0].trim();
-        console.log(`📝 Usando nombre real (JID): ${realName}`);
+        console.log(`ðŸ“ Usando nombre real (JID): ${realName}`);
         return realName;
       }
     }
     
-    console.log(`❌ No se encontró participante para número: ${numero}`);
+    console.log(`âŒ No se encontrÃ³ participante para nÃºmero: ${numero}`);
     return numero;
   } catch (error) {
     console.error('Error en getParticipantName:', error);
@@ -2351,14 +2351,14 @@ async function handleYouTubeDownload(usuario, grupo, isGroup, args) {
     if (!args || args.length === 0) {
       return {
         success: false,
-        message: `🎬 *Descarga de YouTube*\n\n` +
-                `📝 *Uso:* \`/yt <enlace o búsqueda>\`\n` +
-                `📝 *Ejemplo:* \`/yt https://youtube.com/watch?v=...\`\n` +
-                `📝 *Ejemplo:* \`/yt música relajante\`\n\n` +
-                `✨ *Funciones:*\n` +
-                `• Descargar videos de YouTube\n` +
-                `• Buscar y descargar por nombre\n` +
-                `• Calidad automática HD`
+        message: `ðŸŽ¬ *Descarga de YouTube*\n\n` +
+                `ðŸ“ *Uso:* \`/yt <enlace o bÃºsqueda>\`\n` +
+                `ðŸ“ *Ejemplo:* \`/yt https://youtube.com/watch?v=...\`\n` +
+                `ðŸ“ *Ejemplo:* \`/yt mÃºsica relajante\`\n\n` +
+                `âœ¨ *Funciones:*\n` +
+                `â€¢ Descargar videos de YouTube\n` +
+                `â€¢ Buscar y descargar por nombre\n` +
+                `â€¢ Calidad automÃ¡tica HD`
       };
     }
 
@@ -2368,11 +2368,11 @@ async function handleYouTubeDownload(usuario, grupo, isGroup, args) {
     if (!socket) {
       return {
         success: false,
-        message: '❌ Bot no conectado. Intenta más tarde.'
+        message: 'âŒ Bot no conectado. Intenta mÃ¡s tarde.'
       };
     }
 
-    // Simular búsqueda (en implementación real usarías yt-search)
+    // Simular bÃºsqueda (en implementaciÃ³n real usarÃ­as yt-search)
     const searchResults = [
       {
         title: `Resultado para: ${query}`,
@@ -2385,16 +2385,16 @@ async function handleYouTubeDownload(usuario, grupo, isGroup, args) {
 
     const video = searchResults[0];
     
-    const response = `🎬 *${video.title}*\n\n` +
-                    `👤 *Canal:* ${video.author}\n` +
-                    `⏱️ *Duración:* ${video.duration}\n` +
-                    `👀 *Vistas:* ${video.views}\n\n` +
-                    `🔄 *Procesando descarga...*\n` +
-                    `▓░░░░░░░░░ 25%\n\n` +
-                    `✨ *Funciones disponibles:*\n` +
-                    `• \`/ytmp3\` - Solo audio\n` +
-                    `• \`/ytmp4\` - Video completo\n` +
-                    `• \`/yt\` - Opciones interactivas`;
+    const response = `ðŸŽ¬ *${video.title}*\n\n` +
+                    `ðŸ‘¤ *Canal:* ${video.author}\n` +
+                    `â±ï¸ *DuraciÃ³n:* ${video.duration}\n` +
+                    `ðŸ‘€ *Vistas:* ${video.views}\n\n` +
+                    `ðŸ”„ *Procesando descarga...*\n` +
+                    `â–“â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘ 25%\n\n` +
+                    `âœ¨ *Funciones disponibles:*\n` +
+                    `â€¢ \`/ytmp3\` - Solo audio\n` +
+                    `â€¢ \`/ytmp4\` - Video completo\n` +
+                    `â€¢ \`/yt\` - Opciones interactivas`;
 
     return {
       success: true,
@@ -2405,7 +2405,7 @@ async function handleYouTubeDownload(usuario, grupo, isGroup, args) {
     console.error('Error en handleYouTubeDownload:', error);
     return {
       success: false,
-      message: '❌ Error al procesar la descarga de YouTube.'
+      message: 'âŒ Error al procesar la descarga de YouTube.'
     };
   }
 }
@@ -2417,20 +2417,20 @@ async function handleSticker(usuario, grupo, isGroup, args) {
   try {
     return {
       success: true,
-      message: `🎭 *Crear Sticker*
+      message: `ðŸŽ­ *Crear Sticker*
 
-1️⃣ Envía o reenvía la imagen/video que quieres convertir.
-2️⃣ Respóndelo con \`/sticker\` (o su alias \`.s\`).
-3️⃣ Espera unos segundos y recibirás el sticker listo para usar.
+1ï¸âƒ£ EnvÃ­a o reenvÃ­a la imagen/video que quieres convertir.
+2ï¸âƒ£ RespÃ³ndelo con \`/sticker\` (o su alias \`.s\`).
+3ï¸âƒ£ Espera unos segundos y recibirÃ¡s el sticker listo para usar.
 
-✨ Tip: los videos cortos (≤6s) se convierten en stickers animados.`
+âœ¨ Tip: los videos cortos (â‰¤6s) se convierten en stickers animados.`
     };
 
   } catch (error) {
     console.error('Error en handleSticker:', error);
     return {
       success: false,
-      message: '❌ Error al procesar el sticker.'
+      message: 'âŒ Error al procesar el sticker.'
     };
   }
 }
@@ -2443,28 +2443,28 @@ async function handleTikTokDownload(usuario, grupo, isGroup, args) {
     if (!args || args.length === 0) {
       return {
         success: false,
-        message: `🎵 *Descarga de TikTok*\n\n` +
-                `📝 *Uso:* \`/tiktok <enlace o búsqueda>\`\n` +
-                `📝 *Ejemplo:* \`/tiktok https://tiktok.com/@user/video/123\`\n` +
-                `📝 *Ejemplo:* \`/tiktok baile viral\`\n\n` +
-                `✨ *Funciones:*\n` +
-                `• Descargar videos de TikTok\n` +
-                `• Buscar videos por hashtag\n` +
-                `• Calidad HD sin marca de agua`
+        message: `ðŸŽµ *Descarga de TikTok*\n\n` +
+                `ðŸ“ *Uso:* \`/tiktok <enlace o bÃºsqueda>\`\n` +
+                `ðŸ“ *Ejemplo:* \`/tiktok https://tiktok.com/@user/video/123\`\n` +
+                `ðŸ“ *Ejemplo:* \`/tiktok baile viral\`\n\n` +
+                `âœ¨ *Funciones:*\n` +
+                `â€¢ Descargar videos de TikTok\n` +
+                `â€¢ Buscar videos por hashtag\n` +
+                `â€¢ Calidad HD sin marca de agua`
       };
     }
 
     const query = args.join(' ');
     
-    const response = `🎵 *TikTok Downloader*\n\n` +
-                    `🔍 *Buscando:* ${query}\n` +
-                    `🔄 *Procesando...*\n` +
-                    `▓▓░░░░░░░░ 50%\n\n` +
-                    `✨ *Características:*\n` +
-                    `• Sin marca de agua\n` +
-                    `• Calidad HD\n` +
-                    `• Descarga rápida\n` +
-                    `• Soporte para enlaces y búsquedas`;
+    const response = `ðŸŽµ *TikTok Downloader*\n\n` +
+                    `ðŸ” *Buscando:* ${query}\n` +
+                    `ðŸ”„ *Procesando...*\n` +
+                    `â–“â–“â–‘â–‘â–‘â–‘â–‘â–‘â–‘â–‘ 50%\n\n` +
+                    `âœ¨ *CaracterÃ­sticas:*\n` +
+                    `â€¢ Sin marca de agua\n` +
+                    `â€¢ Calidad HD\n` +
+                    `â€¢ Descarga rÃ¡pida\n` +
+                    `â€¢ Soporte para enlaces y bÃºsquedas`;
 
     return {
       success: true,
@@ -2475,7 +2475,7 @@ async function handleTikTokDownload(usuario, grupo, isGroup, args) {
     console.error('Error en handleTikTokDownload:', error);
     return {
       success: false,
-      message: '❌ Error al procesar la descarga de TikTok.'
+      message: 'âŒ Error al procesar la descarga de TikTok.'
     };
   }
 }
@@ -2488,27 +2488,27 @@ async function handleInstagramDownload(usuario, grupo, isGroup, args) {
     if (!args || args.length === 0) {
       return {
         success: false,
-        message: `📸 *Descarga de Instagram*\n\n` +
-                `📝 *Uso:* \`/ig <enlace de Instagram>\`\n` +
-                `📝 *Ejemplo:* \`/ig https://instagram.com/p/ABC123\`\n\n` +
-                `✨ *Soporta:*\n` +
-                `• Fotos individuales\n` +
-                `• Videos\n` +
-                `• Carousels (múltiples fotos)\n` +
-                `• Stories (si son públicas)`
+        message: `ðŸ“¸ *Descarga de Instagram*\n\n` +
+                `ðŸ“ *Uso:* \`/ig <enlace de Instagram>\`\n` +
+                `ðŸ“ *Ejemplo:* \`/ig https://instagram.com/p/ABC123\`\n\n` +
+                `âœ¨ *Soporta:*\n` +
+                `â€¢ Fotos individuales\n` +
+                `â€¢ Videos\n` +
+                `â€¢ Carousels (mÃºltiples fotos)\n` +
+                `â€¢ Stories (si son pÃºblicas)`
       };
     }
 
     const url = args[0];
     
-    const response = `📸 *Instagram Downloader*\n\n` +
-                    `🔗 *URL:* ${url}\n` +
-                    `🔄 *Analizando contenido...*\n` +
-                    `▓▓▓░░░░░░░ 75%\n\n` +
-                    `✨ *Procesando:*\n` +
-                    `• Detecting media type\n` +
-                    `• Optimizing quality\n` +
-                    `• Preparing download`;
+    const response = `ðŸ“¸ *Instagram Downloader*\n\n` +
+                    `ðŸ”— *URL:* ${url}\n` +
+                    `ðŸ”„ *Analizando contenido...*\n` +
+                    `â–“â–“â–“â–‘â–‘â–‘â–‘â–‘â–‘â–‘ 75%\n\n` +
+                    `âœ¨ *Procesando:*\n` +
+                    `â€¢ Detecting media type\n` +
+                    `â€¢ Optimizing quality\n` +
+                    `â€¢ Preparing download`;
 
     return {
       success: true,
@@ -2519,7 +2519,7 @@ async function handleInstagramDownload(usuario, grupo, isGroup, args) {
     console.error('Error en handleInstagramDownload:', error);
     return {
       success: false,
-      message: '❌ Error al procesar la descarga de Instagram.'
+      message: 'âŒ Error al procesar la descarga de Instagram.'
     };
   }
 }
@@ -2532,27 +2532,27 @@ async function handleTwitterDownload(usuario, grupo, isGroup, args) {
     if (!args || args.length === 0) {
       return {
         success: false,
-        message: `🐦 *Descarga de Twitter/X*\n\n` +
-                `📝 *Uso:* \`/twitter <enlace de Twitter>\`\n` +
-                `📝 *Ejemplo:* \`/twitter https://twitter.com/user/status/123\`\n\n` +
-                `✨ *Soporta:*\n` +
-                `• Videos de Twitter\n` +
-                `• GIFs\n` +
-                `• Imágenes\n` +
-                `• Hilos completos`
+        message: `ðŸ¦ *Descarga de Twitter/X*\n\n` +
+                `ðŸ“ *Uso:* \`/twitter <enlace de Twitter>\`\n` +
+                `ðŸ“ *Ejemplo:* \`/twitter https://twitter.com/user/status/123\`\n\n` +
+                `âœ¨ *Soporta:*\n` +
+                `â€¢ Videos de Twitter\n` +
+                `â€¢ GIFs\n` +
+                `â€¢ ImÃ¡genes\n` +
+                `â€¢ Hilos completos`
       };
     }
 
     const url = args[0];
     
-    const response = `🐦 *Twitter Downloader*\n\n` +
-                    `🔗 *URL:* ${url}\n` +
-                    `🔄 *Procesando...*\n` +
-                    `▓▓▓▓░░░░░░ 80%\n\n` +
-                    `✨ *Características:*\n` +
-                    `• Calidad original\n` +
-                    `• Sin compresión\n` +
-                    `• Descarga rápida`;
+    const response = `ðŸ¦ *Twitter Downloader*\n\n` +
+                    `ðŸ”— *URL:* ${url}\n` +
+                    `ðŸ”„ *Procesando...*\n` +
+                    `â–“â–“â–“â–“â–‘â–‘â–‘â–‘â–‘â–‘ 80%\n\n` +
+                    `âœ¨ *CaracterÃ­sticas:*\n` +
+                    `â€¢ Calidad original\n` +
+                    `â€¢ Sin compresiÃ³n\n` +
+                    `â€¢ Descarga rÃ¡pida`;
 
     return {
       success: true,
@@ -2563,21 +2563,21 @@ async function handleTwitterDownload(usuario, grupo, isGroup, args) {
     console.error('Error en handleTwitterDownload:', error);
     return {
       success: false,
-      message: '❌ Error al procesar la descarga de Twitter.'
+      message: 'âŒ Error al procesar la descarga de Twitter.'
     };
   }
 }
 
 /**
- * Obtener información del LID del usuario
+ * Obtener informaciÃ³n del LID del usuario
  */
 async function handleGetLID(usuario, grupo, isGroup, args) {
   try {
-    // Solo superadmins pueden ver esta información
+    // Solo superadmins pueden ver esta informaciÃ³n
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: '❌ Solo los superadmins pueden obtener esta información.'
+        message: 'âŒ Solo los superadmins pueden obtener esta informaciÃ³n.'
       };
     }
 
@@ -2585,34 +2585,34 @@ async function handleGetLID(usuario, grupo, isGroup, args) {
     if (!socket) {
       return {
         success: false,
-        message: '❌ Bot no conectado.'
+        message: 'âŒ Bot no conectado.'
       };
     }
 
-    // Obtener información del bot
+    // Obtener informaciÃ³n del bot
     const botJid = socket.user?.jid || 'No disponible';
     const botNumber = botJid.split('@')[0];
     const botServer = botJid.split('@')[1];
 
-    let response = `🔍 *Información del Sistema*\n\n`;
-    response += `🤖 *Bot JID:* ${botJid}\n`;
-    response += `📱 *Bot Número:* ${botNumber}\n`;
-    response += `🌐 *Servidor:* ${botServer}\n\n`;
+    let response = `ðŸ” *InformaciÃ³n del Sistema*\n\n`;
+    response += `ðŸ¤– *Bot JID:* ${botJid}\n`;
+    response += `ðŸ“± *Bot NÃºmero:* ${botNumber}\n`;
+    response += `ðŸŒ *Servidor:* ${botServer}\n\n`;
     
-    response += `👤 *Tu información:*\n`;
-    response += `• Usuario: ${usuario}\n`;
-    response += `• Número: ${usuario.split('@')[0]}\n`;
-    response += `• Servidor: ${usuario.split('@')[1]}\n\n`;
+    response += `ðŸ‘¤ *Tu informaciÃ³n:*\n`;
+    response += `â€¢ Usuario: ${usuario}\n`;
+    response += `â€¢ NÃºmero: ${usuario.split('@')[0]}\n`;
+    response += `â€¢ Servidor: ${usuario.split('@')[1]}\n\n`;
     
-    response += `🔧 *Configuración actual:*\n`;
-    response += `• Superadmins: ${global.owner.length}\n`;
-    response += `• Moderadores: ${global.mods.length}\n`;
-    response += `• Premium: ${global.prems.length}\n\n`;
+    response += `ðŸ”§ *ConfiguraciÃ³n actual:*\n`;
+    response += `â€¢ Superadmins: ${global.owner.length}\n`;
+    response += `â€¢ Moderadores: ${global.mods.length}\n`;
+    response += `â€¢ Premium: ${global.prems.length}\n\n`;
     
-    response += `📋 *Para actualizar tu LID:*\n`;
-    response += `• Usa \`/updatelid <tu_lid_completo>\`\n`;
-    response += `• Ejemplo: \`/updatelid 1234567890@lid\`\n`;
-    response += `• O usa \`/updatelid auto\` para detectar automáticamente`;
+    response += `ðŸ“‹ *Para actualizar tu LID:*\n`;
+    response += `â€¢ Usa \`/updatelid <tu_lid_completo>\`\n`;
+    response += `â€¢ Ejemplo: \`/updatelid 1234567890@lid\`\n`;
+    response += `â€¢ O usa \`/updatelid auto\` para detectar automÃ¡ticamente`;
 
     return {
       success: true,
@@ -2623,7 +2623,7 @@ async function handleGetLID(usuario, grupo, isGroup, args) {
     console.error('Error en handleGetLID:', error);
     return {
       success: false,
-      message: '❌ Error al obtener información del LID.'
+      message: 'âŒ Error al obtener informaciÃ³n del LID.'
     };
   }
 }
@@ -2637,26 +2637,26 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: '❌ Solo los superadmins pueden actualizar LIDs.'
+        message: 'âŒ Solo los superadmins pueden actualizar LIDs.'
       };
     }
 
     if (!args || args.length < 1) {
       return {
         success: false,
-        message: '📝 *Uso:* `/updatelid <tu_lid_completo>`\n\n' +
-                '📝 *Ejemplo:* `/updatelid 1234567890@lid`\n' +
-                '📝 *Auto:* `/updatelid auto` (detectar automáticamente)'
+        message: 'ðŸ“ *Uso:* `/updatelid <tu_lid_completo>`\n\n' +
+                'ðŸ“ *Ejemplo:* `/updatelid 1234567890@lid`\n' +
+                'ðŸ“ *Auto:* `/updatelid auto` (detectar automÃ¡ticamente)'
       };
     }
 
     const lidInput = args[0].toLowerCase();
     
     if (lidInput === 'auto') {
-      // Detectar automáticamente el LID del usuario actual
+      // Detectar automÃ¡ticamente el LID del usuario actual
       const currentLid = usuario; // El usuario ya viene con el formato correcto
       
-      // Actualizar en la configuración global
+      // Actualizar en la configuraciÃ³n global
       const userIndex = global.owner.findIndex(([num]) => isSuperAdmin(num));
       if (userIndex !== -1) {
         global.owner[userIndex][0] = currentLid.split('@')[0];
@@ -2664,27 +2664,27 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
 
       return {
         success: true,
-        message: `✅ LID actualizado automáticamente:\n` +
-                `• LID detectado: ${currentLid}\n` +
-                `• Número: ${currentLid.split('@')[0]}\n` +
-                `• Servidor: ${currentLid.split('@')[1]}\n\n` +
-                `🔄 Los cambios se aplicarán en el próximo reinicio.`
+        message: `âœ… LID actualizado automÃ¡ticamente:\n` +
+                `â€¢ LID detectado: ${currentLid}\n` +
+                `â€¢ NÃºmero: ${currentLid.split('@')[0]}\n` +
+                `â€¢ Servidor: ${currentLid.split('@')[1]}\n\n` +
+                `ðŸ”„ Los cambios se aplicarÃ¡n en el prÃ³ximo reinicio.`
       };
     } else {
       // LID manual
       const lid = args[0];
       
-      // Validar formato básico
+      // Validar formato bÃ¡sico
       if (!lid.includes('@')) {
         return {
           success: false,
-          message: '❌ Formato de LID inválido. Debe incluir @ (ej: 1234567890@lid)'
+          message: 'âŒ Formato de LID invÃ¡lido. Debe incluir @ (ej: 1234567890@lid)'
         };
       }
 
       const [numero, servidor] = lid.split('@');
       
-      // Actualizar en la configuración global
+      // Actualizar en la configuraciÃ³n global
       const userIndex = global.owner.findIndex(([num]) => isSuperAdmin(num));
       if (userIndex !== -1) {
         global.owner[userIndex][0] = numero;
@@ -2692,11 +2692,11 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
 
       return {
         success: true,
-        message: `✅ LID actualizado manualmente:\n` +
-                `• LID: ${lid}\n` +
-                `• Número: ${numero}\n` +
-                `• Servidor: ${servidor}\n\n` +
-                `🔄 Los cambios se aplicarán en el próximo reinicio.`
+        message: `âœ… LID actualizado manualmente:\n` +
+                `â€¢ LID: ${lid}\n` +
+                `â€¢ NÃºmero: ${numero}\n` +
+                `â€¢ Servidor: ${servidor}\n\n` +
+                `ðŸ”„ Los cambios se aplicarÃ¡n en el prÃ³ximo reinicio.`
       };
     }
 
@@ -2704,15 +2704,15 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
     console.error('Error en handleUpdateLID:', error);
     return {
       success: false,
-      message: '❌ Error al actualizar LID.'
+      message: 'âŒ Error al actualizar LID.'
     };
   }
 }
 
-// ==================== COMANDOS DE ADMINISTRACIÓN GLOBAL ====================
+// ==================== COMANDOS DE ADMINISTRACIÃ“N GLOBAL ====================
 
 /**
- * Mostrar información del sistema de administradores
+ * Mostrar informaciÃ³n del sistema de administradores
  */
 async function handleAdminInfo(usuario, grupo, isGroup, args) {
   try {
@@ -2720,7 +2720,7 @@ async function handleAdminInfo(usuario, grupo, isGroup, args) {
     if (!await isOwnerOrAdmin(usuario, grupo)) {
       return {
         success: false,
-        message: '❌ Solo los administradores pueden ver esta información.'
+        message: 'âŒ Solo los administradores pueden ver esta informaciÃ³n.'
       };
     }
 
@@ -2729,29 +2729,29 @@ async function handleAdminInfo(usuario, grupo, isGroup, args) {
     const isMod = isModerator(usuario);
     const isPrem = isPremium(usuario);
 
-    let response = `🔧 *Sistema de Administración*\n\n`;
-    response += `👤 *Tu información:*\n`;
-    response += `• Nombre: ${ownerName}\n`;
-    response += `• Número: ${usuario}\n`;
-    response += `• Superadmin: ${isSuper ? '✅' : '❌'}\n`;
-    response += `• Moderador: ${isMod ? '✅' : '❌'}\n`;
-    response += `• Premium: ${isPrem ? '✅' : '❌'}\n\n`;
+    let response = `ðŸ”§ *Sistema de AdministraciÃ³n*\n\n`;
+    response += `ðŸ‘¤ *Tu informaciÃ³n:*\n`;
+    response += `â€¢ Nombre: ${ownerName}\n`;
+    response += `â€¢ NÃºmero: ${usuario}\n`;
+    response += `â€¢ Superadmin: ${isSuper ? 'âœ…' : 'âŒ'}\n`;
+    response += `â€¢ Moderador: ${isMod ? 'âœ…' : 'âŒ'}\n`;
+    response += `â€¢ Premium: ${isPrem ? 'âœ…' : 'âŒ'}\n\n`;
 
-    response += `👑 *Superadmins globales:*\n`;
+    response += `ðŸ‘‘ *Superadmins globales:*\n`;
     global.owner.forEach(([num, name, isSuper], index) => {
       response += `${index + 1}. ${name} (${num})\n`;
     });
 
-    response += `\n🛡️ *Moderadores:* ${global.mods.length}\n`;
-    response += `💎 *Usuarios Premium:* ${global.prems.length}\n\n`;
+    response += `\nðŸ›¡ï¸ *Moderadores:* ${global.mods.length}\n`;
+    response += `ðŸ’Ž *Usuarios Premium:* ${global.prems.length}\n\n`;
 
-    response += `📋 *Comandos disponibles:*\n`;
-    response += `• \`/addadmin <numero> <nombre>\` - Agregar superadmin\n`;
-    response += `• \`/deladmin <numero>\` - Quitar superadmin\n`;
-    response += `• \`/addmod <numero>\` - Agregar moderador\n`;
-    response += `• \`/delmod <numero>\` - Quitar moderador\n`;
-    response += `• \`/addprem <numero>\` - Agregar premium\n`;
-    response += `• \`/delprem <numero>\` - Quitar premium\n`;
+    response += `ðŸ“‹ *Comandos disponibles:*\n`;
+    response += `â€¢ \`/addadmin <numero> <nombre>\` - Agregar superadmin\n`;
+    response += `â€¢ \`/deladmin <numero>\` - Quitar superadmin\n`;
+    response += `â€¢ \`/addmod <numero>\` - Agregar moderador\n`;
+    response += `â€¢ \`/delmod <numero>\` - Quitar moderador\n`;
+    response += `â€¢ \`/addprem <numero>\` - Agregar premium\n`;
+    response += `â€¢ \`/delprem <numero>\` - Quitar premium\n`;
 
     return {
       success: true,
@@ -2762,7 +2762,7 @@ async function handleAdminInfo(usuario, grupo, isGroup, args) {
     console.error('Error en handleAdminInfo:', error);
     return {
       success: false,
-      message: '❌ Error al obtener información de administración.'
+      message: 'âŒ Error al obtener informaciÃ³n de administraciÃ³n.'
     };
   }
 }
@@ -2776,15 +2776,15 @@ async function handleAddAdmin(usuario, grupo, isGroup, args) {
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: '❌ Solo los superadmins pueden agregar otros superadmins.'
+        message: 'âŒ Solo los superadmins pueden agregar otros superadmins.'
       };
     }
 
     if (!args || args.length < 2) {
       return {
         success: false,
-        message: '📝 *Uso:* `/addadmin <numero> <nombre>`\n\n' +
-                '📝 *Ejemplo:* `/addadmin 1234567890 Juan Pérez`'
+        message: 'ðŸ“ *Uso:* `/addadmin <numero> <nombre>`\n\n' +
+                'ðŸ“ *Ejemplo:* `/addadmin 1234567890 Juan PÃ©rez`'
       };
     }
 
@@ -2796,7 +2796,7 @@ async function handleAddAdmin(usuario, grupo, isGroup, args) {
     if (existingAdmin) {
       return {
         success: false,
-        message: `❌ El número ${numero} ya es superadmin.`
+        message: `âŒ El nÃºmero ${numero} ya es superadmin.`
       };
     }
 
@@ -2805,17 +2805,17 @@ async function handleAddAdmin(usuario, grupo, isGroup, args) {
 
     return {
       success: true,
-      message: `✅ Superadmin agregado exitosamente:\n` +
-              `• Nombre: ${nombre}\n` +
-              `• Número: ${numero}\n\n` +
-              `🔄 Los cambios se aplicarán en el próximo reinicio.`
+      message: `âœ… Superadmin agregado exitosamente:\n` +
+              `â€¢ Nombre: ${nombre}\n` +
+              `â€¢ NÃºmero: ${numero}\n\n` +
+              `ðŸ”„ Los cambios se aplicarÃ¡n en el prÃ³ximo reinicio.`
     };
 
   } catch (error) {
     console.error('Error en handleAddAdmin:', error);
     return {
       success: false,
-      message: '❌ Error al agregar superadmin.'
+      message: 'âŒ Error al agregar superadmin.'
     };
   }
 }
@@ -2829,15 +2829,15 @@ async function handleDelAdmin(usuario, grupo, isGroup, args) {
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: '❌ Solo los superadmins pueden quitar otros superadmins.'
+        message: 'âŒ Solo los superadmins pueden quitar otros superadmins.'
       };
     }
 
     if (!args || args.length < 1) {
       return {
         success: false,
-        message: '📝 *Uso:* `/deladmin <numero>`\n\n' +
-                '📝 *Ejemplo:* `/deladmin 1234567890`'
+        message: 'ðŸ“ *Uso:* `/deladmin <numero>`\n\n' +
+                'ðŸ“ *Ejemplo:* `/deladmin 1234567890`'
       };
     }
 
@@ -2848,16 +2848,16 @@ async function handleDelAdmin(usuario, grupo, isGroup, args) {
     if (adminIndex === -1) {
       return {
         success: false,
-        message: `❌ El número ${numero} no es superadmin.`
+        message: `âŒ El nÃºmero ${numero} no es superadmin.`
       };
     }
 
-    // No permitir quitarse a sí mismo
+    // No permitir quitarse a sÃ­ mismo
     const usuarioNumero = usuario.replace(/[^0-9]/g, '');
     if (numero === usuarioNumero) {
       return {
         success: false,
-        message: '❌ No puedes quitarte a ti mismo como superadmin.'
+        message: 'âŒ No puedes quitarte a ti mismo como superadmin.'
       };
     }
 
@@ -2866,17 +2866,17 @@ async function handleDelAdmin(usuario, grupo, isGroup, args) {
 
     return {
       success: true,
-      message: `✅ Superadmin removido exitosamente:\n` +
-              `• Nombre: ${removedAdmin[1]}\n` +
-              `• Número: ${numero}\n\n` +
-              `🔄 Los cambios se aplicarán en el próximo reinicio.`
+      message: `âœ… Superadmin removido exitosamente:\n` +
+              `â€¢ Nombre: ${removedAdmin[1]}\n` +
+              `â€¢ NÃºmero: ${numero}\n\n` +
+              `ðŸ”„ Los cambios se aplicarÃ¡n en el prÃ³ximo reinicio.`
     };
 
   } catch (error) {
     console.error('Error en handleDelAdmin:', error);
     return {
       success: false,
-      message: '❌ Error al quitar superadmin.'
+      message: 'âŒ Error al quitar superadmin.'
     };
   }
 }
@@ -2890,15 +2890,15 @@ async function handleAddMod(usuario, grupo, isGroup, args) {
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: '❌ Solo los superadmins pueden agregar moderadores.'
+        message: 'âŒ Solo los superadmins pueden agregar moderadores.'
       };
     }
 
     if (!args || args.length < 1) {
       return {
         success: false,
-        message: '📝 *Uso:* `/addmod <numero>`\n\n' +
-                '📝 *Ejemplo:* `/addmod 1234567890`'
+        message: 'ðŸ“ *Uso:* `/addmod <numero>`\n\n' +
+                'ðŸ“ *Ejemplo:* `/addmod 1234567890`'
       };
     }
 
@@ -2908,7 +2908,7 @@ async function handleAddMod(usuario, grupo, isGroup, args) {
     if (isSuperAdmin(`${numero}@s.whatsapp.net`)) {
       return {
         success: false,
-        message: `❌ El número ${numero} ya es superadmin.`
+        message: `âŒ El nÃºmero ${numero} ya es superadmin.`
       };
     }
 
@@ -2916,7 +2916,7 @@ async function handleAddMod(usuario, grupo, isGroup, args) {
     if (isModerator(`${numero}@s.whatsapp.net`)) {
       return {
         success: false,
-        message: `❌ El número ${numero} ya es moderador.`
+        message: `âŒ El nÃºmero ${numero} ya es moderador.`
       };
     }
 
@@ -2925,16 +2925,16 @@ async function handleAddMod(usuario, grupo, isGroup, args) {
 
     return {
       success: true,
-      message: `✅ Moderador agregado exitosamente:\n` +
-              `• Número: ${numero}\n\n` +
-              `🔄 Los cambios se aplicarán en el próximo reinicio.`
+      message: `âœ… Moderador agregado exitosamente:\n` +
+              `â€¢ NÃºmero: ${numero}\n\n` +
+              `ðŸ”„ Los cambios se aplicarÃ¡n en el prÃ³ximo reinicio.`
     };
 
   } catch (error) {
     console.error('Error en handleAddMod:', error);
     return {
       success: false,
-      message: '❌ Error al agregar moderador.'
+      message: 'âŒ Error al agregar moderador.'
     };
   }
 }
@@ -2948,15 +2948,15 @@ async function handleDelMod(usuario, grupo, isGroup, args) {
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: '❌ Solo los superadmins pueden quitar moderadores.'
+        message: 'âŒ Solo los superadmins pueden quitar moderadores.'
       };
     }
 
     if (!args || args.length < 1) {
       return {
         success: false,
-        message: '📝 *Uso:* `/delmod <numero>`\n\n' +
-                '📝 *Ejemplo:* `/delmod 1234567890`'
+        message: 'ðŸ“ *Uso:* `/delmod <numero>`\n\n' +
+                'ðŸ“ *Ejemplo:* `/delmod 1234567890`'
       };
     }
 
@@ -2967,7 +2967,7 @@ async function handleDelMod(usuario, grupo, isGroup, args) {
     if (modIndex === -1) {
       return {
         success: false,
-        message: `❌ El número ${numero} no es moderador.`
+        message: `âŒ El nÃºmero ${numero} no es moderador.`
       };
     }
 
@@ -2976,16 +2976,16 @@ async function handleDelMod(usuario, grupo, isGroup, args) {
 
     return {
       success: true,
-      message: `✅ Moderador removido exitosamente:\n` +
-              `• Número: ${numero}\n\n` +
-              `🔄 Los cambios se aplicarán en el próximo reinicio.`
+      message: `âœ… Moderador removido exitosamente:\n` +
+              `â€¢ NÃºmero: ${numero}\n\n` +
+              `ðŸ”„ Los cambios se aplicarÃ¡n en el prÃ³ximo reinicio.`
     };
 
   } catch (error) {
     console.error('Error en handleDelMod:', error);
     return {
       success: false,
-      message: '❌ Error al quitar moderador.'
+      message: 'âŒ Error al quitar moderador.'
     };
   }
 }
@@ -2994,13 +2994,13 @@ async function handleDelMod(usuario, grupo, isGroup, args) {
 async function getGlobalOffMessage() {
   try {
     const row = await db('configuracion').where({ parametro: 'global_off_message' }).first();
-    return row?.valor || '❌ El bot está desactivado globalmente por el administrador.';
+    return row?.valor || 'âŒ El bot estÃ¡ desactivado globalmente por el administrador.';
   } catch {
-    return '❌ El bot está desactivado globalmente por el administrador.';
+    return 'âŒ El bot estÃ¡ desactivado globalmente por el administrador.';
   }
 }
 
-// En el manejador principal de comandos (ejemplo pseudocódigo, debes ubicarlo en el entrypoint de comandos)
+// En el manejador principal de comandos (ejemplo pseudocÃ³digo, debes ubicarlo en el entrypoint de comandos)
 async function handleCommand(ctx) {
   // ...
   // Verificar estado global antes de ejecutar cualquier comando
@@ -3010,11 +3010,94 @@ async function handleCommand(ctx) {
     await ctx.reply(msg);
     return;
   }
-  // ... resto de la lógica de comandos ...
+  // ... resto de la lÃ³gica de comandos ...
+}
+// =====================
+// Ban / Unban helpers
+// =====================
+
+function normalizeNumber(value) {
+  if (!value) return null;
+  return String(value).replace(/[^0-9]/g, '');
+}
+
+async function ensureBansTable() {
+  const has = await db.schema.hasTable('usuarios_baneados');
+  if (!has) {
+    await db.schema.createTable('usuarios_baneados', (t) => {
+      t.increments('id').primary();
+      t.string('wa_number').notNullable().unique();
+      t.text('reason').defaultTo('');
+      t.string('banned_by').defaultTo('');
+      t.timestamp('fecha').defaultTo(db.fn.now());
+    });
+  }
+}
+
+async function handleBan(target, usuario, grupo, reason = '') {
+  try {
+    await ensureBansTable();
+    const number = normalizeNumber(target);
+    if (!number) {
+      return { success: false, message: 'âŒ Debes mencionar o indicar un nÃºmero vÃ¡lido.' };
+    }
+
+    // Permisos: superadmin o admin del grupo
+    const owner = normalizeNumber(usuario);
+    let allowed = isSuperAdmin(usuario) === true;
+    if (!allowed && grupo) {
+      allowed = await isGroupAdmin(usuario, grupo);
+    }
+    if (!allowed) {
+      return { success: false, message: 'â›” No tienes permisos para banear.' };
+    }
+
+    if (owner === number) {
+      return { success: false, message: 'âŒ No puedes banearte a ti mismo.' };
+    }
+
+    await db('usuarios_baneados')
+      .insert({ wa_number: number, reason, banned_by: owner })
+      .onConflict('wa_number')
+      .merge({ reason, banned_by: owner, fecha: db.fn.now() });
+
+    return { success: true, message: `ðŸš« Usuario @${number} ha sido baneado del bot.${reason ? ` Motivo: ${reason}` : ''}` };
+  } catch (error) {
+    console.error('Error en handleBan:', error);
+    return { success: false, message: 'âŒ Error al banear usuario.' };
+  }
+}
+
+async function handleUnban(target, usuario, grupo) {
+  try {
+    await ensureBansTable();
+    const number = normalizeNumber(target);
+    if (!number) {
+      return { success: false, message: 'âŒ Debes mencionar o indicar un nÃºmero vÃ¡lido.' };
+    }
+
+    // Permisos: superadmin o admin del grupo
+    let allowed = isSuperAdmin(usuario) === true;
+    if (!allowed && grupo) {
+      allowed = await isGroupAdmin(usuario, grupo);
+    }
+    if (!allowed) {
+      return { success: false, message: 'â›” No tienes permisos para desbanear.' };
+    }
+
+    const deleted = await db('usuarios_baneados').where({ wa_number: number }).del();
+    if (!deleted) {
+      return { success: false, message: 'â„¹ï¸ El usuario no estaba baneado.' };
+    }
+    return { success: true, message: `âœ… Usuario @${number} ha sido desbaneado.` };
+  } catch (error) {
+    console.error('Error en handleUnban:', error);
+    return { success: false, message: 'âŒ Error al desbanear usuario.' };
+  }
 }
 
 export {
-  // Comandos básicos
+  // Comandos bÃ¡sicos
   handleHelp,
   handleIA,
   handleClasificar,
@@ -3025,7 +3108,7 @@ export {
   handleAddAporte,
   handleAddSerie,
   handlePedido,
-  // Comandos de obtención
+  // Comandos de obtenciÃ³n
   handleObtenerManhwa,
   handleObtenerExtra,
   handleObtenerIlustracion,
@@ -3057,7 +3140,7 @@ export {
   handleTag,
   handleReplyTag,
 
-  // Reexportados consolidación
+  // Reexportados consolidaciÃ³n
   handleMusic,
   handleVideo,
   handleMeme,
@@ -3107,3 +3190,15 @@ export {
   handleMisSubbots,
   handleDelSubbot,
   handleStatusBot,
+  
+  // ModeraciÃ³n: ban/unban
+  handleBan,
+  handleUnban,
+
+};
+export {
+  // ...
+  handleBan,
+  handleUnban,
+};
+

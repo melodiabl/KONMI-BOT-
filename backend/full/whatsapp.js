@@ -98,10 +98,11 @@ import {
   handleMisArchivos,
   handleEstadisticas,
   handleLimpiar,
-  handleBuscarArchivo
+  handleBuscarArchivo,
+  handleBan,
+  handleUnban
 } from './commands-complete.js';
-
-import { processProviderMessage } from './auto-provider-handler.js';
+import { processProviderMessage } from './handler.js';
 import { onSubbotEvent } from './inproc-subbots.js';
 
 // nose xd
@@ -420,6 +421,15 @@ async function handleMessage(message) {
   const usuario = sender.split('@')[0];
   const grupo = isGroup ? remoteJid : null;
 
+  // Bloqueo por ban (solo para comandos)
+  try {
+    const banned = await db('usuarios_baneados').where({ wa_number: usuario }).first();
+    if (banned) {
+      await sock.sendMessage(remoteJid, { text: '🚫 Estás baneado del bot.' });
+      return;
+    }
+  } catch (_) {}
+
   // Detectar admins del grupo si es un grupo
   if (isGroup) {
     await detectGroupAdmins(remoteJid);
@@ -452,16 +462,15 @@ async function handleMessage(message) {
     }
   }
 
-  // 2. Estado por grupo (solo si no está globalmente apagado)
+  // 2. Estado por grupo: si el grupo está desactivado, avisar solo una vez por participante
   if (isGroup && await isGroupDeactivated(remoteJid)) {
-    // Solo permitir comandos de activación para admins reales del grupo
+    // Solo permitir reactivar con /bot on por un admin real del grupo
     if (command === '/bot' && args[0] === 'on') {
       const isAdmin = await import('./commands-complete.js').then(m => m.isGroupAdmin(usuario, remoteJid));
       if (isAdmin) {
-        // Permitir reactivar el bot y limpiar avisos de grupo
         await clearGroupOffNotices(remoteJid);
+        // sigue el flujo para que /bot on haga su trabajo más abajo
       } else {
-        // Avisar solo una vez por usuario
         if (!(await wasUserNotifiedGroupOff(remoteJid, usuario))) {
           await sock.sendMessage(remoteJid, {
             text: '🤖 *Bot desactivado en este grupo*\n\nSolo un admin puede reactivarlo usando `/bot on`.'
@@ -471,7 +480,6 @@ async function handleMessage(message) {
         return;
       }
     } else {
-      // Avisar solo una vez por usuario
       if (!(await wasUserNotifiedGroupOff(remoteJid, usuario))) {
         await sock.sendMessage(remoteJid, {
           text: '🤖 *Bot desactivado en este grupo*\n\nSolo un admin puede reactivarlo usando `/bot on`.'
@@ -482,11 +490,15 @@ async function handleMessage(message) {
     }
   }
 
-  // Comandos solo para grupo
+  // Comandos solo para grupo (excepto '/bot global ...' permitido en cualquier chat)
   const groupOnlyCommands = ['/bot', '/kick', '/promote', '/demote', '/lock', '/unlock', '/tag'];
-  if (!isGroup && groupOnlyCommands.some(cmd => command.startsWith(cmd))) {
-    await sock.sendMessage(remoteJid, { text: '⛔ Este comando solo funciona en grupos.' });
-    return;
+  if (!isGroup) {
+    const isGroupOnly = groupOnlyCommands.some(cmd => command.startsWith(cmd));
+    const isBotGlobal = command === '/bot' && args[0] === 'global';
+    if (isGroupOnly && !isBotGlobal) {
+      await sock.sendMessage(remoteJid, { text: '⛔ Este comando solo funciona en grupos.' });
+      return;
+    }
   }
 
   console.log(`📨 Comando recibido: ${command} de ${usuario} en ${isGroup ? grupo : 'privado'}`);
@@ -647,9 +659,9 @@ async function handleMessage(message) {
           return;
         }
       } else {
-        // Comandos de grupo (solo en grupos y solo admins reales)
+        // Control por grupo: requiere grupo y admin real
         if (!isGroup) {
-          await sock.sendMessage(remoteJid, { text: '⛔ Los comandos /bot on/off solo funcionan en grupos.' });
+          await sock.sendMessage(remoteJid, { text: '⛔ Este comando solo funciona en grupos. Usa `/bot global on|off` para control global.' });
           return;
         }
         const isAdmin = await import('./commands-complete.js').then(m => m.isGroupAdmin(usuario, remoteJid));
@@ -708,6 +720,41 @@ async function handleMessage(message) {
 
     case '/debugadmin':
       result = await handleDebugAdmin(usuario, grupo);
+      break;
+
+    // Moderación: banear y desbanear
+    case '/ban':
+      {
+        // Determinar objetivo: @numero, o respondido
+        let target = args[0] || '';
+        if (!target && message.message?.extendedTextMessage?.contextInfo?.participant) {
+          target = '@' + message.message.extendedTextMessage.contextInfo.participant.split('@')[0];
+        }
+        if (!target && message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
+          const mj = message.message.extendedTextMessage.contextInfo.mentionedJid[0];
+          target = '@' + String(mj).split('@')[0];
+        }
+        if (!target) { await sock.sendMessage(remoteJid, { text: 'Uso: /ban @usuario [motivo] (o responde un mensaje)' }); return; }
+        const reason = args.slice(1).join(' ');
+        const num = target.replace(/[^0-9]/g, '');
+        result = await handleBan(num, sender, grupo, reason);
+      }
+      break;
+
+    case '/unban':
+      {
+        let target = args[0] || '';
+        if (!target && message.message?.extendedTextMessage?.contextInfo?.participant) {
+          target = '@' + message.message.extendedTextMessage.contextInfo.participant.split('@')[0];
+        }
+        if (!target && message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
+          const mj = message.message.extendedTextMessage.contextInfo.mentionedJid[0];
+          target = '@' + String(mj).split('@')[0];
+        }
+        if (!target) { await sock.sendMessage(remoteJid, { text: 'Uso: /unban @usuario (o responde un mensaje)' }); return; }
+        const num = target.replace(/[^0-9]/g, '');
+        result = await handleUnban(num, sender, grupo);
+      }
       break;
 
     case '/addmanhwa':

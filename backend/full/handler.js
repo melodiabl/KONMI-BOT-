@@ -1165,5 +1165,3 @@ async function ensureGruposTable() {
     });
   }
 }
-};
-

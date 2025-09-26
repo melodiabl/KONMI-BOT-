@@ -5,11 +5,7 @@ import fs from 'fs';
 import db from './db.js';
 import { authenticateToken, authorizeRoles } from './auth.js';
 import { getQRCode, getQRCodeImage, getPairingCode, getPairingNumber, setAuthMethod, getConnectionStatus, getAvailableGroups, getSocket, clearWhatsAppSession } from './whatsapp.js';
-import {
-  getProviderStats,
-  getProviderAportes
-} from './auto-provider-handler.js';
-import { chatWithAI } from './ai-chat-handler.js';
+import { getProviderStats, getProviderAportes, chatWithAI } from './handler.js';
 import {
   handleBotCommandsStream,
   handleUsuariosStream,

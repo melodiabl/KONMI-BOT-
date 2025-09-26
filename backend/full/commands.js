@@ -1,6 +1,5 @@
 import db from './db.js';
-import { analyzeContentWithAI } from './gemini-ai-handler.js';
-import { chatWithAI, analyzeManhwaContent } from './ai-chat-handler.js';
+import { analyzeContentWithAI, chatWithAI, analyzeManhwaContent } from './handler.js';
 import { addAporte } from './handler.js';
 
 /**
