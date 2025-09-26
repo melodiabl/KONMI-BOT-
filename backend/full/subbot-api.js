@@ -1,155 +1,140 @@
 import express from 'express';
-import { authenticateToken, authorizeRoles } from './auth.js';
 import {
-  launchSubbot,
-  deleteSubbot,
-  fetchSubbotListWithOnlineFlag,
-  getSubbotStatus,
-  registerSubbotEvent,
+  createSubbot,
   getSubbotByCode,
-  onSubbotEvent
-} from './subproc-subbots.js';
+  getUserSubbots,
+  getSubbotStatus,
+  getSubbotStatusOverview,
+  getSubbotAccessData,
+  deleteSubbot,
+  registerSubbotEvent,
+  listAllSubbots,
+  cleanupInactiveSubbots,
+  getSubbotStats
+} from './handler.js';
+import { authenticateToken, authorizeRoles } from './auth.js';
 
 const router = express.Router();
 
+// Middleware para autenticación y autorización
+const requireAuth = [authenticateToken, authorizeRoles(['admin', 'user'])];
+
+// Endpoint para crear un nuevo subbot
+router.post('/create', requireAuth, async (req, res) => {
+  try {
+    const { userPhone, userName, connectionType = 'qr' } = req.body;
+    if (!userPhone) {
+      return res.status(400).json({ success: false, error: 'userPhone es requerido' });
+    }
+
+    const result = await createSubbot(userPhone, userName, connectionType);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error creando subbot:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// Endpoint para obtener subbots del usuario
+router.get('/list', requireAuth, async (req, res) => {
+  try {
+    const { userPhone } = req.query;
+    if (!userPhone) {
+      return res.status(400).json({ success: false, error: 'userPhone es requerido' });
+    }
+
+    const result = await getUserSubbots(userPhone);
+    res.json(result);
+  } catch (error) {
+    console.error('Error obteniendo subbots:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// Endpoint para obtener el estado de un subbot específico
+router.get('/status/:code', requireAuth, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const result = await getSubbotStatus(code);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error obteniendo datos de acceso:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// Endpoint para eliminar un subbot
+router.delete('/delete/:code', requireAuth, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { userPhone } = req.query;
+    const result = await deleteSubbot(code, userPhone);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error eliminando subbot:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// Endpoint para registrar eventos de subbot
 router.post('/event', async (req, res) => {
   try {
-    const { subbotId, token, event, data } = req.body || {};
+    const { subbotId, token, event, data } = req.body;
     const result = await registerSubbotEvent({ subbotId, token, event, data });
     if (!result.success) {
       return res.status(400).json(result);
     }
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
-router.use(authenticateToken);
-router.use(authorizeRoles('admin', 'owner'));
-
-router.get('/list', async (_req, res) => {
-  try {
-    const subbots = await fetchSubbotListWithOnlineFlag();
-    res.json({ success: true, subbots });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.get('/status', async (_req, res) => {
-  try {
-    const subbots = await getSubbotStatus();
-    res.json({ success: true, subbots });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post('/create', async (req, res) => {
-  try {
-    const { type = 'qr', phoneNumber = null } = req.body || {};
-    const requester = req.user?.username || null;
-    const sanitizedNumber = phoneNumber ? String(phoneNumber).replace(/[^0-9]/g, '') : null;
-
-    if (type === 'code' && (!sanitizedNumber || sanitizedNumber.length < 7)) {
-      return res.status(400).json({ success: false, error: 'Número de emparejamiento inválido.' });
-    }
-
-    const result = await launchSubbot({
-      type,
-      createdBy: requester,
-      requestJid: null,
-      requestParticipant: null,
-      targetNumber: type === 'code' ? sanitizedNumber : null,
-      metadata: { source: 'panel', requester }
-    });
-
-    if (!result.success) {
-      return res.status(400).json(result);
-    }
-
-    res.json({ success: true, subbotId: result.subbot.code });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.delete('/:code', async (req, res) => {
-  try {
-    const { code } = req.params;
-    const result = await deleteSubbot(code);
-    if (!result.success) {
-      return res.status(400).json(result);
-    }
     res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error registrando evento de subbot:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 });
 
-// QR se entrega por eventos y DM; este endpoint puede ser omitido en modo in-proc
-
-router.get('/details/:code', async (req, res) => {
+// Endpoint para listar todos los subbots activos (solo admin)
+router.get('/all', [authenticateToken, authorizeRoles(['admin'])], async (req, res) => {
   try {
-    const subbot = await getSubbotByCode(req.params.code);
-    if (!subbot) {
-      return res.status(404).json({ success: false, error: 'Subbot no encontrado' });
-    }
-    res.json({ success: true, subbot });
+    const subbots = listAllSubbots();
+    res.json({ success: true, subbots });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error listando subbots:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 });
 
-// Eventos/Logs de sub-bots
-router.get('/events', async (req, res) => {
+// Endpoint para limpiar subbots inactivos (solo admin)
+router.post('/cleanup', [authenticateToken, authorizeRoles(['admin'])], async (req, res) => {
   try {
-    const code = req.query.code ? String(req.query.code) : null;
-    const page = Math.max(1, parseInt(req.query.page || '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '50')));
-    const offset = (page - 1) * limit;
-    let q = db('subbot_events').select('*').orderBy('id','desc').limit(limit).offset(offset);
-    if (code) q = q.where({ code });
-    const rows = await q;
-    res.json({ success:true, page, limit, events: rows });
+    await cleanupInactiveSubbots();
+    res.json({ success: true, message: 'Limpieza completada' });
   } catch (error) {
-    res.status(500).json({ success:false, error: error.message });
+    console.error('Error limpiando subbots:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 });
 
-// SSE live stream de eventos
-const sseClients = new Set();
-onSubbotEvent('qr_ready', (p) => broadcastSse({ type:'qr_ready', ...p }));
-onSubbotEvent('pairing_code', (p) => broadcastSse({ type:'pairing_code', ...p }));
-onSubbotEvent('connected', (p) => broadcastSse({ type:'connected', ...p }));
-onSubbotEvent('disconnected', (p) => broadcastSse({ type:'disconnected', ...p }));
-onSubbotEvent('error', (p) => broadcastSse({ type:'error', ...p }));
-onSubbotEvent('stopped', (p) => broadcastSse({ type:'stopped', ...p }));
-onSubbotEvent('launch', (p) => broadcastSse({ type:'launch', ...p }));
-
-function broadcastSse(payload){
-  const data = `data: ${JSON.stringify(payload)}\n\n`;
-  for (const client of sseClients){
-    try {
-      if (!client.filter || client.filter === payload?.subbot?.code) {
-        client.res.write(data);
-      }
-    } catch (_) {}
+// Endpoint para obtener estadísticas de subbots (solo admin)
+router.get('/stats', [authenticateToken, authorizeRoles(['admin'])], async (req, res) => {
+  try {
+    const stats = await getSubbotStats();
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('Error obteniendo estadísticas:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
-}
-
-router.get('/events/stream', async (req, res) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive'
-  });
-  const filter = req.query.code ? String(req.query.code) : null;
-  const client = { res, filter };
-  sseClients.add(client);
-  req.on('close', () => sseClients.delete(client));
-  res.write(`data: ${JSON.stringify({ type:'hello', filter })}\n\n`);
 });
 
 export default router;

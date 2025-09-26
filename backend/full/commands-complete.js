@@ -10,6 +10,14 @@ import {
   getSubbotByCode
 } from './inproc-subbots.js';
 
+// Importar comandos de subbots
+import {
+  handleSerbot,
+  handleMisSubbots,
+  handleDelSubbot,
+  handleStatusBot
+} from './subbot-commands.js';
+
 // Consolidación de comandos: reexportamos funciones de módulos específicos
 import {
   // Media
@@ -3017,24 +3025,6 @@ export {
   handleAddAporte,
   handleAddSerie,
   handlePedido,
-  handlePedidos,
-  handleExtra,
-  handleIlustraciones,
-  
-  // Comandos de administración
-  handleAddGroup,
-  handleDelGroup,
-  handleAddManhwa,
-  handleLogs,
-  handlePrivado,
-  handleAmigos,
-  handleAdvertencias,
-  
-  // Comandos de votación
-  handleVotar,
-  handleCrearVotacion,
-  handleCerrarVotacion,
-  
   // Comandos de obtención
   handleObtenerManhwa,
   handleObtenerExtra,
@@ -3112,12 +3102,8 @@ export {
   handleInstagramDownload,
   handleTwitterDownload,
 
-  // Comandos de Administración Global
-  handleAdminInfo,
-  handleAddAdmin,
-  handleDelAdmin,
-  handleAddMod,
-  handleDelMod,
-  handleGetLID,
-  handleUpdateLID
-};
+  // Comandos de SubBots
+  handleSerbot,
+  handleMisSubbots,
+  handleDelSubbot,
+  handleStatusBot,
