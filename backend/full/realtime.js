@@ -49,7 +49,7 @@ function handleNotification(msg) {
     const data = msg.payload ? JSON.parse(msg.payload) : {};
     broadcast(msg.channel, data);
   } catch (error) {
-    console.error(`Error procesando notificación del canal ${msg.channel}:`, error);
+    console.error(`Error procesando notificacion del canal ${msg.channel}:`, error);
     broadcast(msg.channel, { operation: 'unknown' });
   }
 }
@@ -77,7 +77,7 @@ function scheduleReconnect() {
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     ensureListener().catch((err) => {
-      console.error('Error reintentando conexión de eventos en tiempo real:', err);
+      console.error('Error reintentando conexion de eventos en tiempo real:', err);
     });
   }, 5000);
 }
@@ -92,7 +92,7 @@ async function ensureListener() {
 
   const pgConfig = getPgConnectionConfig();
   if (!pgConfig) {
-    console.warn('Configuración de PostgreSQL no disponible para eventos en tiempo real');
+    console.warn('Configuracion de PostgreSQL no disponible para eventos en tiempo real');
     return;
   }
 
@@ -152,7 +152,7 @@ function setupStream(channel, eventType, req, res) {
   channelConfigs.set(channel, { eventType });
 
   ensureChannelSubscription(channel).catch((error) => {
-    console.error(`No se pudo garantizar la suscripción para ${channel}:`, error);
+    console.error(`No se pudo garantizar la suscripcion para ${channel}:`, error);
   });
 
   res.setHeader('Content-Type', 'text/event-stream');

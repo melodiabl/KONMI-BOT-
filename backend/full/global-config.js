@@ -1,53 +1,53 @@
-// ==================== CONFIGURACIÓN GLOBAL DEL BOT ====================
+// ==================== CONFIGURACION GLOBAL DEL BOT ====================
 
 // Lista de administradores globales (superadmins)
 // Formato: [numero, nombre, esSuperAdmin]
 global.owner = [
-  ['595974154768', 'Melodia', true], // Número principal del bot
-  // Agregar más administradores aquí si es necesario
+  ['595974154768', 'Melodia', true], // Numero principal del bot
+  // Agregar ms administradores aqu si es necesario
 ]
 
-// Lista de moderadores (pueden usar comandos de moderación)
+// Lista de moderadores (pueden usar comandos de moderacin)
 global.mods = [
-  // Agregar números de moderadores aquí
+  // Agregar nmeros de moderadores aqu
 ]
 
 // Lista de usuarios premium
 global.prems = [
-  // Agregar números de usuarios premium aquí
+  // Agregar nmeros de usuarios premium aqu
 ]
 
-// Configuración del bot
+// Configuracion del bot
 global.namebot = 'KONMI BOT'
 global.botname = 'KONMI BOT v2.5.0'
 global.packname = 'KONMI BOT'
-global.author = 'Hecho con ❤️ por Melodía'
+global.author = 'Hecho con  por Melodia'
 global.moneda = 'KONMI Coins'
 global.libreria = 'Baileys'
 global.baileys = 'V 6.7.0'
 global.vs = '2.5.0'
-global.sessions = 'KONMI Bot'
+global.sessions = './storage/baileys_full' // Ruta centralizada de autenticacin
 global.jadi = 'KONMI Bots'
 
-// Autenticación por defecto del bot principal en entornos no interactivos
+// Autenticacion por defecto del bot principal en entornos no interactivos
 // Valores posibles para method: 'prompt' | 'qr' | 'pairing'
-// Si usas 'pairing', configura pairingNumber solo con dígitos (incluye el código de país)
+// Si usas 'pairing', configura pairingNumber solo con digitos (incluye el codigo de pais)
 
-// Configuración de canales (opcional)
-global.namecanal = 'KONMI BOT • Actualizaciones'
+// Configuracion de canales (opcional)
+global.namecanal = 'KONMI BOT  Actualizaciones'
 global.idcanal = '120363372883715167@newsletter'
 global.canal = 'https://whatsapp.com/channel/0029VayXJte65yD6LQGiRB0R'
 
-// Configuración de canales a seguir
+// Configuracin de canales a seguir
 global.ch = {
   ch1: '120363372883715167@newsletter'
 }
 
-// Configuración del sistema
+// Configuracin del sistema
 global.multiplier = 100 // Multiplicador de experiencia
-global.maxwarn = 3 // Máximo de advertencias antes del ban
+global.maxwarn = 3 // Maximo de advertencias antes del ban
 
-// Configuración de respuestas automáticas
+// Configuracion de respuestas automaticas
 global.rcanal = {
   contextInfo: {
     externalAdReply: {
@@ -61,10 +61,11 @@ global.rcanal = {
   }
 }
 
-// Función para verificar si un usuario es superadmin
+// Funcin para verificar si un usuario es superadmin
 function normalizeNumber(value) {
   if (!value) return '';
-  return String(value).split(':')[0].replace(/[^0-9]/g, '');
+  // No cortar nmeros largos, solo eliminar caracteres no numricos
+  return String(value).replace(/[^0-9]/g, '');
 }
 
 function setPrimaryOwner(number, name = 'Owner') {
@@ -75,17 +76,27 @@ function setPrimaryOwner(number, name = 'Owner') {
   const filtered = existing.filter(([num]) => normalizeNumber(num) !== normalized);
   const entry = [normalized, name || 'Owner', true];
   global.owner = [entry, ...filtered];
-  console.log(`👑 Owner principal actualizado dinámicamente a +${normalized}`);
+  console.log(` Owner principal actualizado dinmicamente a +${normalized}`);
 }
 
 function isSuperAdmin(sender) {
   if (!global.owner || !Array.isArray(global.owner)) return false;
 
   const senderNumber = normalizeNumber(sender);
-  return global.owner.some(([number]) => normalizeNumber(number) === senderNumber);
+  // Verificar si el sender es un superadmin
+  const isSuper = global.owner.some(([number]) => normalizeNumber(number) === senderNumber);
+  
+  // Si el sender es el mismo nmero que el bot, no considerarlo superadmin
+  // para evitar conflictos en la deteccin de permisos
+  const botNumber = '595974154768'; // Nmero del bot
+  if (senderNumber === botNumber) {
+    return false; // El bot no puede ser superadmin de s mismo
+  }
+  
+  return isSuper;
 }
 
-// Función para verificar si un usuario es moderador
+// Funcin para verificar si un usuario es moderador
 function isModerator(sender) {
   if (!global.mods || !Array.isArray(global.mods)) return false;
 
@@ -93,7 +104,7 @@ function isModerator(sender) {
   return global.mods.some((number) => normalizeNumber(number) === senderNumber);
 }
 
-// Función para verificar si un usuario es premium
+// Funcin para verificar si un usuario es premium
 function isPremium(sender) {
   if (!global.prems || !Array.isArray(global.prems)) return false;
 
@@ -101,7 +112,7 @@ function isPremium(sender) {
   return global.prems.some((number) => normalizeNumber(number) === senderNumber);
 }
 
-// Función para obtener el nombre del owner por número
+// Funcin para obtener el nombre del owner por nmero
 function getOwnerName(sender) {
   if (!global.owner || !Array.isArray(global.owner)) return 'Owner Desconocido';
 
@@ -129,9 +140,9 @@ export {
   setPrimaryOwner
 };
 
-// Log de configuración cargada
-console.log('🔧 Configuración global cargada:');
-console.log(`👑 Superadmins: ${global.owner.map(([num, name]) => `${name} (${num})`).join(', ')}`);
-console.log(`🛡️ Moderadores: ${global.mods.length}`);
-console.log(`💎 Premium: ${global.prems.length}`);
-console.log(`🤖 Bot: ${global.botname} v${global.vs}`);
+// Log de configuracin cargada
+console.log(' Configuracin global cargada:');
+console.log(` Superadmins: ${global.owner.map(([num, name]) => `${name} (${num})`).join(', ')}`);
+console.log(` Moderadores: ${global.mods.length}`);
+console.log(` Premium: ${global.prems.length}`);
+console.log(` Bot: ${global.botname} v${global.vs}`);

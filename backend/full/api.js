@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import db from './db.js';
 import { authenticateToken, authorizeRoles } from './auth.js';
-import { getQRCode, getQRCodeImage, getPairingCode, getPairingNumber, setAuthMethod, getConnectionStatus, getAvailableGroups, getSocket, clearWhatsAppSession } from './whatsapp.js';
+import { getQRCode, getQRCodeImage, getCurrentPairingCode as getPairingCode, getPairingTargetNumber as getPairingNumber, setAuthMethod, getConnectionStatus, getAvailableGroups, getSocket, clearWhatsAppSession } from './whatsapp.js';
 import { getProviderStats, getProviderAportes, chatWithAI } from './handler.js';
 import {
   handleBotCommandsStream,
@@ -185,7 +185,7 @@ router.post('/subbots/qr', authenticateToken, async (req, res) => {
       .first();
     
     if (existingSubbots.count >= 3) {
-      return res.status(400).json({ error: 'Límite de sub-bots por usuario alcanzado' });
+      return res.status(400).json({ error: 'Lmite de sub-bots por usuario alcanzado' });
     }
 
     // Generate unique code
@@ -219,7 +219,7 @@ router.post('/subbots/code', authenticateToken, async (req, res) => {
       .first();
     
     if (existingSubbots.count >= 3) {
-      return res.status(400).json({ error: 'Límite de sub-bots por usuario alcanzado' });
+      return res.status(400).json({ error: 'Lmite de sub-bots por usuario alcanzado' });
     }
 
     // Generate unique code
@@ -288,7 +288,7 @@ router.put('/users/:id/role', authenticateToken, authorizeRoles(['admin']), asyn
     
     const validRoles = ['admin', 'moderador', 'usuario'];
     if (!validRoles.includes(rol)) {
-      return res.status(400).json({ error: 'Rol inválido' });
+      return res.status(400).json({ error: 'Rol invalido' });
     }
 
     const updated = await db('usuarios')
@@ -418,7 +418,7 @@ router.get('/system/stats', async (req, res) => {
 });
 
 // =====================
-// AI endpoints (mínimos)
+// AI endpoints (minimos)
 // =====================
 
 router.get('/ai/stats', async (_req, res) => {
@@ -532,7 +532,7 @@ router.post('/chat/sessions/:id/messages', async (req, res) => {
     const aiText = ai?.response || 'No pude generar una respuesta.';
     const model = ai?.model || null;
     await db('chat_messages').insert({ session_id: id, role: 'assistant', content: aiText, timestamp: new Date().toISOString(), model });
-    // Actualizar sesión
+    // Actualizar sesion
     const countRow = await db('chat_messages').where({ session_id: id }).count('id as c').first();
     await db('chat_sessions').where({ id }).update({ updated_at: new Date().toISOString(), last_message: aiText.substring(0, 120), message_count: Number(countRow?.c || 0) });
     res.json({ success: true });
@@ -1031,7 +1031,7 @@ router.get('/votaciones/activas', async (req, res) => {
   }
 });
 
-// Votar en una votación
+// Votar en una votacion
 router.post('/votaciones/:id/votar', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1039,13 +1039,13 @@ router.post('/votaciones/:id/votar', authenticateToken, async (req, res) => {
     const usuario = req.user.username;
 
     const votacion = await db('votaciones').where({ id, estado: 'activa' }).first();
-    if (!votacion) return res.status(404).json({ error: 'Votación no encontrada o inactiva' });
+    if (!votacion) return res.status(404).json({ error: 'Votacion no encontrada o inactiva' });
 
     const opciones = JSON.parse(votacion.opciones || '[]');
-    if (!opciones.includes(opcion)) return res.status(400).json({ error: 'Opción inválida' });
+    if (!opciones.includes(opcion)) return res.status(400).json({ error: 'Opcion invalida' });
 
     const votoExistente = await db('votos').where({ votacion_id: id, usuario }).first();
-    if (votoExistente) return res.status(400).json({ error: 'Ya has votado en esta votación' });
+    if (votoExistente) return res.status(400).json({ error: 'Ya has votado en esta votacion' });
 
     await db('votos').insert({ votacion_id: id, usuario, opcion, fecha: new Date() });
     return res.json({ success: true, message: 'Voto registrado' });
@@ -1238,7 +1238,7 @@ router.patch('/aportes/:id/estado', authenticateToken, authorizeRoles('admin', '
     const { id } = req.params;
     const allowed = ['pendiente', 'aprobado', 'rechazado'];
     if (!estado || !allowed.includes(String(estado))) {
-      return res.status(400).json({ error: 'estado inválido' });
+      return res.status(400).json({ error: 'estado invalido' });
     }
     await db('aportes').where({ id }).update({ estado, motivo_rechazo: motivo_rechazo || null, fecha_procesado: new Date().toISOString(), procesado_por: req.user?.username || null, updated_at: new Date().toISOString() });
     try { await db('logs').insert({ tipo: 'administracion', comando: 'aporte_estado', usuario: req.user?.username || 'panel', fecha: new Date().toISOString(), detalles: JSON.stringify({ id, estado }) }); } catch (_) {}
@@ -1289,7 +1289,7 @@ router.get('/aportes/stats', authenticateToken, authorizeRoles('admin', 'owner',
 });
 
 // =====================
-// Proveedores (mínimos)
+// Proveedores (minimos)
 // =====================
 
 // Listar proveedores a partir de grupos_autorizados tipo proveedor
@@ -1362,7 +1362,7 @@ router.get('/proveedores/stats', authenticateToken, authorizeRoles('admin', 'own
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Bot config endpoints (mínimos para Settings)
+// Bot config endpoints (minimos para Settings)
 router.get('/bot/config', async (req, res) => {
   try {
     const cfg = await db('configuracion').select('parametro','valor').orderBy('parametro');
@@ -1378,7 +1378,7 @@ router.patch('/bot/config', async (req, res) => {
       await db('configuracion').insert({ parametro, valor, fecha_modificacion: new Date().toISOString() })
         .onConflict('parametro').merge();
     }
-    res.json({ success: true, message: 'Configuración del bot actualizada' });
+    res.json({ success: true, message: 'Configuracion del bot actualizada' });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -1391,7 +1391,7 @@ router.post('/bot/restart', async (req, res) => {
 
 router.post('/bot/disconnect', async (req, res) => {
   try { await db('logs').insert({ tipo: 'sistema', comando: 'bot_disconnect', usuario: 'panel', fecha: new Date().toISOString() });
-    res.json({ success: true, message: 'Desconexión encolada' });
+    res.json({ success: true, message: 'Desconexion encolada' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1509,7 +1509,7 @@ router.post('/logs', authenticateToken, authorizeRoles('admin', 'owner'), async 
     // Validar tipos permitidos
     const tiposPermitidos = ['control', 'configuracion', 'sistema', 'comando', 'ai_command', 'clasificar_command', 'administracion'];
     if (!tiposPermitidos.includes(tipo)) {
-      return res.status(400).json({ error: 'Tipo de log no válido' });
+      return res.status(400).json({ error: 'Tipo de log no valido' });
     }
     
     await db('logs').insert({
@@ -1614,7 +1614,7 @@ router.patch('/grupos/:jid/proveedor', authenticateToken, authorizeRoles('admin'
     const { jid } = req.params;
     const { es_proveedor } = req.body;
     if (!jid || typeof es_proveedor === 'undefined') {
-      return res.status(400).json({ error: 'Parámetros inválidos' });
+      return res.status(400).json({ error: 'Parametros invalidos' });
     }
 
     const isNumeric = /^\d+$/.test(jid);
@@ -1917,13 +1917,13 @@ router.patch('/pedidos/:id', authenticateToken, authorizeRoles('admin', 'owner',
     if (changes.estado) {
       const allowedEstados = ['pendiente', 'en_proceso', 'resuelto', 'cancelado', 'rechazado'];
       if (!allowedEstados.includes(changes.estado)) {
-        return res.status(400).json({ error: 'Estado inválido' });
+        return res.status(400).json({ error: 'Estado invalido' });
       }
     }
     if (changes.prioridad) {
       const allowedPrioridad = ['baja', 'media', 'alta', 'urgente'];
       if (!allowedPrioridad.includes(String(changes.prioridad))) {
-        return res.status(400).json({ error: 'Prioridad inválida' });
+        return res.status(400).json({ error: 'Prioridad invalida' });
       }
     }
 
@@ -2194,15 +2194,15 @@ router.post('/votaciones', authenticateToken, authorizeRoles('admin', 'owner', '
         const sock = getSocket();
         if (sock) {
           const opcionesTexto = (opciones || []).map((o, i) => `${i + 1}. ${o}`).join('\n');
-          const msg = `🗳️ *NUEVA VOTACIÓN*\n\n📋 ${titulo}\n\n${descripcion || ''}\n\n${opcionesTexto}\n\nPara votar usa: /votar [opción]`;
+          const msg = ` *NUEVA VOTACION*\n\n ${titulo}\n\n${descripcion || ''}\n\n${opcionesTexto}\n\nPara votar usa: /votar [opcion]`;
           await sock.sendMessage(grupo, { text: msg });
         }
       } catch (e) {
-        console.error('No se pudo anunciar la votación en el grupo:', e);
+        console.error('No se pudo anunciar la votacion en el grupo:', e);
       }
     }
 
-    res.json({ success: true, message: 'Votación creada correctamente', id });
+    res.json({ success: true, message: 'Votacion creada correctamente', id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2222,7 +2222,7 @@ router.put('/votaciones/:id', authenticateToken, authorizeRoles('admin', 'owner'
       grupo_jid: grupo || null,
     });
     
-    res.json({ success: true, message: 'Votación actualizada correctamente' });
+    res.json({ success: true, message: 'Votacion actualizada correctamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2235,7 +2235,7 @@ router.delete('/votaciones/:id', authenticateToken, authorizeRoles('admin', 'own
     await db('votos').where({ votacion_id: id }).del();
     await db('votaciones').where({ id }).del();
     
-    res.json({ success: true, message: 'Votación eliminada correctamente' });
+    res.json({ success: true, message: 'Votacion eliminada correctamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2305,7 +2305,7 @@ router.post('/aportes', authenticateToken, async (req, res) => {
     const { contenido, tipo, grupo, manhwa_titulo, archivo_path } = req.body;
     if (!contenido || !tipo) return res.status(400).json({ error: 'Contenido y tipo son requeridos' });
     if (tipo === 'documento' && (!manhwa_titulo || !archivo_path)) {
-      return res.status(400).json({ error: 'Para documentos debes indicar título de manhwa y archivo' });
+      return res.status(400).json({ error: 'Para documentos debes indicar titulo de manhwa y archivo' });
     }
 
     const fecha = new Date();
@@ -2354,7 +2354,7 @@ router.put('/aportes/:id/estado', authenticateToken, authorizeRoles('admin', 'ow
     const { estado } = req.body;
     const allowed = ['pendiente', 'en_revision', 'completado'];
     if (!allowed.includes(estado)) {
-      return res.status(400).json({ error: 'Estado inválido' });
+      return res.status(400).json({ error: 'Estado invalido' });
     }
 
     const updateData = {
@@ -2464,7 +2464,7 @@ router.delete('/grupos/:jid', authenticateToken, authorizeRoles('admin', 'owner'
 
 // Dashboard stats endpoint
 
-// Gestión de usuarios (solo admin y owner)
+// Gestion de usuarios (solo admin y owner)
 router.delete('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureUsuariosTrigger();
@@ -2485,7 +2485,7 @@ router.put('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'),
     const { rol } = req.body;
     
     if (!['owner', 'admin', 'colaborador', 'usuario', 'creador', 'moderador'].includes(rol)) {
-      return res.status(400).json({ error: 'Rol no válido' });
+      return res.status(400).json({ error: 'Rol no vlido' });
     }
     
     await db('usuarios').where({ id }).update({ rol });
@@ -2496,7 +2496,7 @@ router.put('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'),
   }
 });
 
-// Edición completa de usuario (admin/owner)
+// Edicion completa de usuario (admin/owner)
 router.put('/usuarios/:id/full-edit', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureUsuariosTrigger();
@@ -2508,10 +2508,10 @@ router.put('/usuarios/:id/full-edit', authenticateToken, authorizeRoles('admin',
     }
     
     if (!['owner', 'admin', 'colaborador', 'usuario', 'creador', 'moderador'].includes(rol)) {
-      return res.status(400).json({ error: 'Rol no válido' });
+      return res.status(400).json({ error: 'Rol no vlido' });
     }
     
-    // Verificar que el nuevo username no exista (si se está cambiando)
+    // Verificar que el nuevo username no exista (si se esta cambiando)
     const currentUser = await db('usuarios').where({ id }).select('username').first();
     if (currentUser.username !== username) {
       const existingUser = await db('usuarios').where({ username }).whereNot({ id }).first();
@@ -2526,7 +2526,7 @@ router.put('/usuarios/:id/full-edit', authenticateToken, authorizeRoles('admin',
       whatsapp_number: whatsapp_number || null
     };
     
-    // Actualizar contraseña si se proporciona
+    // Actualizar contrasena si se proporciona
     if (password && password.trim() !== '') {
       const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -2546,7 +2546,7 @@ router.post('/usuarios/:id/reset-password', authenticateToken, authorizeRoles('a
   try {
     const { id } = req.params;
     
-    // Generar nueva contraseña temporal
+    // Generar nueva contrasea temporal
     const newTempPassword = Math.random().toString(36).slice(-8);
     const bcrypt = await import('bcryptjs');
     const hashedPassword = await bcrypt.hash(newTempPassword, 10);
@@ -2555,7 +2555,7 @@ router.post('/usuarios/:id/reset-password', authenticateToken, authorizeRoles('a
     
     res.json({ 
       success: true, 
-      message: 'Contraseña restablecida correctamente',
+      message: 'Contrasena restablecida correctamente',
       tempPassword: newTempPassword
     });
   } catch (error) {
@@ -2581,7 +2581,7 @@ router.get('/whatsapp/qr', authenticateToken, authorizeRoles('owner'), async (re
     if (!qrCode && !qrCodeImage) {
       return res.json({
         available: false,
-        message: 'No hay código QR disponible'
+        message: 'No hay codigo QR disponible'
       });
     }
 
@@ -2605,7 +2605,7 @@ router.get('/whatsapp/pairing-code', authenticateToken, authorizeRoles('owner'),
     if (!pairingCode) {
       return res.json({
         available: false,
-        message: 'No hay código de emparejamiento disponible',
+        message: 'No hay codigo de emparejamiento disponible',
         phoneNumber: phoneNumber ? `+${phoneNumber}` : null
       });
     }
@@ -2639,13 +2639,13 @@ router.post('/whatsapp/auth-method', authenticateToken, authorizeRoles('owner'),
       try {
         socket.end();
       } catch (socketError) {
-        console.error('Error cerrando socket para regenerar autenticación:', socketError);
+        console.error('Error cerrando socket para regenerar autenticacin:', socketError);
       }
     }
 
     res.json({
       success: true,
-      message: `Método de autenticación establecido: ${method}`,
+      message: `Metodo de autenticacion establecido: ${method}`,
       method: method,
       phoneNumber: method === 'pairing' && normalizedNumber ? `+${normalizedNumber}` : null
     });
@@ -2656,8 +2656,8 @@ router.post('/whatsapp/auth-method', authenticateToken, authorizeRoles('owner'),
 
 router.post('/whatsapp/logout', authenticateToken, authorizeRoles('owner'), async (req, res) => {
   try {
-    // Aquí podrías agregar lógica para desconectar el bot si es necesario
-    // Por ahora solo devolvemos éxito
+    // Aqu podras agregar lgica para desconectar el bot si es necesario
+    // Por ahora solo devolvemos xito
     res.json({ 
       success: true, 
       message: 'Bot desconectado correctamente' 
@@ -2727,7 +2727,7 @@ router.post('/bot/global-state', authenticateToken, authorizeRoles('admin', 'own
   }
 });
 
-// Rutas para sistema de proveedores automático
+// Rutas para sistema de proveedores automatico
 router.get('/proveedores/estadisticas', authenticateToken, async (req, res) => {
   try {
     const stats = await getProviderStats();
@@ -2759,7 +2759,7 @@ router.get('/proveedores/download/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Obtener información del archivo
+    // Obtener informacin del archivo
     const aporte = await db('aportes')
       .where({ id, tipo: 'proveedor_auto' })
       .select('archivo_path', 'manhwa_titulo')
@@ -2777,7 +2777,7 @@ router.get('/proveedores/download/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Archivo no encontrado en el sistema' });
     }
     
-    // Obtener información del archivo
+    // Obtener informacin del archivo
     const fileName = path.basename(aporte.archivo_path);
     const fileStats = fs.statSync(aporte.archivo_path);
     
@@ -2837,7 +2837,7 @@ router.get('/notificaciones/stats', authenticateToken, authorizeRoles('admin', '
   }
 });
 
-// Notificaciones helpers: garantizar tabla mínima
+// Notificaciones helpers: garantizar tabla minima
 async function ensureNotificationsTable() {
   const has = await db.schema.hasTable('notificaciones');
   if (!has) {
@@ -2935,7 +2935,7 @@ async function enrichNotifications(rows) {
     }
     return {
       id: row.id,
-      title: row.title || 'Notificación',
+      title: row.title || 'Notificacion',
       message: row.message,
       type: row.type || 'info',
       category: row.category || 'general',
@@ -2954,7 +2954,7 @@ async function enrichNotifications(rows) {
 // Endpoint: /api/analytics
 router.get('/analytics', async (req, res) => {
   try {
-    // Ejemplo de analítica básica real
+    // Ejemplo de analitica basica real
     const usuarios = await db('usuarios').count('id as count').first();
     const grupos = await db('grupos_autorizados').count('jid as count').first();
     const aportes = await db('aportes').count('id as count').first();
@@ -3025,7 +3025,7 @@ router.get('/notificaciones', authenticateToken, authorizeRoles('admin', 'owner'
   }
 });
 
-// Marcar notificación como leída
+// Marcar notificacin como leda
 router.patch('/notificaciones/:id/read', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensureNotificationsTable();
@@ -3035,7 +3035,7 @@ router.patch('/notificaciones/:id/read', authenticateToken, authorizeRoles('admi
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Marcar todas como leídas
+// Marcar todas como ledas
 router.patch('/notificaciones/read-all', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (_req, res) => {
   try {
     await ensureNotificationsTable();
@@ -3046,13 +3046,13 @@ router.patch('/notificaciones/read-all', authenticateToken, authorizeRoles('admi
   catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Eliminar notificación
+// Eliminar notificacin
 router.delete('/notificaciones/:id', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureNotificationsTable();
     const { id } = req.params;
     const existing = await db('notificaciones').where({ id }).first();
-    if (!existing) return res.status(404).json({ error: 'Notificación no encontrada' });
+    if (!existing) return res.status(404).json({ error: 'Notificacin no encontrada' });
     await db('notificaciones').where({ id }).del();
     emitNotificacionesEvent({ operation: 'DELETE', id: Number(id) });
     res.json({ success: true });
@@ -3060,11 +3060,11 @@ router.delete('/notificaciones/:id', authenticateToken, authorizeRoles('admin', 
   catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Crear notificación de prueba
+// Crear notificacin de prueba
 router.post('/notificaciones', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensureNotificationsTable();
-    const { message, title = 'Notificación', type = 'info', category = 'general', metadata = {}, user_id = null } = req.body || {};
+    const { message, title = 'Notificacin', type = 'info', category = 'general', metadata = {}, user_id = null } = req.body || {};
     if (!message) return res.status(400).json({ error: 'message requerido' });
     const now = new Date().toISOString();
     let insertedId;
@@ -3084,7 +3084,7 @@ router.post('/notificaciones', authenticateToken, authorizeRoles('admin', 'owner
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Listas de categorías y tipos
+// Listas de categoras y tipos
 router.get('/notificaciones/categories', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (_req, res) => {
   try {
     await ensureNotificationsTable();
@@ -3126,7 +3126,7 @@ router.patch('/system/config', async (req, res) => {
       await db('configuracion').insert({ parametro: `system:${parametro}`, valor, fecha_modificacion: new Date().toISOString() })
         .onConflict('parametro').merge();
     }
-    res.json({ success: true, message: 'Configuración del sistema actualizada' });
+    res.json({ success: true, message: 'Configuracin del sistema actualizada' });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -3194,7 +3194,7 @@ router.post('/api/multimedia/upload', authenticateToken, authorizeRoles('admin',
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Multimedia delete compat → borra aporte
+// Multimedia delete compat  borra aporte
 router.delete('/api/multimedia/:id', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensureAportesTable();
@@ -3212,14 +3212,14 @@ router.delete('/api/multimedia/:id', authenticateToken, authorizeRoles('admin', 
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Usuarios CRUD mínimos para panel
+// Usuarios CRUD mnimos para panel
 router.post('/usuarios', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureUsuariosTrigger();
     const { username, password, rol = 'usuario', whatsapp_number } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'username y password requeridos' });
     if (!['owner', 'admin', 'colaborador', 'usuario', 'creador', 'moderador'].includes(rol)) {
-      return res.status(400).json({ error: 'Rol no válido' });
+      return res.status(400).json({ error: 'Rol no vlido' });
     }
     let hashed;
     try {
@@ -3394,13 +3394,13 @@ router.get('/api/multimedia/:id', authenticateToken, authorizeRoles('admin', 'ow
   }
 });
 
-// Endpoint: /api/grupos/management - Gestión de grupos desde el panel
+// Endpoint: /api/grupos/management - Gestin de grupos desde el panel
 router.get('/grupos/management', async (req, res) => {
   try {
     const grupos = await db('grupos').select('*').orderBy('nombre', 'asc');
     const gruposDesactivados = await db('grupos_desactivados').select('*');
     
-    // Combinar información
+    // Combinar informacin
     const gruposConEstado = grupos.map(grupo => {
       const desactivado = gruposDesactivados.find(gd => gd.jid === grupo.jid);
       return {
@@ -3417,7 +3417,7 @@ router.get('/grupos/management', async (req, res) => {
   }
 });
 
-// Endpoint: /api/grupos/:id/toggle - Activar/desactivar bot en grupo específico
+// Endpoint: /api/grupos/:id/toggle - Activar/desactivar bot en grupo especfico
 router.post('/grupos/:id/toggle', async (req, res) => {
   try {
     const grupoId = req.params.id;
@@ -3446,7 +3446,7 @@ router.post('/grupos/:id/toggle', async (req, res) => {
         action: 'on'
       });
     } else {
-      res.status(400).json({ error: 'Acción inválida. Use "on" o "off"' });
+      res.status(400).json({ error: 'Accin invlida. Use "on" o "off"' });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -3479,7 +3479,7 @@ router.get('/notificaciones-globales', async (req, res) => {
   }
 });
 
-// Endpoint: /api/notificaciones-globales/stats - Estadísticas de notificaciones
+// Endpoint: /api/notificaciones-globales/stats - Estadsticas de notificaciones
 router.get('/notificaciones-globales/stats', async (req, res) => {
   try {
     const total = await db('notificaciones_globales').count('id as count').first();
@@ -3531,7 +3531,7 @@ router.post('/bot/global-startup', async (req, res) => {
 router.get('/bot/global-off-message', async (req, res) => {
   try {
     const row = await db('configuracion').where({ parametro: 'global_off_message' }).first();
-    res.json({ message: row?.valor || '❌ El bot está desactivado globalmente por el administrador.' });
+    res.json({ message: row?.valor || ' El bot est desactivado globalmente por el administrador.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -3542,7 +3542,7 @@ router.post('/bot/global-off-message', async (req, res) => {
   try {
     const { message } = req.body;
     if (typeof message !== 'string' || !message.trim()) {
-      return res.status(400).json({ error: 'Mensaje inválido' });
+      return res.status(400).json({ error: 'Mensaje invlido' });
     }
     await db('configuracion').insert({ parametro: 'global_off_message', valor: message, fecha_modificacion: new Date().toISOString() })
       .onConflict('parametro').merge();

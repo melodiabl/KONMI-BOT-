@@ -12,7 +12,7 @@ const db = knex(config);
 
 // Compatibilidad: agregar helpers tipo SQLite (.all, .get, .prepare, .run)
 function normalizeRows(res) {
-  // knex.raw puede devolver distintos formatos según el cliente
+  // knex.raw puede devolver distintos formatos segun el cliente
   if (!res) return [];
   if (Array.isArray(res)) {
     // sqlite3/mariadb a veces devuelven [rows, fields]

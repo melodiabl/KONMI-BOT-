@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Servicio inteligente de gestión de recursos para subbots
+ * Servicio inteligente de gestin de recursos para subbots
  */
 class SubbotService {
   constructor() {
@@ -17,7 +17,7 @@ class SubbotService {
     this.cleanupInterval = parseInt(process.env.CLEANUP_INTERVAL) || 5 * 60 * 1000; // 5 min
     this.maxMemoryUsage = parseInt(process.env.MAX_MEMORY_MB) || 512; // 512MB por subbot
     
-    // Iniciar limpieza automática
+    // Iniciar limpieza automtica
     this.startCleanupService();
     
     // Monitorear uso de memoria
@@ -29,16 +29,16 @@ class SubbotService {
    */
   async canCreateSubbot(userPhone) {
     try {
-      // Verificar límite global
+      // Verificar lmite global
       const activeCount = await db('subbots').where({ is_active: true }).count('id as count').first();
       if (activeCount.count >= this.maxActiveSubbots) {
         return {
           canCreate: false,
-          reason: `Límite global alcanzado (${this.maxActiveSubbots} subbots activos)`
+          reason: `Lmite global alcanzado (${this.maxActiveSubbots} subbots activos)`
         };
       }
 
-      // Verificar límite por usuario (máximo 2 por usuario)
+      // Verificar lmite por usuario (mximo 2 por usuario)
       const userActiveCount = await db('subbots')
         .where({ user_phone: userPhone, is_active: true })
         .count('id as count')
@@ -47,7 +47,7 @@ class SubbotService {
       if (userActiveCount.count >= 2) {
         return {
           canCreate: false,
-          reason: 'Máximo 2 subbots activos por usuario'
+          reason: 'Mximo 2 subbots activos por usuario'
         };
       }
 
@@ -58,7 +58,7 @@ class SubbotService {
       if (memoryUsageMB > (this.maxMemoryUsage * this.maxActiveSubbots * 0.8)) {
         return {
           canCreate: false,
-          reason: 'Uso de memoria alto, intenta más tarde'
+          reason: 'Uso de memoria alto, intenta ms tarde'
         };
       }
 
@@ -73,7 +73,7 @@ class SubbotService {
   }
 
   /**
-   * Obtener estadísticas de uso de recursos
+   * Obtener estadsticas de uso de recursos
    */
   async getResourceStats() {
     try {
@@ -105,7 +105,7 @@ class SubbotService {
         }
       };
     } catch (error) {
-      console.error('Error obteniendo estadísticas:', error);
+      console.error('Error obteniendo estadsticas:', error);
       return null;
     }
   }
@@ -137,7 +137,7 @@ class SubbotService {
         }
       }
 
-      // Ordenar por tiempo de inactividad (más inactivos primero)
+      // Ordenar por tiempo de inactividad (ms inactivos primero)
       candidates.sort((a, b) => b.inactiveTime - a.inactiveTime);
 
       // Limpiar subbots inactivos
@@ -146,7 +146,7 @@ class SubbotService {
           await this.cleanupSubbot(candidate.code);
           cleanupResults.cleaned++;
           
-          console.log(`🧹 Subbot limpiado: ${candidate.code} (inactivo por ${Math.round(candidate.inactiveTime / 60000)} min)`);
+          console.log(` Subbot limpiado: ${candidate.code} (inactivo por ${Math.round(candidate.inactiveTime / 60000)} min)`);
         } catch (error) {
           cleanupResults.errors.push({
             code: candidate.code,
@@ -155,12 +155,12 @@ class SubbotService {
         }
       }
 
-      // Si el uso de memoria sigue alto, limpiar más agresivamente
+      // Si el uso de memoria sigue alto, limpiar ms agresivamente
       const memoryUsage = process.memoryUsage();
       const memoryUsageMB = memoryUsage.heapUsed / 1024 / 1024;
       
       if (memoryUsageMB > (this.maxMemoryUsage * this.maxActiveSubbots * 0.9)) {
-        console.log('🚨 Memoria alta, limpieza agresiva activada');
+        console.log(' Memoria alta, limpieza agresiva activada');
         await this.aggressiveCleanup();
       }
 
@@ -172,18 +172,18 @@ class SubbotService {
   }
 
   /**
-   * Limpiar un subbot específico
+   * Limpiar un subbot especfico
    */
   async cleanupSubbot(subbotCode) {
     try {
-      // Cerrar conexión
+      // Cerrar conexin
       if (activeSubbots.has(subbotCode)) {
         const sock = activeSubbots.get(subbotCode);
         sock.end();
         activeSubbots.delete(subbotCode);
       }
 
-      // Limpiar sesión
+      // Limpiar sesin
       if (subbotSessions.has(subbotCode)) {
         subbotSessions.delete(subbotCode);
       }
@@ -195,7 +195,7 @@ class SubbotService {
         last_activity: new Date().toISOString()
       });
 
-      // Limpiar archivos de sesión temporales (mantener credenciales)
+      // Limpiar archivos de sesin temporales (mantener credenciales)
       const sessionDir = path.join(__dirname, 'sessions', 'subbots', subbotCode);
       if (fs.existsSync(sessionDir)) {
         const files = fs.readdirSync(sessionDir);
@@ -215,24 +215,24 @@ class SubbotService {
   }
 
   /**
-   * Limpieza agresiva cuando la memoria está muy alta
+   * Limpieza agresiva cuando la memoria est muy alta
    */
   async aggressiveCleanup() {
     try {
-      // Obtener todos los subbots activos ordenados por última actividad
+      // Obtener todos los subbots activos ordenados por ltima actividad
       const activeSessions = Array.from(subbotSessions.entries())
         .sort((a, b) => a[1].lastActivity - b[1].lastActivity);
 
-      // Limpiar los más antiguos hasta liberar memoria
+      // Limpiar los ms antiguos hasta liberar memoria
       const targetCleanup = Math.ceil(activeSessions.length * 0.3); // Limpiar 30%
       
       for (let i = 0; i < targetCleanup && i < activeSessions.length; i++) {
         const [subbotCode] = activeSessions[i];
         await this.cleanupSubbot(subbotCode);
-        console.log(`🚨 Limpieza agresiva: ${subbotCode}`);
+        console.log(` Limpieza agresiva: ${subbotCode}`);
       }
 
-      // Forzar garbage collection si está disponible
+      // Forzar garbage collection si est disponible
       if (global.gc) {
         global.gc();
       }
@@ -242,21 +242,21 @@ class SubbotService {
   }
 
   /**
-   * Iniciar servicio de limpieza automática
+   * Iniciar servicio de limpieza automtica
    */
   startCleanupService() {
     setInterval(async () => {
       try {
         const results = await this.intelligentCleanup();
         if (results.cleaned > 0) {
-          console.log(`🧹 Limpieza automática: ${results.cleaned} subbots limpiados`);
+          console.log(` Limpieza automtica: ${results.cleaned} subbots limpiados`);
         }
       } catch (error) {
-        console.error('Error en limpieza automática:', error);
+        console.error('Error en limpieza automtica:', error);
       }
     }, this.cleanupInterval);
 
-    console.log(`🤖 Servicio de limpieza iniciado (cada ${this.cleanupInterval / 60000} min)`);
+    console.log(` Servicio de limpieza iniciado (cada ${this.cleanupInterval / 60000} min)`);
   }
 
   /**
@@ -268,7 +268,7 @@ class SubbotService {
       const memoryUsageMB = memoryUsage.heapUsed / 1024 / 1024;
       
       if (memoryUsageMB > (this.maxMemoryUsage * this.maxActiveSubbots * 0.8)) {
-        console.log(`⚠️ Uso de memoria alto: ${Math.round(memoryUsageMB)}MB`);
+        console.log(` Uso de memoria alto: ${Math.round(memoryUsageMB)}MB`);
       }
     }, 60000); // Cada minuto
   }
@@ -281,7 +281,7 @@ class SubbotService {
       const session = subbotSessions.get(subbotCode);
       if (!session) return false;
 
-      // Actualizar última actividad
+      // Actualizar ltima actividad
       session.lastActivity = Date.now();
 
       // Actualizar en base de datos

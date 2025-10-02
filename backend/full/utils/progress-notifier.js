@@ -17,7 +17,7 @@ export function createProgressNotifier({
   chatId,
   quoted = null,
   title = 'Procesando',
-  icon = '✨',
+  icon = '',
   barLength = 22
 } = {}) {
   if (typeof resolveSocket !== 'function' || !chatId) {
@@ -36,7 +36,7 @@ export function createProgressNotifier({
     const percentLabel = `${String(percent).padStart(3, ' ')}%`;
     const barLine = `|${bar}| ${percentLabel}`;
 
-    const lines = [header, border, barLine, border, `• ${status}`];
+    const lines = [header, border, barLine, border, ` ${status}`];
     details.filter(Boolean).forEach((line) => {
       lines.push(`  ${line}`);
     });
@@ -68,7 +68,7 @@ export function createProgressNotifier({
         messageRef = await sock.sendMessage(chatId, payload, quoted ? { quoted } : undefined);
       }
     } catch (error) {
-      console.error('⚠️ Progress notifier error:', error?.message || error);
+      console.error(' Progress notifier error:', error?.message || error);
     }
 
     return messageRef;
@@ -78,11 +78,11 @@ export function createProgressNotifier({
     update(percent, status, options = {}) {
       return send(percent, status, options);
     },
-    complete(status = 'Completado ✅', options = {}) {
+    complete(status = 'Completado ', options = {}) {
       return send(100, status, options);
     },
     fail(reason = 'Error', options = {}) {
-      const message = reason.startsWith('❌') ? reason : `❌ ${reason}`;
+      const message = reason.startsWith('') ? reason : ` ${reason}`;
       return send(lastPercent || 0, message, options);
     }
   };

@@ -1,4 +1,4 @@
-import * as baileys from 'AdonixBaileys';
+import * as baileys from '@whiskeysockets/baileys';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pino from 'pino';
@@ -74,7 +74,7 @@ async function start(){
     }
     
     if (connection === 'open'){
-      console.log('Conexión abierta');
+      console.log('Conexin abierta');
       try {
         process.send?.({ event:'connected' });
       } catch (e) {
@@ -83,19 +83,19 @@ async function start(){
       
       if (TYPE === 'code' && TARGET){
         try {
-          console.log('Solicitando código de pairing para:', TARGET);
+          console.log('Solicitando cdigo de pairing para:', TARGET);
           if (sock?.authState?.creds){ 
             sock.authState.creds.usePairingCode = true; 
           }
           const raw = await sock.requestPairingCode(TARGET);
-          console.log('Código de pairing obtenido:', raw);
+          console.log('Cdigo de pairing obtenido:', raw);
           try {
             process.send?.({ event:'pairing_code', data:{ code: raw, displayCode: DISPLAY, targetNumber: TARGET } });
           } catch (e) {
             console.log('No se pudo enviar mensaje al proceso padre (probablemente cerrado)');
           }
         } catch(e){ 
-          console.error('Error obteniendo código de pairing:', e);
+          console.error('Error obteniendo cdigo de pairing:', e);
           try {
           process.send?.({ event:'error', data:{ message: e.message } });
         } catch (sendError) {
@@ -107,7 +107,7 @@ async function start(){
     
     if (connection === 'close'){
       const code = lastDisconnect?.error?.output?.statusCode;
-      console.log('Conexión cerrada, código:', code);
+      console.log('Conexin cerrada, cdigo:', code);
       try {
         process.send?.({ event:'disconnected', data:{ reason: code } });
       } catch (e) {

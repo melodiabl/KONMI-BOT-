@@ -1,8 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import readline from 'readline';
-import { connectToWhatsApp, getAvailableGroups, getQRCode, getQRCodeImage, getConnectionStatus, getSocket, setAuthMethod } from './whatsapp.js';
+import { connectToWhatsApp, getAvailableGroups, getQRCode, getQRCodeImage, getConnectionStatus, getSocket } from './whatsapp.js';
 import apiRouter from './api.js';
 import { router as authRouter, authenticateToken, authorizeRoles } from './auth.js';
 import subbotRouter from './subbot-api.js';
@@ -32,18 +31,10 @@ app.use('/media', express.static(join(__dirname, 'storage')));
 //   app.use(express.static(frontendDistPath));
 // }
 
+// La autenticacin interactiva ahora est integrada en whatsapp.js
+// No es necesario preguntar aqu, se preguntar automticamente al conectar
 
-async function promptAuthMethodIfNeeded() {
-  // Forzar QR para el bot principal. Pairing deshabilitado por solicitud.
-  try {
-    setAuthMethod('qr');
-    console.log('🔧 Autenticación del bot principal: QR (pairing deshabilitado)');
-  } catch (error) {
-    console.warn(`⚠️ No se pudo fijar modo QR: ${error.message}`);
-  }
-}
-
-// Rutas de autenticación
+// Rutas de autenticacin
 app.use('/api/auth', authRouter);
 
 // Rutas de subbots (panel e in-proc manager)
@@ -102,7 +93,7 @@ app.get('/api/bot/qr', authenticateToken, authorizeRoles('owner'), (_req, res) =
     qrCode: null,
     qrCodeImage: null,
     status: status.status,
-    message: 'No hay código QR disponible'
+    message: 'No hay cdigo QR disponible'
   });
 });
 
@@ -118,7 +109,7 @@ app.post('/api/whatsapp/logout', authenticateToken, authorizeRoles('owner'), asy
       await sock.logout();
       return res.json({ success: true, message: 'Desconectado exitosamente' });
     }
-    return res.json({ success: false, message: 'No hay conexión activa' });
+    return res.json({ success: false, message: 'No hay conexin activa' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -132,7 +123,7 @@ app.post('/api/bot/disconnect', authenticateToken, authorizeRoles('owner'), asyn
       await sock.logout();
       return res.json({ success: true });
     }
-    return res.json({ success: false, message: 'No hay conexión activa' });
+    return res.json({ success: false, message: 'No hay conexin activa' });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -182,14 +173,17 @@ app.get('/api/health', (req, res) => {
 
 // Start the bot connection and server
 async function start() {
-  await promptAuthMethodIfNeeded();
-  await connectToWhatsApp(join(__dirname, 'storage', 'baileys_full'));
+  // Primero iniciar el servidor HTTP
   app.listen(port, config.server.host, () => {
-    console.log(`🚀 Backend server listening on port ${port}`);
-    console.log(`🌍 Environment: ${config.server.environment}`);
-    console.log(`🔗 Frontend URL: ${config.frontend.url}`);
-    console.log(`🤖 Bot: ${config.bot.name} v${config.bot.version}`);
+    console.log(` Backend server listening on port ${port}`);
+    console.log(` Environment: ${config.server.environment}`);
+    console.log(` Frontend URL: ${config.frontend.url}`);
+    console.log(` Bot: ${config.bot.name} v${config.bot.version}`);
+    console.log(''); // Lnea en blanco antes del men de autenticacin
   });
+  
+  // Luego conectar el bot (esto mostrar el men interactivo)
+  await connectToWhatsApp(join(__dirname, 'storage', 'baileys_full'));
 }
 
 start();

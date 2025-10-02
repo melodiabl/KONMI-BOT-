@@ -1,5 +1,5 @@
 // handler.js
-// Handler principal para lógica de aportes, media, pedidos y proveedores
+// Handler principal para logica de aportes, media, pedidos y proveedores
 
 import db from './db.js';
 import path from 'path';
@@ -45,7 +45,7 @@ async function ensureSubbotsTable() {
       table.integer('message_count').defaultTo(0);
       table.json('settings').nullable();
     });
-    console.log('✅ Tabla `subbots` creada');
+    console.log(' Tabla `subbots` creada');
   }
 }
 
@@ -165,7 +165,7 @@ class SubbotService {
     const interval = setInterval(() => {
       const mem = process.memoryUsage().heapUsed / 1024 / 1024;
       if (mem > this.maxMemoryUsage * this.maxActiveSubbots * 0.8) {
-        console.log(`⚠️ Uso de memoria elevado: ${Math.round(mem)}MB`);
+        console.log(` Uso de memoria elevado: ${Math.round(mem)}MB`);
       }
     }, 60000);
     if (typeof interval.unref === 'function') interval.unref();
@@ -175,18 +175,18 @@ class SubbotService {
     try {
       const actives = await db('subbots').where({ is_active: true }).count('id as count').first();
       if (Number(actives?.count || 0) >= this.maxActiveSubbots) {
-        return { canCreate: false, reason: `Límite global (${this.maxActiveSubbots}) alcanzado` };
+        return { canCreate: false, reason: `Limite global (${this.maxActiveSubbots}) alcanzado` };
       }
       const userActives = await db('subbots')
         .where({ user_phone: userPhone, is_active: true })
         .count('id as count')
         .first();
       if (Number(userActives?.count || 0) >= 2) {
-        return { canCreate: false, reason: 'Máximo de 2 subbots activos por usuario' };
+        return { canCreate: false, reason: 'Maximo de 2 subbots activos por usuario' };
       }
       const mem = process.memoryUsage().heapUsed / 1024 / 1024;
       if (mem > this.maxMemoryUsage * this.maxActiveSubbots * 0.8) {
-        return { canCreate: false, reason: 'Uso de memoria elevado, intenta más tarde' };
+        return { canCreate: false, reason: 'Uso de memoria elevado, intenta mas tarde' };
       }
       return { canCreate: true };
     } catch (error) {
@@ -222,7 +222,7 @@ class SubbotService {
         },
       };
     } catch (error) {
-      console.error('Error obteniendo estadísticas de subbots:', error);
+      console.error('Error obteniendo estadisticas de subbots:', error);
       return null;
     }
   }
@@ -241,7 +241,7 @@ class SubbotService {
       }
       const mem = process.memoryUsage().heapUsed / 1024 / 1024;
       if (mem > this.maxMemoryUsage * this.maxActiveSubbots * 0.9) {
-        console.log('🚨 Memoria alta, limpiando sesiones inactivas');
+        console.log(' Memoria alta, limpiando sesiones inactivas');
         for (const code of Array.from(subbotSessions.keys())) {
           await cleanupSubbotInternal(code);
         }
@@ -384,7 +384,7 @@ async function generatePairingCode(subbotCode, phoneNumber) {
   });
 
   sock.ev.on('creds.update', saveCreds);
-  return { success: true, code, message: 'Código de emparejamiento generado' };
+  return { success: true, code, message: 'Codigo de emparejamiento generado' };
 }
 
 async function cleanupSubbotInternal(subbotCode) {
@@ -436,7 +436,7 @@ export async function createSubbot(userPhone, userName, connectionType = 'qr') {
     } else if (connectionType === 'pairing' || connectionType === 'code') {
       result = await generatePairingCode(subbotCode, normalizedPhone);
     } else {
-      throw new Error('Tipo de conexión no válido');
+      throw new Error('Tipo de conexion no valido');
     }
   } catch (error) {
     console.error('Error generando credenciales de subbot:', error);
@@ -547,7 +547,7 @@ export async function registerSubbotEvent({ subbotId, token, event, data }) {
     return { success: false, error: 'Subbot no encontrado' };
   }
   if (subbot.token && token !== subbot.token) {
-    return { success: false, error: 'Token inválido' };
+    return { success: false, error: 'Token invalido' };
   }
   await db('subbot_events').insert({
     code: subbotId,
@@ -679,7 +679,7 @@ export function normalizeAporteTipo(raw) {
     'extra imagen': 'extra_imagen',
     'imagen': 'extra_imagen',
     'ilustracion': 'ilustracion',
-    'ilustración': 'ilustracion',
+    'ilustracion': 'ilustracion',
     'ilustraciones': 'ilustracion',
     'pack': 'pack'
   };
@@ -738,43 +738,43 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
     await stmt.run(contenido, 'pendiente', usuario, grupo, fecha);
     await stmt.finalize();
 
-    let response = `📋 *Pedido registrado:* "${contenido}"\n\n`;
+    let response = ` *Pedido registrado:* "${contenido}"\n\n`;
 
-    // Si encontró contenido, mencionarlo
+    // Si encontr contenido, mencionarlo
     if (manhwaEncontrado) {
-      response += `✅ *¡Encontrado en manhwas!*\n`;
-      response += `📚 **${manhwaEncontrado.titulo}**\n`;
-      response += `👤 Autor: ${manhwaEncontrado.autor}\n`;
-      response += `📊 Estado: ${manhwaEncontrado.estado}\n`;
+      response += ` *Encontrado en manhwas!*\n`;
+      response += ` **${manhwaEncontrado.titulo}**\n`;
+      response += ` Autor: ${manhwaEncontrado.autor}\n`;
+      response += ` Estado: ${manhwaEncontrado.estado}\n`;
       if (manhwaEncontrado.descripcion) {
-        response += `📝 ${manhwaEncontrado.descripcion}\n`;
+        response += ` ${manhwaEncontrado.descripcion}\n`;
       }
       if (manhwaEncontrado.url) {
-        response += `🔗 ${manhwaEncontrado.url}\n`;
+        response += ` ${manhwaEncontrado.url}\n`;
       }
       response += `\n`;
     }
 
     if (aporteEncontrado) {
-      response += `✅ *¡Encontrado en aportes!*\n`;
-      response += `📁 **${aporteEncontrado.contenido}**\n`;
-      response += `🏷️ Tipo: ${aporteEncontrado.tipo}\n`;
+      response += ` *Encontrado en aportes!*\n`;
+      response += ` **${aporteEncontrado.contenido}**\n`;
+      response += ` Tipo: ${aporteEncontrado.tipo}\n`;
       {
         const num = String(aporteEncontrado.usuario || '').split('@')[0].split(':')[0];
         const u = await db('usuarios').where({ whatsapp_number: num }).select('username').first();
         const wa = u?.username ? null : await db('wa_contacts').where({ wa_number: num }).select('display_name').first();
         const mention = `@${u?.username || wa?.display_name || num}`;
-        response += `👤 Aportado por: ${mention}\n`;
+        response += ` Aportado por: ${mention}\n`;
       }
-      response += `📅 Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
+      response += ` Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
     }
 
-    // Buscar y enviar archivos físicos si existen
+    // Buscar y enviar archivos fsicos si existen
     let archivosEnviados = 0;
     if (archivosEncontrados.length > 0 && sock) {
-      response += `📁 *Archivos encontrados:*\n`;
+      response += ` *Archivos encontrados:*\n`;
 
-      for (const archivo of archivosEncontrados.slice(0, 5)) { // Máximo 5 archivos
+      for (const archivo of archivosEncontrados.slice(0, 5)) { // Mximo 5 archivos
         try {
           const archivoPath = path.join(process.cwd(), 'storage', 'downloads', archivo.category, archivo.filename);
 
@@ -796,12 +796,12 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
             if (mediaType === 'image') {
               sentMessage = await sock.sendMessage(remoteJid, {
                 image: fileBuffer,
-                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}\n👤 Subido por: ${archivo.usuario}\n📅 ${new Date(archivo.fecha).toLocaleDateString()}`
+                caption: ` ${archivo.filename}\n ${archivo.category}\n Subido por: ${archivo.usuario}\n ${new Date(archivo.fecha).toLocaleDateString()}`
               });
             } else if (mediaType === 'video') {
               sentMessage = await sock.sendMessage(remoteJid, {
                 video: fileBuffer,
-                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}`
+                caption: ` ${archivo.filename}\n ${archivo.category}`
               });
             } else if (mediaType === 'audio') {
               sentMessage = await sock.sendMessage(remoteJid, {
@@ -812,14 +812,14 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
               sentMessage = await sock.sendMessage(remoteJid, {
                 document: fileBuffer,
                 fileName: archivo.filename,
-                caption: `📁 ${archivo.filename}\n🏷️ ${archivo.category}`
+                caption: ` ${archivo.filename}\n ${archivo.category}`
               });
             }
 
-            response += `✅ *Enviado:* ${archivo.filename} (${archivo.category})\n`;
+            response += ` *Enviado:* ${archivo.filename} (${archivo.category})\n`;
             archivosEnviados++;
 
-            // Marcar el pedido como completado si se envió al menos un archivo
+            // Marcar el pedido como completado si se envi al menos un archivo
             if (archivosEnviados === 1) {
               await db('pedidos')
                 .where({ texto: contenido, usuario: usuario, grupo: grupo })
@@ -828,20 +828,20 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
           }
         } catch (fileError) {
           console.error(`Error enviando archivo ${archivo.filename}:`, fileError);
-          response += `❌ Error enviando: ${archivo.filename}\n`;
+          response += ` Error enviando: ${archivo.filename}\n`;
         }
       }
 
       if (archivosEnviados === 0) {
-        response += `⚠️ Archivos encontrados pero no se pudieron enviar\n`;
+        response += ` Archivos encontrados pero no se pudieron enviar\n`;
       }
     }
 
     if (!manhwaEncontrado && !aporteEncontrado && archivosEnviados === 0) {
-      response += `⏳ *No encontrado en la base de datos*\n`;
-      response += `Tu pedido ha sido registrado y será revisado por los administradores.\n`;
+      response += ` *No encontrado en la base de datos*\n`;
+      response += `Tu pedido ha sido registrado y ser revisado por los administradores.\n`;
     } else if (archivosEnviados > 0) {
-      response += `\n🎉 *¡Pedido completado automáticamente!* ✅`;
+      response += `\n *Pedido completado automticamente!* `;
     }
 
     return { success: true, message: response };
@@ -862,15 +862,15 @@ export async function handlePedidos(usuario, grupo) {
     );
 
     if (pedidos.length === 0) {
-      return { success: true, message: '📋 No tienes pedidos registrados.' };
+      return { success: true, message: ' No tienes pedidos registrados.' };
     }
 
-    let message = `📋 *Tus pedidos (${pedidos.length}):*\n\n`;
+    let message = ` *Tus pedidos (${pedidos.length}):*\n\n`;
     pedidos.forEach((pedido, index) => {
       const fecha = new Date(pedido.fecha).toLocaleDateString();
-      const estado = pedido.estado === 'pendiente' ? '⏳' : pedido.estado === 'completado' ? '✅' : '❌';
+      const estado = pedido.estado === 'pendiente' ? '' : pedido.estado === 'completado' ? '' : '';
       message += `${index + 1}. ${estado} ${pedido.texto}\n`;
-      message += `   📅 ${fecha} - Estado: ${pedido.estado}\n\n`;
+      message += `    ${fecha} - Estado: ${pedido.estado}\n\n`;
     });
 
     return { success: true, message };
@@ -893,7 +893,7 @@ export async function analyzeContentWithAI(content, filename = '') {
     }
 
     const prompt = `
-Analiza el siguiente contenido de un mensaje de WhatsApp y clasifícalo:
+Analiza el siguiente contenido de un mensaje de WhatsApp y clasificalo:
 
 Contenido del mensaje: "${content}"
 Nombre del archivo: "${filename}"
@@ -901,22 +901,22 @@ Nombre del archivo: "${filename}"
 Responde en formato JSON con la siguiente estructura:
 {
   "tipo": "manhwa|serie|extra|ilustracion|pack|anime|otros",
-  "titulo": "Título detectado o null",
-  "capitulo": "Número de capítulo detectado o null",
+  "titulo": "Ttulo detectado o null",
+  "capitulo": "Nmero de captulo detectado o null",
   "confianza": 0-100,
-  "descripcion": "Breve descripción del contenido"
+  "descripcion": "Breve descripcin del contenido"
 }
 
-Reglas de clasificación:
-- Si menciona "manhwa", "manga", "comic" → tipo: "manhwa"
-- Si menciona "serie", "episodio", "temporada" → tipo: "serie"
-- Si menciona "ilustracion", "fanart", "arte" → tipo: "ilustracion"
-- Si menciona "pack", "coleccion" → tipo: "pack"
-- Si menciona "anime", "animacion" → tipo: "anime"
+Reglas de clasificacin:
+- Si menciona "manhwa", "manga", "comic"  tipo: "manhwa"
+- Si menciona "serie", "episodio", "temporada"  tipo: "serie"
+- Si menciona "ilustracion", "fanart", "arte"  tipo: "ilustracion"
+- Si menciona "pack", "coleccion"  tipo: "pack"
+- Si menciona "anime", "animacion"  tipo: "anime"
 - Por defecto: "extra"
 
-Busca números que parezcan capítulos (ej: "cap 45", "episodio 12", "volumen 3").
-Extrae títulos que parezcan nombres de obras.
+Busca nmeros que parezcan captulos (ej: "cap 45", "episodio 12", "volumen 3").
+Extrae ttulos que parezcan nombres de obras.
 `;
 
     const response = await axios.post(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
@@ -924,13 +924,13 @@ Extrae títulos que parezcan nombres de obras.
     }, { headers: { 'Content-Type': 'application/json' } });
 
     const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!aiResponse) return { success: false, error: 'No se recibió respuesta de la IA' };
+    if (!aiResponse) return { success: false, error: 'No se recibi respuesta de la IA' };
 
     let analysis;
     try {
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) analysis = JSON.parse(jsonMatch[0]);
-      else throw new Error('No se encontró JSON válido');
+      else throw new Error('No se encontro JSON valido');
     } catch (parseError) {
       console.error('Error parseando respuesta AI:', parseError);
       return { success: false, error: 'Error parseando respuesta de la IA' };
@@ -956,7 +956,7 @@ Extrae títulos que parezcan nombres de obras.
 export async function chatWithAI(message, context = '') {
   try {
     if (!GEMINI_API_KEY) {
-      return { success: false, error: 'GEMINI_API_KEY no está configurada' };
+      return { success: false, error: 'GEMINI_API_KEY no est configurada' };
     }
 
     const prompt = `
@@ -965,8 +965,8 @@ Contexto: ${context}
 
 Pregunta del usuario: ${message}
 
-Responde de forma clara, concisa y útil. Si la pregunta es sobre manhwas, series, o contenido multimedia, sé específico.
-Mantén un tono amigable y profesional.
+Responde de forma clara, concisa y til. Si la pregunta es sobre manhwas, series, o contenido multimedia, s especfico.
+Mantn un tono amigable y profesional.
 `;
 
     const response = await axios.post(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
@@ -974,7 +974,7 @@ Mantén un tono amigable y profesional.
     }, { headers: { 'Content-Type': 'application/json' } });
 
     const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!aiResponse) return { success: false, error: 'No se recibió respuesta de la IA' };
+    if (!aiResponse) return { success: false, error: 'No se recibi respuesta de la IA' };
 
     return { success: true, response: aiResponse, model: 'gemini-1.5-flash' };
 
@@ -991,17 +991,17 @@ export async function analyzeManhwaContent(content) {
     }
 
     const prompt = `
-Analiza si el siguiente contenido es de un manhwa y extrae información:
+Analiza si el siguiente contenido es de un manhwa y extrae informacin:
 
 Contenido: "${content}"
 
 Responde en formato JSON:
 {
   "es_manhwa": true/false,
-  "titulo": "Título del manhwa o null",
-  "capitulo": "Número de capítulo o null",
+  "titulo": "Ttulo del manhwa o null",
+  "capitulo": "Nmero de captulo o null",
   "autor": "Autor si se menciona o null",
-  "genero": "Género si se detecta o null"
+  "genero": "Gnero si se detecta o null"
 }
 `;
 
@@ -1044,7 +1044,7 @@ export async function processProviderMessage(message, groupJid, groupName) {
                         message.message.imageMessage?.caption ||
                         message.message.videoMessage?.caption ||
                         message.message.documentMessage?.caption ||
-                        'Media sin descripción';
+                        'Media sin descripcin';
 
     const categoria = 'auto';
     const result = await processWhatsAppMedia(message, categoria, usuario);
@@ -1062,7 +1062,7 @@ export async function processProviderMessage(message, groupJid, groupName) {
         tituloDetectado = aiAnalysis.analysis.titulo;
       }
     } catch (aiError) {
-      console.error('Error en análisis AI:', aiError);
+      console.error('Error en anlisis AI:', aiError);
     }
 
     const tipoNormalizado = normalizeAporteTipo(tipoClasificado);
@@ -1107,7 +1107,7 @@ export async function processProviderMessage(message, groupJid, groupName) {
 
     return {
       success: true,
-      message: 'Aporte automático procesado correctamente',
+      message: 'Aporte automtico procesado correctamente',
       aporte,
       description: `Media clasificada como ${tipoNormalizado}${tituloDetectado ? ` - ${tituloDetectado}` : ''}${capituloDetectado ? ` Cap ${capituloDetectado}` : ''}`
     };

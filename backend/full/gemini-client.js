@@ -13,7 +13,7 @@ export function getGeminiClient() {
 
   const apiKey = resolveGeminiApiKey();
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY no está configurada en el entorno');
+    throw new Error('GEMINI_API_KEY no est configurada en el entorno');
   }
 
   cachedClient = new GoogleGenerativeAI(apiKey);

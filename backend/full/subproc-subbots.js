@@ -27,7 +27,7 @@ export async function registerSubbotEvent({ subbotId, token, event, data }) {
     if (token) {
       const subbot = await getSubbotByCode(subbotId);
       if (!subbot || subbot.api_token !== token) {
-        return { success: false, error: 'Token inválido' };
+        return { success: false, error: 'Token invlido' };
       }
     }
 
@@ -95,13 +95,13 @@ export async function launchSubbot({ type='qr', createdBy=null, requestJid=null,
   const MAX_PER_USER = parseInt(process.env.SUB_MAX_PER_USER || '5');
   try {
     const total = await db('subbots').count('code as c').first();
-    if (Number(total?.c || 0) >= MAX_GLOBAL) return { success:false, error:'Límite global de sub-bots alcanzado' };
+    if (Number(total?.c || 0) >= MAX_GLOBAL) return { success:false, error:'Lmite global de sub-bots alcanzado' };
     const per = await db('subbots').where({ created_by: digits(createdBy) }).count('code as c').first();
-    if (Number(per?.c || 0) >= MAX_PER_USER) return { success:false, error:'Límite de sub-bots por usuario alcanzado' };
+    if (Number(per?.c || 0) >= MAX_PER_USER) return { success:false, error:'Lmite de sub-bots por usuario alcanzado' };
   } catch(_){}
   const normalizedType = type === 'code' ? 'code' : 'qr';
   const target = normalizedType === 'code' ? digits(targetNumber) : null;
-  if (normalizedType === 'code' && !target) return { success:false, error:'Número inválido' };
+  if (normalizedType === 'code' && !target) return { success:false, error:'Nmero invlido' };
 
   const code = newCode(normalizedType);
   const now = new Date().toISOString();
@@ -196,7 +196,7 @@ export async function launchSubbot({ type='qr', createdBy=null, requestJid=null,
     try { await db('subbots').where({ code }).update({ status:'stopped', updated_at: new Date().toISOString() }); } catch(_){}
     emitter.emit('stopped', { subbotId: code, code: codeExit, signal });
     try { await db('subbot_events').insert({ code, event:'stopped', payload: JSON.stringify({ codeExit, signal }), created_at: new Date().toISOString() }); } catch(_){}
-    // Auto-restart backoff si no fue delete explícito
+    // Auto-restart backoff si no fue delete explcito
     if (info && !info.markDeleted) {
       const MAX_RESTARTS = parseInt(process.env.SUB_MAX_RESTARTS || '3');
       if (info.restarts < MAX_RESTARTS) {

@@ -6,7 +6,7 @@ export function up(knex) {
   return knex.schema.createTable('subbots', (table) => {
     table.increments('id').primary();
     table.string('code').unique().notNullable();
-    table.string('user_phone').notNullable(); // Número del usuario que creó el subbot
+    table.string('user_phone').notNullable(); // Numero del usuario que creo el subbot
     table.string('user_name').nullable();
     table.string('status').defaultTo('pending'); // pending, waiting_scan, waiting_pairing, connected, disconnected, inactive, error
     table.string('connection_type').defaultTo('qr'); // qr, pairing
@@ -20,7 +20,7 @@ export function up(knex) {
     table.integer('message_count').defaultTo(0);
     table.json('settings').nullable(); // Configuraciones del subbot
     
-    // Índices para optimizar consultas
+    // Indices para optimizar consultas
     table.index('user_phone');
     table.index('status');
     table.index('is_active');

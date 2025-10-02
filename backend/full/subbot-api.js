@@ -16,7 +16,7 @@ import { authenticateToken, authorizeRoles } from './auth.js';
 
 const router = express.Router();
 
-// Middleware para autenticación y autorización
+// Middleware para autenticacin y autorizacin
 const requireAuth = [authenticateToken, authorizeRoles(['admin', 'user'])];
 
 // Endpoint para crear un nuevo subbot
@@ -55,7 +55,7 @@ router.get('/list', requireAuth, async (req, res) => {
   }
 });
 
-// Endpoint para obtener el estado de un subbot específico
+// Endpoint para obtener el estado de un subbot especfico
 router.get('/status/:code', requireAuth, async (req, res) => {
   try {
     const { code } = req.params;
@@ -126,13 +126,13 @@ router.post('/cleanup', [authenticateToken, authorizeRoles(['admin'])], async (r
   }
 });
 
-// Endpoint para obtener estadísticas de subbots (solo admin)
+// Endpoint para obtener estadsticas de subbots (solo admin)
 router.get('/stats', [authenticateToken, authorizeRoles(['admin'])], async (req, res) => {
   try {
     const stats = await getSubbotStats();
     res.json({ success: true, stats });
   } catch (error) {
-    console.error('Error obteniendo estadísticas:', error);
+    console.error('Error obteniendo estadsticas:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 });

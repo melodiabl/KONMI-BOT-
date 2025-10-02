@@ -13,7 +13,7 @@ export async function analyzeContentWithAI(content, filename = '') {
     }
 
     const prompt = `
-Analiza el siguiente contenido de un mensaje de WhatsApp y clasifícalo:
+Analiza el siguiente contenido de un mensaje de WhatsApp y clasificalo:
 
 Contenido del mensaje: "${content}"
 Nombre del archivo: "${filename}"
@@ -21,22 +21,22 @@ Nombre del archivo: "${filename}"
 Responde en formato JSON con la siguiente estructura:
 {
   "tipo": "manhwa|serie|extra|ilustracion|pack|anime|otros",
-  "titulo": "Título detectado o null",
-  "capitulo": "Número de capítulo detectado o null",
+  "titulo": "Titulo detectado o null",
+  "capitulo": "Numero de capitulo detectado o null",
   "confianza": 0-100,
-  "descripcion": "Breve descripción del contenido"
+  "descripcion": "Breve descripcion del contenido"
 }
 
-Reglas de clasificación:
-- Si menciona "manhwa", "manga", "comic" → tipo: "manhwa"
-- Si menciona "serie", "episodio", "temporada" → tipo: "serie"
-- Si menciona "ilustracion", "fanart", "arte" → tipo: "ilustracion"
-- Si menciona "pack", "coleccion" → tipo: "pack"
-- Si menciona "anime", "animacion" → tipo: "anime"
+Reglas de clasificacion:
+- Si menciona "manhwa", "manga", "comic"  tipo: "manhwa"
+- Si menciona "serie", "episodio", "temporada"  tipo: "serie"
+- Si menciona "ilustracion", "fanart", "arte" -> tipo: "ilustracion"
+- Si menciona "pack", "coleccion"  tipo: "pack"
+- Si menciona "anime", "animacion"  tipo: "anime"
 - Por defecto: "extra"
 
-Busca números que parezcan capítulos (ej: "cap 45", "episodio 12", "volumen 3").
-Extrae títulos que parezcan nombres de obras.
+Busca numeros que parezcan capitulos (ej: "cap 45", "episodio 12", "volumen 3").
+Extrae titulos que parezcan nombres de obras.
 `;
 
     const response = await axios.post(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
@@ -56,7 +56,7 @@ Extrae títulos que parezcan nombres de obras.
     if (!aiResponse) {
       return {
         success: false,
-        error: 'No se recibió respuesta de la IA'
+        error: 'No se recibio respuesta de la IA'
       };
     }
 
@@ -68,7 +68,7 @@ Extrae títulos que parezcan nombres de obras.
       if (jsonMatch) {
         analysis = JSON.parse(jsonMatch[0]);
       } else {
-        throw new Error('No se encontró JSON válido');
+        throw new Error('No se encontro JSON valido');
       }
     } catch (parseError) {
       console.error('Error parseando respuesta AI:', parseError);
@@ -103,7 +103,7 @@ export async function chatWithAI(message, context = '') {
     if (!GEMINI_API_KEY) {
       return {
         success: false,
-        error: 'GEMINI_API_KEY no está configurada'
+        error: 'GEMINI_API_KEY no esta configurada'
       };
     }
 
@@ -113,8 +113,8 @@ Contexto: ${context}
 
 Pregunta del usuario: ${message}
 
-Responde de forma clara, concisa y útil. Si la pregunta es sobre manhwas, series, o contenido multimedia, sé específico.
-Mantén un tono amigable y profesional.
+Responde de forma clara, concisa y util. Si la pregunta es sobre manhwas, series, o contenido multimedia, se especifico.
+Manten un tono amigable y profesional.
 `;
 
     const response = await axios.post(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
@@ -134,7 +134,7 @@ Mantén un tono amigable y profesional.
     if (!aiResponse) {
       return {
         success: false,
-        error: 'No se recibió respuesta de la IA'
+        error: 'No se recibio respuesta de la IA'
       };
     }
 
@@ -163,17 +163,17 @@ export async function analyzeManhwaContent(content) {
     }
 
     const prompt = `
-Analiza si el siguiente contenido es de un manhwa y extrae información:
+Analiza si el siguiente contenido es de un manhwa y extrae informacion:
 
 Contenido: "${content}"
 
 Responde en formato JSON:
 {
   "es_manhwa": true/false,
-  "titulo": "Título del manhwa o null",
-  "capitulo": "Número de capítulo o null",
+  "titulo": "Titulo del manhwa o null",
+  "capitulo": "Numero de capitulo o null",
   "autor": "Autor si se menciona o null",
-  "genero": "Género si se detecta o null"
+  "genero": "Genero si se detecta o null"
 }
 `;
 

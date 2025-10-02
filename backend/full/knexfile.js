@@ -1,9 +1,14 @@
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Cargar variables de entorno desde backend/full/.env (y también intentar fallback genérico)
+try { dotenv.config({ path: join(__dirname, '.env') }); } catch {}
+try { dotenv.config(); } catch {}
 
 export default {
   development: {

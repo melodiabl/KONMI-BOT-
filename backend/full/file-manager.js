@@ -31,7 +31,7 @@ function ensureDirectoriesExist() {
   dirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
-      console.log(`📁 Directorio creado: ${dir}`);
+      console.log(` Directorio creado: ${dir}`);
     }
   });
 }
@@ -43,7 +43,7 @@ ensureDirectoriesExist();
  * Descargar archivo desde URL
  * @param {string} url - URL del archivo a descargar
  * @param {string} filename - Nombre del archivo
- * @param {string} category - Categoría (manhwa, serie, extra, etc.)
+ * @param {string} category - Categoria (manhwa, serie, extra, etc.)
  * @param {string} usuario - Usuario que solicita la descarga
  * @returns {Promise<Object>} Resultado de la descarga
  */
@@ -52,7 +52,7 @@ async function downloadFile(url, filename, category, usuario) {
     try {
       // Validar URL
       if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
-        reject(new Error('URL inválida'));
+        reject(new Error('URL invalida'));
         return;
       }
 
@@ -75,7 +75,7 @@ async function downloadFile(url, filename, category, usuario) {
       const protocol = url.startsWith('https://') ? https : http;
       
       const request = protocol.get(url, (response) => {
-        // Verificar código de respuesta
+        // Verificar cdigo de respuesta
         if (response.statusCode !== 200) {
           reject(new Error(`Error HTTP: ${response.statusCode}`));
           return;
@@ -135,8 +135,8 @@ async function downloadFile(url, filename, category, usuario) {
 /**
  * Procesar archivo multimedia de WhatsApp
  * @param {Object} message - Mensaje de WhatsApp con media
- * @param {string} category - Categoría del archivo
- * @param {string} usuario - Usuario que envía el archivo
+ * @param {string} category - Categoria del archivo
+ * @param {string} usuario - Usuario que envia el archivo
  * @returns {Promise<Object>} Resultado del procesamiento
  */
 async function processWhatsAppMedia(message, category, usuario) {
@@ -168,7 +168,7 @@ async function processWhatsAppMedia(message, category, usuario) {
       throw new Error('Tipo de media no soportado');
     }
 
-    console.log(`📥 Procesando media tipo: ${mediaType} de usuario: ${usuario}`);
+    console.log(` Procesando media tipo: ${mediaType} de usuario: ${usuario}`);
 
     // Descargar media
     const buffer = await sock.downloadMediaMessage(message);
@@ -198,7 +198,7 @@ async function processWhatsAppMedia(message, category, usuario) {
       throw dbError;
     }
 
-    console.log(`✅ Media procesada y guardada en: ${filepath}`);
+    console.log(` Media procesada y guardada en: ${filepath}`);
 
     return {
       success: true,
@@ -210,7 +210,7 @@ async function processWhatsAppMedia(message, category, usuario) {
     };
 
   } catch (error) {
-    console.error('❌ Error en processWhatsAppMedia:', error);
+    console.error(' Error en processWhatsAppMedia:', error);
     throw error;
   }
 }
@@ -237,7 +237,7 @@ async function registerDownload(filename, filepath, category, usuario, size, sou
 }
 
 /**
- * Obtener extensión de archivo desde mimetype
+ * Obtener extension de archivo desde mimetype
  */
 function getFileExtension(mimetype) {
   const mimeMap = {
@@ -261,7 +261,7 @@ function getFileExtension(mimetype) {
 }
 
 /**
- * Listar archivos descargados por categoría
+ * Listar archivos descargados por categoria
  */
 async function listDownloads(category = null, usuario = null) {
   try {
@@ -277,7 +277,7 @@ async function listDownloads(category = null, usuario = null) {
 }
 
 /**
- * Obtener estadísticas de descargas
+ * Obtener estadisticas de descargas
  */
 async function getDownloadStats() {
   try {
@@ -299,13 +299,13 @@ async function getDownloadStats() {
       totalSize: Number(totals?.totalSize || 0)
     };
   } catch (error) {
-    console.error('Error obteniendo estadísticas:', error);
+    console.error('Error obteniendo estadisticas:', error);
     return { byCategory: [], totalFiles: 0, totalSize: 0 };
   }
 }
 
 /**
- * Limpiar archivos antiguos (más de 30 días)
+ * Limpiar archivos antiguos (mas de 30 dias)
  */
 async function cleanOldFiles() {
   try {
@@ -342,7 +342,7 @@ async function cleanOldFiles() {
 function checkDiskSpace() {
   try {
     const stats = fs.statSync(DOWNLOADS_DIR);
-    // Implementación básica - en producción usar librerías como 'check-disk-space'
+    // Implementacion basica - en produccion usar librerias como 'check-disk-space'
     return {
       available: true,
       message: 'Espacio disponible'

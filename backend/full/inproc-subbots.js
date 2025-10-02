@@ -1,4 +1,4 @@
-import * as baileys from 'AdonixBaileys';
+import * as baileys from '@whiskeysockets/baileys';
 import EventEmitter from 'events';
 import path from 'path';
 import fs from 'fs';
@@ -7,7 +7,7 @@ import db from './db.js';
 const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = baileys;
 
 const emitter = new EventEmitter();
-const running = new Map(); // code -> { sock, type, targetNumber, status, lastEvent, lastSeen }
+const running = new Map(); // code -> { sock, type, targetNumber, status, lastEvent, lastSeen, dir, metadata }
 
 function ensureDir(dir) { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); }
 function digits(val){ return String(val||'').replace(/[^0-9]/g,''); }
@@ -45,7 +45,7 @@ function codeId(type){
 export async function launchSubbot({ type='qr', createdBy=null, requestJid=null, requestParticipant=null, targetNumber=null, metadata={} }){
   const normalizedType = type === 'code' ? 'code' : 'qr';
   const target = normalizedType === 'code' ? digits(targetNumber) : null;
-  if (normalizedType === 'code' && !target) return { success:false, error:'Número de emparejamiento inválido' };
+  if (normalizedType === 'code' && !target) return { success:false, error:'Numero de emparejamiento invalido' };
 
   const code = codeId(normalizedType);
   const now = new Date().toISOString();
@@ -68,7 +68,7 @@ async function startSubbotSocket({ code, type, dir, targetNumber, metadata }){
   const { state, saveCreds } = await useMultiFileAuthState(path.join(dir,'auth'));
   const { version } = await fetchLatestBaileysVersion();
   const sock = makeWASocket({ version, logger: undefined, printQRInTerminal: false, auth: state, browser: ['KONMI Subbot','Desktop','1.0.0'] });
-  running.set(code, { sock, type, targetNumber, status:'launching', lastEvent:'spawn', lastSeen: new Date().toISOString() });
+  running.set(code, { sock, type, targetNumber, status:'launching', lastEvent:'spawn', lastSeen: new Date().toISOString(), dir, metadata });
   sock.ev.on('creds.update', saveCreds);
   sock.ev.on('connection.update', async (u)=>{
     const entry = running.get(code);
@@ -112,5 +112,21 @@ export async function getSubbotStatus(){
     arr.push({ subbotId: code, status: info.status, lastEvent: info.lastEvent, lastSeen: info.lastSeen, isOnline: info.status==='connected' });
   }
   return arr;
+}
+
+// Reinicia todos los subbots en ejecucin para que tomen nueva configuracin
+export async function reloadAllSubbots(){
+  let total = 0;
+  let restarted = 0;
+  for (const [code, info] of running.entries()){
+    total += 1;
+    try {
+      try { info.sock?.end(); } catch(_) {}
+      const dir = info.dir || path.join(process.cwd(), 'backend', 'full', 'storage', 'subbots', code);
+      await startSubbotSocket({ code, type: info.type, dir, targetNumber: info.targetNumber || null, metadata: info.metadata || {} });
+      restarted += 1;
+    } catch (_) {}
+  }
+  return { success: true, total, restarted };
 }
 

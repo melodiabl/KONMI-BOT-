@@ -33,7 +33,7 @@ function normalizeAporteTipo(raw) {
     'extra imagen': 'extra_imagen',
     'imagen': 'extra_imagen',
     'ilustracion': 'ilustracion',
-    'ilustración': 'ilustracion',
+    'ilustracion': 'ilustracion',
     'ilustraciones': 'ilustracion',
     'pack': 'pack'
   };
@@ -59,20 +59,20 @@ export async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
  */
 async function handleAI(pregunta, usuario, grupo, fecha) {
   try {
-    console.log(`🤖 Comando /ai recibido de ${usuario}: "${pregunta}"`);
+    console.log(` Comando /ai recibido de ${usuario}: "${pregunta}"`);
 
     const aiResult = await chatWithAI(pregunta, `Usuario: ${usuario}, Grupo: ${grupo}`);
     if (!aiResult.success) {
-      const reason = aiResult.error?.includes('no está configurada')
-        ? 'La función de IA no está configurada. Por favor establece GEMINI_API_KEY en el servidor.'
+      const reason = aiResult.error?.includes('no est configurada')
+        ? 'La funcion de IA no esta configurada. Por favor establece GEMINI_API_KEY en el servidor.'
         : aiResult.error || 'La IA no pudo procesar tu solicitud.';
       return {
         success: false,
-        message: `❌ ${reason}`
+        message: ` ${reason}`
       };
     }
 
-    const finalResponse = `🤖 *Respuesta de IA:*\n\n${aiResult.response}\n\n_Procesado por ${aiResult.model || 'Gemini AI'}_`;
+    const finalResponse = ` *Respuesta de IA:*\n\n${aiResult.response}\n\n_Procesado por ${aiResult.model || 'Gemini AI'}_`;
 
     await db('logs').insert({
       tipo: 'ai_command',
@@ -94,7 +94,7 @@ async function handleAI(pregunta, usuario, grupo, fecha) {
     console.error('Error en comando /ai:', error);
     return {
       success: false,
-      message: `❌ Error procesando comando /ai: ${error.message}\n\n_Intenta reformular tu pregunta._`
+      message: ` Error procesando comando /ai: ${error.message}\n\n_Intenta reformular tu pregunta._`
     };
   }
 }
@@ -108,9 +108,9 @@ async function handleAI(pregunta, usuario, grupo, fecha) {
  */
 async function handleClasificar(texto, usuario, grupo, fecha) {
   try {
-    console.log(`🔍 Comando /clasificar recibido de ${usuario}: "${texto}"`);
+    console.log(` Comando /clasificar recibido de ${usuario}: "${texto}"`);
     
-    // Analizar con IA para clasificación de manhwa
+    // Analizar con IA para clasificacin de manhwa
     let aiResult = await analyzeManhwaContent(texto, '');
 
     if (!aiResult.success) {
@@ -119,14 +119,14 @@ async function handleClasificar(texto, usuario, grupo, fecha) {
 
     if (aiResult.success) {
       const data = aiResult.data;
-      const response = `🔍 *Clasificación de IA:*\n\n` +
-        `📚 *Título detectado:* ${data.titulo}\n` +
-        `🏷️ *Tipo de contenido:* ${data.tipo}\n` +
-        (data.capitulo ? `📖 *Capítulo:* ${data.capitulo}\n` : '') +
-        (data.descripcion ? `📝 *Descripción:* ${data.descripcion}\n` : '') +
-        `📊 *Nivel de confianza:* ${Math.round((data.confianza || 0) * 100)}%\n` +
-        `🔧 *Método usado:* ${data.fuente || 'gemini-ai'}\n\n` +
-        `_Análisis realizado por Gemini AI_`;
+      const response = ` *Clasificacin de IA:*\n\n` +
+        ` *Ttulo detectado:* ${data.titulo}\n` +
+        ` *Tipo de contenido:* ${data.tipo}\n` +
+        (data.capitulo ? ` *Captulo:* ${data.capitulo}\n` : '') +
+        (data.descripcion ? ` *Descripcin:* ${data.descripcion}\n` : '') +
+        ` *Nivel de confianza:* ${Math.round((data.confianza || 0) * 100)}%\n` +
+        ` *Mtodo usado:* ${data.fuente || 'gemini-ai'}\n\n` +
+        `_Anlisis realizado por Gemini AI_`;
 
       await db('logs').insert({
         tipo: 'clasificar_command',
@@ -146,13 +146,13 @@ async function handleClasificar(texto, usuario, grupo, fecha) {
 
     return {
       success: false,
-      message: `❌ Error en clasificación: ${aiResult.error || 'IA no disponible'}\n\n_Intenta con otro texto._`
+      message: ` Error en clasificacin: ${aiResult.error || 'IA no disponible'}\n\n_Intenta con otro texto._`
     };
   } catch (error) {
     console.error('Error en comando /clasificar:', error);
     return { 
       success: false, 
-      message: `❌ Error procesando comando /clasificar: ${error.message}` 
+      message: ` Error procesando comando /clasificar: ${error.message}` 
     };
   }
 }
@@ -165,9 +165,9 @@ async function handleClasificar(texto, usuario, grupo, fecha) {
  */
 async function handleListClasificados(usuario, grupo, fecha) {
   try {
-    console.log(`📋 Comando /listclasificados recibido de ${usuario}`);
+    console.log(` Comando /listclasificados recibido de ${usuario}`);
     
-    // Obtener aportes automáticos clasificados
+    // Obtener aportes automticos clasificados
     const aportes = await db('aportes')
       .where({ tipo: 'proveedor_auto' })
       .select('manhwa_titulo', 'contenido_tipo', 'proveedor', 'fecha', 'contenido')
@@ -177,20 +177,20 @@ async function handleListClasificados(usuario, grupo, fecha) {
     if (aportes.length === 0) {
       return { 
         success: true, 
-        message: `📋 *Lista de Clasificaciones:*\n\n❌ No hay contenido clasificado aún.\n\n_El bot clasificará automáticamente cuando lleguen archivos a grupos proveedores._` 
+        message: ` *Lista de Clasificaciones:*\n\n No hay contenido clasificado an.\n\n_El bot clasificar automticamente cuando lleguen archivos a grupos proveedores._` 
       };
     }
 
-    let response = `📋 *Últimas 20 Clasificaciones del Bot:*\n\n`;
+    let response = ` *ltimas 20 Clasificaciones del Bot:*\n\n`;
     
     aportes.forEach((aporte, index) => {
       const fechaCorta = new Date(aporte.fecha).toLocaleDateString('es-ES');
-      response += `${index + 1}. 📚 *${aporte.manhwa_titulo}*\n`;
-      response += `   🏷️ ${aporte.contenido_tipo} | 🏢 ${aporte.proveedor}\n`;
-      response += `   📅 ${fechaCorta}\n\n`;
+      response += `${index + 1}.  *${aporte.manhwa_titulo}*\n`;
+      response += `    ${aporte.contenido_tipo} |  ${aporte.proveedor}\n`;
+      response += `    ${fechaCorta}\n\n`;
     });
 
-    response += `_Total clasificado automáticamente por IA_`;
+    response += `_Total clasificado automticamente por IA_`;
 
     return { success: true, message: response };
     
@@ -198,7 +198,7 @@ async function handleListClasificados(usuario, grupo, fecha) {
     console.error('Error en comando /listclasificados:', error);
     return { 
       success: false, 
-      message: `❌ Error obteniendo clasificaciones: ${error.message}` 
+      message: ` Error obteniendo clasificaciones: ${error.message}` 
     };
   }
 }
@@ -262,7 +262,7 @@ async function logConfigurationChange(configuracion, usuario, grupo, fecha, deta
  */
 async function handleLogs(categoria, usuario, grupo, fecha) {
   try {
-    console.log(`📋 Comando /logs recibido de ${usuario}, categoría: ${categoria || 'todas'}`);
+    console.log(` Comando /logs recibido de ${usuario}, categora: ${categoria || 'todas'}`);
     
     let query = db('logs').select('*');
     
@@ -275,11 +275,11 @@ async function handleLogs(categoria, usuario, grupo, fecha) {
     if (logs.length === 0) {
       return { 
         success: true, 
-        message: `📋 *Logs del Sistema:*\n\n❌ No hay logs${categoria ? ` de tipo "${categoria}"` : ''} disponibles.` 
+        message: ` *Logs del Sistema:*\n\n No hay logs${categoria ? ` de tipo "${categoria}"` : ''} disponibles.` 
       };
     }
 
-    let response = `📋 *Logs del Sistema${categoria ? ` - ${categoria.toUpperCase()}` : ''}:*\n\n`;
+    let response = ` *Logs del Sistema${categoria ? ` - ${categoria.toUpperCase()}` : ''}:*\n\n`;
     
     // Resolver nombres de usuario
     const nums = [...new Set(logs.map(l => String(l.usuario || '').split('@')[0].split(':')[0]))].filter(Boolean);
@@ -292,23 +292,23 @@ async function handleLogs(categoria, usuario, grupo, fecha) {
     logs.forEach((log, index) => {
       const fechaCorta = new Date(log.fecha).toLocaleString('es-ES');
       const tipoIcon = {
-        'control': '🔧',
-        'configuracion': '⚙️',
-        'sistema': '🖥️',
-        'comando': '💬',
-        'ai_command': '🤖',
-        'clasificar_command': '🔍'
-      }[log.tipo] || '📝';
+        'control': '',
+        'configuracion': '',
+        'sistema': '',
+        'comando': '',
+        'ai_command': '',
+        'clasificar_command': ''
+      }[log.tipo] || '';
       
       response += `${index + 1}. ${tipoIcon} *${log.comando}*\n`;
       const num = String(log.usuario || '').split('@')[0].split(':')[0];
       const uname = nameByNumber[num] || waByNumber[num] || num || '-';
-      response += `   👤 @${uname} | 📅 ${fechaCorta}\n`;
-      if (log.grupo) response += `   📍 Grupo: ${log.grupo}\n`;
+      response += `    @${uname} |  ${fechaCorta}\n`;
+      if (log.grupo) response += `    Grupo: ${log.grupo}\n`;
       response += `\n`;
     });
 
-    response += `_Mostrando últimos ${logs.length} registros_`;
+    response += `_Mostrando ltimos ${logs.length} registros_`;
 
     // Log this command usage
     await logControlAction('/logs', usuario, grupo, fecha, { categoria: categoria || 'todas' });
@@ -319,7 +319,7 @@ async function handleLogs(categoria, usuario, grupo, fecha) {
     console.error('Error en comando /logs:', error);
     return { 
       success: false, 
-      message: `❌ Error obteniendo logs: ${error.message}` 
+      message: ` Error obteniendo logs: ${error.message}` 
     };
   }
 }
@@ -334,18 +334,18 @@ async function handleLogs(categoria, usuario, grupo, fecha) {
  */
 async function handleConfig(parametro, valor, usuario, grupo, fecha) {
   try {
-    console.log(`⚙️ Comando /config recibido de ${usuario}: ${parametro} = ${valor}`);
+    console.log(` Comando /config recibido de ${usuario}: ${parametro} = ${valor}`);
     
     if (!parametro) {
       // Show current configuration
       const configs = await db('configuracion').select('*').orderBy('parametro');
       
-      let response = `⚙️ *Configuración del Bot:*\n\n`;
+      let response = ` *Configuracin del Bot:*\n\n`;
       
       if (configs.length === 0) {
-        response += `❌ No hay configuraciones guardadas.\n\n`;
-        response += `💡 *Uso:* /config [parametro] [valor]\n`;
-        response += `📝 *Ejemplo:* /config max_warnings 5`;
+        response += ` No hay configuraciones guardadas.\n\n`;
+        response += ` *Uso:* /config [parametro] [valor]\n`;
+        response += ` *Ejemplo:* /config max_warnings 5`;
       } else {
         configs.forEach((config, index) => {
           response += `${index + 1}. **${config.parametro}:** ${config.valor}\n`;
@@ -360,7 +360,7 @@ async function handleConfig(parametro, valor, usuario, grupo, fecha) {
     if (!valor) {
       return { 
         success: false, 
-        message: `❌ Debes especificar un valor.\n\n💡 *Uso:* /config ${parametro} [valor]` 
+        message: ` Debes especificar un valor.\n\n *Uso:* /config ${parametro} [valor]` 
       };
     }
     
@@ -376,14 +376,14 @@ async function handleConfig(parametro, valor, usuario, grupo, fecha) {
     
     return { 
       success: true, 
-      message: `✅ Configuración actualizada:\n\n**${parametro}:** ${valor}\n\n_Modificado por ${usuario}_` 
+      message: ` Configuracin actualizada:\n\n**${parametro}:** ${valor}\n\n_Modificado por ${usuario}_` 
     };
     
   } catch (error) {
     console.error('Error en comando /config:', error);
     return { 
       success: false, 
-      message: `❌ Error procesando configuración: ${error.message}` 
+      message: ` Error procesando configuracin: ${error.message}` 
     };
   }
 }
@@ -397,20 +397,20 @@ async function handleConfig(parametro, valor, usuario, grupo, fecha) {
  */
 async function handleRegistrarUsuario(username, usuario, grupo, fecha) {
   try {
-    console.log(`📝 Comando /registrar recibido de ${usuario}: ${username}`);
+    console.log(` Comando /registrar recibido de ${usuario}: ${username}`);
     
     // Validar username
     if (!username || username.length < 3) {
       return { 
         success: false, 
-        message: '❌ *Error:* El nombre de usuario debe tener al menos 3 caracteres' 
+        message: ' *Error:* El nombre de usuario debe tener al menos 3 caracteres' 
       };
     }
 
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       return { 
         success: false, 
-        message: '❌ *Error:* El nombre de usuario solo puede contener letras, números y guiones bajos' 
+        message: ' *Error:* El nombre de usuario solo puede contener letras, nmeros y guiones bajos' 
       };
     }
 
@@ -442,19 +442,19 @@ async function handleRegistrarUsuario(username, usuario, grupo, fecha) {
 
       return { 
         success: true, 
-        message: `✅ *¡Registro Exitoso!*\n\n👤 *Usuario:* ${result.username}\n🔑 *Contraseña temporal:* \`${result.tempPassword}\`\n\n🌐 *Panel:* ${process.env.FRONTEND_URL}\n\n⚠️ *IMPORTANTE:* Cambia tu contraseña después del primer login\n\n💡 *Tip:* Guarda esta información en un lugar seguro` 
+        message: ` *Registro Exitoso!*\n\n *Usuario:* ${result.username}\n *Contrasea temporal:* \`${result.tempPassword}\`\n\n *Panel:* ${process.env.FRONTEND_URL}\n\n *IMPORTANTE:* Cambia tu contrasea despus del primer login\n\n *Tip:* Guarda esta informacin en un lugar seguro` 
       };
     } else {
       return { 
         success: false, 
-        message: `❌ *Error en el registro:*\n\n${result.error}` 
+        message: ` *Error en el registro:*\n\n${result.error}` 
       };
     }
   } catch (error) {
-    console.error('Error en registro automático:', error);
+    console.error('Error en registro automtico:', error);
     return { 
       success: false, 
-      message: '❌ *Error interno del sistema*\n\nIntenta nuevamente en unos minutos' 
+      message: ' *Error interno del sistema*\n\nIntenta nuevamente en unos minutos' 
     };
   }
 }
@@ -468,12 +468,12 @@ async function handleRegistrarUsuario(username, usuario, grupo, fecha) {
  */
 async function handleResetPassword(username, usuario, grupo, fecha) {
   try {
-    console.log(`🔑 Comando /resetpass recibido de ${usuario}: ${username}`);
+    console.log(` Comando /resetpass recibido de ${usuario}: ${username}`);
     
     if (!username) {
       return { 
         success: false, 
-        message: '❌ *Uso incorrecto*\n\n📝 *Formato:* `/resetpass tu_username`\n\n💡 *Ejemplo:* `/resetpass juan123`' 
+        message: ' *Uso incorrecto*\n\n *Formato:* `/resetpass tu_username`\n\n *Ejemplo:* `/resetpass juan123`' 
       };
     }
 
@@ -504,19 +504,19 @@ async function handleResetPassword(username, usuario, grupo, fecha) {
 
       return { 
         success: true, 
-        message: `✅ *¡Contraseña Restablecida!*\n\n👤 *Usuario:* ${result.username}\n🔑 *Nueva contraseña temporal:* \`${result.tempPassword}\`\n\n🌐 *Panel:* ${process.env.FRONTEND_URL}\n\n⚠️ *IMPORTANTE:* Cambia tu contraseña después del login` 
+        message: ` *Contrasea Restablecida!*\n\n *Usuario:* ${result.username}\n *Nueva contrasea temporal:* \`${result.tempPassword}\`\n\n *Panel:* ${process.env.FRONTEND_URL}\n\n *IMPORTANTE:* Cambia tu contrasea despus del login` 
       };
     } else {
       return { 
         success: false, 
-        message: `❌ *Error:*\n\n${result.error}` 
+        message: ` *Error:*\n\n${result.error}` 
       };
     }
   } catch (error) {
     console.error('Error en reset password:', error);
     return { 
       success: false, 
-      message: '❌ *Error interno del sistema*\n\nIntenta nuevamente en unos minutos' 
+      message: ' *Error interno del sistema*\n\nIntenta nuevamente en unos minutos' 
     };
   }
 }
@@ -529,34 +529,34 @@ async function handleResetPassword(username, usuario, grupo, fecha) {
  */
 async function handleMiInfo(usuario, grupo, fecha) {
   try {
-    console.log(`👤 Comando /miinfo recibido de ${usuario}`);
+    console.log(` Comando /miinfo recibido de ${usuario}`);
     
     const whatsappNumber = usuario.split('@')[0];
     
-    // Buscar usuario por número de WhatsApp
+    // Buscar usuario por nmero de WhatsApp
     const user = await db('usuarios').where({ whatsapp_number: whatsappNumber }).select('username', 'rol', 'fecha_registro').first();
     
     if (!user) {
       return { 
         success: true, 
-        message: '❌ *No estás registrado*\n\n📝 Para registrarte usa: `/registrar tu_username`' 
+        message: ' *No ests registrado*\n\n Para registrarte usa: `/registrar tu_username`' 
       };
     }
 
     const fechaRegistro = user.fecha_registro ? new Date(user.fecha_registro).toLocaleDateString('es-ES') : 'No disponible';
-    const rolDisplay = user.rol === 'admin' ? '👑 ADMINISTRADOR' : 
-                      user.rol === 'colaborador' ? '🤝 COLABORADOR' : 
-                      '👤 USUARIO';
+    const rolDisplay = user.rol === 'admin' ? ' ADMINISTRADOR' : 
+                      user.rol === 'colaborador' ? ' COLABORADOR' : 
+                      ' USUARIO';
 
     return { 
       success: true, 
-      message: `👤 *Tu Información*\n\n🏷️ *Usuario:* ${user.username}\n📱 *WhatsApp:* ${whatsappNumber}\n${rolDisplay}\n📅 *Registrado:* ${fechaRegistro}\n\n🌐 *Panel:* ${process.env.FRONTEND_URL}` 
+      message: ` *Tu Informacin*\n\n *Usuario:* ${user.username}\n *WhatsApp:* ${whatsappNumber}\n${rolDisplay}\n *Registrado:* ${fechaRegistro}\n\n *Panel:* ${process.env.FRONTEND_URL}` 
     };
   } catch (error) {
     console.error('Error en mi info:', error);
     return { 
       success: false, 
-      message: '❌ *Error interno del sistema*' 
+      message: ' *Error interno del sistema*' 
     };
   }
 }
@@ -569,7 +569,7 @@ async function handleMiInfo(usuario, grupo, fecha) {
  */
 async function handleCleanSession(usuario, grupo, fecha) {
   try {
-    console.log(`🧹 Comando /cleansession recibido de ${usuario}`);
+    console.log(` Comando /cleansession recibido de ${usuario}`);
     
     // Verificar si el usuario es admin
     const whatsappNumber = usuario.split('@')[0];
@@ -578,7 +578,7 @@ async function handleCleanSession(usuario, grupo, fecha) {
     if (!user || user.rol !== 'admin') {
       return { 
         success: true, 
-        message: '❌ *Solo administradores pueden usar este comando*' 
+        message: ' *Solo administradores pueden usar este comando*' 
       };
     }
 
@@ -641,32 +641,31 @@ async function handleCleanSession(usuario, grupo, fecha) {
       });
     }
 
-    // Log de la acción
+    // Log de la accin
     await logControlAction(usuario, 'CLEAN_SESSION', `Sesiones limpiadas: ${cleanedFiles} archivos`, grupo);
 
     return { 
       success: true, 
-      message: `╭─❍「 🧹 Melodia Clean Session ✦ 」
-│
-├─ ✅ *Archivos eliminados:* ${cleanedFiles}
-├─ 🔄 *El bot se reiniciará para generar nuevo QR*
-├─ ⏳ *Reiniciando en 3 segundos...*
-│
-├─ 💫 Melodia ha limpiado todo perfectamente~ ♡
-╰─✦` 
+      message: `  Melodia Clean Session  
+
+  *Archivos eliminados:* ${cleanedFiles}
+  *El bot se reiniciar para generar nuevo QR*
+  *Reiniciando en 3 segundos...*
+
+  Melodia ha limpiado todo perfectamente~ 
+` 
     };
   } catch (error) {
     console.error('Error en clean session:', error);
     return { 
       success: false, 
-      message: '❌ *Error al limpiar sesiones*' 
+      message: ' *Error al limpiar sesiones*' 
     };
   }
 }
 
 export {
   normalizeAporteTipo,
-  handleAportar,
   handleAI,
   handleClasificar,
   handleListClasificados,

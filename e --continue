@@ -1,0 +1,635 @@
+[33mcommit 83e151b37735ad09f063725803ef20df89402d0b[m
+Author: WhatsApp Bot Panel <whatsapp-bot@panel.com>
+Date:   Wed Sep 17 23:45:18 2025 +0000
+
+    actuuu
+
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex d5c8241..91ea736 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -5,7 +5,6 @@[m [mfrontend-panel/node_modules/[m
+ # Production builds[m
+ frontend-panel/dist/[m
+ build/[m
+[31m-panel-dist/[m
+ [m
+ # Environment variables[m
+ .env[m
+[36m@@ -100,12 +99,6 @@[m [mThumbs.db[m
+ .tmp/[m
+ temp/[m
+ [m
+[31m-# Baileys files with case sensitivity issues[m
+[31m-backend/full/storage/baileys_full/app-state-sync-key-AAAAAC6*.json[m
+[31m-[m
+[31m-# Database files[m
+[31m-pgdata/[m
+[31m-[m
+ # Test files[m
+ coverage/[m
+ .nyc_output/[m
+[1mdiff --git a/DEPLOY_VPS.md b/DEPLOY_VPS.md[m
+[1mnew file mode 100644[m
+[1mindex 0000000..c2c3fe9[m
+[1m--- /dev/null[m
+[1m+++ b/DEPLOY_VPS.md[m
+[36m@@ -0,0 +1,118 @@[m
+[32m+[m[32m# Despliegue en VPS (sin Docker)[m
+[32m+[m
+[32m+[m[32mPasos mínimos para levantar el panel y backend en un VPS con Caddy + Node.js + PostgreSQL.[m
+[32m+[m
+[32m+[m[32m## 1) Requisitos[m
+[32m+[m[32m- Node.js 18 o 20[m
+[32m+[m[32m- PostgreSQL 16 (o compatible) en localhost[m
+[32m+[m[32m- Caddy instalado (como servicio del sistema)[m
+[32m+[m
+[32m+[m[32m## 2) Base de datos[m
+[32m+[m[32mCrear base y usuario (ajusta credenciales si usas otras):[m
+[32m+[m
+[32m+[m[32m```sql[m
+[32m+[m[32mCREATE USER appuser WITH PASSWORD 'superpass';[m
+[32m+[m[32mCREATE DATABASE appdb OWNER appuser;[m
+[32m+[m[32mGRANT ALL PRIVILEGES ON DATABASE appdb TO appuser;[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m## 3) Variables de entorno del backend[m
+[32m+[m[32mArchivo `backend/full/.env` ya preparado para VPS:[m
+[32m+[m
+[32m+[m[32m```[m
+[32m+[m[32mDB_HOST=localhost[m
+[32m+[m[32mDB_PORT=5432[m
+[32m+[m[32mDB_USER=appuser[m
+[32m+[m[32mDB_PASSWORD=superpass[m
+[32m+[m[32mDB_NAME=appdb[m
+[32m+[m[32mNODE_ENV=production[m
+[32m+[m[32mPORT=3001[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mPuedes añadir `JWT_SECRET` personalizado y `OWNER_WHATSAPP_NUMBER` si aplica.[m
+[32m+[m
+[32m+[m[32m## 4) Instalar dependencias[m
+[32m+[m
+[32m+[m[32mEn raíz (frontend y root opcionalmente) y backend:[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32m# Backend (tiene su propio package.json)[m
+[32m+[m[32mcd backend/full[m
+[32m+[m[32mnpm ci[m
+[32m+[m
+[32m+[m[32m# Frontend (opcional si ya existe dist)[m
+[32m+[m[32mcd ../../frontend-panel[m
+[32m+[m[32mnpm ci[m
+[32m+[m[32mnpm run build[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mSi prefieres que `npm install` desde la raíz instale frontend automáticamente, ejecuta en raíz:[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32mcd /home/admin/bot-whatsapp-panel-2.5-completo-v2[m
+[32m+[m[32mnpm ci[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m## 5) Migraciones y arranque backend[m
+[32m+[m
+[32m+[m[32mDesde la raíz del repo:[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32mnpm run start:production[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mEste comando ejecuta migraciones usando el `knexfile` del backend y luego inicia `backend/full/index.js` en `0.0.0.0:3001`.[m
+[32m+[m
+[32m+[m[32m## 6) Caddy[m
+[32m+[m
+[32m+[m[32mEl archivo `frontend-panel/Caddyfile` ya está configurado para escuchar en `:80` y:[m
+[32m+[m[32m- Servir `frontend-panel/dist`[m
+[32m+[m[32m- Proxear `/api/*` y `/media/*` al backend `localhost:3001`[m
+[32m+[m
+[32m+[m[32mAplica la config y recarga Caddy según tu instalación (por ejemplo en Debian/Ubuntu):[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32msudo cp frontend-panel/Caddyfile /etc/caddy/Caddyfile[m
+[32m+[m[32msudo systemctl reload caddy[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mSi tienes dominio, cambia el primer renglón por tu dominio (ej: `midominio.com`).[m
+[32m+[m
+[32m+[m[32m## 7) Servicio en segundo plano[m
+[32m+[m
+[32m+[m[32mOpcional: crea un servicio systemd para el backend. Archivo de ejemplo `/etc/systemd/system/konmi-backend.service`:[m
+[32m+[m
+[32m+[m[32m```[m
+[32m+[m[32m[Unit][m
+[32m+[m[32mDescription=Konmi WhatsApp Bot Backend[m
+[32m+[m[32mAfter=network.target[m
+[32m+[m
+[32m+[m[32m[Service][m
+[32m+[m[32mType=simple[m
+[32m+[m[32mUser=admin[m
+[32m+[m[32mWorkingDirectory=/home/admin/bot-whatsapp-panel-2.5-completo-v2/backend/full[m
+[32m+[m[32mEnvironment=NODE_ENV=production[m
+[32m+[m[32mEnvironment=PORT=3001[m
+[32m+[m[32mExecStart=/usr/bin/node /home/admin/bot-whatsapp-panel-2.5-completo-v2/backend/full/index.js[m
+[32m+[m[32mRestart=always[m
+[32m+[m[32mRestartSec=5[m
+[32m+[m
+[32m+[m[32m[Install][m
+[32m+[m[32mWantedBy=multi-user.target[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mLuego:[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32msudo systemctl daemon-reload[m
+[32m+[m[32msudo systemctl enable --now konmi-backend[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m## 8) Verificación rápida[m
+[32m+[m[32m- Backend: `curl http://127.0.0.1:3001/api/health`[m
+[32m+[m[32m- Frontend: abrir en navegador `http://<IP-o-dominio>/`[m
+[32m+[m
+[32m+[m[32m## Notas[m
+[32m+[m[32m- Si prefieres Docker Compose, no cambies `DB_HOST` a `localhost` y usa `docker-compose.yml` (el servicio se conecta a `db`).[m
+[32m+[m[32m- Para sub-bots, `create-subbot.sh` requiere Docker en el host.[m
+[32m+[m
+[1mdiff --git a/README.md b/README.md[m
+[1mindex 7a953c1..60b74e0 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -1,2 +1,12 @@[m
+ # KONMI-BOT-[m
+ KONMI BOT , CREADA CON IA Y EN DESARROLLO[m
+[32m+[m
+[32m+[m[32m## Despliegue rápido (frontend fuera de Docker)[m
+[32m+[m
+[32m+[m[32m- Frontend no se construye con Docker. Primero compila el panel con npm y luego levanta los servicios con Docker (solo backend, DB, etc.).[m
+[32m+[m
+[32m+[m[32mPasos:[m
+[32m+[m[32m- `./start-system.sh` — compila `frontend-panel` con `npm run build` y levanta Docker Compose.[m
+[32m+[m[32m- Caddy en el host sirve `frontend-panel/dist` y proxya `/api` al backend.[m
+[32m+[m
+[32m+[m[32mDetalles y alternativas en `DEPLOY_VPS.md`.[m
+[1mdiff --git a/TODO.md b/TODO.md[m
+[1mnew file mode 100644[m
+[1mindex 0000000..14cd4b8[m
+[1m--- /dev/null[m
+[1m+++ b/TODO.md[m
+[36m@@ -0,0 +1,4 @@[m
+[32m+[m[32m- [x] Import QRCode library in Subbots.tsx[m
+[32m+[m[32m- [x] Modify viewSubbotQR to generate QR from qr_data if available[m
+[32m+[m[32m- [x] Update details modal to display QR image instead of text[m
+[32m+[m[32m- [x] Test QR generation for subbots with qr_data (dev server running)[m
+[1mdiff --git a/backend/full/Dockerfile.dev b/backend/full/Dockerfile.dev[m
+[1mdeleted file mode 100644[m
+[1mindex 8160788..0000000[m
+[1m--- a/backend/full/Dockerfile.dev[m
+[1m+++ /dev/null[m
+[36m@@ -1,34 +0,0 @@[m
+[31m-FROM node:18-alpine[m
+[31m-[m
+[31m-# Instalar dependencias del sistema[m
+[31m-RUN apk add --no-cache \[m
+[31m-    wget \[m
+[31m-    curl \[m
+[31m-    bash \[m
+[31m-    git[m
+[31m-[m
+[31m-# Crear directorio de trabajo[m
+[31m-WORKDIR /app[m
+[31m-[m
+[31m-# Copiar package.json y package-lock.json (si existe)[m
+[31m-COPY package*.json ./[m
+[31m-[m
+[31m-# Instalar dependencias[m
+[31m-RUN npm install[m
+[31m-[m
+[31m-# Instalar nodemon globalmente para hot reload[m
+[31m-RUN npm install -g nodemon[m
+[31m-[m
+[31m-# Copiar el resto del código[m
+[31m-COPY . .[m
+[31m-[m
+[31m-# Crear directorios necesarios[m
+[31m-RUN mkdir -p storage logs[m
+[31m-[m
+[31m-# Exponer puerto[m
+[31m-EXPOSE 3001[m
+[31m-[m
+[31m-# Comando por defecto para desarrollo[m
+[31m-CMD ["npm", "run", "dev"][m
+[31m-[m
+[31m-[m
+[1mdiff --git a/backend/full/ai-chat-handler.js b/backend/full/ai-chat-handler.js[m
+[1mindex 0cc8867..dd17197 100644[m
+[1m--- a/backend/full/ai-chat-handler.js[m
+[1m+++ b/backend/full/ai-chat-handler.js[m
+[36m@@ -1,15 +1,18 @@[m
+[31m-import { GoogleGenerativeAI } from '@google/generative-ai';[m
+[31m-[m
+[31m-// Configuración de Gemini AI[m
+[31m-const GEMINI_API_KEY = 'AIzaSyAOBzrh8dnm_rMAUyy3yzBMpVIME-JFay4';[m
+[31m-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);[m
+[32m+[m[32mimport { getGeminiModel, hasGeminiApiKey } from './gemini-client.js';[m
+ [m
+ /**[m
+  * Responder preguntas generales usando Gemini AI[m
+  */[m
+ async function chatWithAI(message, context = '') {[m
+   try {[m
+[31m-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });[m
+[32m+[m[32m    if (!hasGeminiApiKey()) {[m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: false,[m
+[32m+[m[32m        error: 'GEMINI_API_KEY no está configurada'[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const model = getGeminiModel('gemini-pro');[m
+ [m
+     const prompt = `[m
+ Eres KONMI BOT, un asistente especializado en manhwas, webtoons y contenido de entretenimiento asiático. [m
+[36m@@ -49,7 +52,14 @@[m [mResponde directamente sin prefijos como "Respuesta:" o similares.[m
+  */[m
+ async function analyzeManhwaContent(message, filename = '') {[m
+   try {[m
+[31m-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });[m
+[32m+[m[32m    if (!hasGeminiApiKey()) {[m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: false,[m
+[32m+[m[32m        error: 'GEMINI_API_KEY no está configurada'[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const model = getGeminiModel('gemini-pro');[m
+ [m
+     const prompt = `[m
+ Analiza el siguiente contenido para extraer información sobre manhwa/webtoon:[m
+[36m@@ -115,7 +125,14 @@[m [mREGLAS:[m
+  */[m
+ async function generateBotResponse(command, context = '') {[m
+   try {[m
+[31m-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });[m
+[32m+[m[32m    if (!hasGeminiApiKey()) {[m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: false,[m
+[32m+[m[32m        error: 'GEMINI_API_KEY no está configurada'[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const model = getGeminiModel('gemini-pro');[m
+ [m
+     const prompt = `[m
+ Eres KONMI BOT, un bot de WhatsApp especializado en manhwas y contenido de entretenimiento.[m
+[36m@@ -163,5 +180,3 @@[m [mexport {[m
+ [m
+ [m
+ [m
+[31m-[m
+[31m-[m
+[1mdiff --git a/backend/full/api.js b/backend/full/api.js[m
+[1mindex e3cc2b2..c9cd0ba 100644[m
+[1m--- a/backend/full/api.js[m
+[1m+++ b/backend/full/api.js[m
+[36m@@ -4,11 +4,25 @@[m [mimport path from 'path';[m
+ import fs from 'fs';[m
+ import db from './db.js';[m
+ import { authenticateToken, authorizeRoles } from './auth.js';[m
+[31m-import { getQRCode, getQRCodeImage, getConnectionStatus, getAvailableGroups, getSocket } from './whatsapp.js';[m
+[32m+[m[32mimport { getQRCode, getQRCodeImage, getPairingCode, setAuthMethod, getConnectionStatus, getAvailableGroups, getSocket } from './whatsapp.js';[m
+ import {[m
+   getProviderStats,[m
+   getProviderAportes[m
+ } from './auto-provider-handler.js';[m
+[32m+[m[32mimport { chatWithAI } from './ai-chat-handler.js';[m
+[32m+[m[32mimport {[m
+[32m+[m[32m  handleBotCommandsStream,[m
+[32m+[m[32m  handleUsuariosStream,[m
+[32m+[m[32m  handleGruposStream,[m
+[32m+[m[32m  handlePedidosStream,[m
+[32m+[m[32m  handleNotificacionesStream,[m
+[32m+[m[32m  handleAportesStream,[m
+[32m+[m[32m  emitGruposEvent,[m
+[32m+[m[32m  emitPedidosEvent,[m
+[32m+[m[32m  emitNotificacionesEvent,[m
+[32m+[m[32m  emitAportesEvent[m
+[32m+[m[32m} from './realtime.js';[m
+[32m+[m[32mimport bcrypt from 'bcryptjs';[m
+ [m
+ const router = express.Router();[m
+ [m
+[36m@@ -39,6 +53,608 @@[m [mrouter.get('/votaciones', async (req, res) => {[m
+   }[m
+ });[m
+ [m
+[32m+[m[32m// =====================[m
+[32m+[m[32m// System & Global State[m
+[32m+[m[32m// =====================[m
+[32m+[m
+[32m+[m[32m// System stats overview[m
+[32m+[m[32mrouter.get('/system/stats', async (req, res) => {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const usuarios = await db('usuarios').count('id as count').first();[m
+[32m+[m[32m    let grupos = { count: 0 };[m
+[32m+[m[32m    try { grupos = await db('grupos_autorizados').count('jid as count').first(); } catch (_) {}[m
+[32m+[m[32m    const aportes = await db('aportes').count('id as count').first();[m
+[32m+[m[32m    const pedidos = await db('pedidos').count('id as count').first();[m
+[32m+[m[32m    res.json({[m
+[32m+[m[32m      usuarios: Number(usuarios?.count || 0),[m
+[32m+[m[32m      grupos: Number(grupos?.count || 0),[m
+[32m+[m[32m      aportes: Number(aportes?.count || 0),[m
+[32m+[m[32m      pedidos: Number(pedidos?.count || 0)[m
+[32m+[m[32m    });[m
+[32m+[m[32m  } catch (error) { res.status(500).json({ error: error.message }); }[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32m// =====================[m
+[32m+[m[32m// AI endpoints (mínimos)[m
+[32m+[m[32m// =====================[m
+[32m+[m
+[32m+[m[32mrouter.get('/ai/stats', async (_req, res) => {[m
+[32m+[m[32m  res.json({ totalQueries: 0, popular: [] });[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32mrouter.post('/ai/chat', async (req, res) => {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const { message, context } = req.body || {};[m
+[32m+[m[32m    if (!message) return res.status(400).json({ error: 'message requerido' });[m
+[32m+[m[32m    const result = await chatWithAI(message, context || 'panel');[m
+[32m+[m[32m    return res.json(result);[m
+[32m+[m[32m  } catch (error) { res.status(500).json({ error: error.message }); }[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32mrouter.post('/ai/ask', async (req, res) => {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const { question } = req.body || {};[m
+[32m+[m[32m    if (!question) return res.status(400).json({ error: 'question requerido' });[m
+[32m+[m[32m    const result = await chatWithAI(question, 'panel');[m
+[32m+[m[32m    return res.json(result);[m
+[32m+[m[32m  } catch (error) { res.status(500).json({ error: error.message }); }[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32m// =====================[m
+[32m+[m[32m// Chat Sessions (para AiChat page)[m
+[32m+[m[32m// =====================[m
+[32m+[m
+[32m+[m[32masync function ensureChatTables() {[m
+[32m+[m[32m  const hasSessions = await db.schema.hasTable('chat_sessions');[m
+[32m+[m[32m  if (!hasSessions) {[m
+[32m+[m[32m    await db.schema.createTable('chat_sessions', (t) => {[m
+[32m+[m[32m      t.increments('id').primary();[m
+[32m+[m[32m      t.string('title').notNullable();[m
+[32m+[m[32m      t.timestamp('created_at').defaultTo(db.fn.now());[m
+[32m+[m[32m      t.timestamp('updated_at').defaultTo(db.fn.now());[m
+[32m+[m[32m      t.text('last_message').nullable();[m
+[32m+[m[32m      t.integer('message_count').defaultTo(0);[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m[32m  const hasMessages = await db.schema.hasTable('chat_messages');[m
+[32m+[m[32m  if (!hasMessages) {[m
+[32m+[m[32m    await db.schema.createTable('chat_messages', (t) => {[m
+[32m+[m[32m      t.increments('id').primary();[m
+[32m+[m[32m      t.integer('session_id').notNullable();[m
+[32m+[m[32m      t.string('role').notNullable(); // 'user' | 'assistant'[m
+[32m+[m[32m      t.text('content').notNullable();[m
+[32m+[m[32m      t.timestamp('timestamp').defaultTo(db.fn.now());[m
+[32m+[m[32m      t.string('model').nullable();[m
+[32m+[m[32m      t.integer('tokens_used').nullable();[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mrouter.get('/chat/sessions', async (_req, res) => {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    await ensureChatTables();[m
+[32m+[m[32m    const sessions = await db('chat_sessions').select('*').orderBy('updated_at', 'desc');[m
+[32m+[m[32m    res.json(sessions);[m
+[32m+[m[32m  } catch (error) { res.status(500).json({ error: error.message }); }[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32mrouter.post('/chat/sessions', async (req, res) => {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    await ensureChatTables();[m
+[32m+[m[32m    const { title } = req.body || {};[m
+[32m+[m[32m    if (!title) return res.status(400).json({ error: 'title requerido' });[m
+[32m+[m[32m    const [id] = await db('chat_sessions').insert({ title, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), last_message: '', message_count: 0 });[m
+[32m+[m[32m    res.json({ id, title });[m
+[32m+[m[32m  } catch (error) { res.status(500).json({ error: error.message }); }[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32mrouter.delete('/chat/sessions/:id', async (req, res) => {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    await ensureChatTables();[m
+[32m+[m[32m    const id = parseInt(req.params.id);[m
+[32m+[m[32m    await db('chat_messages').where({ session_id: id }).del();[m
+[32m+[m[32m    await db('chat_sessions').where({ id }).del();[m
+[32m+[m[32m    res.json({ success: true });[m
+[32m+[m[32m  } catch (error) { res.status(500).json({ error: error.message }); }[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32mrouter.get('/chat/sessions/:id/messages', async (req, res) => {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    await ensureChatTables();[m
+[32m+[m[32m    const id = parseInt(req.params.id);[m
+[32m+[m[32m    const messages = await db('chat_messages').where({ session_id: id }).orderBy('id', 'asc');[m
+[32m+[m[32m    // Normalizar campos a los esperados por el frontend[m
+[32m+[m[32m    const normalized = messages.map(m => ({[m
+[32m+[m[32m      id: String(m.id),[m
+[32m+[m[32m      role: m.role,[m
+[32m+[m[32m      content: m.content,[m
+[32m+[m[32m      timestamp: m.timestamp,[m
+[32m+[m[32m      tokens_used: m.tokens_used,[m
+[32m+[m[32m      model: m.model[m
+[32m+[m[32m    }));[m
+[32m+[m[32m    res.json(normalized);[m
+[32m+[m[32m  } catch (error) { res.status(500).json({ error: error.message }); }[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32mrouter.post('/chat/sessions/:id/messages', async (req, res) => {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    await ensureChatTables();[m
+[32m+[m[32m    const id = parseInt(req.params.id);[m
+[32m+[m[32m    const { message } = req.body || {};[m
+[32m+[m[32m    if (!message) return res.status(400).json({ error: 'message requerido' });[m
+[32m+[m[32m    const now = new Date().toISOString();[m
+[32m+[m[32m    await db('chat_messages').insert({ session_id: id, role: 'user', content: message, timestamp: now });[m
+[32m+[m[32m    // Responder con IA[m
+[32m+[m[32m    const ai = await chatWithAI(message, `session:${id}`);[m
+[32m+[m[32m    const aiText = ai?.response || 'No pude generar una respuesta.';[m
+[32m+[m[32m    const model = ai?.model || null;[m
+[32m+[m[32m    await db('chat_messages').insert({ session_id: id, role: 'assistant', content: aiText, timestamp: new Date().toISOString(), model });[m
+[32m+[m[32m    // Actualizar sesión[m
+[32m+[m[32m    const countRow = await db('chat_messages').where({ session_id: id }).count('id as c').first();[m
+[32m+[m[32m    await db('chat_sessions').where({ id }).update({ updated_at: new Date().toISOString(), last_message: aiText.substring(0, 120), message_count: Number(countRow?.c || 0) });[m
+[32m+[m[32m    res.json({ success: true });[m
+[32m+[m[32m  } catch (error) { res.status(500).json({ error: error.message }); }[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32m// =====================[m
+[32m+[m[32m// Bot Commands (placeholders)[m
+[32m+[m[32m// =====================[m
+[32m+[m[32masync function ensureBotCommandsTable() {[m
+[32m+[m[32m  const has = await db.schema.hasTable('bot_commands');[m
+[32m+[m[32m  if (!has) {[m
+[32m+[m[32m    await db.schema.createTable('bot_commands', (t) => {[m
+[32m+[m[32m      t.string('id').primary();[m
+[32m+[m[32m      t.string('command').notNullable();[m
+[32m+[m[32m      t.text('description').defaultTo('');[m
+[32m+[m[32m      t.text('response').defaultTo('');[m
+[32m+[m[32m      t.string('category').defaultTo('general');[m
+[32m+[m[32m      t.boolean('enabled').defaultTo(true);[m
+[32m+[m[32m      t.integer('usage_count').defaultTo(0);[m
+[32m+[m[32m      t.timestamp('last_used').nullable();[m
+[32m+[m[32m      t.timestamp('created_at').defaultTo(db.fn.now());[m
+[32m+[m[32m      t.timestamp('updated_at').defaultTo(db.fn.now());[m
+[32m+[m[32m      t.text('permissions').defaultTo('[]');[m
+[32m+[m[32m      t.text('aliases').defaultTo('[]');[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m[32m  await ensureBotCommandsTrigger();[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function ensureBotCommandsTrigger() {[m
+[32m+[m[32m  await db.raw(`[m
+[32m+[m[32m    DO $$[m
+[32m+[m[32m    BEGIN[m
+[32m+[m[32m      IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'notify_bot_commands_changes') THEN[m
+[32m+[m[32m        CREATE FUNCTION notify_bot_commands_changes() RETURNS trigger AS $func$[m
+[32m+[m[32m        DECLARE[m
+[32m+[m[32m          payload JSON;[m
+[32m+[m[32m        BEGIN[m
+[32m+[m[32m          IF (TG_OP = 'DELETE') THEN[m
+[32m+[m[32m            payload := json_build_object('operation', TG_OP, 'id', OLD.id);[m
+[32m+[m[32m          ELSE[m
+[32m+[m[32m            payload := json_build_object('operation', TG_OP, 'id', NEW.id);[m
+[32m+[m[32m          END IF;[m
+[32m+[m[32m          PERFORM pg_notify('bot_commands_changes', payload::text);[m
+[32m+[m[32m          IF (TG_OP = 'DELETE') THEN[m
+[32m+[m[32m            RETURN OLD;[m
+[32m+[m[32m          ELSE[m
+[32m+[m[32m            RETURN NEW;[m
+[32m+[m[32m          END IF;[m
+[32m+[m[32m        END;[m
+[32m+[m[32m        $func$ LANGUAGE plpgsql;[m
+[32m+[m[32m      END IF;[m
+[32m+[m[32m      IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'bot_commands_notify_trigger') THEN[m
+[32m+[m[32m        CREATE TRIGGER bot_commands_notify_trigger[m
+[32m+[m[32m        AFTER INSERT OR UPDATE OR DELETE ON bot_commands[m
+[32m+[m[32m        FOR EACH ROW EXECUTE FUNCTION notify_bot_commands_changes();[m
+[32m+[m[32m      END IF;[m
+[32m+[m[32m    END;[m
+[32m+[m[32m    $$;[m
+[32m+[m[32m  `);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function ensureUsuariosTrigger() {[m
+[32m+[m[32m  await db.raw(`[m
+[32m+[m[32m    DO $$[m
+[32m+[m[32m    BEGIN[m
+[32m+[m[32m      IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'notify_usuarios_changes') THEN[m
+[32m+[m[32m        CREATE FUNCTION notify_usuarios_changes() RETURNS trigger AS $func$[m
+[32m+[m[32m        DECLARE[m
+[32m+[m[32m          payload JSON;[m
+[32m+[m[32m        BEGIN[m
+[32m+[m[32m          IF (TG_OP = 'DELETE') THEN[m
+[32m+[m[32m            payload := json_build_object('operation', TG_OP, 'id', OLD.id);[m
+[32m+[m[32m          ELSE[m
+[32m+[m[32m            payload := json_build_object('operation', TG_OP, 'id', NEW.id);[m
+[32m+[m[32m          END IF;[m
+[32m+[m[32m          PERFORM pg_notify('usuarios_changes', payload::text);[m
+[32m+[m[32m          IF (TG_OP = 'DELETE') THEN[m
+[32m+[m[32m            RETURN OLD;[m
+[32m+[m[32m          ELSE[m
+[32m+[m[32m            RETURN NEW;[m
+[32m+[m[32m          END IF;[m
+[32m+[m[32m        END;[m
+[32m+[m[32m        $func$ LANGUAGE plpgsql;[m
+[32m+[m[32m      END IF;[m
+[32m+[m[32m      IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'usuarios_notify_trigger') THEN[m
+[32m+[m[32m        CREATE TRIGGER usuarios_notify_trigger[m
+[32m+[m[32m        AFTER INSERT OR UPDATE OR DELETE ON usuarios[m
+[32m+[m[32m        FOR EACH ROW EXECUTE FUNCTION notify_usuarios_changes();[m
+[32m+[m[32m      END IF;[m
+[32m+[m[32m    END;[m
+[32m+[m[32m    $$;[m
+[32m+[m[32m  `);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function ensureGruposTable() {[m
+[32m+[m[32m  const has = await db.schema.hasTable('grupos_autorizados');[m
+[32m+[m[32m  if (!has) {[m
+[32m+[m[32m    await db.schema.createTable('grupos_autorizados', (t) => {[m
+[32m+[m[32m      t.increments('id').primary();[m
+[32m+[m[32m      t.string('jid').notNullable().unique();[m
+[32m+[m[32m      t.string('nombre').defaultTo('');[m
+[32m+[m[32m      t.text('descripcion').defaultTo('');[m
+[32m+[m[32m      t.boolean('bot_enabled').defaultTo(true);[m
+[32m+[m[32m      t.boolean('es_proveedor').defaultTo(false);[m
+[32m+[m[32m      t.string('tipo').defaultTo('normal');[m
+[32m+[m[32m      t.integer('usuario_id').nullable();[m
+[32m+[m[32m      t.timestamp('created_at').defaultTo(db.fn.now());[m
+[32m+[m[32m      t.timestamp('updated_at').defaultTo(db.fn.now());[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  const ensureColumn = async (name, cb) => {[m
+[32m+[m[32m    const exists = await db.schema.hasColumn('grupos_autorizados', name);[m
+[32m+[m[32m    if (!exists) {[m
+[32m+[m[32m      await db.schema.alterTable('grupos_autorizados', cb);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  };[m
+[32m+[m
+[32m+[m[32m  await ensureColumn('descripcion', (t) => t.text('descripcion').defaultTo(''));[m
+[32m+[m[32m  await ensureColumn('bot_enabled', (t) => t.boolean('bot_enabled').defaultTo(true));[m
+[32m+[m[32m  await ensureColumn('es_proveedor', (t) => t.boolean('es_proveedor').defaultTo(false));[m
+[32m+[m[32m  await ensureColumn('tipo', (t) => t.string('tipo').defaultTo('normal'));[m
+[32m+[m[32m  await ensureColumn('usuario_id', (t) => t.integer('usuario_id').nullable());[m
+[32m+[m[32m  await ensureColumn('created_at', (t) => t.timestamp('created_at').defaultTo(db.fn.now()));[m
+[32m+[m[32m  await ensureColumn('updated_at', (t) => t.timestamp('updated_at').defaultTo(db.fn.now()));[m
+[32m+[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const now = new Date().toISOString();[m
+[32m+[m[32m    await db('grupos_autorizados').whereNull('created_at').update({ created_at: now });[m
+[32m+[m[32m    await db('grupos_autorizados').whereNull('updated_at').update({ updated_at: now });[m
+[32m+[m[32m  } catch (error) {[m
+[32m+[m[32m    console.error('No se pudo actualizar timestamps en grupos_autorizados:', error.message);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  await ensureGruposTrigger();[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function ensureGruposTrigger() {[m
+[32m+[m[32m  await db.raw(`[m
+[32m+[m[32m    DO $$[m
+[32m+[m[32m    BEGIN[m
+[32m+[m[32m      IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'notify_grupos_changes') THEN[m
+[32m+[m[32m        CREATE FUNCTION notify_grupos_changes() RETURNS trigger AS $func$[m
+[32m+[m[32m        DECLARE[m
+[32m+[m[32m          payload JSON;[m
+[32m+[m[32m        BEGIN[m
+[32m+[m[32m          IF (TG_OP = 'DELETE') THEN[m
+[32m+[m[32m            payload := json_build_object('operation', TG_OP, 'id', OLD.id, 'jid', OLD.jid);[m
+[32m+[m[32m          ELSE[m
+[32m+[m[32m            payload := json_build_object('operation', TG_OP, 'id', NEW.id, 'jid', NEW.jid);[m
+[32m+[m[32m          END IF;[m
+[32m+[m[32m          PERFORM pg_notify('grupos_changes', payload::text);[m
+[32m+[m[32m          IF (TG_OP = 'DELETE') THEN[m
+[32m+[m[32m            RETURN OLD;[m
+[32m+[m[32m          ELSE[m
+[32m+[m[32m            RETURN NEW;[m
+[32m+[m[32m          END IF;[m
+[32m+[m[32m        END;[m
+[32m+[m[32m        $func$ LANGUAGE plpgsql;[m
+[32m+[m[32m      END IF;[m
+[32m+[m[32m      IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'grupos_notify_trigger') THEN[m
+[32m+[m[32m        CREATE TRIGGER grupos_notify_trigger[m
+[32m+[m[32m        AFTER INSERT OR UPDATE OR DELETE ON grupos_autorizados[m
+[32m+[m[32m        FOR EACH ROW EXECUTE FUNCTION notify_grupos_changes();[m
+[32m+[m[32m      END IF;[m
+[32m+[m[32m    END;[m
+[32m+[m[32m    $$;[m
+[32m+[m[32m  `);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function ensurePedidosTable() {[m
+[32m+[m[32m  const has = await db.schema.hasTable
