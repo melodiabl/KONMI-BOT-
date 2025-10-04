@@ -1,4 +1,4 @@
-import * as baileys from '@whiskeysockets/baileys';
+import * as baileys from 'baileys-mod';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pino from 'pino';

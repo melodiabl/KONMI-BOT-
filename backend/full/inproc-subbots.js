@@ -1,132 +1,216 @@
-import * as baileys from '@whiskeysockets/baileys';
-import EventEmitter from 'events';
-import path from 'path';
-import fs from 'fs';
+import { makeInMemoryStore } from 'baileys-mod';
 import db from './db.js';
+import logger from './config/logger.js';
+import { startSession, closeSession, getSessionStatus, listSessions } from './multiaccount-manager.js';
 
-const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = baileys;
+// Almacenamiento en memoria para los datos adicionales de los subbots
+const subbotMetadata = new Map();
 
-const emitter = new EventEmitter();
-const running = new Map(); // code -> { sock, type, targetNumber, status, lastEvent, lastSeen, dir, metadata }
-
-function ensureDir(dir) { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); }
-function digits(val){ return String(val||'').replace(/[^0-9]/g,''); }
-
-export function onSubbotEvent(event, handler){ emitter.on(event, handler); }
-
-export async function listSubbots(){ return db('subbots').select('*').orderBy('created_at','desc'); }
-export async function getSubbotByCode(code){ return db('subbots').where({ code }).first(); }
-
-export async function fetchSubbotListWithOnlineFlag(){
-  const subs = await listSubbots();
-  return subs.map(s => ({ ...s, isOnline: running.has(s.code) && running.get(s.code).status === 'connected' }));
-}
-
-export async function deleteSubbot(code){
+/**
+ * Inicia un nuevo subbot con conexión a WhatsApp Web
+ * @param {string} subbotId - ID único del subbot
+ * @param {string} ownerJid - JID del propietario (usuario que creó el subbot)
+ */
+export async function launchSubbot(subbotId, ownerJid) {
   try {
-    const entry = running.get(code);
-    if (entry?.sock){ try { await entry.sock.logout(); } catch(_){} try { entry.sock.end(); } catch(_){} }
-    running.delete(code);
-    await db('subbots').where({ code }).del();
-    const dir = path.join(process.cwd(), 'backend', 'full', 'storage', 'subbots', code);
-    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive:true, force:true });
-    emitter.emit('stopped', { subbotId: code });
+    logger.info(`[Subbot ${subbotId}] Iniciando subbot para ${ownerJid}`);
+    
+    // Actualizar estado del subbot a 'starting'
+    await updateSubbotStatus(subbotId, 'starting');
+    
+    // Iniciar sesión usando el nuevo manejador
+    const result = await startSession(subbotId, {
+      onQR: async ({ qrUrl }) => {
+        // Notificar al propietario con el código QR
+        await notifyOwner(ownerJid, {
+          text: 'Escanea el código QR para conectar el subbot',
+          qr: qrUrl
+        });
+        
+        // Actualizar estado del subbot
+        await updateSubbotStatus(subbotId, 'qr_ready', { qr: qrUrl });
+      },
+      onConnected: async (session) => {
+        logger.info(`[Subbot ${subbotId}] Conexión establecida`);
+        await updateSubbotStatus(subbotId, 'connected', { 
+          phoneNumber: session.phoneNumber 
+        });
+        
+        // Notificar al propietario
+        await notifyOwner(ownerJid, {
+          text: `✅ Subbot ${subbotId} conectado correctamente`
+        });
+        
+        // Almacenar metadatos adicionales
+        subbotMetadata.set(subbotId, {
+          ownerJid,
+          connectedAt: new Date(),
+          phoneNumber: session.phoneNumber
+        });
+      },
+      onDisconnected: async (session) => {
+        logger.info(`[Subbot ${subbotId}] Desconectado`);
+        await updateSubbotStatus(subbotId, 'disconnected');
+        subbotMetadata.delete(subbotId);
+      }
+    });
+    
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    
     return { success: true };
-  } catch (e) {
-    return { success:false, error: e.message };
+    
+  } catch (error) {
+    logger.error(`[Subbot ${subbotId}] Error al iniciar:`, error);
+    await updateSubbotStatus(subbotId, 'error', { error: error.message });
+    return { error: error.message };
   }
 }
 
-function codeId(type){
-  const t = type === 'code' ? 'code' : 'qr';
-  return `subbot_${Math.random().toString(36).substring(2,7)}_${Date.now()}`;
-}
-
-export async function launchSubbot({ type='qr', createdBy=null, requestJid=null, requestParticipant=null, targetNumber=null, metadata={} }){
-  const normalizedType = type === 'code' ? 'code' : 'qr';
-  const target = normalizedType === 'code' ? digits(targetNumber) : null;
-  if (normalizedType === 'code' && !target) return { success:false, error:'Numero de emparejamiento invalido' };
-
-  const code = codeId(normalizedType);
-  const now = new Date().toISOString();
-  const dir = path.join(process.cwd(), 'backend', 'full', 'storage', 'subbots', code);
-  ensureDir(dir); ensureDir(path.join(dir,'auth'));
-
-  const record = {
-    code, type: normalizedType, status: 'launching',
-    created_by: digits(createdBy), request_jid: requestJid, request_participant: requestParticipant,
-    target_number: target, created_at: now, updated_at: now, last_heartbeat: now,
-    metadata: metadata ? JSON.stringify(metadata) : null
-  };
-  await db('subbots').insert(record);
-  startSubbotSocket({ code, type: normalizedType, dir, targetNumber: target, metadata });
-  emitter.emit('launch', { subbot: record });
-  return { success:true, subbot: record };
-}
-
-async function startSubbotSocket({ code, type, dir, targetNumber, metadata }){
-  const { state, saveCreds } = await useMultiFileAuthState(path.join(dir,'auth'));
-  const { version } = await fetchLatestBaileysVersion();
-  const sock = makeWASocket({ version, logger: undefined, printQRInTerminal: false, auth: state, browser: ['KONMI Subbot','Desktop','1.0.0'] });
-  running.set(code, { sock, type, targetNumber, status:'launching', lastEvent:'spawn', lastSeen: new Date().toISOString(), dir, metadata });
-  sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', async (u)=>{
-    const entry = running.get(code);
-    if (!entry) return;
-    const { connection, qr, lastDisconnect } = u;
-    if (qr && type === 'qr'){
-      // Emit QR como PNG base64 (dataURL sin prefijo)
-      try {
-        const QR = await (await import('qrcode')).default;
-        const png = await QR.toDataURL(qr, { errorCorrectionLevel:'M', margin:1, scale:6 });
-        const base64 = png.split(',')[1];
-        emitter.emit('qr_ready', { subbot: { code, request_jid: metadata?.requestJid || null, request_participant: metadata?.requesterJid || null, metadata }, data: { qrImage: base64 } });
-      } catch (e) { emitter.emit('error', { subbot:{ code }, data:{ message:e.message }}); }
-    }
-    if (connection === 'open'){
-      emitter.emit('connected', { subbot: { code } });
-      entry.status = 'connected';
-      // Si es tipo code, solicitar pairing inmediatamente
-      if (type === 'code' && targetNumber){
-        try {
-          if (sock?.authState?.creds){ sock.authState.creds.usePairingCode = true; }
-          const raw = await sock.requestPairingCode(targetNumber);
-          const display = (metadata?.customPairingDisplay || 'KONMI-BOT');
-          emitter.emit('pairing_code', { subbot: { code, target_number: targetNumber, request_jid: metadata?.requestJid || null, request_participant: metadata?.requesterJid || null, metadata }, data:{ code: raw, displayCode: display, targetNumber } });
-        } catch(e){ emitter.emit('error', { subbot:{ code }, data:{ message:e.message }}); }
+/**
+ * Actualiza el estado de un subbot en la base de datos
+ * @param {string} subbotId - ID del subbot
+ * @param {string} status - Nuevo estado
+ * @param {Object} [data] - Datos adicionales para actualizar
+ */
+async function updateSubbotStatus(subbotId, status, data = {}) {
+  try {
+    const updateData = {
+      status,
+      last_activity: new Date(),
+      ...data
+    };
+    
+    if (status === 'connected') {
+      updateData.connected_at = new Date();
+      
+      // Obtener información de la sesión
+      const sessionInfo = await getSessionStatus(subbotId);
+      if (sessionInfo && sessionInfo.phoneNumber) {
+        updateData.user_phone = sessionInfo.phoneNumber;
       }
     }
-    if (connection === 'close'){
-      const codeErr = lastDisconnect?.error?.output?.statusCode;
-      emitter.emit('disconnected', { subbot: { code }, data:{ reason: codeErr }});
-      entry.status = 'disconnected';
-      // No auto-restart para simplificar
-    }
-  });
-}
-
-export async function registerSubbotEvent(){ return { success:false, error:'inproc manager does not accept external events' }; }
-export async function getSubbotStatus(){
-  const arr = [];
-  for (const [code, info] of running.entries()){
-    arr.push({ subbotId: code, status: info.status, lastEvent: info.lastEvent, lastSeen: info.lastSeen, isOnline: info.status==='connected' });
+    
+    await db('subbots')
+      .where({ code: subbotId })
+      .update(updateData);
+      
+    logger.debug(`[Subbot ${subbotId}] Estado actualizado a ${status}`);
+    
+  } catch (error) {
+    logger.error(`[Subbot ${subbotId}] Error al actualizar estado:`, error);
   }
-  return arr;
 }
 
-// Reinicia todos los subbots en ejecucin para que tomen nueva configuracin
-export async function reloadAllSubbots(){
-  let total = 0;
-  let restarted = 0;
-  for (const [code, info] of running.entries()){
-    total += 1;
+/**
+ * Notifica al propietario del subbot
+ * @param {string} ownerJid - JID del propietario
+ * @param {Object} message - Mensaje a enviar
+ */
+async function notifyOwner(ownerJid, message) {
+  try {
+    // Implementar lógica para notificar al propietario
+    // Esto podría ser a través de un WebSocket, base de datos, etc.
+    logger.info(`[Notificación a ${ownerJid}]: ${message.text}`);
+  } catch (error) {
+    logger.error(`Error notificando al propietario ${ownerJid}:`, error);
+  }
+}
+
+/**
+ * Obtiene un subbot por su código
+ * @param {string} code - Código del subbot
+ */
+export async function getSubbotByCode(code) {
+  try {
+    return await db('subbots').where({ code }).first();
+  } catch (error) {
+    logger.error(`Error obteniendo subbot ${code}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Obtiene la lista de subbots con su estado de conexión
+ */
+export async function fetchSubbotListWithOnlineFlag() {
+  try {
+    // Obtener subbots de la base de datos
+    const subbots = await db('subbots')
+      .whereNotIn('status', ['deleted'])
+      .select('*');
+    
+    // Obtener estado de las sesiones activas
+    const activeSessions = listSessions();
+    
+    // Agregar estado de conexión
+    const result = await Promise.all(subbots.map(async (subbot) => {
+      const sessionInfo = activeSessions.find(s => s.sessionId === subbot.code);
+      const isOnline = !!sessionInfo && sessionInfo.status === 'open';
+      
+      return {
+        ...subbot,
+        is_online: isOnline,
+        last_seen: isOnline ? 'Ahora' : subbot.last_activity,
+        connection_status: sessionInfo?.status || 'disconnected'
+      };
+    }));
+    
+    return result;
+    
+  } catch (error) {
+    logger.error('Error al obtener lista de subbots:', error);
+    return [];
+  }
+}
+
+/**
+ * Elimina un subbot
+ * @param {string} subbotId - ID del subbot a eliminar
+ * @param {string} ownerJid - JID del propietario
+ */
+export async function deleteSubbot(subbotId, ownerJid) {
+  try {
+    logger.info(`[Subbot ${subbotId}] Solicitada eliminación por ${ownerJid}`);
+    
+    // Cerrar la sesión usando el manejador
+    await closeSession(subbotId, true); // true para eliminar también los archivos de sesión
+    
+    // Actualizar estado en la base de datos
+    await db('subbots')
+      .where({ code: subbotId, user_phone: ownerJid.split('@')[0] })
+      .update({ 
+        status: 'deleted',
+        deleted_at: new Date(),
+        is_active: false
+      });
+      
+    // Eliminar metadatos
+    subbotMetadata.delete(subbotId);
+    
+    return { success: true };
+    
+  } catch (error) {
+    logger.error(`[Subbot ${subbotId}] Error al eliminar:`, error);
+    return { error: error.message };
+  }
+}
+
+// Manejar cierre del proceso
+process.on('SIGINT', async () => {
+  logger.info('Cerrando todas las conexiones de subbots...');
+  
+  // Cerrar todas las sesiones activas
+  const sessions = listSessions();
+  for (const session of sessions) {
     try {
-      try { info.sock?.end(); } catch(_) {}
-      const dir = info.dir || path.join(process.cwd(), 'backend', 'full', 'storage', 'subbots', code);
-      await startSubbotSocket({ code, type: info.type, dir, targetNumber: info.targetNumber || null, metadata: info.metadata || {} });
-      restarted += 1;
-    } catch (_) {}
+      await closeSession(session.sessionId);
+      logger.info(`Sesión ${session.sessionId} cerrada correctamente`);
+    } catch (error) {
+      logger.error(`Error cerrando sesión ${session.sessionId}:`, error);
+    }
   }
-  return { success: true, total, restarted };
-}
-
+  
+  process.exit(0);
+});

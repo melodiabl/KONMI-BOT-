@@ -10,6 +10,7 @@ import QRCode from 'qrcode';
 import pino from 'pino';
 import { EventEmitter } from 'events';
 import * as baileys from '@whiskeysockets/baileys';
+import * as multiAccount from './multiaccount-manager.js';
 import { processWhatsAppMedia } from './file-manager.js';
 
 const { makeWASocket, DisconnectReason, useMultiFileAuthState } = baileys;
@@ -17,8 +18,10 @@ const { makeWASocket, DisconnectReason, useMultiFileAuthState } = baileys;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const SESSION_DIR = './sessions/subbots';
 const activeSubbots = new Map();
 const subbotSessions = new Map();
+const logger = pino({ level: 'silent' });
 const subbotEmitter = new EventEmitter();
 subbotEmitter.setMaxListeners(100);
 
@@ -282,109 +285,44 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
   }
 }
 
+// Delegate QR and pairing generation to the multi-account manager (baileys-mod fork)
 async function generateQRCode(subbotCode) {
-  const sessionDir = createSubbotSessionDir(subbotCode);
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-    logger: pino({ level: 'silent' }),
-    browser: ['SubBot', 'Chrome', '1.0.0'],
-  });
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      sock.end();
-      reject(new Error('QR generation timeout'));
-    }, 60000);
-
-    sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
-
-      if (qr) {
-        try {
-          const qrString = await QRCode.toDataURL(qr);
-          await db('subbots').where({ code: subbotCode }).update({
-            qr_code: qrString,
-            status: 'waiting_scan',
-            last_activity: new Date().toISOString(),
-          });
-          emitSubbotEvent('qr_ready', { code: subbotCode, qr: qrString });
-          clearTimeout(timeout);
-          resolve({ success: true, qr: qrString, message: 'QR generado correctamente' });
-        } catch (error) {
-          clearTimeout(timeout);
-          reject(error);
-        }
-      }
-
-      if (connection === 'open') {
-        await db('subbots').where({ code: subbotCode }).update({
-          status: 'connected',
-          connected_at: new Date().toISOString(),
-          is_active: true,
-        });
-        await setupSubbotMessageHandlers(sock, subbotCode);
-        activeSubbots.set(subbotCode, sock);
-        subbotSessions.set(subbotCode, { sock, saveCreds, lastActivity: Date.now() });
-        emitSubbotEvent('connected', { code: subbotCode });
-        clearTimeout(timeout);
-      }
-
-      if (connection === 'close') {
-        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-        if (!shouldReconnect) {
-          await cleanupSubbotInternal(subbotCode);
-        }
-      }
+  try {
+    const result = await multiAccount.generateSubbotQR(`KONMI-QR-${Date.now().toString().slice(-6)}`);
+    if (!result || !result.success) {
+      throw new Error(result?.error || 'Error generando QR');
+    }
+    // Persist some metadata in our db for compatibility
+    await db('subbots').where({ code: subbotCode }).update({
+      qr_code: result.qr || null,
+      status: result.status || 'waiting_scan',
+      last_activity: new Date().toISOString(),
     });
-
-    sock.ev.on('creds.update', saveCreds);
-  });
+    emitSubbotEvent('qr_ready', { code: subbotCode, qr: result.qr });
+    return { success: true, qr: result.qr, message: result.message };
+  } catch (error) {
+    console.error('generateQRCode delegated error:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 async function generatePairingCode(subbotCode, phoneNumber) {
-  const sessionDir = createSubbotSessionDir(subbotCode);
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-    logger: pino({ level: 'silent' }),
-    browser: ['SubBot', 'Chrome', '1.0.0'],
-  });
-
-  const code = await sock.requestPairingCode(phoneNumber);
-  await db('subbots').where({ code: subbotCode }).update({
-    pairing_code: code,
-    status: 'waiting_pairing',
-    last_activity: new Date().toISOString(),
-  });
-  emitSubbotEvent('pairing_code', { code: subbotCode, pairingCode: code });
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'open') {
-      await db('subbots').where({ code: subbotCode }).update({
-        status: 'connected',
-        connected_at: new Date().toISOString(),
-        is_active: true,
-        pairing_code: null,
-      });
-      await setupSubbotMessageHandlers(sock, subbotCode);
-      activeSubbots.set(subbotCode, sock);
-      subbotSessions.set(subbotCode, { sock, saveCreds, lastActivity: Date.now() });
-      emitSubbotEvent('connected', { code: subbotCode });
+  try {
+    const result = await multiAccount.generateSubbotPairingCode(phoneNumber, 'KONMI-BOT');
+    if (!result || !result.success) {
+      throw new Error(result?.error || 'Error generando pairing code');
     }
-    if (connection === 'close') {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      if (!shouldReconnect) {
-        await cleanupSubbotInternal(subbotCode);
-      }
-    }
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-  return { success: true, code, message: 'Codigo de emparejamiento generado' };
+    await db('subbots').where({ code: subbotCode }).update({
+      pairing_code: result.code || null,
+      status: result.status || 'waiting_pairing',
+      last_activity: new Date().toISOString(),
+    });
+    emitSubbotEvent('pairing_code', { code: subbotCode, pairingCode: result.code });
+    return { success: true, code: result.code, message: result.message };
+  } catch (error) {
+    console.error('generatePairingCode delegated error:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 async function cleanupSubbotInternal(subbotCode) {

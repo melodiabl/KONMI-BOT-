@@ -1,5 +1,6 @@
 import db from './db.js';
 import { getSocket } from './whatsapp.js';
+import logger from './config/logger.js';
 import * as baileys from '@whiskeysockets/baileys';
 import { handleAI as handleAICommand, handleClasificar as handleClasificarCommand } from './commands.js';
 import { isSuperAdmin, isModerator, isPremium, getOwnerName } from './global-config.js';
@@ -11,12 +12,11 @@ import {
 } from './inproc-subbots.js';
 
 // Importar comandos de subbots
-import {
-  handleSerbot,
-  handleMisSubbots,
-  handleDelSubbot,
-  handleStatusBot
-} from './subbot-commands.js';
+import subbotCommands from './commands/subbot-commands.js';
+
+// Comandos de subbots (versión mejorada)
+const handleMisBotsCommand = handleBots;
+const handleDelSubbotCommand = _handleDelSubbot;
 
 
 // Consolidacion de comandos: reexportamos funciones de modulos especificos
@@ -64,7 +64,6 @@ let dynamicAdminNumbers = [];
 
 // Helper: normalizar JID (remover sufijo :<num>, convertir LIDWID, y mapear @lid)
 function normalizeJid(jid) {
-  if (!jid) return '';
   let withoutDevice = jid.replace(/:\d+/, '');
   // Mapear sufijo @lid a servidor clasico
   if (withoutDevice.endsWith('@lid')) {
@@ -81,17 +80,26 @@ function normalizeJid(jid) {
   return withoutDevice;
 }
 
+async function ensureGruposAutorizadosTable() {
+  const hasTable = await db.schema.hasTable('grupos_autorizados');
+  if (!hasTable) {
+    await db.schema.createTable('grupos_autorizados', (t) => {
+      t.increments('id');
+      t.string('jid').unique().notNullable();
+      t.boolean('bot_enabled').defaultTo(true);
+      t.string('tipo').nullable();
+    });
+  }
+}
+
 /**
  * /bots - Lista los subbots del usuario con estado y tiempo funcionando
  */
 async function handleBots(usuario) {
   try {
-    // Normalizar número del usuario (JID -> dígitos)
-    const userNum = String(usuario || '')
-      .split('@')[0]
-      .split(':')[0]
-      .replace(/[^0-9]/g, '');
-
+    // Obtener el número de teléfono del usuario
+    const userNum = usuario.split('@')[0];
+    
     // Obtener todos los subbots con flag de conexión
     const subs = await fetchSubbotListWithOnlineFlag();
 
@@ -152,15 +160,15 @@ async function handleBots(usuario) {
   }
 }
 
-/** Determina si el usuario es el owner específico (595974154768) o superadmin */
+/** Determina si el usuario es el owner específico (dinámico por ENV/global) o superadmin */
 function isSpecificOwner(usuario) {
   const normalized = String(usuario || '')
     .split('@')[0]
     .split(':')[0]
     .replace(/[^0-9]/g, '');
-  // Número del owner principal (confirmado)
-  const OWNER = '595974154768';
-  return normalized === OWNER;
+  const OWNER = ((process.env.OWNER_WHATSAPP_NUMBER || (Array.isArray(global.owner) && global.owner[0]?.[0]) || '') + '')
+    .replace(/[^0-9]/g, '');
+  return OWNER && normalized === OWNER;
 }
 
 /**
@@ -213,7 +221,7 @@ async function isBotActiveInGroup(grupoId) {
   try {
     // Verificar estado global del bot primero
     const globalState = await db('bot_global_state').select('*').first();
-    if (!globalState || !globalState.isOn) {
+    if (!globalState || !(globalState.is_on === 1 || globalState.is_on === true)) {
       return false; // Bot globalmente desactivado
     }
     
@@ -455,16 +463,25 @@ async function handleAportes(usuario, grupo, isGroup, filtroTipo = null) {
     if (aportes.length === 0) {
       return { success: true, message: ' No hay aportes registrados.' };
     }
-  // Resolver nombres de usuario a partir del numero (JID)
+    // Resolver nombres de usuario a partir del numero (JID) de forma robusta
     const uniqueNums = [...new Set(aportes.map(a => String(a.usuario).split('@')[0].split(':')[0]))];
-    const users = await db('usuarios').whereIn('whatsapp_number', uniqueNums).select('whatsapp_number','username');
-    const nameByNumber = Object.fromEntries(users.map(u => [u.whatsapp_number, u.username]));
-    const missing = uniqueNums.filter(n => !nameByNumber[n]);
-    let waNames = [];
-    if (missing.length) {
-      waNames = await db('wa_contacts').whereIn('wa_number', missing).select('wa_number','display_name');
-    }
-    const waByNumber = Object.fromEntries(waNames.map(w => [w.wa_number, w.display_name]));
+    let nameByNumber = {};
+    let waByNumber = {};
+    try {
+      const hasUsers = await db.schema.hasTable('usuarios');
+      if (hasUsers && uniqueNums.length) {
+        const users = await db('usuarios').whereIn('whatsapp_number', uniqueNums).select('whatsapp_number','username');
+        nameByNumber = Object.fromEntries((users || []).map(u => [u.whatsapp_number, u.username]));
+      }
+    } catch (_) {}
+    try {
+      const missing = uniqueNums.filter(n => !nameByNumber[n]);
+      const hasWa = await db.schema.hasTable('wa_contacts');
+      if (hasWa && missing.length) {
+        const waNames = await db('wa_contacts').whereIn('wa_number', missing).select('wa_number','display_name');
+        waByNumber = Object.fromEntries((waNames || []).map(w => [w.wa_number, w.display_name]));
+      }
+    } catch (_) {}
 
     const byTipo = aportes.reduce((acc, r) => { (acc[r.tipo || 'sin_tipo'] ||= []).push(r); return acc; }, {});
     const order = ['manhwa', 'manhwas_bls', 'series', 'series_videos', 'series_bls', 'anime', 'anime_bls', 'extra_imagen', 'ilustracion', 'extra'];
@@ -520,9 +537,9 @@ async function handleManhwas(usuario, grupo) {
 /**
  * /addaporte [datos] - Permite enviar un aporte
  */
-async function handleAddAporte(contenido, tipo, usuario, grupo, fecha) {
+async function handleAddAporte(contenido, tipo, usuario, grupo, fecha, archivoPath = null) {
   try {
-    await db('aportes').insert({ contenido, tipo, usuario, grupo, fecha });
+    await db('aportes').insert({ contenido, tipo, usuario, grupo, fecha, archivo_path: archivoPath });
     await logCommand('comando', 'addaporte', usuario, grupo);
   return { success: true, message: ` Aporte de tipo "${tipo}" guardado correctamente.` };
   } catch (error) {
@@ -548,6 +565,72 @@ async function handleAporteEstado(id, estado, usuario, grupo) {
   return { success: true, message: ` Aporte #${id} actualizado a "${normalized}".` };
   } catch (e) {
   return { success: false, message: 'Error al actualizar estado de aporte.' };
+  }
+}
+
+async function handleLock(usuario, grupo, isGroup) {
+  if (!isGroup || !grupo?.endsWith('@g.us')) {
+    return { success: false, message: ' Este comando solo se puede usar en grupos.' };
+  }
+
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
+    return { success: false, message: ' Solo administradores pueden bloquear el grupo.' };
+  }
+
+  const sock = getSocket();
+  if (!sock) {
+    return { success: false, message: ' Bot no conectado.' };
+  }
+
+  try {
+    await sock.groupSettingUpdate(grupo, 'announcement');
+    await logCommand('administracion', 'lock', usuario, grupo, { action: 'lock' });
+    return { success: true, message: '🔒 Grupo bloqueado. Solo administradores pueden enviar mensajes.' };
+  } catch (error) {
+    // Usar el logger de WhatsApp para mejor formato
+    logger.whatsapp.error(`Error en /lock: ${error.message}`, {
+      error: error.toString(),
+      stack: error.stack,
+      grupo,
+      usuario,
+      timestamp: new Date().toISOString()
+    });
+    
+    const detail = error?.message ? ` Detalle: ${error.message}` : ' Asegúrate de que el bot sea administrador.';
+    return { success: false, message: ` Error al bloquear el grupo.${detail}` };
+  }
+}
+
+async function handleUnlock(usuario, grupo, isGroup) {
+  if (!isGroup || !grupo?.endsWith('@g.us')) {
+    return { success: false, message: ' Este comando solo se puede usar en grupos.' };
+  }
+
+  if (!await isOwnerOrAdmin(usuario, grupo)) {
+    return { success: false, message: ' Solo administradores pueden desbloquear el grupo.' };
+  }
+
+  const sock = getSocket();
+  if (!sock) {
+    return { success: false, message: ' Bot no conectado.' };
+  }
+
+  try {
+    await sock.groupSettingUpdate(grupo, 'not_announcement');
+    await logCommand('administracion', 'unlock', usuario, grupo, { action: 'unlock' });
+    return { success: true, message: '🔓 Grupo desbloqueado. Todos los participantes pueden enviar mensajes.' };
+  } catch (error) {
+    // Usar el logger de WhatsApp para mejor formato
+    logger.whatsapp.error(`Error en /unlock: ${error.message}`, {
+      error: error.toString(),
+      stack: error.stack,
+      grupo,
+      usuario,
+      timestamp: new Date().toISOString()
+    });
+    
+    const detail = error?.message ? ` Detalle: ${error.message}` : ' Asegúrate de que el bot sea administrador.';
+    return { success: false, message: ` Error al desbloquear el grupo.${detail}` };
   }
 }
 
@@ -1617,6 +1700,62 @@ async function _handleDelSubbot(code, usuario) {
   }
 }
 
+async function handleCode(usuario, grupo, remoteJid, args, sender, messageId) {
+  try {
+    let phoneNumber = args[0];
+    let alias = args[1] || '';
+    
+    // Validar número de teléfono
+    if (!phoneNumber || phoneNumber === 'auto') {
+      // Usar el número del remitente si no se proporciona
+      phoneNumber = usuario.split('@')[0];
+    } else {
+      // Limpiar el número de teléfono
+      phoneNumber = phoneNumber.replace(/[^0-9]/g, '');
+      if (phoneNumber.length < 10) {
+        return {
+          success: false,
+          message: '❌ Número de teléfono inválido. Debe tener al menos 10 dígitos.'
+        };
+      }
+    }
+
+    // Generar un código de 6 dígitos
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Aquí iría la lógica para guardar el código en la base de datos
+    // await savePairingCode(code, phoneNumber, usuario, alias);
+
+    const message = `
+🔑 *CÓDIGO DE EMPAREJAMIENTO* 🔑
+
+📱 *Número:* ${phoneNumber}
+🔢 *Código:* ${code}
+
+*Instrucciones:*
+1. Abre WhatsApp en tu celular
+2. Ve a Ajustes > Dispositivos vinculados
+3. Toca "Vincular un dispositivo"
+4. Ingresa este código: *${code}*
+
+*Nota:* Este código expira en 5 minutos`;
+
+    return {
+      success: true,
+      message,
+      code,
+      phoneNumber,
+      expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutos
+    };
+  } catch (error) {
+    console.error('Error en handleCode:', error);
+    return {
+      success: false,
+      message: '❌ Error al generar el código de emparejamiento. Intenta de nuevo.'
+    };
+  }
+}
+
 async function handleQR(subbotCode) {
   try {
     if (!subbotCode) {
@@ -1807,72 +1946,6 @@ async function handleReplyTag(mensaje, usuario, grupo, quotedMessage) {
     return { success: false, message: ' Error al responder con mencin.' };
   }
 }
-
-/**
- * /lock - Solo admins pueden escribir en el grupo
- */
-async function handleLock(usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: ' Solo Admin puede bloquear el grupo.' };
-  }
-  const sock = getSocket();
-  if (!sock) return { success: false, message: ' Bot no conectado.' };
-  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: ' Este comando solo funciona en grupos.' };
-  try {
-    await sock.groupSettingUpdate(grupo, 'announcement');
-    let subject = '';
-    try {
-      const meta = await sock.groupMetadata(grupo);
-      subject = meta?.subject || '';
-    } catch (_) {}
-    await logCommand('moderacion', 'lock', usuario, grupo, {
-      action: 'lock',
-      actor_number: normalizeUserNumber(usuario),
-      group_id: grupo,
-      group_name: subject
-    });
-    return {
-      success: true,
-      message: ` Grupo bloqueado. Solo admins pueden escribir.`
-    };
-  } catch (error) {
-    return { success: false, message: ' No se pudo bloquear el grupo.' };
-  }
-}
-
-/**
- * /unlock - Todos pueden escribir en el grupo
- */
-async function handleUnlock(usuario, grupo) {
-  if (!await isOwnerOrAdmin(usuario, grupo)) {
-    return { success: false, message: ' Solo Admin puede desbloquear el grupo.' };
-  }
-  const sock = getSocket();
-  if (!sock) return { success: false, message: ' Bot no conectado.' };
-  if (!grupo || !grupo.endsWith('@g.us')) return { success: false, message: ' Este comando solo funciona en grupos.' };
-  try {
-    await sock.groupSettingUpdate(grupo, 'not_announcement');
-    let subject = '';
-    try {
-      const meta = await sock.groupMetadata(grupo);
-      subject = meta?.subject || '';
-    } catch (_) {}
-    await logCommand('moderacion', 'unlock', usuario, grupo, {
-      action: 'unlock',
-      actor_number: normalizeUserNumber(usuario),
-      group_id: grupo,
-      group_name: subject
-    });
-    return {
-      success: true,
-      message: ` Grupo desbloqueado. Todos pueden escribir.`
-    };
-  } catch (error) {
-    return { success: false, message: ' No se pudo desbloquear el grupo.' };
-  }
-}
-
-// Funciones de utilidad existentes
 
 /**
  * Moderacin de grupos va WhatsApp (requiere que el bot sea admin del grupo)
@@ -3010,99 +3083,115 @@ async function handleUnban(target, usuario, grupo) {
   }
 }
 
-export {
-  // Comandos basicos
-  handleHelp,
-  handleIA,
-  handleClasificar,
-  // Subbots
-  handleSerbot,
-  handleBots,
-  handleMyAportes,
-  handleAportes,
-  handleManhwas,
-  handleSeries,
-  handleAddAporte,
-  handleAddSerie,
-  handlePedido,
-  // Comandos de obtencian
-  handleObtenerManhwa,
-  handleObtenerExtra,
-  handleObtenerIlustracion,
-  handleObtenerPack,
-  
-  // Comandos existentes
-  handleKick,
-  handlePromote,
-  handleDemote,
-  handleAporteEstado,
-  handleLock,
-  handleUnlock,
-  handleBotOn,
-  handleBotOff,
-  handleBotGlobalOn,
-  handleBotGlobalOff,
-  // Permisos reutilizables
-  isOwnerOrAdmin,
-  isBotGloballyActive,
-  wasUserNotifiedAboutMaintenance,
-  markUserAsNotifiedAboutMaintenance,
-  clearMaintenanceNotifications,
-  clearGroupOffNotices,
-  // Funciones de actualizacin movidas a otro archivo
-  handleWhoami,
-  handleTag,
-  handleReplyTag,
+// Exportar todas las funciones necesarias de manera organizada
+// Usando export individual para cada función
 
-  // Reexportados consolidacion
-  handleMusic,
-  handleVideo,
-  handleMeme,
-  handleWallpaper,
-  handleJoke,
-  handleAIEnhanced as handleAI,
-  handleImage,
-  handleTranslate,
-  handleWeather,
-  handleQuote,
-  handleFact,
-  handleTrivia,
-  handleHoroscope,
-  handleLogsAdvanced,
-  handleStatus,
-  handlePing,
-  handleStats,
-  handleExport,
-  handleDescargar,
-  handleGuardar,
-  handleArchivos,
-  handleMisArchivos,
-  handleEstadisticas,
-  handleLimpiar,
-  handleBuscarArchivo,
-  
-  // Variables de estado
-  modoPrivado,
-  modoAmigos,
-  advertenciasActivas,
-  
-  // Debug
-  handleDebugAdmin,
-  
-  // Funciones de utilidad
-  isGroupAdmin,
-  
-  // Comandos de Media (MaycolPlus)
-  handleYouTubeDownload,
-  handleSticker,
-  handleTikTokDownload,
-  handleInstagramDownload,
-  handleTwitterDownload,
+// ===== COMANDOS BÁSICOS =====
+export { handleHelp };
+export { handleIA };
+export { handleClasificar };
+export { handleWhoami };
+export { handlePing };
+export { handleStatus };
 
-  // Los comandos de SubBots se importan desde subbot-commands.js
-  
-  // Moderacion: ban/unban
-  handleBan,
-  handleUnban,
-};
+// ===== COMANDOS DE GRUPO =====
+export { handleAddGroup };
+export { handleDelGroup };
+export { handleKick };
+export { handlePromote };
+export { handleDemote };
+export { handleLock };
+export { handleUnlock };
+export { handleTag };
+export { handleReplyTag };
 
+// ===== COMANDOS DE CONTENIDO =====
+export { handleMyAportes };
+export { handleAportes };
+export { handleManhwas };
+export { handleSeries };
+export { handleAddAporte };
+export { handleAddSerie };
+export { handlePedido };
+export { handlePedidos };
+export { handleExtra };
+export { handleIlustraciones };
+
+// ===== COMANDOS DE ADMINISTRACIÓN =====
+export { handleAporteEstado };
+export { handleBotOn };
+export { handleBotOff };
+export { handleBotGlobalOn };
+export { handleBotGlobalOff };
+export { handleAdvertencias };
+
+// ===== COMANDOS DE OBTENCIÓN =====
+export { handleObtenerManhwa };
+export { handleObtenerExtra };
+export { handleObtenerIlustracion };
+export { handleObtenerPack };
+
+// ===== COMANDOS DE UTILIDAD =====
+export { handlePrivado };
+export { handleAmigos };
+export { handleVotar };
+export { handleCrearVotacion };
+export { handleCerrarVotacion };
+export { handleLogs };
+export { handleLogsAdvanced };
+export { handleBuscarArchivo };
+export { handleStats };
+export { handleExport };
+export { handleDescargar };
+export { handleGuardar };
+export { handleArchivos };
+export { handleMisArchivos };
+export { handleEstadisticas };
+export { handleLimpiar };
+
+// ===== COMANDOS DE MEDIA =====
+export { handleYouTubeDownload };
+export { handleSticker };
+export { handleTikTokDownload };
+export { handleInstagramDownload };
+export { handleTwitterDownload };
+export { handleImage };
+export { handleTranslate };
+export { handleWeather };
+export { handleQuote };
+export { handleFact };
+export { handleTrivia };
+export { handleHoroscope };
+export { handleMeme };
+export { handleWallpaper };
+export { handleJoke };
+export { handleAIEnhanced as handleAI };
+
+// ===== COMANDOS DE SUBBOTS =====
+export { handleBots };
+export { handleMisBotsCommand as handleMisBots };
+export { handleQR };
+export { handleCode };
+
+// ===== MODERACIÓN =====
+export { handleBan };
+export { handleUnban };
+
+// ===== VARIABLES DE ESTADO =====
+export { modoPrivado };
+export { modoAmigos };
+export { advertenciasActivas };
+
+// ===== DEBUG Y UTILIDADES =====
+export { handleDebugAdmin };
+export { isGroupAdmin };
+export { isBotAdmin };
+export { isOwnerOrAdmin };
+export { isBotGloballyActive };
+export { wasUserNotifiedAboutMaintenance };
+export { markUserAsNotifiedAboutMaintenance };
+export { clearMaintenanceNotifications };
+export { clearGroupOffNotices };
+
+// ===== MÓDULOS =====
+export { subbotCommands };

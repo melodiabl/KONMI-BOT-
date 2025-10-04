@@ -1,6 +1,8 @@
+name: ${COMPOSE_PROJECT_NAME:-konmibot}
 services:
   db:
     image: postgres:16
+    container_name: konmi-bot-db
     restart: always
     environment:
       POSTGRES_DB: appdb
@@ -19,6 +21,7 @@ services:
 
   adminer:
     image: adminer
+    container_name: konmi-bot-adminer
     restart: always
     ports:
       - "8080:8080"
@@ -27,12 +30,14 @@ services:
         condition: service_healthy
 
   backend:
+    image: konmibot-backend:latest
+    container_name: konmi-bot-backend
     build: ./backend/full
     restart: always
     env_file:
       - ./backend/full/.env
     environment:
-      # Si tu app usa variables individuales:
+      # DB (si no usas DATABASE_URL)
       DB_HOST: db
       DB_PORT: "5432"
       DB_USER: appuser
@@ -41,7 +46,13 @@ services:
       NODE_ENV: production
       PORT: "3001"
       TZ: America/Asuncion
-      # O si usas DATABASE_URL en knexfile:
+      # Bot device label (WhatsApp)
+      BOT_DEVICE: ubuntu
+      BOT_DEVICE_NAME: "KONMI-BOT-"
+      # Logging
+      LOG_TO_FILE: "true"
+      LOG_LEVEL: debug
+      # Si prefieres usar DATABASE_URL, comentalo arriba y descomenta abajo
       # DATABASE_URL: postgres://appuser:superpass@db:5432/appdb
     depends_on:
       db:
@@ -53,6 +64,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend/full/storage/subbot-exports:/app/storage/subbot-exports
       - ./create-subbot.sh:/app/create-subbot.sh
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Comando simplificado sin el script de espera
     command: ["/bin/sh", "-c", "sleep 10 && npm run migrate && node index.js"]
     healthcheck:

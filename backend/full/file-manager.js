@@ -4,6 +4,7 @@ import https from 'https';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import db from './db.js';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -141,13 +142,6 @@ async function downloadFile(url, filename, category, usuario) {
  */
 async function processWhatsAppMedia(message, category, usuario) {
   try {
-    const { getSocket } = await import('./whatsapp.js');
-    const sock = getSocket();
-    
-    if (!sock) {
-      throw new Error('Bot no conectado');
-    }
-
     let mediaType = null;
     let mediaMessage = null;
 
@@ -170,8 +164,13 @@ async function processWhatsAppMedia(message, category, usuario) {
 
     console.log(` Procesando media tipo: ${mediaType} de usuario: ${usuario}`);
 
-    // Descargar media
-    const buffer = await sock.downloadMediaMessage(message);
+    // Descargar media usando Baileys (stream -> Buffer)
+    const stream = await downloadContentFromMessage(mediaMessage, mediaType);
+    const chunks = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
     
     // Generar nombre de archivo
     const timestamp = Date.now();

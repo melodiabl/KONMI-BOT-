@@ -67,29 +67,145 @@ async function ensureBotGlobalStateTable() {
 
 // Tabla de subbots (multi-cuenta por usuario)
 let subbotsTableReady = false;
-async function ensureSubbotsTable() {
-  if (subbotsTableReady) return;
+
+// Función para reiniciar la tabla subbots
+async function resetSubbotsTable() {
   try {
-    const exists = await db.schema.hasTable('subbots');
-    if (!exists) {
-      await db.schema.createTable('subbots', (t) => {
-        t.increments('id');
-        t.string('owner_number').notNullable().index();
-        t.string('method').notNullable(); // 'qr' | 'code'
-        t.string('label'); // nombre mostrado del dispositivo
-        t.string('bot_number'); // requerido para 'code'
-        t.string('session_id'); // usado en 'qr'
-        t.string('auth_path').notNullable();
-        t.string('state').notNullable().defaultTo('pending'); // 'pending' | 'connected' | 'disconnected'
-        t.json('meta');
-        t.timestamps(true, true);
-      });
-      logger.pretty.line('🗄️ Tabla subbots creada');
-    }
-    subbotsTableReady = true;
+    logger.warn('Reiniciando tabla subbots...');
+    await db.schema.dropTableIfExists('subbots');
+    await db.schema.dropTableIfExists('subbots_temp');
+    subbotsTableReady = false;
+    await ensureSubbotsTable();
+    logger.info('✅ Tabla subbots reiniciada exitosamente');
+    return true;
   } catch (error) {
-    logger.warn('No se pudo verificar/crear tabla subbots', { error: error?.message });
+    logger.error('Error al reiniciar la tabla subbots:', error);
+    return false;
   }
+}
+async function ensureSubbotsTable() {
+  if (subbotsTableReady) return true;
+  
+  const maxRetries = 3;
+  let retries = 0;
+  
+  // Primero intentar con la tabla temporal si existe
+  try {
+    const tempExists = await db.schema.hasTable('subbots_temp');
+    if (tempExists) {
+      logger.warn('Usando tabla temporal subbots_temp');
+      return true;
+    }
+  } catch (e) {
+    logger.warn('No se pudo verificar tabla temporal:', e.message);
+  }
+  
+  while (retries < maxRetries) {
+    try {
+      // Verificar si la tabla principal existe
+      const exists = await db.schema.hasTable('subbots');
+      
+      if (!exists) {
+        logger.info('La tabla subbots no existe, creándola...');
+        
+        // Crear la tabla con todas las columnas necesarias
+        await db.schema.createTable('subbots', (t) => {
+          t.increments('id').primary();
+          t.string('owner_number', 20).notNullable().index();
+          t.string('method', 10).notNullable(); // 'qr' | 'code'
+          t.string('label', 100); // nombre mostrado del dispositivo
+          t.string('bot_number', 20); // requerido para 'code'
+          t.string('session_id', 100); // usado en 'qr'
+          t.string('auth_path', 255).notNullable();
+          t.string('state', 20).notNullable().defaultTo('pending');
+          t.json('meta');
+          t.timestamp('created_at').defaultTo(db.fn.now());
+          t.timestamp('updated_at').defaultTo(db.fn.now());
+        });
+        
+        logger.info('✅ Tabla subbots creada exitosamente');
+      } else {
+        // Verificar si faltan columnas
+        let columns = [];
+        try {
+          const result = await db.raw(`PRAGMA table_info(subbots)`);
+          columns = result || [];
+          const columnNames = columns.map(col => col.name);
+          
+          const requiredColumns = [
+            'id', 'owner_number', 'method', 'label', 'bot_number', 
+            'session_id', 'auth_path', 'state', 'meta', 'created_at', 'updated_at'
+          ];
+          
+          for (const col of requiredColumns) {
+            if (!columnNames.includes(col)) {
+              logger.warn(`Agregando columna faltante: ${col}`);
+              try {
+                if (col === 'meta') {
+                  await db.schema.alterTable('subbots', (t) => {
+                    t.json(col).nullable();
+                  });
+                } else if (col === 'created_at' || col === 'updated_at') {
+                  await db.schema.alterTable('subbots', (t) => {
+                    t.timestamp(col).defaultTo(db.fn.now());
+                  });
+                } else {
+                  await db.schema.alterTable('subbots', (t) => {
+                    t.string(col, 255).nullable();
+                  });
+                }
+                logger.info(`✅ Columna ${col} agregada`);
+              } catch (alterError) {
+                logger.warn(`No se pudo agregar ${col}:`, alterError.message);
+                throw alterError; // Forzar recreación de tabla
+              }
+            }
+          }
+        } catch (e) {
+          logger.warn('Error al verificar columnas, recreando tabla...');
+          await db.schema.dropTableIfExists('subbots');
+          continue;
+        }
+      }
+      
+      // Verificar acceso
+      await db('subbots').limit(1).catch(() => {
+        throw new Error('No se pudo acceder a la tabla');
+      });
+      
+      subbotsTableReady = true;
+      return true;
+      
+    } catch (error) {
+      retries++;
+      const waitTime = Math.pow(2, retries) * 1000;
+      
+      // Si es el último intento, crear tabla temporal
+      if (retries >= maxRetries) {
+        logger.error('No se pudo inicializar la tabla principal, creando temporal...');
+        try {
+          await db.schema.dropTableIfExists('subbots_temp');
+          await db.schema.createTable('subbots_temp', (t) => {
+            t.increments('id').primary();
+            t.string('owner_number', 20).notNullable().index();
+            t.string('method', 10).notNullable();
+            t.string('state', 20).notNullable().defaultTo('pending');
+            t.timestamp('created_at').defaultTo(db.fn.now());
+          });
+          logger.warn('✅ Tabla temporal subbots_temp creada');
+          return true;
+        } catch (tempError) {
+          logger.error('Error crítico al crear tabla temporal:', tempError);
+          throw new Error('No se pudo crear tabla temporal');
+        }
+      }
+      
+      logger.warn(`Reintentando en ${waitTime/1000}s... (${retries}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+  
+  return false;
 }
 
 // Helper FS: detectar si un subbot ya se vinculó leyendo archivos de sesión
@@ -121,21 +237,143 @@ function detectLinkedFromFs(baseDir) {
 // Refrescar estado de subbot de un dueño desde FS a BD
 async function refreshOwnerSubbotStatus(ownerNumber) {
   try {
-    await ensureSubbotsTable();
-    const rows = await db('subbots').where({ owner_number: ownerNumber }).orderBy('id', 'desc');
-    for (const r of rows) {
-      const baseDir = r.auth_path ? path.resolve(r.auth_path).replace(/\\auth$/, '') : null;
-      if (!baseDir) continue;
-      const fx = detectLinkedFromFs(baseDir);
-      if (fx.linked && r.state !== 'connected') {
-        await db('subbots').where({ id: r.id }).update({ state: 'connected', bot_number: fx.number, updated_at: new Date().toISOString() });
-        logger.pretty.line(`🔗 Subbot conectado (owner ${ownerNumber}) -> ${fx.number}`);
+    if (!ownerNumber) {
+      logger.warn('refreshOwnerSubbotStatus: ownerNumber no proporcionado');
+      return;
+    }
+    
+    const tableReady = await ensureSubbotsTable();
+    if (!tableReady) {
+      logger.warn('No se pudo inicializar la tabla de subbots');
+      return;
+    }
+    
+    // Determinar qué tabla usar (temp o normal)
+    const useTempTable = await db.schema.hasTable('subbots_temp') && 
+                        !(await db.schema.hasTable('subbots'));
+    const tableName = useTempTable ? 'subbots_temp' : 'subbots';
+    
+    try {
+      // Obtener subbots existentes en la base de datos
+      const rows = await db(tableName).where({ owner_number: ownerNumber }).orderBy('id', 'desc');
+      
+      // Actualizar estado de los subbots existentes
+      for (const r of rows) {
+        try {
+          const baseDir = r.auth_path ? path.resolve(r.auth_path).replace(/\\auth$/, '') : null;
+          if (!baseDir) continue;
+          
+          // Verificar si el directorio de autenticación existe
+          if (fs.existsSync(path.join(baseDir, 'auth', 'creds.json'))) {
+            // Actualizar estado a conectado si no lo está
+            if (r.state !== 'connected') {
+              await db(tableName)
+                .where({ id: r.id })
+                .update({ 
+                  state: 'connected',
+                  ...(tableName === 'subbots' ? { updated_at: db.fn.now() } : {})
+                });
+              logger.pretty.line(`🔗 Subbot conectado (owner ${ownerNumber}) -> ${r.bot_number || 'N/A'}`);
+            }
+          } else {
+            // Si no existe el archivo de credenciales, marcar como desconectado
+            if (r.state !== 'disconnected') {
+              await db(tableName)
+                .where({ id: r.id })
+                .update({ 
+                  state: 'disconnected',
+                  ...(tableName === 'subbots' ? { updated_at: db.fn.now() } : {})
+                });
+              logger.pretty.line(`❌ Subbot desconectado (owner ${ownerNumber}) -> ${r.bot_number || 'N/A'}`);
+            }
+          }
+        } catch (innerError) {
+          logger.warn(`Error procesando subbot ${r.id} del owner ${ownerNumber}:`, innerError?.message || 'Error desconocido');
+          continue;
+        }
       }
+      
+      // Verificar si hay subbots en el sistema de archivos que no están en la base de datos
+      if (!useTempTable) {
+        const subbotsDir = path.join(process.cwd(), 'storage', 'subbots');
+        if (fs.existsSync(subbotsDir)) {
+          const dirs = fs.readdirSync(subbotsDir, { withFileTypes: true })
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => dirent.name);
+            
+          for (const dir of dirs) {
+            try {
+              const authPath = path.join(subbotsDir, dir, 'auth');
+              if (fs.existsSync(path.join(authPath, 'creds.json'))) {
+                const existing = await db(tableName)
+                  .where({ auth_path: authPath })
+                  .first();
+                  
+                if (!existing) {
+                  // Agregar subbot que existe en el sistema de archivos pero no en la BD
+                  await db(tableName).insert({
+                    owner_number: ownerNumber,
+                    method: 'qr',
+                    label: `Dispositivo ${dir.slice(0, 6)}`,
+                    session_id: dir,
+                    auth_path: authPath,
+                    state: 'connected',
+                    ...(tableName === 'subbots' ? {
+                      created_at: db.fn.now(),
+                      updated_at: db.fn.now(),
+                      meta: JSON.stringify({ autoDetected: true })
+                    } : {})
+                  });
+                  logger.pretty.line(`➕ Subbot detectado en FS: ${dir}`);
+                }
+              }
+            } catch (fsError) {
+              logger.warn(`Error procesando directorio ${dir}:`, fsError?.message || 'Error desconocido');
+              continue;
+            }
+          }
+        }
+      }
+      
+      return true;
+      
+    } catch (dbError) {
+      logger.error('Error al consultar/actualizar la base de datos de subbots:', dbError?.message || 'Error desconocido');
+      throw dbError;
     }
   } catch (e) {
-    logger.warn('refreshOwnerSubbotStatus error', { error: e?.message });
+    const errorMessage = e?.message || 'Error desconocido en refreshOwnerSubbotStatus';
+    logger.error(errorMessage, { stack: e?.stack });
+    return false;
   }
 }
+// Inicialización de la base de datos
+async function initializeDatabase() {
+  try {
+    // Verificar conexión a la base de datos
+    const isConnected = await checkDatabaseConnection();
+    if (!isConnected) {
+      throw new Error('No se pudo conectar a la base de datos');
+    }
+
+    // Asegurar que las tablas existan
+    await ensureBotGlobalStateTable();
+    await ensureSubbotsTable();
+    
+    logger.info('✅ Base de datos inicializada correctamente');
+    return true;
+  } catch (error) {
+    logger.error('❌ Error al inicializar la base de datos:', error);
+    process.exit(1); // Salir con error si no se puede inicializar la base de datos
+  }
+}
+
+// Inicializar la base de datos al cargar el módulo
+initializeDatabase().catch(error => {
+  logger.error('Error fatal durante la inicialización de la base de datos:', error);
+  process.exit(1);
+});
+
 import { isSuperAdmin, setPrimaryOwner } from './global-config.js';
 import {
   handleAI,
@@ -194,7 +432,6 @@ import {
   handleFact,
   handleTrivia,
   handleHoroscope,
-  handleSerbot,
   handleBots,
   handleKick,
   handlePromote,
@@ -204,7 +441,14 @@ import {
 } from './commands-complete.js';
 
 // Gestor multi-cuenta (subbots reales)
-import { generateSubbotPairingCode, generateSubbotQR } from './multiaccount.js';
+import { 
+  startSession, 
+  closeSession, 
+  getSessionStatus, 
+  listSessions,
+  generateSubbotQR,
+  generateSubbotPairingCode 
+} from './multiaccount-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -224,6 +468,11 @@ let pairingRequestInProgress = false;
 let savedAuthPath = null; // Guardar authPath para reconexiones
 let userSelectedMethod = null; // Guardar mtodo seleccionado por el usuario
 let userSelectedPhone = null; // Guardar nmero seleccionado por el usuario
+
+// Caches necesarios para logs y permisos (evitan ReferenceError en logAllMessages)
+const nameCache = new Map();
+const groupNameCache = new Map();
+const groupAdminsCache = new Map();
 
 // Evitar reprocesar mensajes y permitir logs/owner con mensajes propios
 const processedMessageIds = new Set();
@@ -444,32 +693,62 @@ async function getGroupAdmins(groupJid) {
     return `${num}@s.whatsapp.net`;
   }
 
-  // Funcion para verificar si el usuario es el owner especifico (595974154768)
+  // Función para verificar si el usuario es el owner específico (595974154768)
   function isSpecificOwner(usuario) {
-    let normalizedUser = normalizeJidToNumber(usuario);
-    if (!normalizedUser) {
-      normalizedUser = String(usuario || '').replace(/[^\d]/g, '');
-    }
-    const ownerNumber = '595974154768';
-    const isSpecific = normalizedUser === ownerNumber;
-    let isSuper = false;
     try {
-      isSuper = isSuperAdmin(usuario);
+      // Normalizar el número de usuario
+      let normalizedUser = normalizeJidToNumber(usuario);
+      if (!normalizedUser) {
+        normalizedUser = String(usuario || '').replace(/[^\d]/g, '');
+      }
+      
+      // Definir el número de owner (fijo)
+      const ownerNumber = '595974154768';
+      
+      // Normalizar números para comparación (últimos 9 dígitos)
+      const userTail = normalizedUser.slice(-9);
+      const ownerTail = ownerNumber.slice(-9);
+      
+      // Verificar coincidencia (últimos 9 dígitos)
+      const isSpecific = userTail === ownerTail;
+      
+      // Verificar si es super admin
+      let isSuper = false;
+      try {
+        isSuper = isSuperAdmin(usuario);
+      } catch (error) {
+        logger.error('Error verificando isSuperAdmin:', error);
+      }
+
+      // El resultado es true si es el owner o super admin
+      const result = isSuper || isSpecific;
+
+      // Log detallado para depuración
+      logger.pretty.banner('🛡️ Verificación de owner', '🔍');
+      logger.pretty.kv('Usuario original', usuario || 'N/A');
+      logger.pretty.kv('Usuario normalizado', normalizedUser || 'N/A');
+      logger.pretty.kv('Últimos 9 dígitos', userTail || 'N/A');
+      logger.pretty.kv('Número owner', ownerNumber);
+      logger.pretty.kv('Coincide owner', isSpecific ? '✅ SI' : '❌ NO');
+      logger.pretty.kv('Es super admin', isSuper ? '✅ SI' : '❌ NO');
+      logger.pretty.kv('Resultado', result ? '✅ ACCESO PERMITIDO' : '❌ ACCESO DENEGADO');
+      
+      // Log adicional para depuración
+      logger.debug('Detalles de verificación:', {
+        usuario,
+        normalizedUser,
+        userTail,
+        ownerTail,
+        isSpecific,
+        isSuper,
+        result
+      });
+
+      return result;
     } catch (error) {
-      logger.error('Error verificando isSuperAdmin:', error);
+      logger.error('Error en isSpecificOwner:', error);
+      return false; // Por seguridad, denegar acceso en caso de error
     }
-
-    const result = isSuper || isSpecific;
-
-    logger.pretty.banner('Verificación de owner', '🛡️');
-    logger.pretty.kv('Usuario original', usuario);
-    logger.pretty.kv('Usuario normalizado', normalizedUser);
-    logger.pretty.kv('Número owner', ownerNumber);
-    logger.pretty.kv('Coincide número', isSpecific ? 'SI' : 'NO');
-    logger.pretty.kv('isSuperAdmin', isSuper ? 'SI' : 'NO');
-    logger.pretty.kv('Resultado', result ? 'ES OWNER' : 'NO ES OWNER');
-
-    return result;
 }
 
 // Verificar si el bot esta activo en un grupo especifico
@@ -618,7 +897,9 @@ async function getContactName(userId) {
     
     // Normalizar el numero para comparacion
     const number = normalizePhoneNumber(userId.split('@')[0]);
-    const ownerNumber = '974154768'; // ultimos 9 digitos de 595974154768
+    const envOwner = ((process.env.OWNER_WHATSAPP_NUMBER || (Array.isArray(global.owner) && global.owner[0]?.[0]) || '') + '').replace(/[^0-9]/g, '');
+    const ownerNumber = envOwner;
+    const ownerTail = ownerNumber ? ownerNumber.slice(-9) : '';
     
     // Verificar cache primero
     if (nameCache.has(fullUserId)) {
@@ -793,14 +1074,14 @@ async function logAllMessages(message, messageText, remoteJid, usuario, isGroup)
       logger.pretty.line(`🧾 Usando pushName: ${contactName}`);
     }
     // Metodo 2: Si es el owner, usar nombre conocido
-    else if (usuario === '595974154768') {
+    else if (isSpecificOwner(usuario)) {
       contactName = 'Melodia (Owner)';
       logger.pretty.line(`👑 Detectado como owner: ${contactName}`);
     }
     // Metodo 3: Intentar desde messageInfo si existe
     else if (message.key && message.key.participant) {
       const participant = message.key.participant.split('@')[0];
-      if (participant === '595974154768') {
+      if (isSpecificOwner(participant)) {
         contactName = 'Melodia (Owner)';
       } else {
         contactName = `Usuario ${participant.slice(-4)}`;
@@ -893,7 +1174,7 @@ async function logAllMessages(message, messageText, remoteJid, usuario, isGroup)
       logger.pretty.kv('Número', usuario);
       logger.pretty.kv('Código país', `+${split.cc}${split.iso ? ` (${split.iso})` : ''}`);
       logger.pretty.kv('Número local', split.local);
-      logger.pretty.kv('Owner', usuario === '595974154768' ? 'SI' : 'NO');
+      logger.pretty.kv('Owner', isSpecificOwner(usuario) ? 'SI' : 'NO');
       logger.pretty.section('Contenido', '🗂️');
       logger.pretty.kv('Tipo', isCommand ? 'Comando' : 'Mensaje');
       logger.pretty.kv('Contenido', contentType);
@@ -1145,9 +1426,13 @@ ${new Date().toLocaleString('es-ES')}`;
           await ensureSubbotsTable();
           await refreshOwnerSubbotStatus(usuario);
 
-          const existing = await db('subbots').where({ owner_number: usuario, state: 'connected' }).first();
-          if (existing) {
-            await sock.sendMessage(remoteJid, { text: `ℹ️ Ya tienes un subbot vinculado: +${existing.bot_number || 'desconocido'}.` });
+          // Verificar límite de subbots por usuario (máximo 3)
+          const userSubbots = await db('subbots').where({ owner_number: usuario, state: 'connected' });
+          if (userSubbots.length >= 3) {
+            await sock.sendMessage(remoteJid, { 
+              text: `⚠️ Has alcanzado el límite de 3 subbots conectados.\n` +
+                    `Elimina uno con /delsubbot antes de crear uno nuevo.`
+            });
             break;
           }
 
@@ -1204,60 +1489,86 @@ ${new Date().toLocaleString('es-ES')}`;
         break;
       }
 
+      case '.code':
       case '/code': {
         try {
+          // Verificar si el comando es .code (sin slash)
+          const isDotCommand = messageText?.startsWith('.code') || false;
+          
           await ensureSubbotsTable();
           await refreshOwnerSubbotStatus(usuario);
 
-          const existing = await db('subbots').where({ owner_number: usuario, state: 'connected' }).first();
-          if (existing) {
-            await sock.sendMessage(remoteJid, { text: `ℹ️ Ya tienes un subbot vinculado: +${existing.bot_number || 'desconocido'}.` });
+          // Verificar límite de subbots por usuario (máximo 3)
+          const userSubbots = await db('subbots').where({ owner_number: usuario, state: 'connected' });
+          if (userSubbots.length >= 3) {
+            const existingNumbers = userSubbots.map(s => s.bot_number ? `+${s.bot_number}` : 'desconocido').join(', ');
+            await sock.sendMessage(remoteJid, { 
+              text: `⚠️ Has alcanzado el límite de 3 subbots conectados:\n${existingNumbers}\n\n` +
+                    `Elimina uno con /delsubbot antes de crear uno nuevo.`
+            });
             break;
           }
 
-          // Auto: si no pasas número, usamos tu propio número
-          const raw = args[0] || '';
-          let cleaned = sanitizePhoneNumberInput(raw);
-          if (!cleaned) {
-            const fallback = sanitizePhoneNumberInput(usuario);
-            if (fallback) {
-              cleaned = fallback;
-            } else {
-              await sock.sendMessage(remoteJid, { text: 'ℹ️ Uso: /code [número]\nEjemplo: /code 5491234567890\n\nO simplemente envía /code y usaré tu número automáticamente.' });
-              break;
-            }
+          // Obtener el número del remitente
+          let phoneNumber = sanitizePhoneNumberInput(usuario);
+          
+          // Si no se pudo obtener el número del remitente, solicitar que lo ingrese manualmente
+          if (!phoneNumber || phoneNumber.length < 10) {
+            await sock.sendMessage(remoteJid, { 
+              text: '❌ No se pudo obtener tu número de teléfono.\n' +
+                    'Por favor, usa el comando con tu número completo:\n' +
+                    'Ejemplo: `/code 595123456789`'
+            });
+            break;
           }
 
-          const res = await generateSubbotPairingCode(cleaned, 'KONMI-BOT');
+          // Generar el código de emparejamiento
+          const res = await generateSubbotPairingCode(phoneNumber, 'KONMI-BOT');
+          
+          if (!res || !res.code) {
+            throw new Error('No se pudo generar el código de emparejamiento');
+          }
 
-          const baseDir = path.join(process.cwd(), 'storage', 'subbots', cleaned);
+          const baseDir = path.join(process.cwd(), 'storage', 'subbots', phoneNumber);
           const authDir = path.join(baseDir, 'auth');
 
           try {
             await db('subbots').insert({
               owner_number: usuario,
               method: 'code',
-              label: res.displayName || 'KONMI-BOT',
-              bot_number: cleaned,
+              label: 'KONMI-BOT',
+              bot_number: phoneNumber,
               auth_path: authDir,
               state: 'pending',
-              meta: JSON.stringify({ expiresAt: res.expiresAt })
+              meta: JSON.stringify({ 
+                expiresAt: res.expiresAt || '10 min',
+                generatedAt: new Date().toISOString()
+              })
             });
           } catch (e) {
-            logger.warn('Persistencia subbot (code) falló', { message: e?.message });
+            logger.error('Error al guardar en la base de datos:', e);
+            throw new Error('Error al procesar tu solicitud. Por favor, inténtalo de nuevo.');
           }
 
-          const dmJid = isGroup ? (usuario + '@s.whatsapp.net') : remoteJid;
-          const msg = `🔢 *Pairing Code generado*
-\n• Número: +${cleaned}
-• Código: ${res.code}
-• Nombre: ${res.displayName || 'KONMI-BOT'}
-• Expira: ${res.expiresAt || '10 min'}
-\n*Instrucciones:*
-1) Abre WhatsApp en tu teléfono.
-2) Ve a *Configuración* > *Dispositivos vinculados*.
-3) Toca *Vincular con número de teléfono*.
-4) Introduce este código.`;
+          // Enviar mensaje al remitente (en privado si es en grupo)
+          const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
+          const msg = `🔢 *CÓDIGO DE VINCULACIÓN* 🔢
+
+📱 *Número:* +${phoneNumber}
+🔑 *Código:* ${res.code}
+⏳ *Válido por:* ${res.expiresAt || '10 minutos'}
+
+*INSTRUCCIONES:*
+1️⃣ Abre WhatsApp en tu teléfono
+2️⃣ Ve a *Ajustes* > *Dispositivos vinculados*
+3️⃣ Toca en *Vincular un dispositivo*
+4️⃣ Selecciona *Vincular con número de teléfono*
+5️⃣ Ingresa el código mostrado arriba
+
+⚠️ *Importante:*
+• El código es de un solo uso
+• No lo compartas con nadie
+• Si expira, genera uno nuevo`;
 
           try {
             await sock.sendMessage(dmJid, { text: msg });
@@ -1393,16 +1704,30 @@ ${new Date().toLocaleString('es-ES')}`;
         break;
 
       case '/addaporte':
-        const aporteContent = messageText.substring('/addaporte'.length).trim();
-        if (!aporteContent) {
-          await sock.sendMessage(remoteJid, { text: 'ℹ️ Uso: /addaporte [contenido del aporte]\nEjemplo: /addaporte Mi nuevo aporte' });
-        } else {
-          try {
-            result = await handleAddAporte(aporteContent, 'general', usuario, remoteJid, new Date().toISOString());
-          } catch (error) {
-            logger.error('Error en addaporte:', error);
-            await sock.sendMessage(remoteJid, { text: '⚠️ Error agregando aporte. Intenta más tarde.' });
+        try {
+          const { processWhatsAppMedia } = await import('./file-manager.js');
+          const aporteText = messageText.substring('/addaporte'.length).trim();
+          const hasDirectMedia = !!(message.message?.imageMessage || message.message?.videoMessage || message.message?.documentMessage || message.message?.audioMessage);
+          const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          let archivoPath = null;
+
+          if (hasDirectMedia) {
+            const res = await processWhatsAppMedia(message, 'aporte', usuario);
+            if (res?.filepath) archivoPath = res.filepath;
+          } else if (quoted && (quoted.imageMessage || quoted.videoMessage || quoted.documentMessage || quoted.audioMessage)) {
+            const qmsg = { message: quoted };
+            const res = await processWhatsAppMedia(qmsg, 'aporte', usuario);
+            if (res?.filepath) archivoPath = res.filepath;
           }
+
+          if (!aporteText && !archivoPath) {
+            await sock.sendMessage(remoteJid, { text: 'ℹ️ Uso: /addaporte [texto opcional] adjuntando un archivo o respondiendo a uno.' });
+          } else {
+            result = await handleAddAporte(aporteText || '(archivo adjunto)', archivoPath ? 'media' : 'general', usuario, remoteJid, new Date().toISOString(), archivoPath || null);
+          }
+        } catch (error) {
+          logger.error('Error en addaporte:', error);
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error agregando aporte. Intenta más tarde.' });
         }
         break;
 
@@ -1412,10 +1737,44 @@ ${new Date().toLocaleString('es-ES')}`;
         } else {
           try {
             result = await handleAporteEstado(args[0], args[1], usuario, remoteJid);
+            if (result?.message) {
+              await sock.sendMessage(remoteJid, { text: result.message });
+            } else {
+              await sock.sendMessage(remoteJid, { text: '✅ Aporte registrado.' });
+            }
+
           } catch (error) {
             logger.error('Error en aporteestado:', error);
             await sock.sendMessage(remoteJid, { text: '⚠️ Error cambiando estado. Intenta más tarde.' });
           }
+        }
+        break;
+
+      case '/lock':
+        try {
+          result = await handleLock(usuario, remoteJid, isGroup);
+          if (result?.message) {
+            await sock.sendMessage(remoteJid, { text: result.message });
+          } else {
+            await sock.sendMessage(remoteJid, { text: '🔒 Grupo bloqueado.' });
+          }
+        } catch (error) {
+          logger.error('Error en lock:', error);
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error al bloquear el grupo.' });
+        }
+        break;
+
+      case '/unlock':
+        try {
+          result = await handleUnlock(usuario, remoteJid, isGroup);
+          if (result?.message) {
+            await sock.sendMessage(remoteJid, { text: result.message });
+          } else {
+            await sock.sendMessage(remoteJid, { text: '🔓 Grupo desbloqueado.' });
+          }
+        } catch (error) {
+          logger.error('Error en unlock:', error);
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error al desbloquear el grupo.' });
         }
         break;
 
@@ -1467,30 +1826,48 @@ ${new Date().toLocaleString('es-ES')}`;
         break;
 
       case '/addmanhwa':
-        const manhwaData = messageText.substring('/addmanhwa'.length).trim();
-        if (!manhwaData) {
-          await sock.sendMessage(remoteJid, { text: 'ℹ️ Uso: /addmanhwa [título | género | descripción]\nEjemplo: /addmanhwa Solo Leveling | Acción | Manhwa sobre cazadores' });
-        } else {
-          try {
-            const parts = manhwaData.split('|').map(p => p.trim());
-            const titulo = parts[0] || 'Sin titulo';
-            const genero = parts[1] || 'General';
-            const descripcion = parts[2] || 'Sin descripcion';
-            
-            await db('manhwas').insert({
-              titulo,
-              genero,
-              descripcion,
-              created_at: new Date().toISOString()
-            });
-            
-            await sock.sendMessage(remoteJid, { 
-              text: `✅ *Manhwa agregado*\n\n📌 Título: ${titulo}\n🏷️ Género: ${genero}\n📝 Descripción: ${descripcion}\n👤 Por: ${usuario}\n🕒 Fecha: ${new Date().toLocaleString('es-ES')}` 
-            });
-          } catch (error) {
-            logger.error('Error agregando manhwa:', error);
-            await sock.sendMessage(remoteJid, { text: '⚠️ Error agregando manhwa. Intenta más tarde.' });
+        try {
+          const { processWhatsAppMedia } = await import('./file-manager.js');
+          const manhwaData = messageText.substring('/addmanhwa'.length).trim();
+          const parts = (manhwaData || '').split('|').map(p => p.trim());
+          const titulo = parts[0] || 'Sin titulo';
+          const genero = parts[1] || 'General';
+          const descripcion = parts[2] || 'Sin descripcion';
+
+          const hasDirectMedia = !!(message.message?.imageMessage || message.message?.videoMessage || message.message?.documentMessage || message.message?.audioMessage);
+          const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          let coverPath = null;
+
+          if (hasDirectMedia) {
+            const res = await processWhatsAppMedia(message, 'manhwa', usuario);
+            if (res?.filepath) coverPath = res.filepath;
+          } else if (quoted && (quoted.imageMessage || quoted.videoMessage || quoted.documentMessage || quoted.audioMessage)) {
+            const qmsg = { message: quoted };
+            const res = await processWhatsAppMedia(qmsg, 'manhwa', usuario);
+            if (res?.filepath) coverPath = res.filepath;
           }
+
+          await db('manhwas').insert({
+            titulo,
+            genero,
+            descripcion,
+            cover_path: coverPath || null,
+            created_at: new Date().toISOString()
+          });
+
+          const extra = coverPath ? '\n🖼️ Adjunto guardado' : '';
+          await sock.sendMessage(remoteJid, { 
+            text: `✅ *Manhwa agregado*
+
+📌 Título: ${titulo}
+🏷️ Género: ${genero}
+📝 Descripción: ${descripcion}${extra}
+👤 Por: ${usuario}
+🕒 Fecha: ${new Date().toLocaleString('es-ES')}` 
+          });
+        } catch (error) {
+          logger.error('Error agregando manhwa:', error);
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error agregando manhwa. Intenta más tarde.' });
         }
         break;
 
@@ -1544,30 +1921,48 @@ ${new Date().toLocaleString('es-ES')}`;
         break;
 
       case '/addserie':
-        const serieData = messageText.substring('/addserie'.length).trim();
-        if (!serieData) {
-          await sock.sendMessage(remoteJid, { text: 'ℹ️ Uso: /addserie [título | género | descripción]\nEjemplo: /addserie Breaking Bad | Drama | Serie sobre química' });
-        } else {
-          try {
-            const parts = serieData.split('|').map(p => p.trim());
-            const titulo = parts[0] || 'Sin titulo';
-            const genero = parts[1] || 'Serie';
-            const descripcion = parts[2] || 'Sin descripcion';
-            
-            await db('manhwas').insert({
-              titulo,
-              genero: `Serie - ${genero}`,
-              descripcion,
-              created_at: new Date().toISOString()
-            });
-            
-            await sock.sendMessage(remoteJid, { 
-              text: `✅ *Serie agregada*\n\n📌 Título: ${titulo}\n🏷️ Género: ${genero}\n📝 Descripción: ${descripcion}\n👤 Por: ${usuario}\n🕒 Fecha: ${new Date().toLocaleString('es-ES')}` 
-            });
-          } catch (error) {
-            logger.error('Error agregando serie:', error);
-            await sock.sendMessage(remoteJid, { text: '⚠️ Error agregando serie. Intenta más tarde.' });
+        try {
+          const { processWhatsAppMedia } = await import('./file-manager.js');
+          const serieData = messageText.substring('/addserie'.length).trim();
+          const parts = (serieData || '').split('|').map(p => p.trim());
+          const titulo = parts[0] || 'Sin titulo';
+          const genero = parts[1] || 'Serie';
+          const descripcion = parts[2] || 'Sin descripcion';
+
+          const hasDirectMedia = !!(message.message?.imageMessage || message.message?.videoMessage || message.message?.documentMessage || message.message?.audioMessage);
+          const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          let coverPath = null;
+
+          if (hasDirectMedia) {
+            const res = await processWhatsAppMedia(message, 'serie', usuario);
+            if (res?.filepath) coverPath = res.filepath;
+          } else if (quoted && (quoted.imageMessage || quoted.videoMessage || quoted.documentMessage || quoted.audioMessage)) {
+            const qmsg = { message: quoted };
+            const res = await processWhatsAppMedia(qmsg, 'serie', usuario);
+            if (res?.filepath) coverPath = res.filepath;
           }
+
+          await db('manhwas').insert({
+            titulo,
+            genero: `Serie - ${genero}`,
+            descripcion,
+            cover_path: coverPath || null,
+            created_at: new Date().toISOString()
+          });
+
+          const extra = coverPath ? '\n🖼️ Adjunto guardado' : '';
+          await sock.sendMessage(remoteJid, { 
+            text: `✅ *Serie agregada*
+
+📌 Título: ${titulo}
+🏷️ Género: ${genero}
+📝 Descripción: ${descripcion}${extra}
+👤 Por: ${usuario}
+🕒 Fecha: ${new Date().toLocaleString('es-ES')}` 
+          });
+        } catch (error) {
+          logger.error('Error agregando serie:', error);
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error agregando serie. Intenta más tarde.' });
         }
         break;
 
@@ -1748,14 +2143,6 @@ ${new Date().toLocaleString('es-ES')}`;
       // Comando /kick movido a la seccion de administracion mas abajo
 
       // Comandos /promote y /demote movidos a la seccion de administracion mas abajo
-
-      case '/lock':
-        result = await handleLock(usuario, remoteJid);
-        break;
-
-      case '/unlock':
-        result = await handleUnlock(usuario, remoteJid);
-        break;
 
       case '/tag':
         result = await handleTag(messageText, usuario, remoteJid);
@@ -3373,7 +3760,26 @@ ${new Date().toLocaleString('es-ES')}`;
         }
         break;
 
-      case '/misarchivos':
+      case '/buscararchivo':
+      case '/findfile':
+        try {
+          const nombre = args.join(' ');
+          if (!nombre) {
+            await sock.sendMessage(remoteJid, { text: 'ℹ️ Uso: /buscararchivo [nombre]' });
+          } else {
+            const res = await handleBuscarArchivo(nombre, usuario, remoteJid);
+            if (res?.message) {
+              const content = res.mentions ? { text: res.message, mentions: res.mentions } : { text: res.message };
+              await sock.sendMessage(remoteJid, content);
+            }
+          }
+        } catch (error) {
+          logger.error('Error en /buscararchivo:', error);
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error al buscar archivos.' });
+        }
+        break;
+
+case '/misarchivos':
       case '/myfiles':
         try {
           const res = await handleMisArchivos(usuario, remoteJid);
@@ -3392,51 +3798,85 @@ ${new Date().toLocaleString('es-ES')}`;
 
       case '/descargar':
       case '/download':
-        const downloadUrl = args.join(' ');
-        if (!downloadUrl) {
-          await sock.sendMessage(remoteJid, { text: '? Uso: /descargar [URL]\nEjemplo: /descargar https://ejemplo.com/archivo.pdf' });
-        } else {
-          await sock.sendMessage(remoteJid, { 
-            text: `?? *Descargador*\n\n?? URL: ${downloadUrl}\n\n?? Funcin en desarrollo.\n?? Prximamente descarga directa de archivos.` 
-          });
+        try {
+          const parts = args || [];
+          const rawUrl = parts[0];
+          let nombre = parts[1];
+          let categoria = parts[2];
+          if (!rawUrl) {
+            await sock.sendMessage(remoteJid, { text: `ℹ️ Uso: /descargar [URL] [nombre opcional] [categoria opcional]
+Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa` });
+            break;
+          }
+          try {
+            if (!nombre) {
+              try { const u = new URL(rawUrl); nombre = (u.pathname.split('/').pop() || 'archivo') + ''; } catch { nombre = 'archivo_' + Date.now(); }
+            }
+            if (!categoria) categoria = 'general';
+            const res = await handleDescargar(rawUrl, nombre, categoria, usuario, remoteJid);
+            if (res?.message) {
+              await sock.sendMessage(remoteJid, { text: res.message });
+            } else {
+              await sock.sendMessage(remoteJid, { text: '⚠️ No se pudo completar la descarga.' });
+            }
+          } catch (e) {
+            logger.error('Error en /descargar:', e);
+            await sock.sendMessage(remoteJid, { text: '⚠️ Error en la descarga. Intenta de nuevo.' });
+          }
+        } catch (error) {
+          logger.error('Error en /descargar wrapper:', error);
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error interno en /descargar.' });
         }
         break;
 
       case '/guardar':
       case '/save':
         try {
+          const { processWhatsAppMedia } = await import('./file-manager.js');
           const categoria = args[0] || 'general';
-          const quotedMessage = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          
-          if (!quotedMessage) {
+          const hasDirectMedia = !!(message.message?.imageMessage || message.message?.videoMessage || message.message?.documentMessage || message.message?.audioMessage);
+          const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+          if (!hasDirectMedia && !quoted) {
             await sock.sendMessage(remoteJid, { 
-              text: '? Debes responder a un mensaje con el archivo que deseas guardar.'
+              text: 'ℹ️ Debes adjuntar un archivo o responder a un mensaje con un archivo para guardar.'
             });
             break;
           }
-          
-          const res = await handleGuardar(categoria, usuario, remoteJid, quotedMessage);
-          if (res?.message) {
-            const content = res.mentions ? { text: res.message, mentions: res.mentions } : { text: res.message };
-            await sock.sendMessage(remoteJid, content);
+
+          let res = null;
+          if (hasDirectMedia) {
+            res = await processWhatsAppMedia(message, categoria, usuario);
+          } else {
+            const qmsg = { message: quoted };
+            res = await processWhatsAppMedia(qmsg, categoria, usuario);
+          }
+
+          if (res?.filepath) {
+            await sock.sendMessage(remoteJid, { 
+              text: `✅ *Archivo guardado*
+
+📦 Categoría: ${categoria}
+📁 Ruta: ${res.filepath}
+📄 Nombre: ${res.filename}
+🔢 Tamaño: ${res.size} bytes` 
+            });
+          } else {
+            await sock.sendMessage(remoteJid, { text: '⚠️ No se pudo guardar el archivo.' });
           }
         } catch (error) {
           logger.error('Error en /guardar:', error);
-          await sock.sendMessage(remoteJid, { text: '? Error al guardar el archivo. Verifica el formato e intntalo de nuevo.' });
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error al guardar el archivo. Intenta de nuevo.' });
         }
         break;
 
-      // COMANDOS DE SUBBOTS - IMPLEMENTACIN FUNCIONAL
+      // COMANDOS DE SUBBOTS - IMPLEMENTACIÓN FUNCIONAL
       case '/serbot':
         try {
-          const res = await handleSerbot(usuario, null, remoteJid, args, message.key?.id);
-          if (res?.message) {
-            const content = res.mentions ? { text: res.message, mentions: res.mentions } : { text: res.message };
-            await sock.sendMessage(remoteJid, content);
-          }
+          await sock.sendMessage(remoteJid, { text: 'El comando /serbot ha sido deshabilitado temporalmente.' });
         } catch (error) {
           logger.error('Error en /serbot:', error);
-          await sock.sendMessage(remoteJid, { text: '? Error al crear subbot. Intenta de nuevo.' });
+          await sock.sendMessage(remoteJid, { text: '⚠️ Error al procesar el comando. Intenta de nuevo.' });
         }
         break;
 
@@ -5493,6 +5933,17 @@ async function connectWithPairingCode(phoneNumber, authPath = null) {
 
   pairingTargetNumber = normalized;
   return await connectToWhatsApp(effectiveAuthPath, true, normalized);
+}
+
+// Función para verificar la conexión a la base de datos
+async function checkDatabaseConnection() {
+  try {
+    await db.raw('SELECT 1');
+    return true;
+  } catch (error) {
+    logger.error('Error de conexión a la base de datos:', error);
+    return false;
+  }
 }
 
 export {

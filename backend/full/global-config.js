@@ -2,10 +2,11 @@
 
 // Lista de administradores globales (superadmins)
 // Formato: [numero, nombre, esSuperAdmin]
+const PRIMARY_OWNER = (process.env.OWNER_WHATSAPP_NUMBER || '595974154768').replace(/[^0-9]/g, '');
 global.owner = [
-  ['595974154768', 'Melodia', true], // Numero principal del bot
-  // Agregar ms administradores aqu si es necesario
-]
+  [PRIMARY_OWNER, 'Owner', true],
+  // Agregar más administradores aquí si es necesario
+];
 
 // Lista de moderadores (pueden usar comandos de moderacin)
 global.mods = [
@@ -81,19 +82,9 @@ function setPrimaryOwner(number, name = 'Owner') {
 
 function isSuperAdmin(sender) {
   if (!global.owner || !Array.isArray(global.owner)) return false;
-
   const senderNumber = normalizeNumber(sender);
-  // Verificar si el sender es un superadmin
-  const isSuper = global.owner.some(([number]) => normalizeNumber(number) === senderNumber);
-  
-  // Si el sender es el mismo nmero que el bot, no considerarlo superadmin
-  // para evitar conflictos en la deteccin de permisos
-  const botNumber = '595974154768'; // Nmero del bot
-  if (senderNumber === botNumber) {
-    return false; // El bot no puede ser superadmin de s mismo
-  }
-  
-  return isSuper;
+  // Verificar si el sender es un superadmin por número (soporta LID y JID)
+  return global.owner.some(([number]) => normalizeNumber(number) === senderNumber);
 }
 
 // Funcin para verificar si un usuario es moderador

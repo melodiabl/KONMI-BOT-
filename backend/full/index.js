@@ -173,17 +173,35 @@ app.get('/api/health', (req, res) => {
 
 // Start the bot connection and server
 async function start() {
-  // Primero iniciar el servidor HTTP
+  // 0) Migraciones automáticas (idempotentes)
+  try {
+    console.log(' Ejecutando migraciones de base de datos...');
+    await db.migrate.latest();
+    console.log(' Migraciones aplicadas correctamente.');
+  } catch (error) {
+    console.warn(' No se pudieron aplicar migraciones automáticamente:', error?.message || error);
+  }
+
+  // 1) Iniciar el servidor HTTP
   app.listen(port, config.server.host, () => {
     console.log(` Backend server listening on port ${port}`);
     console.log(` Environment: ${config.server.environment}`);
     console.log(` Frontend URL: ${config.frontend.url}`);
     console.log(` Bot: ${config.bot.name} v${config.bot.version}`);
-    console.log(''); // Lnea en blanco antes del men de autenticacin
+    console.log(''); // Línea en blanco antes del menú de autenticación
   });
-  
-  // Luego conectar el bot (esto mostrar el men interactivo)
+
+  // 2) Conectar el bot (esto mostrará el menú interactivo según método seleccionado)
   await connectToWhatsApp(join(__dirname, 'storage', 'baileys_full'));
+
+  // 3) Inicializar subbots (solo si la conexión fue exitosa)
+  try {
+    const { initializeSubbots } = await import('./subbot-init.js');
+    await initializeSubbots();
+    console.log('✅ Subbots inicializados correctamente');
+  } catch (error) {
+    console.error('❌ Error al inicializar subbots:', error);
+  }
 }
 
 start();

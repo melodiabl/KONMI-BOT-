@@ -17,25 +17,40 @@ if (!fs.existsSync(logsDir)) {
 const logLevel = process.env.LOG_LEVEL || 'info';
 const logFile = process.env.LOG_FILE || path.join(logsDir, 'app.log');
 
-// Logger con pretty-print en consola cuando está disponible pino-pretty
+// Logger con pretty-print en consola y escritura a archivo (siempre que sea posible)
 function createLogger() {
   try {
-    // Intentar activar pino-pretty si está instalado
-    const logger = pino({
+    const targets = [];
+
+    // Salida bonita en consola
+    targets.push({
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
+        ignore: 'pid,hostname'
+      },
+      level: logLevel
+    });
+
+    // Escritura a archivo (puede desactivarse con LOG_TO_FILE=false)
+    const logToFileEnv = String(process.env.LOG_TO_FILE ?? 'true').toLowerCase();
+    const enableFile = logToFileEnv !== 'false' && !!logFile;
+    if (enableFile) {
+      targets.push({
+        target: 'pino/file',
+        options: { destination: logFile, mkdir: true },
+        level: logLevel
+      });
+    }
+
+    return pino({
       level: logLevel,
       timestamp: pino.stdTimeFunctions.isoTime,
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
-          ignore: 'pid,hostname'
-        }
-      }
+      transport: { targets }
     });
-    return logger;
   } catch (e) {
-    // Fallback: pino normal (sin pretty)
+    // Fallback: pino normal (sin pretty, sin archivo)
     return pino({
       level: logLevel,
       timestamp: pino.stdTimeFunctions.isoTime
