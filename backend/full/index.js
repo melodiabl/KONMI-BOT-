@@ -4,8 +4,6 @@ import bodyParser from 'body-parser';
 import { connectToWhatsApp, getAvailableGroups, getQRCode, getQRCodeImage, getConnectionStatus, getSocket } from './whatsapp.js';
 import apiRouter from './api.js';
 import { router as authRouter, authenticateToken, authorizeRoles } from './auth.js';
-import subbotRouter from './subbot-api.js';
-import { getAuthDefaults } from './global-config.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import db from './db.js';
@@ -36,9 +34,6 @@ app.use('/media', express.static(join(__dirname, 'storage')));
 
 // Rutas de autenticacin
 app.use('/api/auth', authRouter);
-
-// Rutas de subbots (panel e in-proc manager)
-app.use('/api/subbot', subbotRouter);
 
 // Rutas principales de la API
 app.use('/api', apiRouter);
@@ -188,20 +183,11 @@ async function start() {
     console.log(` Environment: ${config.server.environment}`);
     console.log(` Frontend URL: ${config.frontend.url}`);
     console.log(` Bot: ${config.bot.name} v${config.bot.version}`);
-    console.log(''); // Línea en blanco antes del menú de autenticación
   });
 
   // 2) Conectar el bot (esto mostrará el menú interactivo según método seleccionado)
   await connectToWhatsApp(join(__dirname, 'storage', 'baileys_full'));
 
-  // 3) Inicializar subbots (solo si la conexión fue exitosa)
-  try {
-    const { initializeSubbots } = await import('./subbot-init.js');
-    await initializeSubbots();
-    console.log('✅ Subbots inicializados correctamente');
-  } catch (error) {
-    console.error('❌ Error al inicializar subbots:', error);
-  }
 }
 
 start();

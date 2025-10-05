@@ -3,7 +3,7 @@ import {
   createSubbot,
   getSubbotByCode,
   getUserSubbots,
-  getSubbotStatus,
+  getSubbotRecord,
   getSubbotStatusOverview,
   getSubbotAccessData,
   deleteSubbot,
@@ -59,7 +59,7 @@ router.get('/list', requireAuth, async (req, res) => {
 router.get('/status/:code', requireAuth, async (req, res) => {
   try {
     const { code } = req.params;
-    const result = await getSubbotStatus(code);
+    const result = await getRuntimeStatus(code);
     if (!result.success) {
       return res.status(404).json(result);
     }

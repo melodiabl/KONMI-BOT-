@@ -1,9 +1,9 @@
 import db from '../db.js';
 import logger from '../config/logger.js';
-import subbotIntegration from '../subbot-integration.js';
+import { getUserSubbots, deleteSubbot } from '../handler.js';
 import { formatDistanceToNow } from 'date-fns';
 import pkg from 'date-fns/locale/es/index.js';
-import { generateSubbotQR, generateSubbotPairingCode } from '../multiaccount-manager.js';
+import { startSubbot, stopSubbot, getSubbotStatus as getRuntimeStatus } from '../lib/subbots.js';
 const { es } = pkg;
 
 /**
@@ -151,7 +151,8 @@ async function handleQRSubbot(sock, from, isGroup, msg) {
  */
 async function handleListSubbots(sock, from, isGroup, msg) {
   try {
-    const subbots = await subbotIntegration.getOwnerSubbots(msg.sender);
+    const result = await getUserSubbots(msg.sender);
+    const subbots = result.success ? result.subbots : [];
     
     if (subbots.length === 0) {
       return await sock.sendMessage(from, {
@@ -216,7 +217,10 @@ async function handleDeleteSubbot(sock, from, isGroup, msg, args) {
   }
   
   try {
-    await subbotIntegration.deleteSubbot(subbotId, msg.sender);
+    const result = await deleteSubbot(subbotId, msg.sender);
+    if (!result.success) {
+      throw new Error(result.error || 'Error al eliminar el subbot');
+    }
     
     await sock.sendMessage(from, {
       text: `✅ Subbot *${subbotId}* eliminado correctamente`,

@@ -4,21 +4,6 @@ import logger from './config/logger.js';
 import * as baileys from '@whiskeysockets/baileys';
 import { handleAI as handleAICommand, handleClasificar as handleClasificarCommand } from './commands.js';
 import { isSuperAdmin, isModerator, isPremium, getOwnerName } from './global-config.js';
-import {
-  launchSubbot,
-  deleteSubbot,
-  fetchSubbotListWithOnlineFlag,
-  getSubbotByCode
-} from './inproc-subbots.js';
-
-// Importar comandos de subbots
-import subbotCommands from './commands/subbot-commands.js';
-
-// Comandos de subbots (versión mejorada)
-const handleMisBotsCommand = handleBots;
-const handleDelSubbotCommand = _handleDelSubbot;
-
-
 // Consolidacion de comandos: reexportamos funciones de modulos especificos
 import {
   // Media
@@ -3167,12 +3152,6 @@ export { handleWallpaper };
 export { handleJoke };
 export { handleAIEnhanced as handleAI };
 
-// ===== COMANDOS DE SUBBOTS =====
-export { handleBots };
-export { handleMisBotsCommand as handleMisBots };
-export { handleQR };
-export { handleCode };
-
 // ===== MODERACIÓN =====
 export { handleBan };
 export { handleUnban };
@@ -3192,6 +3171,3 @@ export { wasUserNotifiedAboutMaintenance };
 export { markUserAsNotifiedAboutMaintenance };
 export { clearMaintenanceNotifications };
 export { clearGroupOffNotices };
-
-// ===== MÓDULOS =====
-export { subbotCommands };

@@ -10,8 +10,8 @@ import readline from 'readline';
 import db from './db.js';
 import logger from './config/logger.js';
 import os from 'os';
+// Handlers de subbots eliminados tras restaurar modo monosesión
 
-// Cargar Baileys de forma diferida (para permitir forks)
 async function loadBaileys() {
   if (baileys) return true;
   const candidates = [];
@@ -85,10 +85,11 @@ async function resetSubbotsTable() {
 }
 async function ensureSubbotsTable() {
   if (subbotsTableReady) return true;
-  
+
   const maxRetries = 3;
   let retries = 0;
-  
+  const client = (db?.client?.config?.client || '').toLowerCase();
+
   // Primero intentar con la tabla temporal si existe
   try {
     const tempExists = await db.schema.hasTable('subbots_temp');
@@ -99,66 +100,126 @@ async function ensureSubbotsTable() {
   } catch (e) {
     logger.warn('No se pudo verificar tabla temporal:', e.message);
   }
-  
+
+  const jsonDefault = client === 'pg' ? db.raw("'{}'::jsonb") : (client === 'sqlite3' ? '{}' : db.raw("'{}'"));
+
   while (retries < maxRetries) {
     try {
-      // Verificar si la tabla principal existe
       const exists = await db.schema.hasTable('subbots');
-      
+
       if (!exists) {
         logger.info('La tabla subbots no existe, creándola...');
-        
-        // Crear la tabla con todas las columnas necesarias
+
         await db.schema.createTable('subbots', (t) => {
           t.increments('id').primary();
-          t.string('owner_number', 20).notNullable().index();
-          t.string('method', 10).notNullable(); // 'qr' | 'code'
-          t.string('label', 100); // nombre mostrado del dispositivo
-          t.string('bot_number', 20); // requerido para 'code'
-          t.string('session_id', 100); // usado en 'qr'
-          t.string('auth_path', 255).notNullable();
-          t.string('state', 20).notNullable().defaultTo('pending');
-          t.json('meta');
+          t.string('code', 100).unique().notNullable();
+          t.string('user_phone', 30).notNullable();
+          t.string('user_name', 100);
+          t.string('status', 30).notNullable().defaultTo('pending');
+          t.string('connection_type', 20).notNullable().defaultTo('qr');
+          t.text('qr_code');
+          t.string('pairing_code', 20);
+          t.text('session_data');
           t.timestamp('created_at').defaultTo(db.fn.now());
+          t.timestamp('last_activity').defaultTo(db.fn.now());
+          t.timestamp('connected_at');
+          t.boolean('is_active').notNullable().defaultTo(false);
+          t.integer('message_count').notNullable().defaultTo(0);
+          if (typeof t.jsonb === 'function' && client === 'pg') {
+            t.jsonb('metadata').defaultTo(jsonDefault);
+          } else if (typeof t.json === 'function') {
+            t.json('metadata').defaultTo('{}');
+          } else {
+            t.text('metadata');
+          }
+          t.string('created_by', 50);
+          t.string('request_jid', 200);
+          t.string('request_participant', 200);
+          t.string('target_number', 30);
+          t.text('qr_data');
+          t.string('api_token', 100);
           t.timestamp('updated_at').defaultTo(db.fn.now());
+          t.timestamp('last_heartbeat').defaultTo(db.fn.now());
         });
-        
+
+        await db('subbots').update({ connection_type: 'qr' }).catch(() => {});
+        await db('subbots').update({ is_active: false }).catch(() => {});
+        await db('subbots').update({ message_count: 0 }).catch(() => {});
+
         logger.info('✅ Tabla subbots creada exitosamente');
       } else {
-        // Verificar si faltan columnas
-        let columns = [];
+        let columnNames = [];
         try {
-          const result = await db.raw(`PRAGMA table_info(subbots)`);
-          columns = result || [];
-          const columnNames = columns.map(col => col.name);
-          
-          const requiredColumns = [
-            'id', 'owner_number', 'method', 'label', 'bot_number', 
-            'session_id', 'auth_path', 'state', 'meta', 'created_at', 'updated_at'
-          ];
-          
-          for (const col of requiredColumns) {
+          if (client === 'sqlite3') {
+            const result = await db.raw('PRAGMA table_info("subbots")');
+            const rows = Array.isArray(result) ? (Array.isArray(result[0]) ? result[0] : result) : result;
+            columnNames = rows.map((col) => col.name);
+          } else if (client === 'pg') {
+            const rows = await db('information_schema.columns')
+              .select('column_name')
+              .where({ table_name: 'subbots' })
+              .andWhere('table_schema', db.raw('current_schema()'));
+            columnNames = rows.map((row) => row.column_name);
+          } else {
+            const rows = await db('information_schema.columns').select('column_name').where({ table_name: 'subbots' });
+            columnNames = rows.map((row) => row.column_name);
+          }
+
+          const requiredColumns = new Map([
+            ['user_phone', (t) => t.string('user_phone', 30)],
+            ['user_name', (t) => t.string('user_name', 100)],
+            ['status', (t) => t.string('status', 30).defaultTo('pending')],
+            ['connection_type', (t) => t.string('connection_type', 20).defaultTo('qr')],
+            ['qr_code', (t) => t.text('qr_code')],
+            ['pairing_code', (t) => t.string('pairing_code', 20)],
+            ['session_data', (t) => t.text('session_data')],
+            ['created_at', (t) => t.timestamp('created_at').defaultTo(db.fn.now())],
+            ['last_activity', (t) => t.timestamp('last_activity').defaultTo(db.fn.now())],
+            ['connected_at', (t) => t.timestamp('connected_at')],
+            ['is_active', (t) => t.boolean('is_active').defaultTo(false)],
+            ['message_count', (t) => t.integer('message_count').defaultTo(0)],
+            ['metadata', (t) => {
+              if (typeof t.jsonb === 'function' && client === 'pg') {
+                t.jsonb('metadata').defaultTo(jsonDefault);
+              } else if (typeof t.json === 'function') {
+                t.json('metadata').defaultTo('{}');
+              } else {
+                t.text('metadata');
+              }
+            }],
+            ['created_by', (t) => t.string('created_by', 50)],
+            ['request_jid', (t) => t.string('request_jid', 200)],
+            ['request_participant', (t) => t.string('request_participant', 200)],
+            ['target_number', (t) => t.string('target_number', 30)],
+            ['qr_data', (t) => t.text('qr_data')],
+            ['api_token', (t) => t.string('api_token', 100)],
+            ['updated_at', (t) => t.timestamp('updated_at').defaultTo(db.fn.now())],
+            ['last_heartbeat', (t) => t.timestamp('last_heartbeat').defaultTo(db.fn.now())]
+          ]);
+
+          for (const [col, builder] of requiredColumns.entries()) {
             if (!columnNames.includes(col)) {
               logger.warn(`Agregando columna faltante: ${col}`);
-              try {
-                if (col === 'meta') {
-                  await db.schema.alterTable('subbots', (t) => {
-                    t.json(col).nullable();
-                  });
-                } else if (col === 'created_at' || col === 'updated_at') {
-                  await db.schema.alterTable('subbots', (t) => {
-                    t.timestamp(col).defaultTo(db.fn.now());
-                  });
-                } else {
-                  await db.schema.alterTable('subbots', (t) => {
-                    t.string(col, 255).nullable();
-                  });
-                }
-                logger.info(`✅ Columna ${col} agregada`);
-              } catch (alterError) {
-                logger.warn(`No se pudo agregar ${col}:`, alterError.message);
-                throw alterError; // Forzar recreación de tabla
+              await db.schema.alterTable('subbots', builder);
+
+              if (col === 'connection_type') {
+                await db('subbots').whereNull('connection_type').update({ connection_type: 'qr' }).catch(() => {});
               }
+              if (col === 'is_active') {
+                await db('subbots').whereNull('is_active').update({ is_active: false }).catch(() => {});
+              }
+              if (col === 'message_count') {
+                await db('subbots').whereNull('message_count').update({ message_count: 0 }).catch(() => {});
+              }
+              if (col === 'metadata') {
+                if (client === 'pg') {
+                  await db('subbots').whereNull('metadata').update({ metadata: jsonDefault }).catch(() => {});
+                } else {
+                  await db('subbots').whereNull('metadata').update({ metadata: JSON.stringify({}) }).catch(() => {});
+                }
+              }
+
+              logger.info(`✅ Columna ${col} agregada`);
             }
           }
         } catch (e) {
@@ -167,27 +228,24 @@ async function ensureSubbotsTable() {
           continue;
         }
       }
-      
-      // Verificar acceso
+
       await db('subbots').limit(1).catch(() => {
         throw new Error('No se pudo acceder a la tabla');
       });
-      
+
       subbotsTableReady = true;
       return true;
-      
     } catch (error) {
       retries++;
       const waitTime = Math.pow(2, retries) * 1000;
-      
-      // Si es el último intento, crear tabla temporal
+
       if (retries >= maxRetries) {
         logger.error('No se pudo inicializar la tabla principal, creando temporal...');
         try {
           await db.schema.dropTableIfExists('subbots_temp');
           await db.schema.createTable('subbots_temp', (t) => {
             t.increments('id').primary();
-            t.string('owner_number', 20).notNullable().index();
+            t.string('request_jid').notNullable().index();
             t.string('method', 10).notNullable();
             t.string('state', 20).notNullable().defaultTo('pending');
             t.timestamp('created_at').defaultTo(db.fn.now());
@@ -199,12 +257,12 @@ async function ensureSubbotsTable() {
           throw new Error('No se pudo crear tabla temporal');
         }
       }
-      
-      logger.warn(`Reintentando en ${waitTime/1000}s... (${retries}/${maxRetries})`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+
+      logger.warn(`Reintentando en ${waitTime / 1000}s... (${retries}/${maxRetries})`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
-  
+
   return false;
 }
 
@@ -235,10 +293,10 @@ function detectLinkedFromFs(baseDir) {
 }
 
 // Refrescar estado de subbot de un dueño desde FS a BD
-async function refreshOwnerSubbotStatus(ownerNumber) {
+export async function refreshSubbotConnectionStatus(ownerNumber) {
   try {
     if (!ownerNumber) {
-      logger.warn('refreshOwnerSubbotStatus: ownerNumber no proporcionado');
+      logger.warn('refreshSubbotConnectionStatus: ownerNumber no proporcionado');
       return;
     }
     
@@ -255,7 +313,7 @@ async function refreshOwnerSubbotStatus(ownerNumber) {
     
     try {
       // Obtener subbots existentes en la base de datos
-      const rows = await db(tableName).where({ owner_number: ownerNumber }).orderBy('id', 'desc');
+      const rows = await db(tableName).where({ request_jid: ownerNumber + '@s.whatsapp.net' }).orderBy('id', 'desc');
       
       // Actualizar estado de los subbots existentes
       for (const r of rows) {
@@ -312,7 +370,7 @@ async function refreshOwnerSubbotStatus(ownerNumber) {
                 if (!existing) {
                   // Agregar subbot que existe en el sistema de archivos pero no en la BD
                   await db(tableName).insert({
-                    owner_number: ownerNumber,
+                    request_jid: ownerNumber + '@s.whatsapp.net',
                     method: 'qr',
                     label: `Dispositivo ${dir.slice(0, 6)}`,
                     session_id: dir,
@@ -342,7 +400,7 @@ async function refreshOwnerSubbotStatus(ownerNumber) {
       throw dbError;
     }
   } catch (e) {
-    const errorMessage = e?.message || 'Error desconocido en refreshOwnerSubbotStatus';
+    const errorMessage = e?.message || 'Error desconocido en refreshSubbotConnectionStatus';
     logger.error(errorMessage, { stack: e?.stack });
     return false;
   }
@@ -432,23 +490,12 @@ import {
   handleFact,
   handleTrivia,
   handleHoroscope,
-  handleBots,
   handleKick,
   handlePromote,
   handleDemote,
   // Permisos centralizados
   isOwnerOrAdmin
 } from './commands-complete.js';
-
-// Gestor multi-cuenta (subbots reales)
-import { 
-  startSession, 
-  closeSession, 
-  getSessionStatus, 
-  listSessions,
-  generateSubbotQR,
-  generateSubbotPairingCode 
-} from './multiaccount-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1189,7 +1236,9 @@ async function logAllMessages(message, messageText, remoteJid, usuario, isGroup)
 }
 
 // Manejar mensajes entrantes - VERSION COMPLETA CON LOGS DECORADOS
-async function handleMessage(message) {
+// Función principal para manejar todos los mensajes entrantes
+export async function handleMessage(message, customSock = null, prefix = '') {
+  const sock = customSock || global.sock; // Usar socket personalizado o el global
   try {
     if (!message.message || !message.key.remoteJid) return;
 
@@ -1266,6 +1315,12 @@ async function handleMessage(message) {
     }
     // Quitar espacios luego del prefijo para soportar ". comando"
     normalizedText = normalizedText.replace(/^\/\s+/, '/');
+    
+    // Agregar prefijo si existe
+    if (prefix && !processedMessageIds.has(message.key.id)) {
+      logger.pretty.kv('Prefijo', prefix);
+      processedMessageIds.add(message.key.id);
+    }
     
     const parts = normalizedText.split(/\s+/);
     const command = parts[0].toLowerCase();
@@ -1347,6 +1402,56 @@ async function handleMessage(message) {
     let result = null;
     
     switch (command) {
+      case '/status':
+      case '/substatus':
+        if (!isOwner) {
+          await sock.sendMessage(remoteJid, { text: '❌ Solo el owner puede usar este comando' }, { quoted: message });
+          return;
+        }
+        const botId = args[0];
+        if (!botId) {
+          const allStatus = await getAllSubbots();
+          const statusText = allStatus.map(bot => {
+            return `ID: ${bot.code}\nEstado: ${bot.status}\nConectado: ${bot.isOnline ? 'Sí' : 'No'}\n`;
+          }).join('\n') || 'No hay subbots activos';
+          await sock.sendMessage(remoteJid, { text: statusText }, { quoted: message });
+          return;
+        }
+        const status = await getRuntimeStatus(botId);
+        await sock.sendMessage(remoteJid, {
+          text: `Status del SubBot ${botId}:\nEstado: ${status.status}\nConectado: ${status.isOnline ? 'Sí' : 'No'}`
+        }, { quoted: message });
+        break;
+
+      case '/subbots':
+        if (!isOwner) {
+          await sock.sendMessage(remoteJid, { text: '❌ Solo el owner puede usar este comando' }, { quoted: message });
+          return;
+        }
+        const bots = await getAllSubbots();
+        const botsText = bots.map(bot => {
+          return `ID: ${bot.code}\nEstado: ${bot.status}\nConectado: ${bot.isOnline ? 'Sí' : 'No'}\n`;
+        }).join('\n') || 'No hay subbots activos';
+        await sock.sendMessage(remoteJid, { text: botsText }, { quoted: message });
+        break;
+
+      case '/stopbot':
+      case '/substop':
+        if (!isOwner) {
+          await sock.sendMessage(remoteJid, { text: '❌ Solo el owner puede usar este comando' }, { quoted: message });
+          return;
+        }
+        const stopBotId = args[0];
+        if (!stopBotId) {
+          await sock.sendMessage(remoteJid, { text: 'ℹ️ Uso: /stopbot <bot-id>' }, { quoted: message });
+          return;
+        }
+        const stopResult = await stopSubbot(stopBotId);
+        await sock.sendMessage(remoteJid, {
+          text: stopResult.success ? `✅ Bot ${stopBotId} detenido` : `❌ Error: ${stopResult.error}`
+        }, { quoted: message });
+        break;
+
       // Comandos basicos
       case '/test':
         await sock.sendMessage(remoteJid, { 
@@ -1424,64 +1529,89 @@ ${new Date().toLocaleString('es-ES')}`;
       case '/qr': {
         try {
           await ensureSubbotsTable();
-          await refreshOwnerSubbotStatus(usuario);
 
-          // Verificar límite de subbots por usuario (máximo 3)
-          const userSubbots = await db('subbots').where({ owner_number: usuario, state: 'connected' });
-          if (userSubbots.length >= 3) {
-            await sock.sendMessage(remoteJid, { 
-              text: `⚠️ Has alcanzado el límite de 3 subbots conectados.\n` +
-                    `Elimina uno con /delsubbot antes de crear uno nuevo.`
+          const { launchSubbot, onSubbotEvent } = await import('./inproc-subbots.js');
+
+          const connectedCount = await db('subbots')
+            .where({ created_by: usuario, status: 'connected' })
+            .count({ count: 'id' })
+            .first();
+          if (Number(connectedCount?.count || 0) >= 3) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ Has alcanzado el límite de 3 subbots conectados. Usa `/delsubbot [code]` para liberar un espacio.'
             });
             break;
           }
 
-          const label = args.join(' ').trim() || 'KONMI-BOT';
-          const res = await generateSubbotQR(label);
-          const baseDir = path.join(process.cwd(), 'storage', 'subbots', res.sessionId);
-          const authDir = path.join(baseDir, 'auth');
+          const subbotEvents = [];
+          const metadata = {
+            requestJid: remoteJid,
+            requesterJid: usuario,
+            customPairingDisplay: 'KONMI-BOT',
+            createdAt: new Date().toISOString()
+          };
 
-          try {
-            await db('subbots').insert({
-              owner_number: usuario,
-              method: 'qr',
-              label,
-              session_id: res.sessionId,
-              auth_path: authDir,
-              state: 'pending',
-              meta: JSON.stringify({ expiresInSec: res.expiresInSec })
-            });
-          } catch (e) {
-            // continuar aunque no se pueda persistir
-            logger.warn('Persistencia subbot (qr) falló', { message: e?.message });
-          }
+          const cleanup = () => {
+            subbotEvents.forEach((off) => off?.());
+          };
 
-          const dmJid = isGroup ? (usuario + '@s.whatsapp.net') : remoteJid;
-          const caption = `🧾 *QR de Subbot*
-\n• Método: QR
-• Etiqueta: ${label}
-• Expira en: ${res.expiresInSec || 60}s
-\n*Instrucciones:*
+          const handleQRReady = async (event) => {
+            if (!launchResult?.subbot?.code || event.subbot?.code !== launchResult.subbot.code) return;
+            cleanup();
+
+            const targetSock = await getSocket();
+            if (!targetSock) {
+              logger.warn('handleQRReady sin socket disponible');
+              return;
+            }
+
+            const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
+            const caption = `🧾 *QR de Subbot*
+• Método: QR
+• Código: ${event.subbot.code}
+• Válido por: 60 segundos
+
+*Instrucciones:*
 1) Abre WhatsApp en tu teléfono.
 2) Ve a *Configuración* > *Dispositivos vinculados*.
 3) Toca *Vincular un dispositivo*.
 4) Escanea este código QR.`;
 
-          let sentInDm = true;
-          try {
-            await sock.sendMessage(dmJid, { image: res.png, caption });
-          } catch (e) {
-            sentInDm = false;
-          }
-
-          if (isGroup) {
-            await sock.sendMessage(remoteJid, { text: sentInDm ? '📩 Te envié el QR por privado.' : '⚠️ No pude enviarte por privado. Enviando QR aquí.' });
-            if (!sentInDm) {
-              await sock.sendMessage(remoteJid, { image: res.png, caption });
+            const messagePayload = { image: Buffer.from(event.data.qrImage, 'base64'), caption };
+            try {
+              await targetSock.sendMessage(dmJid, messagePayload);
+              if (isGroup) {
+                await targetSock.sendMessage(remoteJid, { text: '📩 Te envié el QR por privado.' });
+              }
+            } catch (err) {
+              logger.warn('Fallo enviando QR por privado, usando chat original', { error: err?.message });
+              await targetSock.sendMessage(remoteJid, messagePayload);
             }
-          }
+          };
 
-          setTimeout(() => { try { refreshOwnerSubbotStatus(usuario); } catch (_) {} }, 15000);
+          const handleError = async (event) => {
+            if (!launchResult?.subbot?.code || event.subbot?.code !== launchResult.subbot.code) return;
+            cleanup();
+            const targetSock = await getSocket();
+            if (!targetSock) return;
+            await targetSock.sendMessage(remoteJid, { text: `⚠️ Error generando QR: ${event.data?.message || 'Intenta nuevamente.'}` });
+          };
+
+          subbotEvents.push(onSubbotEvent('qr_ready', handleQRReady));
+          subbotEvents.push(onSubbotEvent('error', handleError));
+
+          const launchResult = await launchSubbot({
+            type: 'qr',
+            createdBy: usuario,
+            requestJid: remoteJid,
+            requestParticipant: usuario,
+            metadata
+          });
+
+          if (!launchResult.success) {
+            cleanup();
+            await sock.sendMessage(remoteJid, { text: `⚠️ Error generando QR: ${launchResult.error || 'Intenta otra vez.'}` });
+          }
         } catch (error) {
           logger.error('Error en /qr:', error);
           await sock.sendMessage(remoteJid, { text: '⚠️ Error generando QR. Intenta otra vez.' });
@@ -1492,94 +1622,102 @@ ${new Date().toLocaleString('es-ES')}`;
       case '.code':
       case '/code': {
         try {
-          // Verificar si el comando es .code (sin slash)
-          const isDotCommand = messageText?.startsWith('.code') || false;
-          
           await ensureSubbotsTable();
-          await refreshOwnerSubbotStatus(usuario);
 
-          // Verificar límite de subbots por usuario (máximo 3)
-          const userSubbots = await db('subbots').where({ owner_number: usuario, state: 'connected' });
-          if (userSubbots.length >= 3) {
-            const existingNumbers = userSubbots.map(s => s.bot_number ? `+${s.bot_number}` : 'desconocido').join(', ');
-            await sock.sendMessage(remoteJid, { 
-              text: `⚠️ Has alcanzado el límite de 3 subbots conectados:\n${existingNumbers}\n\n` +
-                    `Elimina uno con /delsubbot antes de crear uno nuevo.`
+          const { launchSubbot, onSubbotEvent } = await import('./inproc-subbots.js');
+
+          const connectedCount = await db('subbots')
+            .where({ created_by: usuario, status: 'connected' })
+            .count({ count: 'id' })
+            .first();
+          if (Number(connectedCount?.count || 0) >= 3) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ Has alcanzado el límite de 3 subbots conectados. Usa `/delsubbot [code]` para liberar un espacio.'
             });
             break;
           }
 
-          // Obtener el número del remitente
-          let phoneNumber = sanitizePhoneNumberInput(usuario);
-          
-          // Si no se pudo obtener el número del remitente, solicitar que lo ingrese manualmente
-          if (!phoneNumber || phoneNumber.length < 10) {
-            await sock.sendMessage(remoteJid, { 
-              text: '❌ No se pudo obtener tu número de teléfono.\n' +
-                    'Por favor, usa el comando con tu número completo:\n' +
-                    'Ejemplo: `/code 595123456789`'
+          const cleanedNumber = sanitizePhoneNumberInput(args[0] || usuario);
+          if (!cleanedNumber || cleanedNumber.length < 10) {
+            await sock.sendMessage(remoteJid, {
+              text: '❌ Debes proporcionar un número con al menos 10 dígitos.\nEjemplo: `/code 595974154768`'
             });
             break;
           }
 
-          // Generar el código de emparejamiento
-          const res = await generateSubbotPairingCode(phoneNumber, 'KONMI-BOT');
-          
-          if (!res || !res.code) {
-            throw new Error('No se pudo generar el código de emparejamiento');
-          }
+          const subbotEvents = [];
+          const metadata = {
+            requestJid: remoteJid,
+            requestParticipant: usuario,
+            customPairingDisplay: 'KONMI-BOT',
+            targetNumber: cleanedNumber,
+            createdAt: new Date().toISOString()
+          };
 
-          const baseDir = path.join(process.cwd(), 'storage', 'subbots', phoneNumber);
-          const authDir = path.join(baseDir, 'auth');
+          const handlePairingCode = async (event) => {
+            if (!launchResult?.subbot?.code || event.subbot?.code !== launchResult.subbot.code) return;
+            cleanup();
 
-          try {
-            await db('subbots').insert({
-              owner_number: usuario,
-              method: 'code',
-              label: 'KONMI-BOT',
-              bot_number: phoneNumber,
-              auth_path: authDir,
-              state: 'pending',
-              meta: JSON.stringify({ 
-                expiresAt: res.expiresAt || '10 min',
-                generatedAt: new Date().toISOString()
-              })
-            });
-          } catch (e) {
-            logger.error('Error al guardar en la base de datos:', e);
-            throw new Error('Error al procesar tu solicitud. Por favor, inténtalo de nuevo.');
-          }
+            const targetSock = await getSocket();
+            if (!targetSock) {
+              logger.warn('handlePairingCode sin socket disponible');
+              return;
+            }
 
-          // Enviar mensaje al remitente (en privado si es en grupo)
-          const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
-          const msg = `🔢 *CÓDIGO DE VINCULACIÓN* 🔢
+            const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
+            const msg = `🔢 *CÓDIGO DE VINCULACIÓN* 🔢
 
-📱 *Número:* +${phoneNumber}
-🔑 *Código:* ${res.code}
-⏳ *Válido por:* ${res.expiresAt || '10 minutos'}
+📱 *Número:* +${event.data?.targetNumber}
+🔑 *Código:* ${event.data?.code}
+🪪 *Aparecerá como:* ${event.data?.displayCode || 'KONMI-BOT'}
+⏳ *Válido por:* 10 minutos
 
-*INSTRUCCIONES:*
+*Instrucciones:*
 1️⃣ Abre WhatsApp en tu teléfono
 2️⃣ Ve a *Ajustes* > *Dispositivos vinculados*
-3️⃣ Toca en *Vincular un dispositivo*
+3️⃣ Toca *Vincular un dispositivo*
 4️⃣ Selecciona *Vincular con número de teléfono*
-5️⃣ Ingresa el código mostrado arriba
+5️⃣ Ingresa el código mostrado arriba`;
 
-⚠️ *Importante:*
-• El código es de un solo uso
-• No lo compartas con nadie
-• Si expira, genera uno nuevo`;
-
-          try {
-            await sock.sendMessage(dmJid, { text: msg });
-            if (isGroup) {
-              await sock.sendMessage(remoteJid, { text: '📩 Te envié el Pairing Code por privado.' });
+            try {
+              await targetSock.sendMessage(dmJid, { text: msg });
+              if (isGroup) {
+                await targetSock.sendMessage(remoteJid, { text: '📩 Te envié el Pairing Code por privado.' });
+              }
+            } catch (err) {
+              logger.warn('Fallo enviando pairing code por privado, usando chat original', { error: err?.message });
+              await targetSock.sendMessage(remoteJid, { text: msg });
             }
-          } catch (_) {
-            await sock.sendMessage(remoteJid, { text: msg });
-          }
+          };
 
-          setTimeout(() => { try { refreshOwnerSubbotStatus(usuario); } catch (_) {} }, 15000);
+          const handleError = async (event) => {
+            if (!launchResult?.subbot?.code || event.subbot?.code !== launchResult.subbot.code) return;
+            cleanup();
+            const targetSock = await getSocket();
+            if (!targetSock) return;
+            await targetSock.sendMessage(remoteJid, { text: `⚠️ Error generando Pairing Code: ${event.data?.message || 'Intenta otra vez.'}` });
+          };
+
+          const cleanup = () => {
+            subbotEvents.forEach((off) => off?.());
+          };
+
+          subbotEvents.push(onSubbotEvent('pairing_code', handlePairingCode));
+          subbotEvents.push(onSubbotEvent('error', handleError));
+
+          const launchResult = await launchSubbot({
+            type: 'code',
+            createdBy: usuario,
+            requestJid: remoteJid,
+            requestParticipant: usuario,
+            targetNumber: cleanedNumber,
+            metadata
+          });
+
+          if (!launchResult.success) {
+            cleanup();
+            await sock.sendMessage(remoteJid, { text: `⚠️ Error generando Pairing Code: ${launchResult.error || 'Intenta otra vez.'}` });
+          }
         } catch (error) {
           logger.error('Error en /code:', error);
           await sock.sendMessage(remoteJid, { text: '⚠️ Error generando Pairing Code. Intenta otra vez.' });
@@ -3873,7 +4011,76 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa` });
       // COMANDOS DE SUBBOTS - IMPLEMENTACIÓN FUNCIONAL
       case '/serbot':
         try {
-          await sock.sendMessage(remoteJid, { text: 'El comando /serbot ha sido deshabilitado temporalmente.' });
+          await ensureSubbotsTable();
+          await refreshSubbotConnectionStatus(usuario);
+
+          // Verificar límite de subbots por usuario (máximo 3)
+          const userJid = usuario + '@s.whatsapp.net';
+          const userSubbots = await db('subbots').where({ request_jid: userJid, status: 'connected' });
+          if (userSubbots.length >= 3) {
+            await sock.sendMessage(remoteJid, { 
+              text: `⚠️ Has alcanzado el límite de 3 subbots conectados.\n` +
+                    `Elimina uno con /delsubbot antes de crear uno nuevo.`
+            });
+            break;
+          }
+
+          // Generar código de vinculación
+          const res = await generateSubbotPairingCode();
+          const baseDir = path.join(process.cwd(), 'storage', 'subbots', res.sessionId);
+          const authDir = path.join(baseDir, 'auth');
+
+          try {
+            await db('subbots').insert({
+              request_jid: userJid,
+              method: 'code',
+              label: 'KONMI-BOT',
+              session_id: res.sessionId,
+              auth_path: authDir,
+              status: 'pending',
+              last_check: new Date(),
+              creation_time: new Date(),
+              meta: JSON.stringify({
+                expiresAt: res.expiresAt || '10 min',
+                generatedAt: new Date().toISOString()
+              })
+            });
+          } catch (e) {
+            logger.error('Error al guardar en la base de datos:', e);
+            throw new Error('Error al procesar tu solicitud. Por favor, inténtalo de nuevo.');
+          }
+
+          // Enviar mensaje al remitente (en privado si es en grupo)
+          const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
+          const msg = `🔢 *CÓDIGO DE VINCULACIÓN* 🔢
+
+📱 *Número:* +${res.phoneNumber}
+🔑 *Código:* ${res.code}
+⏳ *Válido por:* ${res.expiresAt || '10 minutos'}
+
+*INSTRUCCIONES:*
+1️⃣ Abre WhatsApp en tu teléfono
+2️⃣ Ve a *Ajustes* > *Dispositivos vinculados*
+3️⃣ Toca en *Vincular un dispositivo*
+4️⃣ Selecciona *Vincular con número de teléfono*
+5️⃣ Ingresa el código mostrado arriba
+
+⚠️ *Importante:*
+• El código es de un solo uso
+• No lo compartas con nadie
+• Si expira, genera uno nuevo con /serbot`;
+
+          try {
+            await sock.sendMessage(dmJid, { text: msg });
+            if (isGroup) {
+              await sock.sendMessage(remoteJid, { text: '📩 Te envié el Pairing Code por privado.' });
+            }
+          } catch (_) {
+            await sock.sendMessage(remoteJid, { text: msg });
+          }
+
+          // Actualizar estado después de 15 segundos
+          setTimeout(() => { try { refreshSubbotConnectionStatus(usuario); } catch (_) {} }, 15000);
         } catch (error) {
           logger.error('Error en /serbot:', error);
           await sock.sendMessage(remoteJid, { text: '⚠️ Error al procesar el comando. Intenta de nuevo.' });
