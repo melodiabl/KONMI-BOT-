@@ -1,4 +1,4 @@
-// Configuración del logger
+// Configuracin del logger
 import pino from 'pino';
 import path from 'path';
 import fs from 'fs';
@@ -102,20 +102,20 @@ logger.whatsapp = {
 
 // Ayudantes visuales para consola (banners bonitos)
 logger.pretty = {
-  banner: (title, icon = '🚀') => {
-    const line = chalk.gray('─'.repeat(Math.max(24, title.length + 8)));
-    console.log(`${chalk.gray('┌')}${line}${chalk.gray('┐')}`);
-    console.log(`${chalk.gray('│')} ${icon}  ${chalk.bold(title)} ${chalk.gray(' '.repeat(Math.max(1, line.length - title.length - 6)))}${chalk.gray('│')}`);
-    console.log(`${chalk.gray('└')}${line}${chalk.gray('┘')}`);
+  banner: (title, icon = '') => {
+    const line = chalk.gray(''.repeat(Math.max(24, title.length + 8)));
+    console.log(`${chalk.gray('')}${line}${chalk.gray('')}`);
+    console.log(`${chalk.gray('')} ${icon}  ${chalk.bold(title)} ${chalk.gray(' '.repeat(Math.max(1, line.length - title.length - 6)))}${chalk.gray('')}`);
+    console.log(`${chalk.gray('')}${line}${chalk.gray('')}`);
   },
-  section: (label, icon = '•') => {
+  section: (label, icon = '') => {
     console.log(`${chalk.cyan(icon)} ${chalk.bold(label)}`);
   },
   kv: (key, value) => {
-    console.log(`  ${chalk.gray('›')} ${chalk.white(key)}: ${chalk.green(String(value))}`);
+    console.log(`  ${chalk.gray('')} ${chalk.white(key)}: ${chalk.green(String(value))}`);
   },
   line: (text) => {
-    console.log(`${chalk.gray('›')} ${text}`);
+    console.log(`${chalk.gray('')} ${text}`);
   }
 };
 

@@ -801,7 +801,7 @@ async function handleLogsAdvanced(type, usuario, grupo, fecha) {
       case 'moderacion':
       case 'moderation':
         logs = await db('logs').where({ tipo: 'moderacion' }).orderBy('fecha', 'desc').limit(30);
-        title = ' Logs de Moderación';
+        title = ' Logs de Moderacin';
         break;
       default:
         logs = await db('logs').orderBy('fecha', 'desc').limit(30);
@@ -829,10 +829,10 @@ async function handleLogsAdvanced(type, usuario, grupo, fecha) {
         const groupName = d.group_name || '';
         let line = '';
         if (action === 'promote') line = `${index + 1}. ${fechaL}\n    ${actor} dio admin a ${targetName || targetNum} (${targetNum})\n    Grupo: ${groupName}`;
-        else if (action === 'demote') line = `${index + 1}. ${fechaL}\n    ${actor} quitó admin a ${targetName || targetNum} (${targetNum})\n    Grupo: ${groupName}`;
-        else if (action === 'kick') line = `${index + 1}. ${fechaL}\n    ${actor} expulsó a ${targetName || targetNum} (${targetNum})\n    Grupo: ${groupName}`;
-        else if (action === 'lock') line = `${index + 1}. ${fechaL}\n    ${actor} bloqueó el grupo ${groupName}`;
-        else if (action === 'unlock') line = `${index + 1}. ${fechaL}\n    ${actor} desbloqueó el grupo ${groupName}`;
+        else if (action === 'demote') line = `${index + 1}. ${fechaL}\n    ${actor} quit admin a ${targetName || targetNum} (${targetNum})\n    Grupo: ${groupName}`;
+        else if (action === 'kick') line = `${index + 1}. ${fechaL}\n    ${actor} expuls a ${targetName || targetNum} (${targetNum})\n    Grupo: ${groupName}`;
+        else if (action === 'lock') line = `${index + 1}. ${fechaL}\n    ${actor} bloque el grupo ${groupName}`;
+        else if (action === 'unlock') line = `${index + 1}. ${fechaL}\n    ${actor} desbloque el grupo ${groupName}`;
         else line = `${index + 1}. ${fechaL}\n    ${actor} -> ${action} ${targetName || targetNum}`;
         message += `${line}\n\n`;
       });

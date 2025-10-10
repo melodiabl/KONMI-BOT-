@@ -20,10 +20,10 @@ const backupPath = join(backupDir, `database-${timestamp}.sqlite`);
 try {
   if (existsSync(dbPath)) {
     copyFileSync(dbPath, backupPath);
-    console.log(`✅ Copia de seguridad creada en: ${backupPath}`);
+    console.log(` Copia de seguridad creada en: ${backupPath}`);
   } else {
-    console.log('ℹ️ No se encontró la base de datos original, creando una nueva...');
+    console.log(' No se encontr la base de datos original, creando una nueva...');
   }
 } catch (error) {
-  console.error('❌ Error al crear la copia de seguridad:', error.message);
+  console.error(' Error al crear la copia de seguridad:', error.message);
 }

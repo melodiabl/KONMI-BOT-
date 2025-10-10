@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const dbPath = join(__dirname, 'storage', 'database.sqlite');
 
-// Configuración de Knex
+// Configuracin de Knex
 const config = {
   client: 'sqlite3',
   connection: {
@@ -19,7 +19,7 @@ const config = {
   }
 };
 
-// Función para crear la tabla subbots
+// Funcin para crear la tabla subbots
 async function createSubbotsTable() {
   const db = knex(config);
   
@@ -28,12 +28,12 @@ async function createSubbotsTable() {
     const tableExists = await db.schema.hasTable('subbots');
     
     if (tableExists) {
-      console.log('ℹ️ La tabla subbots ya existe. Eliminando...');
+      console.log(' La tabla subbots ya existe. Eliminando...');
       await db.schema.dropTable('subbots');
     }
     
     // Crear la tabla con la estructura correcta
-    console.log('🔄 Creando tabla subbots...');
+    console.log(' Creando tabla subbots...');
     await db.schema.createTable('subbots', (table) => {
       table.increments('id').primary();
       table.string('code').unique().notNullable();
@@ -51,39 +51,39 @@ async function createSubbotsTable() {
       table.integer('message_count').defaultTo(0);
       table.json('settings').nullable();
       
-      // Índices para optimizar consultas
+      // ndices para optimizar consultas
       table.index('user_phone');
       table.index('status');
       table.index('is_active');
       table.index('last_activity');
     });
     
-    console.log('✅ Tabla subbots creada exitosamente');
+    console.log(' Tabla subbots creada exitosamente');
     
   } catch (error) {
-    console.error('❌ Error al crear la tabla subbots:', error);
+    console.error(' Error al crear la tabla subbots:', error);
     throw error;
   } finally {
     await db.destroy();
   }
 }
 
-// Función principal
+// Funcin principal
 async function main() {
   try {
-    console.log('🚀 Inicializando base de datos...');
+    console.log(' Inicializando base de datos...');
     
     // Crear la tabla subbots
     await createSubbotsTable();
     
-    console.log('\n✨ Base de datos inicializada correctamente');
-    console.log(`📁 Ubicación: ${dbPath}`);
+    console.log('\n Base de datos inicializada correctamente');
+    console.log(` Ubicacin: ${dbPath}`);
     
   } catch (error) {
-    console.error('\n❌ Error durante la inicialización:', error);
+    console.error('\n Error durante la inicializacin:', error);
     process.exit(1);
   }
 }
 
-// Ejecutar la inicialización
+// Ejecutar la inicializacin
 main();

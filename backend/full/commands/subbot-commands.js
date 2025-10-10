@@ -10,14 +10,14 @@ const { es } = pkg;
  * Muestra la ayuda de comandos de subbots
  */
 async function handleHelp(sock, from, isGroup, msg) {
-  const helpText = `🤖 *Comandos de SubBots* 🤖
+  const helpText = ` *Comandos de SubBots* 
 
 ` +
-  `🔹 */subbot pair [número]* - Crea un nuevo subbot con código de emparejamiento\n` +
-  `🔹 */subbot qr* - Genera un código QR para un nuevo subbot\n` +
-  `🔹 */subbot list* - Muestra tus subbots\n` +
-  `🔹 */subbot delete [id]* - Elimina un subbot\n` +
-  `🔹 */subbot help* - Muestra esta ayuda`;
+  ` */subbot pair [nmero]* - Crea un nuevo subbot con cdigo de emparejamiento\n` +
+  ` */subbot qr* - Genera un cdigo QR para un nuevo subbot\n` +
+  ` */subbot list* - Muestra tus subbots\n` +
+  ` */subbot delete [id]* - Elimina un subbot\n` +
+  ` */subbot help* - Muestra esta ayuda`;
 
   await sock.sendMessage(from, { 
     text: helpText,
@@ -26,14 +26,14 @@ async function handleHelp(sock, from, isGroup, msg) {
 }
 
 /**
- * Maneja el comando de creación de subbot con pairing code
+ * Maneja el comando de creacin de subbot con pairing code
  */
 async function handlePairSubbot(sock, from, isGroup, msg, args) {
   const phoneNumber = args[0];
   
   if (!phoneNumber || phoneNumber.length < 10) {
     return await sock.sendMessage(from, { 
-      text: '❌ Debes proporcionar un número de teléfono válido (mínimo 10 dígitos)\n' +
+      text: ' Debes proporcionar un nmero de telfono vlido (mnimo 10 dgitos)\n' +
             'Ejemplo: */subbot pair 595974154768*',
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
@@ -41,13 +41,13 @@ async function handlePairSubbot(sock, from, isGroup, msg, args) {
 
   try {
     const processingMsg = await sock.sendMessage(from, { 
-      text: '⏳ Generando código de emparejamiento...',
+      text: ' Generando cdigo de emparejamiento...',
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
 
-    // Generar código de emparejamiento usando baileys-mod
+    // Generar cdigo de emparejamiento usando baileys-mod
     const result = await generateSubbotPairingCode(
-      phoneNumber.replace(/[^0-9]/g, ''), // Limpiar número
+      phoneNumber.replace(/[^0-9]/g, ''), // Limpiar nmero
       `KONMI-${Date.now().toString().slice(-4)}`
     );
 
@@ -70,40 +70,40 @@ async function handlePairSubbot(sock, from, isGroup, msg, args) {
       });
 
       await sock.sendMessage(from, {
-        text: `✅ *CÓDIGO DE EMPAREJAMIENTO* 🔑\n\n` +
-              `📱 *Número:* ${phoneNumber}\n` +
-              `🔢 *Código:* ${result.code}\n\n` +
+        text: ` *CDIGO DE EMPAREJAMIENTO* \n\n` +
+              ` *Nmero:* ${phoneNumber}\n` +
+              ` *Cdigo:* ${result.code}\n\n` +
               `*Instrucciones:*\n` +
               `1. Abre WhatsApp en tu celular\n` +
               `2. Ve a Ajustes > Dispositivos vinculados\n` +
               `3. Toca "Vincular un dispositivo"\n` +
-              `4. Ingresa este código: *${result.code}*\n\n` +
-              `⏱️ *Expira en:* ${formatDistanceToNow(new Date(result.expiresAt), { locale: es })}`,
+              `4. Ingresa este cdigo: *${result.code}*\n\n` +
+              ` *Expira en:* ${formatDistanceToNow(new Date(result.expiresAt), { locale: es })}`,
         ...(isGroup ? { mentions: [msg.sender] } : {})
       });
     } else {
-      throw new Error(result.error || 'No se pudo generar el código de emparejamiento');
+      throw new Error(result.error || 'No se pudo generar el cdigo de emparejamiento');
     }
   } catch (error) {
     logger.error('Error en comando pair:', error);
     await sock.sendMessage(from, { 
-      text: `❌ Error al generar el código de emparejamiento: ${error.message}`,
+      text: ` Error al generar el cdigo de emparejamiento: ${error.message}`,
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
   }
 }
 
 /**
- * Maneja el comando de creación de subbot con QR
+ * Maneja el comando de creacin de subbot con QR
  */
 async function handleQRSubbot(sock, from, isGroup, msg) {
   try {
     const processingMsg = await sock.sendMessage(from, { 
-      text: '⏳ Generando código QR...',
+      text: ' Generando cdigo QR...',
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
 
-    // Generar código QR usando baileys-mod
+    // Generar cdigo QR usando baileys-mod
     const result = await generateSubbotQR(`KONMI-QR-${Date.now().toString().slice(-4)}`);
 
     if (result.success) {
@@ -121,26 +121,26 @@ async function handleQRSubbot(sock, from, isGroup, msg) {
         })
       });
 
-      // Enviar el código QR como imagen
+      // Enviar el cdigo QR como imagen
       await sock.sendMessage(from, {
         image: Buffer.from(result.png, 'base64'),
-        caption: `🔷 *CÓDIGO QR PARA VINCULAR SUBBOT* 🔷\n\n` +
+        caption: ` *CDIGO QR PARA VINCULAR SUBBOT* \n\n` +
                  `*ID del Subbot:* \`${result.sessionId}\`\n\n` +
                  `*Instrucciones:*\n` +
                  `1. Abre WhatsApp en tu celular\n` +
                  `2. Ve a Ajustes > Dispositivos vinculados\n` +
                  `3. Toca "Vincular un dispositivo"\n` +
-                 `4. Escanea este código QR\n\n` +
-                 `⏱️ *Expira en:* ${formatDistanceToNow(new Date(result.expiresAt), { locale: es })}`,
+                 `4. Escanea este cdigo QR\n\n` +
+                 ` *Expira en:* ${formatDistanceToNow(new Date(result.expiresAt), { locale: es })}`,
         ...(isGroup ? { mentions: [msg.sender] } : {})
       });
     } else {
-      throw new Error(result.error || 'No se pudo generar el código QR');
+      throw new Error(result.error || 'No se pudo generar el cdigo QR');
     }
   } catch (error) {
     logger.error('Error en comando qr:', error);
     await sock.sendMessage(from, { 
-      text: `❌ Error al generar el código QR: ${error.message}`,
+      text: ` Error al generar el cdigo QR: ${error.message}`,
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
   }
@@ -161,26 +161,26 @@ async function handleListSubbots(sock, from, isGroup, msg) {
       });
     }
     
-    let message = `📱 *Tus Subbots (${subbots.length})*\n\n`;
+    let message = ` *Tus Subbots (${subbots.length})*\n\n`;
     
     for (const [index, subbot] of subbots.entries()) {
       const metadata = typeof subbot.metadata === 'string' ? JSON.parse(subbot.metadata) : subbot.metadata || {};
       const statusEmoji = getStatusEmoji(subbot.status);
       
       message += `${index + 1}. ${statusEmoji} *${subbot.display_name || 'Sin nombre'}*\n`;
-      message += `   🆔: ${subbot.id}\n`;
+      message += `   : ${subbot.id}\n`;
       
       if (subbot.phone_number) {
-        message += `   📞: ${subbot.phone_number}\n`;
+        message += `   : ${subbot.phone_number}\n`;
       }
       
-      message += `   📅: ${formatDistanceToNow(new Date(subbot.created_at), { addSuffix: true, locale: es })}\n`;
-      message += `   🔄: ${formatDistanceToNow(new Date(subbot.updated_at), { addSuffix: true, locale: es })}\n`;
+      message += `   : ${formatDistanceToNow(new Date(subbot.created_at), { addSuffix: true, locale: es })}\n`;
+      message += `   : ${formatDistanceToNow(new Date(subbot.updated_at), { addSuffix: true, locale: es })}\n`;
       
       if (subbot.status === 'connected') {
-        message += `   ✅ Conectado\n`;
+        message += `    Conectado\n`;
       } else if (subbot.status === 'pending') {
-        message += `   ⏳ Esperando conexión\n`;
+        message += `    Esperando conexin\n`;
       }
       
       message += '\n';
@@ -196,7 +196,7 @@ async function handleListSubbots(sock, from, isGroup, msg) {
   } catch (error) {
     logger.error('Error al listar subbots:', error);
     await sock.sendMessage(from, { 
-      text: '❌ Error al listar los subbots',
+      text: ' Error al listar los subbots',
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
   }
@@ -210,7 +210,7 @@ async function handleDeleteSubbot(sock, from, isGroup, msg, args) {
   
   if (!subbotId) {
     return await sock.sendMessage(from, { 
-      text: '❌ Debes proporcionar el ID del subbot a eliminar\n' +
+      text: ' Debes proporcionar el ID del subbot a eliminar\n' +
             'Ejemplo: */subbot delete subbot_1234567890*',
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
@@ -223,13 +223,13 @@ async function handleDeleteSubbot(sock, from, isGroup, msg, args) {
     }
     
     await sock.sendMessage(from, {
-      text: `✅ Subbot *${subbotId}* eliminado correctamente`,
+      text: ` Subbot *${subbotId}* eliminado correctamente`,
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
   } catch (error) {
     logger.error(`Error al eliminar subbot ${subbotId}:`, error);
     await sock.sendMessage(from, { 
-      text: `❌ Error al eliminar el subbot: ${error.message}`,
+      text: ` Error al eliminar el subbot: ${error.message}`,
       ...(isGroup ? { mentions: [msg.sender] } : {})
     });
   }
@@ -240,14 +240,14 @@ async function handleDeleteSubbot(sock, from, isGroup, msg, args) {
  */
 function getStatusEmoji(status) {
   const statusEmojis = {
-    'connected': '🟢',
-    'pending': '🟡',
-    'error': '🔴',
-    'disconnected': '⚫',
-    'expired': '⏱️'
+    'connected': '',
+    'pending': '',
+    'error': '',
+    'disconnected': '',
+    'expired': ''
   };
   
-  return statusEmojis[status] || '❓';
+  return statusEmojis[status] || '';
 }
 
 /**
@@ -285,12 +285,12 @@ export default {
   description: 'Gestiona tus subbots',
   command: 'subbot',
   handler: handleSubbotCommand,
-  help: `🤖 *Comandos de SubBots* 🤖
+  help: ` *Comandos de SubBots* 
 
 ` +
-  `🔹 */subbot pair [número]* - Crea un nuevo subbot con código de emparejamiento\n` +
-  `🔹 */subbot qr* - Genera un código QR para un nuevo subbot\n` +
-  `🔹 */subbot list* - Muestra tus subbots\n` +
-  `🔹 */subbot delete [id]* - Elimina un subbot\n` +
-  `🔹 */subbot help* - Muestra esta ayuda`
+  ` */subbot pair [nmero]* - Crea un nuevo subbot con cdigo de emparejamiento\n` +
+  ` */subbot qr* - Genera un cdigo QR para un nuevo subbot\n` +
+  ` */subbot list* - Muestra tus subbots\n` +
+  ` */subbot delete [id]* - Elimina un subbot\n` +
+  ` */subbot help* - Muestra esta ayuda`
 };

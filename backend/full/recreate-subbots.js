@@ -2,17 +2,17 @@ import db from './db.js';
 
 async function recreateSubbotsTable() {
   try {
-    console.log('🔄 Recreando la tabla subbots...');
+    console.log(' Recreando la tabla subbots...');
     
     // Verificar si la tabla existe y eliminarla
     const tableExists = await db.schema.hasTable('subbots');
     if (tableExists) {
-      console.log('🗑️  Eliminando tabla subbots existente...');
+      console.log('  Eliminando tabla subbots existente...');
       await db.schema.dropTable('subbots');
     }
     
     // Crear la tabla con la estructura correcta
-    console.log('🆕 Creando nueva tabla subbots...');
+    console.log(' Creando nueva tabla subbots...');
     await db.schema.createTable('subbots', (table) => {
       table.increments('id').primary();
       table.string('code').unique().notNullable();
@@ -30,23 +30,23 @@ async function recreateSubbotsTable() {
       table.integer('message_count').defaultTo(0);
       table.json('settings').nullable();
       
-      // Índices para optimizar consultas
+      // ndices para optimizar consultas
       table.index('user_phone');
       table.index('status');
       table.index('is_active');
       table.index('last_activity');
     });
     
-    console.log('✅ Tabla subbots recreada exitosamente');
+    console.log(' Tabla subbots recreada exitosamente');
     
   } catch (error) {
-    console.error('❌ Error al recrear la tabla subbots:', error);
+    console.error(' Error al recrear la tabla subbots:', error);
   } finally {
     try {
       await db.destroy();
-      console.log('🔌 Conexión cerrada.');
+      console.log(' Conexin cerrada.');
     } catch (e) {
-      console.error('Error al cerrar la conexión:', e);
+      console.error('Error al cerrar la conexin:', e);
     }
     process.exit(0);
   }

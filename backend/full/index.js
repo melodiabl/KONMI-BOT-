@@ -168,13 +168,13 @@ app.get('/api/health', (req, res) => {
 
 // Start the bot connection and server
 async function start() {
-  // 0) Migraciones automáticas (idempotentes)
+  // 0) Migraciones automticas (idempotentes)
   try {
     console.log(' Ejecutando migraciones de base de datos...');
     await db.migrate.latest();
     console.log(' Migraciones aplicadas correctamente.');
   } catch (error) {
-    console.warn(' No se pudieron aplicar migraciones automáticamente:', error?.message || error);
+    console.warn(' No se pudieron aplicar migraciones automticamente:', error?.message || error);
   }
 
   // 1) Iniciar el servidor HTTP
@@ -185,7 +185,7 @@ async function start() {
     console.log(` Bot: ${config.bot.name} v${config.bot.version}`);
   });
 
-  // 2) Conectar el bot (esto mostrará el menú interactivo según método seleccionado)
+  // 2) Conectar el bot (esto mostrar el men interactivo segn mtodo seleccionado)
   await connectToWhatsApp(join(__dirname, 'storage', 'baileys_full'));
 
 }

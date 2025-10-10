@@ -5,7 +5,7 @@
 const PRIMARY_OWNER = (process.env.OWNER_WHATSAPP_NUMBER || '595974154768').replace(/[^0-9]/g, '');
 global.owner = [
   [PRIMARY_OWNER, 'Owner', true],
-  // Agregar más administradores aquí si es necesario
+  // Agregar ms administradores aqu si es necesario
 ];
 
 // Lista de moderadores (pueden usar comandos de moderacin)
@@ -83,7 +83,7 @@ function setPrimaryOwner(number, name = 'Owner') {
 function isSuperAdmin(sender) {
   if (!global.owner || !Array.isArray(global.owner)) return false;
   const senderNumber = normalizeNumber(sender);
-  // Verificar si el sender es un superadmin por número (soporta LID y JID)
+  // Verificar si el sender es un superadmin por nmero (soporta LID y JID)
   return global.owner.some(([number]) => normalizeNumber(number) === senderNumber);
 }
 

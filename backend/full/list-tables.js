@@ -2,7 +2,7 @@ import db from './db.js';
 
 async function listTables() {
   try {
-    console.log('📋 Tablas en la base de datos:');
+    console.log(' Tablas en la base de datos:');
     
     // SQLite specific query to list all tables
     const tables = await db.raw("SELECT name FROM sqlite_master WHERE type='table'");
@@ -16,7 +16,7 @@ async function listTables() {
     
     // For each table, show columns
     for (const table of tables) {
-      console.log(`\n🔍 Estructura de la tabla ${table.name}:`);
+      console.log(`\n Estructura de la tabla ${table.name}:`);
       try {
         const columns = await db(table.name).columnInfo();
         console.log(Object.keys(columns).join(', '));
@@ -30,7 +30,7 @@ async function listTables() {
   } finally {
     try {
       await db.destroy();
-      console.log('\n🔌 Conexión cerrada.');
+      console.log('\n Conexin cerrada.');
     } catch (e) {
       // Ignore
     }

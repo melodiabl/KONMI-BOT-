@@ -1,0 +1,352 @@
+import * as baileys from 'baileys-mod';
+import path from 'path';
+import pino from 'pino';
+import fs from 'fs';
+
+const {
+  makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  Browsers
+} = baileys;
+
+const CODE = process.env.SUB_CODE;
+const TYPE = process.env.SUB_TYPE || 'qr';
+const DIR = process.env.SUB_DIR;
+const RAW_TARGET = process.env.SUB_TARGET || '';
+const TARGET = RAW_TARGET
+  ? (RAW_TARGET.startsWith('+') ? RAW_TARGET : `+${RAW_TARGET.replace(/[^0-9]/g, '')}` )
+  : '';
+const DISPLAY = process.env.SUB_DISPLAY || 'KONMI-BOT';
+
+const MAX_RETRIES = parseInt(process.env.SUBBOT_MAX_RETRIES || '3', 10);
+const RETRY_DELAY_MS = parseInt(process.env.SUBBOT_RETRY_DELAY_MS || '3000', 10);
+const ATTEMPT_TIMEOUT_MS = parseInt(process.env.SUBBOT_ATTEMPT_TIMEOUT_MS || '180000', 10);
+const SUBBOT_BROWSER = (process.env.SUBBOT_BROWSER || 'ubuntu').toLowerCase();
+
+if (!CODE || !DIR) {
+  process.send?.({ event: 'error', data: { message: 'Missing SUB_CODE or SUB_DIR' } });
+  process.exit(1);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetry(statusCode) {
+  if (statusCode === undefined || statusCode === null) return true;
+  const retryable = new Set([401, 408, 415, 428, 440, 499, 500, 503, 515]);
+  return retryable.has(statusCode);
+}
+
+function resolveBrowserPreset() {
+  try {
+    if (SUBBOT_BROWSER === 'windows') return Browsers.windows('WhatsApp Web');
+    if (SUBBOT_BROWSER === 'macos') return Browsers.macOS('WhatsApp Web');
+    if (SUBBOT_BROWSER === 'chrome') return Browsers.chrome('Chrome');
+    return Browsers.ubuntu('Chrome');
+  } catch (error) {
+    console.log('No se pudo aplicar navegador personalizado, usando default Baileys', error?.message);
+    return undefined;
+  }
+}
+
+async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth }) {
+  console.log(`  Intento ${attempt}/${maxAttempts}`);
+
+  if (cleanupAuth) {
+    try {
+      fs.rmSync(authDir, { recursive: true, force: true });
+    } catch (_) {}
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
+
+  if (TYPE === 'code') {
+    try {
+      state.creds.usePairingCode = true;
+      state.creds.registered = false;
+      state.creds.me = undefined;
+      state.creds.account = undefined;
+      state.creds.device = undefined;
+    } catch (error) {
+      console.log('No se pudo preparar credenciales para pairing:', error);
+    }
+  }
+
+  console.log('Auth state preparado');
+
+  const { version, isLatest } = await fetchLatestBaileysVersion();
+  console.log('Baileys version:', { version, isLatest });
+
+  const sock = makeWASocket({
+    version,
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: false,
+    auth: state,
+    browser: resolveBrowserPreset()
+  });
+  console.log('Socket creado');
+
+  sock.ev.on('creds.update', saveCreds);
+
+  const targetDigits = TARGET.replace(/[^0-9]/g, '');
+  const rawCustomPairing = (process.env.PAIRING_CODE || '').toString().trim();
+  const sanitizedCustomPairing = rawCustomPairing.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const customPairingCode = sanitizedCustomPairing.length === 8 ? sanitizedCustomPairing : '';
+
+  if (TYPE === 'code' && rawCustomPairing && !customPairingCode) {
+    console.log('PAIRING_CODE definido pero no tiene 8 caracteres, usando código generado por Baileys');
+  }
+
+  let pairingDelivered = false;
+  let awaitingConnection = false;
+  let pairingRequestInFlight = false;
+  let connectedReported = false;
+  let resolved = false;
+  let registeredSession = false;
+
+  return await new Promise((resolve) => {
+    let timeoutTimer;
+
+    const cleanup = ({ fatal = false, reason } = {}) => {
+      if (resolved) return;
+      resolved = true;
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      sock.ev.off('connection.update', onUpdate);
+      try { sock.ws?.close?.(); } catch (_) {}
+      if (!registeredSession && reason && !fatal) {
+        process.send?.({ event: 'status', data: { status: 'pending', reason } });
+      }
+    };
+
+    const emitError = (message, reason) => {
+      process.send?.({ event: 'error', data: { message, reason } });
+    };
+
+    const emitDisconnected = (reason, statusCode) => {
+      process.send?.({ event: 'disconnected', data: { reason, statusCode } });
+    };
+
+    const emitPairingCode = (code) => {
+      if (pairingDelivered) return;
+      pairingDelivered = true;
+      awaitingConnection = true;
+      pairingRequestInFlight = false;
+      process.send?.({
+        event: 'pairing_code',
+        data: {
+          code,
+          displayCode: DISPLAY,
+          targetNumber: targetDigits,
+          customCodeUsed: !!customPairingCode
+        }
+      });
+    };
+
+    const requestPairing = async () => {
+      if (pairingDelivered || pairingRequestInFlight) return;
+      pairingRequestInFlight = true;
+      try {
+        console.log('Solicitando pairing code a Baileys...');
+        const code = customPairingCode
+          ? await sock.requestPairingCode(targetDigits, customPairingCode)
+          : await sock.requestPairingCode(targetDigits);
+        console.log('Pairing code recibido:', code);
+        pairingRequestInFlight = false;
+        emitPairingCode(code);
+      } catch (error) {
+        pairingRequestInFlight = false;
+        console.error('requestPairingCode falló:', error);
+        if (!pairingDelivered) {
+          const statusCode = error?.output?.statusCode || error?.data?.statusCode;
+          if (!shouldRetry(statusCode)) {
+            emitError(error?.message || 'Error solicitando pairing code', statusCode);
+            cleanup({ fatal: true, reason: error?.message });
+            resolve({ status: 'fatal', statusCode, reason: error?.message });
+          } else {
+            console.log('Error retryable solicitando pairing code, reintentando...', statusCode);
+            setTimeout(requestPairing, Math.max(3000, RETRY_DELAY_MS));
+          }
+        }
+      }
+    };
+
+    const onUpdate = (update = {}) => {
+      const { connection, qr, pairingCode, lastDisconnect } = update;
+      console.log('Connection update:', {
+        connection,
+        hasQR: !!qr,
+        hasTarget: !!TARGET,
+        hasPairingCode: !!pairingCode
+      });
+
+      if (pairingCode && TYPE === 'code') {
+        console.log('Pairing code entregado por evento:', pairingCode);
+        emitPairingCode(pairingCode);
+        return;
+      }
+
+      if (qr && TYPE === 'qr' && !pairingDelivered) {
+        import('qrcode').then((QR) => {
+          QR.default
+            .toDataURL(qr, {
+              errorCorrectionLevel: 'H',
+              margin: 2,
+              scale: 8,
+              color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+              }
+            })
+            .then((png) => {
+              const base64 = png.split(',')[1];
+              process.send?.({ event: 'qr_ready', data: { qrImage: base64, qrCode: qr } });
+            })
+            .catch((err) => emitError(err.message, 'qr_generation'));
+        });
+      }
+
+      if (connection === 'open') {
+        if (!connectedReported) {
+          connectedReported = true;
+          process.send?.({ event: 'connected' });
+        }
+
+        if (TYPE === 'code') {
+          if (awaitingConnection) {
+            awaitingConnection = false;
+            registeredSession = true;
+            cleanup({ fatal: false, reason: 'connection_open' });
+            resolve({ status: 'success' });
+          } else {
+            requestPairing();
+          }
+        } else if (TYPE === 'qr') {
+          registeredSession = true;
+          cleanup({ fatal: false, reason: 'connection_open' });
+          resolve({ status: 'success' });
+        }
+        return;
+      }
+
+      if (connection === 'close') {
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const reasonMessage = lastDisconnect?.error?.output?.payload?.message || lastDisconnect?.error?.message;
+        const messageLC = String(reasonMessage || '').toLowerCase();
+        const isLoggedOut = messageLC.includes('logged out') || messageLC.includes('logged off') || messageLC.includes('device removed');
+        console.log('Conexión cerrada con código:', statusCode, reasonMessage || 'sin mensaje');
+
+        if (pairingDelivered && awaitingConnection && shouldRetry(statusCode)) {
+          awaitingConnection = false;
+          pairingDelivered = false;
+          pairingRequestInFlight = false;
+          console.log('Conexión cerrada antes de completar la vinculación. Solicitando nuevo código...');
+          setTimeout(requestPairing, Math.max(3000, RETRY_DELAY_MS));
+          return;
+        }
+
+        cleanup({ fatal: isLoggedOut, reason: reasonMessage || statusCode });
+
+        if (isLoggedOut) {
+          process.send?.({
+            event: 'logged_out',
+            data: { statusCode, message: reasonMessage || 'Sesión cerrada desde WhatsApp' }
+          });
+          resolve({ status: 'fatal', statusCode, reason: reasonMessage || 'logged out' });
+          return;
+        }
+
+        emitDisconnected(reasonMessage || 'connection closed', statusCode);
+
+        if (shouldRetry(statusCode)) {
+          resolve({ status: 'retry', statusCode, reason: reasonMessage });
+        } else {
+          emitError(reasonMessage || 'Conexión cerrada por WhatsApp', statusCode);
+          resolve({ status: 'fatal', statusCode, reason: reasonMessage });
+        }
+      }
+    };
+
+    sock.ev.on('connection.update', onUpdate);
+
+    if (TYPE === 'code' && TARGET) {
+      setTimeout(requestPairing, 500);
+    }
+
+    timeoutTimer = setTimeout(() => {
+      if (resolved) return;
+      console.log('Tiempo de intento agotado sin éxito');
+      cleanup({ fatal: false, reason: 'timeout' });
+      resolve({ status: 'retry', reason: 'timeout' });
+    }, ATTEMPT_TIMEOUT_MS);
+  });
+}
+
+async function start() {
+  try {
+    console.log('Iniciando subbot runner...');
+    console.log('CODE:', CODE);
+    console.log('TYPE:', TYPE);
+    console.log('DIR:', DIR);
+    console.log('TARGET:', TARGET || 'N/A');
+
+    if (TYPE === 'code' && !TARGET) {
+      process.send?.({ event: 'error', data: { message: 'No se proporcionó número objetivo para pairing.' } });
+      process.exit(1);
+    }
+
+    const authDir = path.join(DIR, 'auth');
+    console.log('Auth dir:', authDir);
+
+    const infiniteRetries = Number.isNaN(MAX_RETRIES) || MAX_RETRIES <= 0;
+    let attempt = 1;
+
+    while (infiniteRetries || attempt <= MAX_RETRIES) {
+      const result = await runAttempt({
+        attempt,
+        maxAttempts: infiniteRetries ? '' : MAX_RETRIES,
+        authDir,
+        cleanupAuth: attempt === 1
+      });
+
+      if (result.status === 'success') {
+        console.log('Subbot finalizado con éxito.');
+        setTimeout(() => process.exit(0), 1500);
+        return;
+      }
+
+      if (result.status === 'fatal') {
+        console.log('Fallo fatal en intento:', result.statusCode, result.reason);
+        process.send?.({
+          event: 'error',
+          data: {
+            message: result.reason || 'No se pudo completar la conexión con WhatsApp',
+            statusCode: result.statusCode
+          }
+        });
+        process.exit(1);
+      }
+
+      console.log('Reintentando en', RETRY_DELAY_MS, 'ms');
+      await delay(RETRY_DELAY_MS);
+      attempt += 1;
+    }
+
+    process.send?.({
+      event: 'error',
+      data: { message: 'No se pudo completar la conexión tras múltiples intentos.' }
+    });
+    process.exit(1);
+  } catch (error) {
+    console.error('Error en start():', error);
+    process.send?.({ event: 'error', data: { message: error.message } });
+    process.exit(1);
+  }
+}
+
+start().catch((error) => {
+  console.error('Error en start():', error);
+  process.send?.({ event: 'error', data: { message: error.message } });
+  process.exit(1);
+});

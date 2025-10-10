@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Cargar variables de entorno desde backend/full/.env (y también intentar fallback genérico)
+// Cargar variables de entorno desde backend/full/.env (y tambin intentar fallback genrico)
 try { dotenv.config({ path: join(__dirname, '.env') }); } catch {}
 try { dotenv.config(); } catch {}
 
@@ -34,7 +34,7 @@ function makeConfig(env) {
   const explicitClient = (process.env.DB_CLIENT || '').toLowerCase();
   let client = explicitClient;
   if (!client) {
-    // Autodetección: si hay credenciales/host/URL => Postgres; si no, SQLite
+    // Autodeteccin: si hay credenciales/host/URL => Postgres; si no, SQLite
     const hasPg = !!(process.env.DATABASE_URL || process.env.DB_HOST || process.env.DB_USER || process.env.DB_NAME);
     client = hasPg ? 'pg' : 'sqlite3';
   }

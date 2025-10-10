@@ -3,11 +3,11 @@ import logger from './config/logger.js';
 import { launchSubbot } from './inproc-subbots.js';
 
 /**
- * Inicializa los subbots existentes al arrancar la aplicación
+ * Inicializa los subbots existentes al arrancar la aplicacin
  */
 export async function initializeSubbots() {
   try {
-    logger.info('🔍 Inicializando subbots existentes...');
+    logger.info(' Inicializando subbots existentes...');
     
     // Verificar si la tabla subbots existe
     const hasTable = await db.schema.hasTable('subbots');
@@ -16,17 +16,17 @@ export async function initializeSubbots() {
       return;
     }
 
-    // Obtener todos los subbots que deberían estar activos
+    // Obtener todos los subbots que deberan estar activos
     const activeSubbots = await db('subbots')
       .where('is_active', true)
       .whereIn('status', ['connected', 'waiting_scan', 'waiting_pairing']);
 
-    logger.info(`🔄 Intentando reconectar ${activeSubbots.length} subbots...`);
+    logger.info(` Intentando reconectar ${activeSubbots.length} subbots...`);
     
     // Iniciar cada subbot en segundo plano
     for (const subbot of activeSubbots) {
       try {
-        logger.info(`🔄 Iniciando subbot ${subbot.id} (${subbot.status})`);
+        logger.info(` Iniciando subbot ${subbot.id} (${subbot.status})`);
         
         // Actualizar el estado a reconectando
         await db('subbots')
@@ -39,26 +39,26 @@ export async function initializeSubbots() {
         // Iniciar el subbot en segundo plano
         launchSubbot(subbot.id, subbot.user_phone)
           .catch(error => {
-            logger.error(`❌ Error al reconectar subbot ${subbot.id}:`, error);
+            logger.error(` Error al reconectar subbot ${subbot.id}:`, error);
           });
           
       } catch (error) {
-        logger.error(`❌ Error procesando subbot ${subbot?.id}:`, error);
+        logger.error(` Error procesando subbot ${subbot?.id}:`, error);
       }
     }
     
-    logger.info('✅ Inicialización de subbots completada');
+    logger.info(' Inicializacin de subbots completada');
   } catch (error) {
-    logger.error('❌ Error en la inicialización de subbots:', error);
+    logger.error(' Error en la inicializacin de subbots:', error);
   }
 }
 
 /**
- * Limpia el estado de los subbots al apagar la aplicación
+ * Limpia el estado de los subbots al apagar la aplicacin
  */
 export async function cleanupSubbots() {
   try {
-    logger.info('🧹 Limpiando estado de subbots...');
+    logger.info(' Limpiando estado de subbots...');
     
     // Actualizar el estado de todos los subbots a desconectados
     await db('subbots')
@@ -69,26 +69,26 @@ export async function cleanupSubbots() {
         updated_at: new Date().toISOString()
       });
       
-    logger.info('✅ Limpieza de subbots completada');
+    logger.info(' Limpieza de subbots completada');
   } catch (error) {
-    logger.error('❌ Error al limpiar el estado de los subbots:', error);
+    logger.error(' Error al limpiar el estado de los subbots:', error);
   }
 }
 
-// Manejar señales de terminación
+// Manejar seales de terminacin
 process.on('SIGINT', async () => {
-  logger.info('\n🛑 Recibida señal de terminación. Limpiando...');
+  logger.info('\n Recibida seal de terminacin. Limpiando...');
   await cleanupSubbots();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  logger.info('\n🛑 Recibida señal de terminación. Limpiando...');
+  logger.info('\n Recibida seal de terminacin. Limpiando...');
   await cleanupSubbots();
   process.exit(0);
 });
 
-// Exportar funciones para uso en otros módulos
+// Exportar funciones para uso en otros mdulos
 export default {
   initializeSubbots,
   cleanupSubbots

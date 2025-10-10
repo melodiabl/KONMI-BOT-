@@ -1,7 +1,7 @@
 import db from './db.js';
 import { getSocket } from './whatsapp.js';
 import logger from './config/logger.js';
-import * as baileys from '@whiskeysockets/baileys';
+import * as baileys from 'baileys-mod';
 import { handleAI as handleAICommand, handleClasificar as handleClasificarCommand } from './commands.js';
 import { isSuperAdmin, isModerator, isPremium, getOwnerName } from './global-config.js';
 // Consolidacion de comandos: reexportamos funciones de modulos especificos
@@ -103,12 +103,12 @@ async function handleBots(usuario) {
     if (!mine.length) {
       return {
         success: true,
-        message: ' 🧩 *Mis SubBots*\n\n No tienes subbots creados.\n\n Usa `/qr` para generar un QR o `/code [numero]` para obtener un Pairing Code.'
+        message: '  *Mis SubBots*\n\n No tienes subbots creados.\n\n Usa `/qr` para generar un QR o `/code [número]` para obtener un Pairing Code.'
       };
     }
 
     const now = Date.now();
-    let text = ` 🤖 *Mis SubBots (${mine.length})*\n\n`;
+    let text = `  *Mis SubBots (${mine.length})*\n\n`;
     for (let i = 0; i < mine.length; i++) {
       const sb = mine[i];
       const code = sb.code || sb.session_id || `subbot_${i + 1}`;
@@ -125,7 +125,7 @@ async function handleBots(usuario) {
         uptime = `${h}h ${m}m`;
       }
 
-      text += `${i + 1}. ${sb.isOnline ? '✅' : '❌'} *${code}*\n`;
+      text += `${i + 1}. ${sb.isOnline ? '' : ''} *${code}*\n`;
       text += `   Tipo: ${type}\n`;
       text += `   Estado: ${status}\n`;
       if (sb.bot_number) text += `   Número: +${sb.bot_number}\n`;
@@ -135,8 +135,8 @@ async function handleBots(usuario) {
     }
 
     text += ' Acciones:\n';
-    text += '  • /delsubbot <codigo> — Eliminar subbot\n';
-    text += '  • /statusbot <codigo> — Ver estado detallado\n';
+    text += '   /delsubbot <codigo>  Eliminar subbot\n';
+    text += '   /statusbot <codigo>  Ver estado detallado\n';
 
     return { success: true, message: text };
   } catch (error) {
@@ -145,7 +145,7 @@ async function handleBots(usuario) {
   }
 }
 
-/** Determina si el usuario es el owner específico (dinámico por ENV/global) o superadmin */
+/** Determina si el usuario es el owner especfico (dinmico por ENV/global) o superadmin */
 function isSpecificOwner(usuario) {
   const normalized = String(usuario || '')
     .split('@')[0]
@@ -160,7 +160,7 @@ function isSpecificOwner(usuario) {
  * Verificar si un usuario es admin del grupo o tiene rol de owner/superadmin/moderador
  */
 async function isOwnerOrAdmin(usuario, grupo = null) {
-  // Prioridad 1: owner específico o superadmin global
+  // Prioridad 1: owner especfico o superadmin global
   try {
     if (isSpecificOwner(usuario) || isSuperAdmin(usuario)) return true;
   } catch (_) {}
@@ -175,12 +175,12 @@ async function isOwnerOrAdmin(usuario, grupo = null) {
     }
   }
 
-  // Prioridad 3: moderadores configurados dinámicamente
+  // Prioridad 3: moderadores configurados dinmicamente
   try {
     if (isModerator(usuario)) return true;
   } catch (_) {}
 
-  // Prioridad 4: lista dinámica de administradores
+  // Prioridad 4: lista dinmica de administradores
   const normalized = String(usuario).split(':')[0].replace(/[^0-9]/g, '');
   return dynamicAdminNumbers.some((num) => String(num).replace(/[^0-9]/g, '') === normalized);
 }
@@ -570,7 +570,7 @@ async function handleLock(usuario, grupo, isGroup) {
   try {
     await sock.groupSettingUpdate(grupo, 'announcement');
     await logCommand('administracion', 'lock', usuario, grupo, { action: 'lock' });
-    return { success: true, message: '🔒 Grupo bloqueado. Solo administradores pueden enviar mensajes.' };
+    return { success: true, message: ' Grupo bloqueado. Solo administradores pueden enviar mensajes.' };
   } catch (error) {
     // Usar el logger de WhatsApp para mejor formato
     logger.whatsapp.error(`Error en /lock: ${error.message}`, {
@@ -581,7 +581,7 @@ async function handleLock(usuario, grupo, isGroup) {
       timestamp: new Date().toISOString()
     });
     
-    const detail = error?.message ? ` Detalle: ${error.message}` : ' Asegúrate de que el bot sea administrador.';
+    const detail = error?.message ? ` Detalle: ${error.message}` : ' Asegrate de que el bot sea administrador.';
     return { success: false, message: ` Error al bloquear el grupo.${detail}` };
   }
 }
@@ -603,7 +603,7 @@ async function handleUnlock(usuario, grupo, isGroup) {
   try {
     await sock.groupSettingUpdate(grupo, 'not_announcement');
     await logCommand('administracion', 'unlock', usuario, grupo, { action: 'unlock' });
-    return { success: true, message: '🔓 Grupo desbloqueado. Todos los participantes pueden enviar mensajes.' };
+    return { success: true, message: ' Grupo desbloqueado. Todos los participantes pueden enviar mensajes.' };
   } catch (error) {
     // Usar el logger de WhatsApp para mejor formato
     logger.whatsapp.error(`Error en /unlock: ${error.message}`, {
@@ -614,7 +614,7 @@ async function handleUnlock(usuario, grupo, isGroup) {
       timestamp: new Date().toISOString()
     });
     
-    const detail = error?.message ? ` Detalle: ${error.message}` : ' Asegúrate de que el bot sea administrador.';
+    const detail = error?.message ? ` Detalle: ${error.message}` : ' Asegrate de que el bot sea administrador.';
     return { success: false, message: ` Error al desbloquear el grupo.${detail}` };
   }
 }
@@ -1690,40 +1690,40 @@ async function handleCode(usuario, grupo, remoteJid, args, sender, messageId) {
     let phoneNumber = args[0];
     let alias = args[1] || '';
     
-    // Validar número de teléfono
+    // Validar nmero de telfono
     if (!phoneNumber || phoneNumber === 'auto') {
-      // Usar el número del remitente si no se proporciona
+      // Usar el nmero del remitente si no se proporciona
       phoneNumber = usuario.split('@')[0];
     } else {
-      // Limpiar el número de teléfono
+      // Limpiar el nmero de telfono
       phoneNumber = phoneNumber.replace(/[^0-9]/g, '');
       if (phoneNumber.length < 10) {
         return {
           success: false,
-          message: '❌ Número de teléfono inválido. Debe tener al menos 10 dígitos.'
+          message: ' Nmero de telfono invlido. Debe tener al menos 10 dgitos.'
         };
       }
     }
 
-    // Generar un código de 6 dígitos
+    // Generar un cdigo de 6 dgitos
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     
-    // Aquí iría la lógica para guardar el código en la base de datos
+    // Aqu ira la lgica para guardar el cdigo en la base de datos
     // await savePairingCode(code, phoneNumber, usuario, alias);
 
     const message = `
-🔑 *CÓDIGO DE EMPAREJAMIENTO* 🔑
+ *CDIGO DE EMPAREJAMIENTO* 
 
-📱 *Número:* ${phoneNumber}
-🔢 *Código:* ${code}
+ *Nmero:* ${phoneNumber}
+ *Cdigo:* ${code}
 
 *Instrucciones:*
 1. Abre WhatsApp en tu celular
 2. Ve a Ajustes > Dispositivos vinculados
 3. Toca "Vincular un dispositivo"
-4. Ingresa este código: *${code}*
+4. Ingresa este cdigo: *${code}*
 
-*Nota:* Este código expira en 5 minutos`;
+*Nota:* Este cdigo expira en 5 minutos`;
 
     return {
       success: true,
@@ -1736,7 +1736,7 @@ async function handleCode(usuario, grupo, remoteJid, args, sender, messageId) {
     console.error('Error en handleCode:', error);
     return {
       success: false,
-      message: '❌ Error al generar el código de emparejamiento. Intenta de nuevo.'
+      message: ' Error al generar el código de emparejamiento. Intenta de nuevo.'
     };
   }
 }
@@ -3069,9 +3069,9 @@ async function handleUnban(target, usuario, grupo) {
 }
 
 // Exportar todas las funciones necesarias de manera organizada
-// Usando export individual para cada función
+// Usando export individual para cada funcin
 
-// ===== COMANDOS BÁSICOS =====
+// ===== COMANDOS BSICOS =====
 export { handleHelp };
 export { handleIA };
 export { handleClasificar };
@@ -3102,7 +3102,7 @@ export { handlePedidos };
 export { handleExtra };
 export { handleIlustraciones };
 
-// ===== COMANDOS DE ADMINISTRACIÓN =====
+// ===== COMANDOS DE ADMINISTRACIN =====
 export { handleAporteEstado };
 export { handleBotOn };
 export { handleBotOff };
@@ -3110,7 +3110,7 @@ export { handleBotGlobalOn };
 export { handleBotGlobalOff };
 export { handleAdvertencias };
 
-// ===== COMANDOS DE OBTENCIÓN =====
+// ===== COMANDOS DE OBTENCIN =====
 export { handleObtenerManhwa };
 export { handleObtenerExtra };
 export { handleObtenerIlustracion };
@@ -3152,7 +3152,7 @@ export { handleWallpaper };
 export { handleJoke };
 export { handleAIEnhanced as handleAI };
 
-// ===== MODERACIÓN =====
+// ===== MODERACIN =====
 export { handleBan };
 export { handleUnban };
 
