@@ -18,6 +18,7 @@ const MAX_SUBBOT_DIRS = parseInt(process.env.MAX_SUBBOT_DIRS ?? '60', 10);
 
 const eventBus = new EventEmitter();
 const activeSubbots = new Map();
+const listenersByCode = new Map();
 
 function ensureDirectory(targetPath) {
   if (!fs.existsSync(targetPath)) {
@@ -103,6 +104,44 @@ export function listActiveSubbots() {
   return Array.from(activeSubbots.values()).map(({ processRef, ...info }) => ({ ...info }));
 }
 
+export function getSubbotInfo(code) {
+  const entry = activeSubbots.get(code);
+  if (!entry) return null;
+  const { processRef, ...info } = entry;
+  return { ...info };
+}
+
+export function registerSubbotListeners(code, listeners) {
+  if (!code || typeof code !== 'string') return () => {};
+  if (!Array.isArray(listeners) || listeners.length === 0) return () => {};
+  const existing = listenersByCode.get(code) || [];
+  const stored = [];
+  listeners.forEach(({ event, handler }) => {
+    if (!event || typeof handler !== 'function') return;
+    eventBus.on(event, handler);
+    stored.push({ event, handler });
+  });
+  listenersByCode.set(code, existing.concat(stored));
+  return () => unregisterSubbotListeners(code);
+}
+
+export function unregisterSubbotListeners(code, predicate) {
+  if (!code || typeof code !== 'string') return;
+  const items = listenersByCode.get(code);
+  if (!items || items.length === 0) return;
+  const remaining = [];
+  items.forEach(({ event, handler }) => {
+    const shouldRemove = typeof predicate === 'function' ? predicate(event, handler) : true;
+    if (shouldRemove) {
+      eventBus.off(event, handler);
+    } else {
+      remaining.push({ event, handler });
+    }
+  });
+  if (remaining.length === 0) listenersByCode.delete(code);
+  else listenersByCode.set(code, remaining);
+}
+
 export async function stopSubbot(code) {
   const entry = activeSubbots.get(code);
   if (!entry) return false;
@@ -112,6 +151,7 @@ export async function stopSubbot(code) {
     logger.warn(`Error al detener subbot ${code}:`, error);
   }
   activeSubbots.delete(code);
+  unregisterSubbotListeners(code);
   return true;
 }
 
@@ -208,48 +248,53 @@ export async function launchSubbot(options = {}) {
       if (activeSubbots.has(code)) {
         activeSubbots.delete(code);
       }
+      unregisterSubbotListeners(code);
       emit('stopped', { reason, info });
     };
 
     child.on('message', (message) => {
-      if (!message || typeof message.event !== 'string') return;
-      const info = activeSubbots.get(code) || publicRecord;
+      try {
+        if (!message || typeof message.event !== 'string') return;
+        const info = activeSubbots.get(code) || publicRecord;
 
-      if (message.event === 'connected') {
-        info.status = 'connected';
-        info.connectedAt = new Date().toISOString();
-        if (info.timeoutHandle) {
-          clearTimeout(info.timeoutHandle);
-          info.timeoutHandle = null;
+        if (message.event === 'connected') {
+          info.status = 'connected';
+          info.connectedAt = new Date().toISOString();
+          if (info.timeoutHandle) {
+            clearTimeout(info.timeoutHandle);
+            info.timeoutHandle = null;
+          }
+          emit('connected', { message: 'connected' });
         }
-        emit('connected', { message: 'connected' });
-      }
-      if (message.event === 'disconnected') {
-        info.status = 'disconnected';
-        info.disconnectedAt = new Date().toISOString();
-        emit('disconnected', { reason: message.data?.reason, statusCode: message.data?.statusCode });
-      }
-      if (message.event === 'error') {
-        info.status = 'error';
-        info.error = message.data?.message || 'Error desconocido';
-        emit('error', message.data || null);
-      }
-      if (message.event === 'logged_out') {
-        info.status = 'logged_out';
-        info.disconnectedAt = new Date().toISOString();
-        info.error = message.data?.message || 'Sesin cerrada desde WhatsApp';
-        try {
-          fs.rmSync(path.join(SUBBOT_BASE_DIR, code), { recursive: true, force: true });
-          logger.info(` Credenciales del subbot ${code} eliminadas tras logout`);
-        } catch (cleanupError) {
-          logger.warn(`No se pudo eliminar directorio del subbot ${code} tras logout`, { error: cleanupError?.message });
+        if (message.event === 'disconnected') {
+          info.status = 'disconnected';
+          info.disconnectedAt = new Date().toISOString();
+          emit('disconnected', { reason: message.data?.reason, statusCode: message.data?.statusCode });
         }
-      }
+        if (message.event === 'error') {
+          info.status = 'error';
+          info.error = message.data?.message || 'Error desconocido';
+          emit('error', message.data || null);
+        }
+        if (message.event === 'logged_out') {
+          info.status = 'logged_out';
+          info.disconnectedAt = new Date().toISOString();
+          info.error = message.data?.message || 'Sesión cerrada desde WhatsApp';
+          try {
+            fs.rmSync(path.join(SUBBOT_BASE_DIR, code), { recursive: true, force: true });
+            logger.info(` Credenciales del subbot ${code} eliminadas tras logout`);
+          } catch (cleanupError) {
+            logger.warn(`No se pudo eliminar directorio del subbot ${code} tras logout`, { error: cleanupError?.message });
+          }
+        }
 
-      eventBus.emit(message.event, {
-        subbot: { ...info },
-        data: message.data || null
-      });
+        eventBus.emit(message.event, {
+          subbot: { ...info },
+          data: message.data || null
+        });
+      } catch (err) {
+        logger.error('Error procesando mensaje de subbot:', err?.message || err);
+      }
     });
 
     child.on('exit', (codeExit) => {

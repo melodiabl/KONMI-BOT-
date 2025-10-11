@@ -1543,7 +1543,7 @@ ${new Date().toLocaleString('es-ES')}`;
         try {
           await ensureSubbotsTable();
 
-          const { launchSubbot, onSubbotEvent } = await import('./inproc-subbots.js');
+          const { launchSubbot, registerSubbotListeners, unregisterSubbotListeners, getSubbotInfo } = await import('./inproc-subbots.js');
 
           if (!baseSock) {
             baseSock = await getSocket();
@@ -1568,13 +1568,14 @@ ${new Date().toLocaleString('es-ES')}`;
             break;
           }
 
-          const subbotEvents = [];
           let qrDelivered = false;
           let finalized = false;
+          let currentCode = null;
           const finish = () => {
             if (finalized) return;
             finalized = true;
-            subbotEvents.forEach((off) => off?.());
+            if (currentCode) unregisterSubbotListeners(currentCode);
+            currentCode = null;
           };
           const metadata = {
             requestJid: remoteJid,
@@ -1595,9 +1596,8 @@ ${new Date().toLocaleString('es-ES')}`;
 
           let launchResult = null;
 
-          const handleQRReady = async (event) => {
-            const launchedCode = launchResult?.subbot?.code;
-            if (!launchedCode || event.subbot?.code !== launchedCode) return;
+          const handleQRReady = async ({ subbot, data }) => {
+            if (!subbot?.code || subbot.code !== currentCode) return;
             if (qrDelivered) return;
             qrDelivered = true;
 
@@ -1620,7 +1620,7 @@ ${new Date().toLocaleString('es-ES')}`;
 3. Toca *Vincular un dispositivo*.
 4. Escanea este código QR.`;
 
-            const messagePayload = { image: Buffer.from(event.data.qrImage, 'base64'), caption };
+            const messagePayload = { image: Buffer.from(data.qrImage, 'base64'), caption };
             try {
               await targetSock.sendMessage(dmJid, messagePayload);
               if (isGroup) {
@@ -1632,41 +1632,46 @@ ${new Date().toLocaleString('es-ES')}`;
             }
           };
 
-          const handleError = async (event) => {
-            const launchedCode = launchResult?.subbot?.code;
-            if (!launchedCode || event.subbot?.code !== launchedCode) return;
-            finish();
-            const targetSock = await getSocket();
-            const errorText = ` Error generando QR: ${event.data?.message || 'Intenta nuevamente.'}`;
-            if (!targetSock) {
-              await baseSock.sendMessage(remoteJid, { text: errorText });
-              return;
+          const handleError = async ({ subbot, data }) => {
+            if (!subbot?.code || subbot.code !== currentCode) return;
+            const fatal = data?.fatal || data?.status === 'fatal' || data?.reason === 'logout';
+            if (fatal) finish();
+            const errorText = ` Error generando QR: ${data?.message || 'Intenta nuevamente.'}`;
+            try {
+              const targetSock = await getSocket();
+              await (targetSock || baseSock).sendMessage(remoteJid, { text: errorText });
+            } catch (err) {
+              logger.error('Error notificando fallo de QR:', err);
             }
-            await targetSock.sendMessage(remoteJid, { text: errorText });
           };
 
-          const handleConnected = async (event) => {
-            const launchedCode = launchResult?.subbot?.code;
-            if (!launchedCode || event.subbot?.code !== launchedCode) return;
+          const handleConnected = async ({ subbot }) => {
+            if (!subbot?.code || subbot.code !== currentCode) return;
             finish();
-            const targetSock = await getSocket();
-            const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
-            const message = `✅ Subbot *${event.subbot?.code || ''}* conectado correctamente.
+            try {
+              await db('subbots').where({ code: subbot.code }).update({
+                estado: 'conectado',
+                ultima_actividad: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }).catch(() => {});
+            } catch (err) {
+              logger.warn('No se pudo actualizar estado conectado del subbot', { code: subbot.code, error: err?.message });
+            }
+
+            const message = ` Subbot *${subbot.code}* conectado correctamente.
 
 Puedes verlo en *WhatsApp ▸ Dispositivos vinculados*.`;
-            if (!targetSock) {
-              await baseSock.sendMessage(remoteJid, { text: message });
-              return;
-            }
-            await targetSock.sendMessage(dmJid, { text: message });
-            if (isGroup) {
-              await targetSock.sendMessage(remoteJid, { text: '✅ Subbot conectado. Revisa el mensaje privado.' });
+            try {
+              const targetSock = await getSocket();
+              const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
+              await (targetSock || baseSock).sendMessage(dmJid, { text: message });
+              if (isGroup && targetSock) {
+                await targetSock.sendMessage(remoteJid, { text: ' Subbot conectado. Revisa el mensaje privado.' });
+              }
+            } catch (err) {
+              logger.error('Error notificando conexión de subbot:', err);
             }
           };
-
-          subbotEvents.push(onSubbotEvent('qr_ready', handleQRReady));
-          subbotEvents.push(onSubbotEvent('error', handleError));
-          subbotEvents.push(onSubbotEvent('connected', handleConnected));
 
           launchResult = await launchSubbot({
             type: 'qr',
@@ -1679,6 +1684,43 @@ Puedes verlo en *WhatsApp ▸ Dispositivos vinculados*.`;
           if (!launchResult.success) {
             finish();
             await baseSock.sendMessage(remoteJid, { text: ` Error generando QR: ${launchResult.error || 'Intenta otra vez.'}` });
+            break;
+          }
+
+          currentCode = launchResult.subbot?.code || null;
+          if (currentCode) {
+            registerSubbotListeners(currentCode, [
+              { event: 'qr_ready', handler: handleQRReady },
+              { event: 'error', handler: handleError },
+              { event: 'connected', handler: handleConnected },
+              {
+                event: 'disconnected',
+                handler: async ({ subbot, data }) => {
+                  if (!subbot?.code || subbot.code !== currentCode) return;
+                  finish();
+                  try {
+                    await db('subbots').where({ code: subbot.code }).update({
+                      estado: 'desconectado',
+                      updated_at: new Date().toISOString(),
+                      ultima_actividad: new Date().toISOString()
+                    }).catch(() => {});
+                  } catch (err) {
+                    logger.warn('No se pudo marcar subbot desconectado', { code: subbot.code, error: err?.message });
+                  }
+                  if (data?.reason === DisconnectReason?.loggedOut || data?.message === 'logout') {
+                    try { await autoDeleteSubbotById(subbot.id || 0, { reason: 'logged_out' }); } catch (_) {}
+                  }
+                  try {
+                    const targetSock = await getSocket();
+                    await (targetSock || baseSock).sendMessage(remoteJid, {
+                      text: ` El subbot ${subbot.code} se desconectó (${data?.reason || 'sin motivo'}).`
+                    });
+                  } catch (err) {
+                    logger.warn('No se pudo notificar desconexión de subbot', err);
+                  }
+                }
+              }
+            ]);
           }
         } catch (error) {
           logger.error('Error en /qr:', error);
@@ -1686,7 +1728,7 @@ Puedes verlo en *WhatsApp ▸ Dispositivos vinculados*.`;
           if (baseSock) {
             await baseSock.sendMessage(remoteJid, { text: ' Error generando QR. Intenta otra vez.' });
           }
-          subbotEvents.forEach((off) => off?.());
+          if (currentCode) unregisterSubbotListeners(currentCode);
         }
         break;
       }
@@ -1697,14 +1739,14 @@ Puedes verlo en *WhatsApp ▸ Dispositivos vinculados*.`;
         try {
           await ensureSubbotsTable();
 
-          const { launchSubbot, onSubbotEvent } = await import('./inproc-subbots.js');
+          const { launchSubbot, registerSubbotListeners, unregisterSubbotListeners } = await import('./inproc-subbots.js');
 
           if (!baseSock) {
             baseSock = await getSocket();
           }
 
           if (!baseSock) {
-            throw new Error('Sesin principal no disponible para enviar mensajes');
+            throw new Error('Sesion principal no disponible para enviar mensajes');
           }
 
           const pairingIntro = `*🔐 Subbot por código*
@@ -1760,13 +1802,18 @@ Generando tu subbot, te avisaré apenas tenga el código.`
 
           logger.pretty.kv('Número final pairing', targetNumberForPairing);
 
-          const subbotEvents = [];
           let codeDelivered = false;
           let finalized = false;
+          let currentCode = null;
+          let detachListeners = null;
           const finish = () => {
             if (finalized) return;
             finalized = true;
-            subbotEvents.forEach((off) => off?.());
+            if (detachListeners) {
+              detachListeners();
+              detachListeners = null;
+            }
+            currentCode = null;
           };
           const metadata = {
             requestJid: remoteJid,
@@ -1779,98 +1826,108 @@ Generando tu subbot, te avisaré apenas tenga el código.`
             metadata.targetNumber = targetNumberForPairing;
           }
 
-          let launchResult = null;
-
-          const handlePairingCode = async (event) => {
-            const launchedCode = launchResult?.subbot?.code;
-            if (!launchedCode || event.subbot?.code !== launchedCode) return;
+          const handlePairingCode = async ({ subbot, data }) => {
+            if (!subbot?.code || subbot.code !== currentCode) return;
             if (codeDelivered) return;
             codeDelivered = true;
 
-            const targetSock = await getSocket();
-            if (!targetSock) {
-              logger.warn('handlePairingCode sin socket disponible');
-              await baseSock.sendMessage(remoteJid, { text: ' No pude enviar el pairing code porque la sesin principal no est lista.' });
-              return;
-            }
-
             const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
-            const numberLine = event.data?.targetNumber ? ` *Número:* +${event.data.targetNumber}
-` : '';
-            const msg = ` *CÓDIGO DE VINCULACIÓN* 
-
-${numberLine} *Código:* ${event.data?.code}
- *Aparecerá como:* ${event.data?.displayCode || 'KONMI-BOT'}
- *Válido por:* 10 minutos
-
-*Instrucciones:*
-1. Abre WhatsApp en tu teléfono
-2. Ve a *Ajustes* > *Dispositivos vinculados*
-3. Toca *Vincular un dispositivo*
-4. Selecciona *Vincular con número de teléfono*
-5. Ingresa el código mostrado arriba`;
+            const numberLine = data?.targetNumber ? ` *Número:* +${data.targetNumber}\n` : '';
+            const msg = ` *CÓDIGO DE VINCULACIÓN* \n\n${numberLine} *Código:* ${data?.code}\n *Aparecerá como:* ${data?.displayCode || 'KONMI-BOT'}\n *Válido por:* 10 minutos\n\n*Instrucciones:*\n1. Abre WhatsApp en tu teléfono\n2. Ve a *Ajustes* > *Dispositivos vinculados*\n3. Toca *Vincular un dispositivo*\n4. Selecciona *Vincular con número de teléfono*\n5. Ingresa el código mostrado arriba`;
 
             try {
-              await targetSock.sendMessage(dmJid, { text: msg });
-              if (isGroup) {
+              const targetSock = await getSocket();
+              await (targetSock || baseSock).sendMessage(dmJid, { text: msg });
+              if (isGroup && targetSock) {
                 await targetSock.sendMessage(remoteJid, { text: ' Te envi el Pairing Code por privado.' });
               }
             } catch (err) {
-              logger.warn('Fallo enviando pairing code por privado, usando chat original', { error: err?.message });
-              await targetSock.sendMessage(remoteJid, { text: msg });
+              logger.error('Error enviando pairing code:', err);
+              try {
+                await baseSock.sendMessage(remoteJid, { text: msg });
+              } catch (innerErr) {
+                logger.error('Error notificando pairing code en chat original:', innerErr);
+              }
             }
           };
 
-          const handleError = async (event) => {
-            const launchedCode = launchResult?.subbot?.code;
-            if (!launchedCode || event.subbot?.code !== launchedCode) return;
+          const handleConnected = async ({ subbot }) => {
+            if (!subbot?.code || subbot.code !== currentCode) return;
             finish();
-            const targetSock = await getSocket();
-            const errorText = ` Error generando Pairing Code: ${event.data?.message || 'Intenta otra vez.'}`;
-            if (!targetSock) {
-              await baseSock.sendMessage(remoteJid, { text: errorText });
-              return;
+            try {
+              await db('subbots').where({ code: subbot.code }).update({
+                estado: 'conectado',
+                ultima_actividad: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }).catch(() => {});
+            } catch (err) {
+              logger.warn('No se pudo actualizar estado conectado (code)', { code: subbot.code, error: err?.message });
             }
-            await targetSock.sendMessage(remoteJid, { text: errorText });
+
+            const message = `✅ Subbot *${subbot.code}* conectado correctamente.\n\nYa puedes usarlo desde el teléfono vinculado.`;
+            try {
+              const targetSock = await getSocket();
+              const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
+              await (targetSock || baseSock).sendMessage(dmJid, { text: message });
+              if (isGroup && targetSock) {
+                await targetSock.sendMessage(remoteJid, { text: '✅ Subbot conectado. Revisa el mensaje privado con los detalles.' });
+              }
+            } catch (err) {
+              logger.error('Error notificando conexión pairing:', err);
+            }
           };
 
-          const handleConnected = async (event) => {
-            const launchedCode = launchResult?.subbot?.code;
-            if (!launchedCode || event.subbot?.code !== launchedCode) return;
+          const handleError = async ({ subbot, data }) => {
+            if (!subbot?.code || subbot.code !== currentCode) return;
+            const fatal = data?.fatal || data?.status === 'fatal' || data?.reason === 'logout';
+            if (fatal) finish();
+            const errorText = ` Error generando Pairing Code: ${data?.message || 'Intenta otra vez.'}`;
+            try {
+              const targetSock = await getSocket();
+              await (targetSock || baseSock).sendMessage(remoteJid, { text: errorText });
+            } catch (err) {
+              logger.error('Error notificando fallo pairing:', err);
+            }
+          };
+
+          const handleDisconnected = async ({ subbot, data }) => {
+            if (!subbot?.code || subbot.code !== currentCode) return;
             finish();
-            const targetSock = await getSocket();
-            const dmJid = isGroup ? `${usuario}@s.whatsapp.net` : remoteJid;
-            const message = `✅ Subbot *${event.subbot?.code || ''}* conectado correctamente.
-
-Ya puedes usarlo desde el teléfono vinculado.`;
-            if (!targetSock) {
-              await baseSock.sendMessage(remoteJid, { text: message });
-              return;
+            let subbotId = null;
+            try {
+              const row = await db('subbots').where({ code: subbot.code }).first();
+              subbotId = row?.id || null;
+              await db('subbots').where({ code: subbot.code }).update({
+                estado: 'desconectado',
+                updated_at: new Date().toISOString(),
+                ultima_actividad: new Date().toISOString()
+              }).catch(() => {});
+            } catch (err) {
+              logger.warn('No se pudo marcar subbot desconectado (pairing)', { code: subbot.code, error: err?.message });
             }
-            await targetSock.sendMessage(dmJid, { text: message });
-            if (isGroup) {
-              await targetSock.sendMessage(remoteJid, { text: '✅ Subbot conectado. Revisa el mensaje privado con los detalles.' });
+
+            if ((data?.statusCode && data.statusCode === DisconnectReason?.loggedOut) || data?.reason === 'logout') {
+              if (!subbotId) {
+                try {
+                  const row = await db('subbots').where({ code: subbot.code }).first();
+                  subbotId = row?.id || null;
+                } catch (_) {}
+              }
+              if (subbotId) {
+                try { await autoDeleteSubbotById(subbotId, { reason: 'logged_out' }); } catch (_) {}
+              }
+            }
+
+            try {
+              await sock.sendMessage(remoteJid, {
+                text: `⚠️ Subbot ${subbot.code} se desconectó (${data?.reason || 'sesión cerrada'}).`
+              });
+            } catch (err) {
+              logger.error('No se pudo notificar desconexión pairing:', err);
             }
           };
 
-          const cleanup = () => {
-            subbotEvents.forEach((off) => off?.());
-          };
-
-          subbotEvents.push(onSubbotEvent('pairing_code', (event) => {
-            logger.pretty.line(' Evento pairing_code recibido');
-            return handlePairingCode(event);
-          }));
-          subbotEvents.push(onSubbotEvent('error', (event) => {
-            logger.pretty.line(' Evento error recibido en pairing');
-            return handleError(event);
-          }));
-          subbotEvents.push(onSubbotEvent('connected', (event) => {
-            logger.pretty.line(' Evento connected recibido en pairing');
-            return handleConnected(event);
-          }));
-
-          launchResult = await launchSubbot({
+          const launchResult = await launchSubbot({
             type: 'code',
             createdBy: usuario,
             requestJid: remoteJid,
@@ -1882,13 +1939,23 @@ Ya puedes usarlo desde el teléfono vinculado.`;
           if (!launchResult.success) {
             finish();
             await baseSock.sendMessage(remoteJid, { text: ` Error generando Pairing Code: ${launchResult.error || 'Intenta otra vez.'}` });
+          } else {
+            currentCode = launchResult.subbot?.code || null;
+            if (currentCode) {
+              detachListeners = registerSubbotListeners(currentCode, [
+                { event: 'pairing_code', handler: handlePairingCode },
+                { event: 'connected', handler: handleConnected },
+                { event: 'error', handler: handleError },
+                { event: 'disconnected', handler: handleDisconnected }
+              ]);
+            }
           }
         } catch (error) {
           logger.error('Error en /code:', error);
           if (baseSock) {
             await baseSock.sendMessage(remoteJid, { text: ' Error generando Pairing Code. Intenta otra vez.' });
           }
-          subbotEvents.forEach((off) => off?.());
+          finish();
         }
         break;
       }
@@ -3144,7 +3211,7 @@ Ya puedes usarlo desde el teléfono vinculado.`;
           });
           
           // Importar el manager de subbots
-          const { launchSubbot, onSubbotEvent } = await import('./inproc-subbots.js');
+          const { launchSubbot, registerSubbotListeners, unregisterSubbotListeners } = await import('./inproc-subbots.js');
           
           // Configurar listeners para eventos del subbot
           const handlePairingCode = async (event) => {

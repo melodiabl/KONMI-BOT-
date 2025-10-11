@@ -1,115 +1,87 @@
-# Dependencies
-frontend-panel/node_modules/
-
-# Production builds
-frontend-panel/dist/
-build/
-
-# Environment variables
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Logs
+# === Node.js ===
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
-*.log
+pnpm-debug.log*
+package-lock.json
+
+# === Compilados y builds ===
+dist/
+build/
+panel-dist/
+frontend-panel-backup-*/
+coverage/
+
+# === Archivos de entorno ===
+.env
+.env.*
+!.env.example
+
+# === Logs ===
 logs/
-backend/full/logs/
-backend/lite/logs/
+*.log
+*.out
+*.err
 
-# Runtime data
-pids
+# === Base de datos y backups ===
+pgdata/
+*.sqlite
+*.db
+*.sql.gz
+dump*.sql
+backup/
+storage/
+
+# === Docker ===
+.docker/
+docker-compose.override.yml
 *.pid
-*.seed
-*.pid.lock
 
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Dependency directories
-jspm_packages/
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# next.js build output
-.next
-
-# nuxt.js build output
-.nuxt
-
-# vuepress build output
-.vuepress/dist
-
-# Serverless directories
-.serverless/
-
-# FuseBox cache
-.fusebox/
-
-# DynamoDB Local files
-.dynamodb/
-
-# TernJS port file
-.tern-port
-
-# Stores VSCode versions used for testing VSCode extensions
-.vscode-test
-
-# IDE
-.vscode/
-.idea/
-
-# OS generated files
+# === Archivos temporales del sistema ===
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-
-# Temporary files
-.tmp/
+desktop.ini
+tmp/
 temp/
-
-# Test files
-coverage/
+.cache/
 .nyc_output/
 
-# Development files
-start-frontend.bat
-test-*.js
+# === Archivos del editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Keep important files for Railway deployment
-!backend/full/storage/.gitkeep
-!backend/lite/storage/.gitkeep
-!scripts/
-!railway.json
-!Dockerfile
-!.dockerignore
-!RAILWAY_DEPLOYMENT.md
+# === Git ===
+.gitignore
+.gitmodules
+.gitkeep
+
+# === Panel frontend (React) ===
+frontend-panel/node_modules/
+frontend-panel/.env.local
+frontend-panel/.env.production
+frontend-panel/.env.development
+frontend-panel/.next/
+frontend-panel/build/
+frontend-panel/dist/
+frontend-panel/yarn.lock
+frontend-panel/package-lock.json
+
+# === Backend ===
+backend/node_modules/
+backend/.env
+backend/.cache/
+backend/storage/
+backend/dist/
+backend/uploads/
+backend/tmp/
+backend/logs/
+
+# === Otros ===
+*.bak
+*.old
+*.orig
+*.rej
+
