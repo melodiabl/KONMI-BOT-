@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Bot, 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Play, 
-  Copy, 
-  Download, 
+  Bot,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Play,
+  Copy,
+  Download,
   Upload,
   Terminal,
   Code,
@@ -115,7 +115,7 @@ const BotCommands: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(commandData)
       });
-      
+
       if (response.ok) {
         setSuccess('Comando creado exitosamente');
         setShowCommandModal(false);
@@ -139,7 +139,7 @@ const BotCommands: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(commandData)
       });
-      
+
       if (response.ok) {
         setSuccess('Comando actualizado exitosamente');
         setShowCommandModal(false);
@@ -156,14 +156,14 @@ const BotCommands: React.FC = () => {
 
   const deleteCommand = async (id: string) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este comando?')) return;
-    
+
     try {
       setActionLoading(id);
       setError(null);
       const response = await fetch(`/api/bot/commands/${id}`, {
         method: 'DELETE'
       });
-      
+
       if (response.ok) {
         setSuccess('Comando eliminado exitosamente');
         await loadCommands();
@@ -186,7 +186,7 @@ const BotCommands: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled })
       });
-      
+
       if (response.ok) {
         setSuccess(`Comando ${enabled ? 'habilitado' : 'deshabilitado'} exitosamente`);
         await loadCommands();
@@ -209,7 +209,7 @@ const BotCommands: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command, message })
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setTestResult(data.response);
@@ -261,7 +261,7 @@ const BotCommands: React.FC = () => {
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) return `${days}d`;
     if (hours > 0) return `${hours}h`;
     return `${minutes}m`;
@@ -366,7 +366,7 @@ const BotCommands: React.FC = () => {
               Comandos registrados
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -379,7 +379,7 @@ const BotCommands: React.FC = () => {
               Comandos habilitados
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -392,7 +392,7 @@ const BotCommands: React.FC = () => {
               Veces utilizados
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -475,25 +475,25 @@ const BotCommands: React.FC = () => {
                           {command.enabled ? 'Activo' : 'Inactivo'}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         {getCategoryIcon(command.category)}
                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(command.category)}`}>
                           {command.category}
                         </span>
                       </div>
-                      
+
                       <div className="text-sm text-gray-900">
                         <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
                           {command.command}
                         </code>
                       </div>
-                      
+
                       <div className="text-sm text-gray-600 max-w-md">
                         {command.description}
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-4">
                       <div className="text-right text-sm text-gray-500">
                         <div className="flex items-center gap-1">
@@ -505,7 +505,7 @@ const BotCommands: React.FC = () => {
                           {command.last_used ? getTimeAgo(command.last_used) : 'Nunca'}
                         </div>
                       </div>
-                      
+
                       <div className="flex gap-2">
                         <button
                           onClick={() => {
@@ -519,7 +519,7 @@ const BotCommands: React.FC = () => {
                         >
                           <Play className="w-4 h-4" />
                         </button>
-                        
+
                         <button
                           onClick={() => {
                             setSelectedCommand(command);
@@ -531,7 +531,7 @@ const BotCommands: React.FC = () => {
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        
+
                         <button
                           onClick={() => toggleCommand(command.id, !command.enabled)}
                           disabled={actionLoading === command.id}
@@ -540,7 +540,7 @@ const BotCommands: React.FC = () => {
                         >
                           {command.enabled ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
-                        
+
                         <button
                           onClick={() => deleteCommand(command.id)}
                           disabled={actionLoading === command.id}
@@ -552,7 +552,7 @@ const BotCommands: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {command.aliases.length > 0 && (
                     <div className="mt-3 flex items-center gap-2">
                       <span className="text-xs text-gray-500">Aliases:</span>
@@ -589,11 +589,11 @@ const BotCommands: React.FC = () => {
                   <XCircle className="w-5 h-5" />
                 </button>
               </div>
-              
+
             <CommandForm
               command={selectedCommand}
-                onSubmit={isEditing ? 
-                  (data) => updateCommand(selectedCommand!.id, data) : 
+                onSubmit={isEditing ?
+                  (data) => updateCommand(selectedCommand!.id, data) :
                   createCommand
                 }
                 isLoading={actionLoading === 'create' || actionLoading === 'update'}
@@ -616,7 +616,7 @@ const BotCommands: React.FC = () => {
                   <XCircle className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -626,7 +626,7 @@ const BotCommands: React.FC = () => {
                     {selectedCommand.command}
                   </code>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Descripción
@@ -635,7 +635,7 @@ const BotCommands: React.FC = () => {
                     {selectedCommand.description}
                   </p>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Mensaje de prueba
@@ -648,7 +648,7 @@ const BotCommands: React.FC = () => {
                     rows={3}
                   />
                 </div>
-                
+
                 {testResult && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -659,7 +659,7 @@ const BotCommands: React.FC = () => {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowTestModal(false)}
@@ -721,7 +721,7 @@ const CommandForm: React.FC<{
           required
         />
       </div>
-      
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Descripción *
@@ -735,7 +735,7 @@ const CommandForm: React.FC<{
           required
         />
       </div>
-      
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Respuesta *
@@ -749,7 +749,7 @@ const CommandForm: React.FC<{
           required
         />
       </div>
-      
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Categoría
@@ -768,7 +768,7 @@ const CommandForm: React.FC<{
           <option value="media">Multimedia</option>
         </select>
       </div>
-      
+
       <div className="flex items-center">
         <input
           type="checkbox"
@@ -781,7 +781,7 @@ const CommandForm: React.FC<{
           Habilitado
         </label>
       </div>
-      
+
       <div className="flex gap-3">
         <button
           type="button"

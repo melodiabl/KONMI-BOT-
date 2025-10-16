@@ -120,7 +120,7 @@ export const AiChat: React.FC = () => {
 
   const handleSendMessage = () => {
     if (!currentMessage.trim() || !selectedSession) return;
-    
+
     setIsTyping(true);
     sendMessageMutation.mutate(currentMessage);
   };
@@ -281,7 +281,7 @@ export const AiChat: React.FC = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             {selectedSession ? `Sesión: ${chatSessions.find(s => s.id === selectedSession)?.title}` : 'Selecciona una sesión'}
           </h3>
-          
+
           {!selectedSession ? (
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
               <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -406,7 +406,7 @@ export const AiChat: React.FC = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Modelo de IA</label>
@@ -442,7 +442,7 @@ export const AiChat: React.FC = () => {
                   </button>
                 </div>
               </div>
-              
+
               <div className="flex justify-end mt-6 space-x-3">
                 <button
                   onClick={() => setIsSettingsOpen(false)}
@@ -477,7 +477,7 @@ export const AiChat: React.FC = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {chatSessions.map((session) => (
                   <div
@@ -513,7 +513,7 @@ export const AiChat: React.FC = () => {
                   </div>
                 ))}
               </div>
-              
+
               <div className="flex justify-end mt-6">
                 <button
                   onClick={() => setIsHistoryOpen(false)}

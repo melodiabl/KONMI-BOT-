@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Plus, 
-  QrCode, 
-  Key, 
-  Trash2, 
-  RefreshCw, 
-  CheckCircle, 
-  XCircle, 
+  Plus,
+  QrCode,
+  Key,
+  Trash2,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
   Clock,
   Smartphone,
   Bot,
@@ -48,12 +48,12 @@ const Subbots: React.FC = () => {
   // Cargar subbots al montar el componente
   useEffect(() => {
     loadSubbots();
-    
+
     // Actualizar estado cada 30 segundos
     const interval = setInterval(() => {
       getSubbotStatus();
     }, 30000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -114,7 +114,7 @@ const Subbots: React.FC = () => {
           usuario: 'admin' // TODO: Get from auth context
         })
       });
-      
+
       if (response.ok) {
         const newSubbot = await response.json();
         setSubbots(prev => [newSubbot, ...prev]);
@@ -152,7 +152,7 @@ const Subbots: React.FC = () => {
           numero: phoneNumber.replace(/[^0-9]/g, '')
         })
       });
-      
+
       if (response.ok) {
         const newSubbot = await response.json();
         setSubbots(prev => [newSubbot, ...prev]);
@@ -173,7 +173,7 @@ const Subbots: React.FC = () => {
 
   const deleteSubbot = async (id: number) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este subbot?')) return;
-    
+
     try {
       setActionLoading(`delete-${id}`);
       const token = localStorage.getItem('token');
@@ -183,7 +183,7 @@ const Subbots: React.FC = () => {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.ok) {
         setSubbots(prev => prev.filter(s => s.id !== id));
         setSuccess('Subbot eliminado correctamente');
@@ -204,7 +204,7 @@ const Subbots: React.FC = () => {
       if (subbot.qr_data) {
         // Generar QR desde qr_data
         const QRCode = await import('qrcode');
-        const qrDataURL = await QRCode.toDataURL(subbot.qr_data, { 
+        const qrDataURL = await QRCode.toDataURL(subbot.qr_data, {
           width: 256,
           margin: 2,
           color: {
@@ -283,7 +283,7 @@ const Subbots: React.FC = () => {
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) return `${days}d`;
     if (hours > 0) return `${hours}h`;
     return `${minutes}m`;
@@ -361,7 +361,7 @@ const Subbots: React.FC = () => {
               {subbots.filter(s => s.type === 'qr').length} QR • {subbots.filter(s => s.type === 'code').length} Códigos
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -376,7 +376,7 @@ const Subbots: React.FC = () => {
               Activos ahora
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -457,18 +457,18 @@ const Subbots: React.FC = () => {
                           {getStatusText(subbot.estado, subbot.isOnline || false)}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         {getTypeIcon(subbot.tipo)}
                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getTypeColor(subbot.tipo)}`}>
                           {getTypeText(subbot.tipo)}
                         </span>
                       </div>
-                      
+
                       <div className="text-sm text-gray-600">
                         <span className="font-mono">{subbot.codigo}</span>
                       </div>
-                      
+
                       {subbot.numero && (
                         <div className="flex items-center gap-2 text-gray-600">
                           <Smartphone className="w-4 h-4" />
@@ -476,13 +476,13 @@ const Subbots: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center gap-4">
                       <div className="text-right text-sm text-gray-500">
                         <div>Creado: {formatDate(subbot.fecha_creacion)}</div>
                         <div>Usuario: {subbot.usuario}</div>
                       </div>
-                      
+
                       <div className="flex gap-2">
                         {subbot.tipo === 'qr' && (
                           <button
@@ -493,7 +493,7 @@ const Subbots: React.FC = () => {
                             <QrCode className="w-4 h-4" />
                           </button>
                         )}
-                        
+
                         {subbot.tipo === 'code' && subbot.pairingCode && (
                           <button
                             onClick={() => viewCode(subbot)}
@@ -503,7 +503,7 @@ const Subbots: React.FC = () => {
                             <Key className="w-4 h-4" />
                           </button>
                         )}
-                        
+
                         <button
                             onClick={() => deleteSubbot(subbot.code)}
                           disabled={actionLoading === subbot.code}

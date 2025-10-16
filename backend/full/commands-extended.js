@@ -234,7 +234,7 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
     });
 
     const [title, author, duration, views, url, thumbnail, description, uploadDate] = infoResult.split('|');
-    
+
     await notifier.update(25, 'Informacion obtenida', {
       details: [
         `Titulo: ${truncate(title, 40)}`,
@@ -264,7 +264,7 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
 
     const downloadResult = await new Promise((resolve, reject) => {
       const child = execFile('yt-dlp', downloadArgs, { maxBuffer: 1024 * 1024 * 10 });
-      
+
       let lastProgress = 30;
       child.stdout.on('data', async (data) => {
         const output = data.toString();
@@ -273,7 +273,7 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
         if (progressMatch) {
           const percent = Math.min(parseFloat(progressMatch[1]), 90);
           const progressPercent = 30 + Math.round((percent / 100) * 50);
-          
+
           if (progressPercent > lastProgress + 2) { // Actualizar cada 2%
             lastProgress = progressPercent;
             await notifier.update(progressPercent, `Descargando audio ${percent}%`, { icon: '' }).catch(() => {});
@@ -292,16 +292,16 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
       await notifier.fail('No se pudo descargar el audio');
       return { success: false, message: ' No se pudo descargar el audio.' };
     }
-    
+
     await notifier.update(95, 'Procesando archivo', { icon: '' });
-    
+
     const audioBuffer = fs.readFileSync(filename);
     fs.unlinkSync(filename);
 
     // Formatear informacin rica
     const viewsFormatted = views ? Number(views).toLocaleString('es-ES') : '';
     const uploadYear = uploadDate ? uploadDate.substring(0, 4) : '';
-    
+
     const richMessage = `\n` +
                        `            *AUDIO DESCARGADO*       \n` +
                        `\n\n` +
@@ -389,7 +389,7 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
     });
 
     const [title, author, duration, views, url, thumbnail, description, uploadDate, width, height] = infoResult.split('|');
-    
+
     await notifier.update(25, 'Informacin obtenida', {
       details: [
         `Ttulo: ${truncate(title, 40)}`,
@@ -418,7 +418,7 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
 
     const downloadResult = await new Promise((resolve, reject) => {
       const child = execFile('yt-dlp', downloadArgs, { maxBuffer: 1024 * 1024 * 10 });
-      
+
       let lastProgress = 30;
       child.stdout.on('data', async (data) => {
         const output = data.toString();
@@ -427,7 +427,7 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
         if (progressMatch) {
           const percent = Math.min(parseFloat(progressMatch[1]), 90);
           const progressPercent = 30 + Math.round((percent / 100) * 50);
-          
+
           if (progressPercent > lastProgress + 2) { // Actualizar cada 2%
             lastProgress = progressPercent;
             await notifier.update(progressPercent, `Descargando video ${percent}%`, { icon: '' }).catch(() => {});
@@ -446,9 +446,9 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
       await notifier.fail('No se pudo descargar el video');
       return { success: false, message: ' No se pudo descargar el video.' };
     }
-    
+
     await notifier.update(95, 'Procesando archivo', { icon: '' });
-    
+
     const videoBuffer = fs.readFileSync(filename);
     fs.unlinkSync(filename);
 
@@ -456,7 +456,7 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
     const viewsFormatted = views ? Number(views).toLocaleString('es-ES') : '';
     const uploadYear = uploadDate ? uploadDate.substring(0, 4) : '';
     const resolution = width && height ? `${width}x${height}` : '';
-    
+
     const richMessage = `\n` +
                        `           *VIDEO DESCARGADO*        \n` +
                        `\n\n` +

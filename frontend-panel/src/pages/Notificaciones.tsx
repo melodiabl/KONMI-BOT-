@@ -166,7 +166,7 @@ export const Notificaciones: React.FC = () => {
     const date = new Date(timestamp);
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-    
+
     if (diffInHours < 1) {
       return 'Hace unos minutos';
     } else if (diffInHours < 24) {
@@ -378,9 +378,9 @@ export const Notificaciones: React.FC = () => {
                 const IconComponent = typeIcons[notification.type as keyof typeof typeIcons] || Bell;
                 const typeColor = typeColors[notification.type as keyof typeof typeColors] || 'gray';
                 const categoryColor = categoryColors[notification.category as keyof typeof categoryColors] || 'gray';
-                
+
                 return (
-                  <tr 
+                  <tr
                     key={notification.id}
                     className={`hover:bg-gray-50 cursor-pointer ${
                       !notification.read ? `bg-${typeColor}-50` : ''
@@ -516,7 +516,7 @@ export const Notificaciones: React.FC = () => {
                   <XIcon className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -546,7 +546,7 @@ export const Notificaciones: React.FC = () => {
                   </div>
                 )}
               </div>
-              
+
               <div className="flex justify-end mt-6 space-x-3">
                 {!selectedNotification.read && (
                   <button

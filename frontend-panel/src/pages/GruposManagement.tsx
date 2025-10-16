@@ -101,7 +101,7 @@ interface GlobalNotification {
 export const GruposManagement: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedNotification, setSelectedNotification] = useState<GlobalNotification | null>(null);
-  
+
   const { isOpen: isGroupModalOpen, onOpen: onGroupModalOpen, onClose: onGroupModalClose } = useDisclosure();
   const { isOpen: isNotificationModalOpen, onOpen: onNotificationModalOpen, onClose: onNotificationModalClose } = useDisclosure();
   const { isOpen: isShutdownModalOpen, onOpen: onShutdownModalOpen, onClose: onShutdownModalClose } = useDisclosure();
@@ -118,7 +118,7 @@ export const GruposManagement: React.FC = () => {
 
   // Mutations
   const toggleGroupMutation = useMutation(
-    ({ groupId, action }: { groupId: string; action: 'on' | 'off' }) => 
+    ({ groupId, action }: { groupId: string; action: 'on' | 'off' }) =>
       apiService.toggleGroupBot(groupId, action),
     {
       onSuccess: (data, variables) => {
@@ -354,7 +354,7 @@ export const GruposManagement: React.FC = () => {
                             </Td>
                             <Td>
                               <Text fontSize="sm">
-                                {group.fecha_desactivacion 
+                                {group.fecha_desactivacion
                                   ? dayjs(group.fecha_desactivacion).format('DD/MM/YYYY HH:mm')
                                   : 'N/A'
                                 }
@@ -482,9 +482,9 @@ export const GruposManagement: React.FC = () => {
                     <Text color="gray.500">{selectedGroup.jid}</Text>
                   </Box>
                 </HStack>
-                
+
                 <Divider />
-                
+
                 <SimpleGrid columns={2} spacing={4}>
                   <Box>
                     <Text fontWeight="bold">Estado del Bot</Text>
@@ -506,7 +506,7 @@ export const GruposManagement: React.FC = () => {
                   <Box>
                     <Text fontWeight="bold">Última Actividad</Text>
                     <Text fontSize="sm" mt={2}>
-                      {selectedGroup.fecha_desactivacion 
+                      {selectedGroup.fecha_desactivacion
                         ? dayjs(selectedGroup.fecha_desactivacion).format('DD/MM/YYYY HH:mm')
                         : 'N/A'
                       }
@@ -564,9 +564,9 @@ export const GruposManagement: React.FC = () => {
                     <Text color="gray.500">{selectedNotification.grupo_jid}</Text>
                   </Box>
                 </HStack>
-                
+
                 <Divider />
-                
+
                 <SimpleGrid columns={2} spacing={4}>
                   <Box>
                     <Text fontWeight="bold">Estado</Text>
@@ -589,7 +589,7 @@ export const GruposManagement: React.FC = () => {
                 </SimpleGrid>
 
                 <Divider />
-                
+
                 <Box>
                   <Text fontWeight="bold">Mensaje Enviado</Text>
                   <Code p={3} mt={2} display="block" whiteSpace="pre-wrap">

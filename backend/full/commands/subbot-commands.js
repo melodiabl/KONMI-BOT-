@@ -36,7 +36,7 @@ async function handleHelp(sock, from, isGroup, msg) {
 
 📝 *Nota:* Para más detalles sobre cada comando, usa */subbot help [comando]*`;
 
-  await sock.sendMessage(from, { 
+  await sock.sendMessage(from, {
     text: helpText,
     ...(isGroup ? { mentions: [msg.sender] } : {})
   });
@@ -448,15 +448,15 @@ export async function handleDeleteSubbot(sock, from, isGroup, msg, args) {
   const cleanedSender = String(rawSenderJid || '').split('@')[0]?.split(':')[0]?.replace(/[^0-9]/g, '') || '';
 
   if (!args[0]) {
-    return await sock.sendMessage(from, { 
+    return await sock.sendMessage(from, {
       text: ' Debes proporcionar el ID del subbot a eliminar\n' +
             'Ejemplo: */subbot delete subbot_1234567890*',
       ...(isGroup && requesterJid ? { mentions: [requesterJid] } : {})
     });
   }
-  
+
   const subbotId = args[0];
-  
+
   try {
     await deleteUserSubbot(subbotId, cleanedSender || msg.sender);
 
@@ -518,24 +518,24 @@ function ensureJid(value) {
  */
 export async function handleSubbotCommand(sock, from, isGroup, msg, args) {
   const subcommand = args[0]?.toLowerCase() || 'help';
-  
+
   switch (subcommand) {
     case 'pair':
       await handlePairSubbot(sock, from, isGroup, msg, args.slice(1));
       break;
-      
+
     case 'qr':
       await handleQRSubbot(sock, from, isGroup, msg);
       break;
-      
+
     case 'list':
       await handleListSubbots(sock, from, isGroup, msg);
       break;
-      
+
     case 'delete':
       await handleDeleteSubbot(sock, from, isGroup, msg, args.slice(1));
       break;
-      
+
     case 'help':
     default:
       await handleHelp(sock, from, isGroup, msg);
@@ -548,7 +548,7 @@ export default {
   description: 'Gestiona tus subbots',
   command: 'subbot',
   handler: handleSubbotCommand,
-  help: ` *Comandos de SubBots* 
+  help: ` *Comandos de SubBots*
 
 ` +
   ` */subbot pair [nmero]* - Crea un nuevo subbot con cdigo de emparejamiento\n` +

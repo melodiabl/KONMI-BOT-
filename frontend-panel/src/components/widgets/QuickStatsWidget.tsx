@@ -73,15 +73,15 @@ export const QuickStatsWidget: React.FC<QuickStatsWidgetProps> = ({
                   {stat.label}
                 </StatLabel>
                 <StatNumber fontSize="2xl" fontWeight="bold">
-                  {typeof stat.value === 'number' 
-                    ? stat.value.toLocaleString() 
+                  {typeof stat.value === 'number'
+                    ? stat.value.toLocaleString()
                     : stat.value
                   }
                 </StatNumber>
                 {stat.change !== undefined && (
                   <StatHelpText>
-                    <StatArrow 
-                      type={stat.changeType || (stat.change > 0 ? 'increase' : 'decrease')} 
+                    <StatArrow
+                      type={stat.changeType || (stat.change > 0 ? 'increase' : 'decrease')}
                     />
                     {Math.abs(stat.change)}%
                   </StatHelpText>

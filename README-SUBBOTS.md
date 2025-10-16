@@ -120,17 +120,17 @@ Si alcanzas el límite:
 🤖 Bot: ╔═══════════════════════════════════╗
        ║  🔢 CÓDIGO DE VINCULACIÓN         ║
        ╚═══════════════════════════════════╝
-       
+
        ✅ Subbot creado exitosamente
-       
+
        📊 INFORMACIÓN
        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
        📱 Número: +595981234567
        🔢 Código: 12345678
        ⏳ Válido por: 10 minutos
-       
+
        [Instrucciones completas...]
-       
+
        🔄 AUTO-LIMPIEZA ACTIVADA
 
 👤 Usuario: [Ingresa código en WhatsApp]
@@ -202,8 +202,8 @@ Si tienes problemas:
 
 ---
 
-*KONMI BOT Panel v2.5.0*  
-*Sistema de Subbots Automatizado v3.0*  
+*KONMI BOT Panel v2.5.0*
+*Sistema de Subbots Automatizado v3.0*
 *2024*
 
 ✨ **¡Simple, automático y profesional!** ✨

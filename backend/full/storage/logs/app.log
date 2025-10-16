@@ -44,3 +44,120 @@
 {"level":30,"time":"2025-10-16T01:11:08.968Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"✨ [Sistema] Versión: 2.5.0"}
 {"level":30,"time":"2025-10-16T01:11:08.968Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Sistema] Iniciado exitosamente"}
 {"level":30,"time":"2025-10-16T01:11:08.982Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"✅ Base de datos inicializadía correctamente"}
+{"level":30,"time":"2025-10-16T01:14:25.908Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Baileys cargado desde mdulo: baileys-mod"}
+{"level":30,"time":"2025-10-16T01:14:25.931Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Servidor] Backend iniciado en puerto 3001"}
+{"level":30,"time":"2025-10-16T01:14:25.931Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"🌐 [Servidor] Host: 0.0.0.0"}
+{"level":30,"time":"2025-10-16T01:14:25.931Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"📦 [Servidor] Entorno: production"}
+{"level":30,"time":"2025-10-16T01:14:25.931Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"🎨 [Frontend] URL: http://localhost:5173"}
+{"level":30,"time":"2025-10-16T01:14:25.931Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"🤖 [Bot] KONMI BOT v2.5.0"}
+{"level":30,"time":"2025-10-16T01:14:25.932Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"✨ [Sistema] Versión: 2.5.0"}
+{"level":30,"time":"2025-10-16T01:14:25.932Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Sistema] Iniciado exitosamente"}
+{"level":30,"time":"2025-10-16T01:14:25.945Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"✅ Base de datos inicializadía correctamente"}
+{"level":30,"time":"2025-10-16T01:14:53.952Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"🧹 [Limpieza] Buscando subbots huérfanos..."}
+{"level":30,"time":"2025-10-16T01:14:53.971Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":" Limpieza de subbots huérfanos: 1 registros eliminados"}
+{"level":30,"time":"2025-10-16T01:15:29.668Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Conectado a WhatsApp exitosamente"}
+{"level":30,"time":"2025-10-16T01:15:29.670Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Número del bot configurado como owner: +595974154768"}
+{"level":20,"time":"2025-10-16T01:15:39.054Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:39.272Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:39.531Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:39.658Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:39.925Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:39.994Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":30,"time":"2025-10-16T01:15:39.999Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"⚡ [WhatsApp] /play - 📱 Grupo: 120363420598107762@g.us | 👤 Usuario: 5216672553102"}
+{"level":20,"time":"2025-10-16T01:15:40.015Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":50,"time":"2025-10-16T01:15:40.040Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en play:"}
+{"level":50,"time":"2025-10-16T01:15:40.056Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en handleMessage:"}
+{"level":50,"time":"2025-10-16T01:15:40.057Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Stack trace:"}
+{"level":20,"time":"2025-10-16T01:15:40.277Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:40.575Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:42.134Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:42.430Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:43.572Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:43.849Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:43.859Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:44.307Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:44.548Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:45.504Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:46.469Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:15:46.865Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:07.485Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:07.809Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:08.278Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:08.847Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:09.532Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:10.214Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:10.564Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:11.731Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:12.243Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:12.630Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:12.641Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:13.499Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:13.960Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:14.209Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:15.580Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:16.600Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:17.591Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:18.790Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:19.093Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:19.548Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:19.679Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:20.776Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:21.184Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:21.889Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:24.054Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:27.525Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:28.372Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:28.923Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:29.129Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:29.564Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:30.090Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:33.251Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:33.987Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:34.947Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:36.233Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:36.733Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:16:42.803Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:17:14.112Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:17:17.249Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":30,"time":"2025-10-16T01:17:17.251Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"⚡ [WhatsApp] /series - 💬 Privado | 👤 Usuario: 595974154768"}
+{"level":20,"time":"2025-10-16T01:17:17.267Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":50,"time":"2025-10-16T01:17:17.280Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en series:"}
+{"level":50,"time":"2025-10-16T01:17:17.290Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en handleMessage:"}
+{"level":50,"time":"2025-10-16T01:17:17.290Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Stack trace:"}
+{"level":20,"time":"2025-10-16T01:17:20.151Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":30,"time":"2025-10-16T01:17:20.152Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"⚡ [WhatsApp] /s - 📱 Grupo: 120363404608592449@g.us | 👤 Usuario: 51921826291"}
+{"level":20,"time":"2025-10-16T01:17:20.162Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":50,"time":"2025-10-16T01:17:20.179Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en handleMessage:"}
+{"level":50,"time":"2025-10-16T01:17:20.180Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Stack trace:"}
+{"level":20,"time":"2025-10-16T01:17:22.199Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":30,"time":"2025-10-16T01:17:22.201Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"⚡ [WhatsApp] /code - 📱 Grupo: 120363404608592449@g.us | 👤 Usuario: 51921826291"}
+{"level":20,"time":"2025-10-16T01:17:22.212Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":50,"time":"2025-10-16T01:17:22.229Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en handleMessage:"}
+{"level":50,"time":"2025-10-16T01:17:22.229Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Stack trace:"}
+{"level":20,"time":"2025-10-16T01:17:22.336Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":30,"time":"2025-10-16T01:17:22.337Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"⚡ [WhatsApp] /help - 💬 Privado | 👤 Usuario: 595974154768"}
+{"level":20,"time":"2025-10-16T01:17:22.343Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":50,"time":"2025-10-16T01:17:22.354Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en handleMessage:"}
+{"level":50,"time":"2025-10-16T01:17:22.354Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Stack trace:"}
+{"level":20,"time":"2025-10-16T01:17:23.635Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":30,"time":"2025-10-16T01:17:23.637Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"⚡ [WhatsApp] /help - 📱 Grupo: 120363404608592449@g.us | 👤 Usuario: 51921826291"}
+{"level":20,"time":"2025-10-16T01:17:23.646Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":50,"time":"2025-10-16T01:17:23.665Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en handleMessage:"}
+{"level":50,"time":"2025-10-16T01:17:23.666Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Stack trace:"}
+{"level":20,"time":"2025-10-16T01:17:30.644Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":20,"time":"2025-10-16T01:17:42.092Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":30,"time":"2025-10-16T01:17:42.095Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"⚡ [WhatsApp] /help - 💬 Privado | 👤 Usuario: 595974154768"}
+{"level":20,"time":"2025-10-16T01:17:42.100Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Detalles de verificación:"}
+{"level":50,"time":"2025-10-16T01:17:42.115Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Error en handleMessage:"}
+{"level":50,"time":"2025-10-16T01:17:42.115Z","pid":12836,"hostname":"DESKTOP-I3NRDVL","msg":"Stack trace:"}
+{"level":30,"time":"2025-10-16T17:00:46.481Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"Baileys cargado desde mdulo: baileys-mod"}
+{"level":30,"time":"2025-10-16T17:00:46.499Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Servidor] Backend iniciado en puerto 3001"}
+{"level":30,"time":"2025-10-16T17:00:46.499Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"🌐 [Servidor] Host: 0.0.0.0"}
+{"level":30,"time":"2025-10-16T17:00:46.499Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"📦 [Servidor] Entorno: production"}
+{"level":30,"time":"2025-10-16T17:00:46.499Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"🎨 [Frontend] URL: http://localhost:5173"}
+{"level":30,"time":"2025-10-16T17:00:46.499Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"🤖 [Bot] KONMI BOT v2.5.0"}
+{"level":30,"time":"2025-10-16T17:00:46.499Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"✨ [Sistema] Versión: 2.5.0"}
+{"level":30,"time":"2025-10-16T17:00:46.499Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Sistema] Iniciado exitosamente"}
+{"level":30,"time":"2025-10-16T17:00:46.509Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"✅ Base de datos inicializada correctamente"}
+{"level":30,"time":"2025-10-16T17:00:47.139Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"🧹 [Limpieza] Buscando subbots huérfanos..."}
+{"level":40,"time":"2025-10-16T17:00:48.802Z","pid":1240,"hostname":"DESKTOP-I3NRDVL","msg":"Conexión cerrada. Código: 401 - Motivo: Connection Failure. No se reconectará."}

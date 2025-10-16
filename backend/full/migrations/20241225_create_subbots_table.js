@@ -19,7 +19,7 @@ export function up(knex) {
     table.boolean('is_active').defaultTo(false);
     table.integer('message_count').defaultTo(0);
     table.json('settings').nullable(); // Configuraciones del subbot
-    
+
     // Indices para optimizar consultas
     table.index('user_phone');
     table.index('status');

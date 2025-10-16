@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FileText, 
-  Search, 
-  Filter, 
-  RefreshCw, 
-  Download, 
+  FileText,
+  Search,
+  Filter,
+  RefreshCw,
+  Download,
   Calendar,
   User,
   MessageSquare,
@@ -216,7 +216,7 @@ const Logs: React.FC = () => {
                 <FileText className="w-8 h-8 text-blue-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -226,7 +226,7 @@ const Logs: React.FC = () => {
                 <Calendar className="w-8 h-8 text-green-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -236,7 +236,7 @@ const Logs: React.FC = () => {
                 <MessageSquare className="w-8 h-8 text-purple-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>

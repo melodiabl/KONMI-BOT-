@@ -37,7 +37,7 @@ import {
 } from "./handler.js";
 
 // Handlers para QR y código de vinculación
-async function handleQROrCodeRequéest(method, ownerNumber) {
+async function handleQROrCodeRequest(method, ownerNumber) {
   try {
     const result = await generateSubbotQR(ownerNumber);
     if (!result.success) {
@@ -74,7 +74,7 @@ async function handlePairingCode(phoneNumber) {
   }
 }
 
-// Cargar Baileys de forma diferidía (para permitir forks)
+// Cargar Baileys de forma diferida (para permitir forks)
 async function isSubbotActive(subbotCode) {
   try {
     const status = await getRuntimeStatus(subbotCode);
@@ -109,8 +109,7 @@ async function updateOwnerSubbotStatus(userJid) {
 async function loadBaileys() {
   if (baileys) return true;
   const candidates = [];
-  if (process?.env?.BAILEYS_MODULE)
-    candidates.push(process.env.BAILEYS_MODULE);
+  if (process?.env?.BAILEYS_MODULE) candidates.push(process.env.BAILEYS_MODULE);
   // Priorizar forks
   candidates.push("baileys-mod");
   candidates.push("baileys");
@@ -127,11 +126,11 @@ async function loadBaileys() {
       logger.info?.(`Baileys cargado desde mdulo: ${mod}`);
       return true;
     } catch (e) {
-      // probar siguiente candidíato
+      // probar siguiente candidato
     }
   }
   logger.warn?.(
-    "Baileys no disponible (temporalmente deshabilitado): no se pudo importar ningn mdulo candidíato",
+    "Baileys no disponible (temporalmente deshabilitado): no se pudo importar ningn mdulo candidato",
   );
   return false;
 }
@@ -148,7 +147,7 @@ async function ensureBotGlobalStateTable() {
         t.boolean("is_on").notNullable().defaultTo(true);
         t.timestamps(true, true);
       });
-      logger.pretty.line("🗄️ Tabla bot_global_state creadía");
+      logger.pretty.line("🗄️ Tabla bot_global_state creada");
     }
     // Asegurar una fila
     const row = await db("bot_global_state").first("id");
@@ -175,7 +174,7 @@ async function resetSubbotsTable() {
     await db.schema.dropTableIfExists("subbots_temp");
     subbotsTableReady = false;
     await ensureSubbotsTable();
-    logger.info("✅ Tabla subbots reiniciadía exitosamente");
+    logger.info("✅ Tabla subbots reiniciada exitosamente");
     return true;
   } catch (error) {
     logger.error("Error al reiniciar la tabla subbots:", error);
@@ -207,10 +206,10 @@ async function ensureSubbotsTable() {
       if (!exists) {
         logger.info("La tabla subbots no existe, creándola...");
 
-        // Crear la tabla con todías las columnas necesarias
+        // Crear la tabla con todas las columnas necesarias
         await db.schema.createTable("subbots", (t) => {
           t.increments("id").primary();
-          t.string("code", 100).uniquée().notNullable();
+          t.string("code", 100).unique().notNullable();
           t.string("type", 20).notNullable().defaultTo("qr");
           t.string("status", 30).notNullable().defaultTo("pending");
           t.string("created_by", 30);
@@ -226,7 +225,7 @@ async function ensureSubbotsTable() {
           t.jsonb("metadata");
         });
 
-        logger.info("✅ Tabla subbots creadía exitosamente");
+        logger.info("✅ Tabla subbots creada exitosamente");
       } else {
         // Verificar si faltan columnas
         let columns = [];
@@ -235,7 +234,7 @@ async function ensureSubbotsTable() {
           columns = result || [];
           const columnNames = columns.map((col) => col.name);
 
-          const requéiredColumns = [
+          const requiredColumns = [
             "id",
             "code",
             "type",
@@ -253,7 +252,7 @@ async function ensureSubbotsTable() {
             "metadata",
           ];
 
-          for (const col of requéiredColumns) {
+          for (const col of requiredColumns) {
             if (!columnNames.includes(col)) {
               logger.warn(`Agregando columna faltante: ${col}`);
               try {
@@ -278,7 +277,7 @@ async function ensureSubbotsTable() {
                     t.string(col, 255).nullable();
                   });
                 }
-                logger.info(`✅ Columna ${col} agregadía`);
+                logger.info(`✅ Columna ${col} agregada`);
               } catch (alterError) {
                 logger.warn(`No se pudo agregar ${col}:`, alterError.message);
                 throw alterError; // Forzar recreación de tabla
@@ -319,7 +318,7 @@ async function ensureSubbotsTable() {
             t.string("state", 20).notNullable().defaultTo("pending");
             t.timestamp("created_at").defaultTo(db.fn.now());
           });
-          logger.warn("✅ Tabla temporal subbots_temp creadía");
+          logger.warn("✅ Tabla temporal subbots_temp creada");
           return true;
         } catch (tempError) {
           logger.error("Error crítico al crear tabla temporal:", tempError);
@@ -387,7 +386,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
       return;
     }
 
-    // Determinar quéé tabla usar (temp o normal)
+    // Determinar qué tabla usar (temp o normal)
     const useTempTable =
       (await db.schema.hasTable("subbots_temp")) &&
       !(await db.schema.hasTable("subbots"));
@@ -448,7 +447,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
         }
       }
 
-      // Verificar si hay subbots en el sistema de archivos quée no están en la base de datos
+      // Verificar si hay subbots en el sistema de archivos que no están en la base de datos
       if (!useTempTable) {
         const subbotsDir = path.join(process.cwd(), "storage", "subbots");
         if (fs.existsSync(subbotsDir)) {
@@ -466,7 +465,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
                   .first();
 
                 if (!existing) {
-                  // Agregar subbot quée existe en el sistema de archivos pero no en la BD
+                  // Agregar subbot que existe en el sistema de archivos pero no en la BD
                   await db(tableName).insert({
                     request_jid: ownerNumber + "@s.whatsapp.net",
                     method: "qr",
@@ -520,11 +519,11 @@ async function initializeDatabase() {
       throw new Error("No se pudo conectar a la base de datos");
     }
 
-    // Asegurar quée las tablas existan
+    // Asegurar que las tablas existan
     await ensureBotGlobalStateTable();
     await ensureSubbotsTable();
 
-    logger.info("✅ Base de datos inicializadía correctamente");
+    logger.info("✅ Base de datos inicializada correctamente");
     return true;
   } catch (error) {
     logger.error("❌ Error al inicializar la base de datos:", error);
@@ -592,7 +591,6 @@ import {
   handleFact,
   handleTrivia,
   handleHoroscope,
-  
   handleKick,
   handlePromote,
   handleDemote,
@@ -601,7 +599,11 @@ import {
 } from "./commands-complete.js";
 
 // Gestor multi-cuenta (subbots reales)
-import { startSubbot, stopSubbotRuntime, getAllSubbots } from "./lib/subbots.js";
+import {
+  startSubbot,
+  stopSubbotRuntime as stopSubbot,
+  getAllSubbots,
+} from "./lib/subbots.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -617,7 +619,7 @@ let currentPairingGeneratedAt = null;
 let currentPairingExpiresAt = null;
 let currentPairingNumber = null;
 let pairingTargetNumber = null;
-let pairingRequéestInProgress = false;
+let pairingRequestInProgress = false;
 let savedAuthPath = null; // Guardar authPath para reconexiones
 let userSelectedMethod = null; // Guardar método seleccionado por el usuario
 let userSelectedPhone = null; // Guardar número seleccionado por el usuario
@@ -643,7 +645,7 @@ async function autoDeleteSubbotById(botId, { reason = "" } = {}) {
   try {
     const subbot = await db("subbots").where({ id: botId }).first();
     if (!subbot) return;
-    // Eliminar credenciales locales conocidías
+    // Eliminar credenciales locales conocidas
     try {
       const cfg = subbot.configuracion ? JSON.parse(subbot.configuracion) : {};
       const authPath = cfg?.auth_path;
@@ -731,7 +733,7 @@ async function diskCleanupOnce() {
   ];
   const now = Date.now();
   const twoHours = 2 * 60 * 60 * 1000;
-  const oneDíay = 24 * 60 * 60 * 1000;
+  const oneDay = 24 * 60 * 60 * 1000;
 
   for (const root of targets) {
     try {
@@ -770,8 +772,8 @@ async function diskCleanupOnce() {
           continue;
         }
 
-        // Regla 3: directorios por número (multiaccount) sin víncuálo o antiguos
-        if (/^\d{7,15}$/.test(ent.name) && age > oneDíay) {
+        // Regla 3: directorios por número (multiaccount) sin vínculo o antiguos
+        if (/^\d{7,15}$/.test(ent.name) && age > oneDay) {
           try {
             const row = await db("subbots")
               .where({ bot_number: ent.name })
@@ -791,7 +793,7 @@ async function diskCleanupOnce() {
 }
 
 function scheduleResourceAutoMaintenance() {
-  // Mantenimiento de memoria cadía 10 minutos si supera 500MB RSS o Set demasiado grande
+  // Mantenimiento de memoria cada 10 minutos si supera 500MB RSS o Set demasiado grande
   setInterval(
     () => {
       try {
@@ -819,7 +821,7 @@ function scheduleResourceAutoMaintenance() {
     10 * 60 * 1000,
   );
 
-  // Limpieza de disco cadía 60 minutos
+  // Limpieza de disco cada 60 minutos
   setInterval(
     () => {
       diskCleanupOnce().catch(() => {});
@@ -848,11 +850,11 @@ async function ensureGroupSettingsTable() {
     if (!exists) {
       await db.schema.createTable("group_settings", (t) => {
         t.increments("id");
-        t.string("group_id").notNullable().uniquée();
+        t.string("group_id").notNullable().unique();
         t.boolean("is_active").notNullable().defaultTo(true);
         t.timestamps(true, true);
       });
-      logger.pretty.line("🗄️ Tabla group_settings creadía");
+      logger.pretty.line("🗄️ Tabla group_settings creada");
     }
     groupSettingsTableReady = true;
   } catch (error) {
@@ -974,7 +976,7 @@ function isSpecificOwner(usuario) {
     return result;
   } catch (error) {
     logger.error("Error en isSpecificOwner:", error);
-    return false; // Por seguridíad, denegar acceso en caso de error
+    return false; // Por seguridad, denegar acceso en caso de error
   }
 }
 
@@ -1028,7 +1030,7 @@ async function isBotGloballyActiveFromDB() {
     }
 
     const isActive = globalState.is_on === 1 || globalState.is_on === true;
-    logger.pretty.kv("Estado calcuálado", isActive);
+    logger.pretty.kv("Estado calculado", isActive);
     logger.pretty.kv("Valor BD", globalState.is_on);
 
     return isActive;
@@ -1078,9 +1080,9 @@ async function getGroupName(groupId) {
 // Funcion para normalizar numeros de telefono
 function normalizePhoneNumber(number) {
   if (!number) return "";
-  // Eliminar todo lo quée no sea digito
+  // Eliminar todo lo que no sea digito
   const digits = number.replace(/\D/g, "");
-  // Si empieza con codigo de pais, quéitarlo
+  // Si empieza con codigo de pais, quitarlo
   if (digits.startsWith("595")) {
     return digits.substring(3);
   }
@@ -1272,7 +1274,7 @@ async function getSystemInfoText() {
   return (
     `🖥️ *Información del servidor*\n\n` +
     `💻 CPU: ${cpuModel} · ${cpuCores} núcleos @ ${cpuSpeed}\n` +
-    `🧠 RAM: ${fmt(usedMem)} usadías / ${fmt(totalMem)} totales\n` +
+    `🧠 RAM: ${fmt(usedMem)} usadas / ${fmt(totalMem)} totales\n` +
     `🎮 GPU: ${gpuModel}\n` +
     `🧾 SO: ${osLine}\n` +
     `⏱️ Uptime: ${uptime}`
@@ -1318,7 +1320,7 @@ async function logAllMessages(
     // Obtener nombre real del pushName del mensaje
     let contactName = "Usuario desconocido";
 
-    // Debug: Ver quéé información tenemos del mensaje
+    // Debug: Ver qué información tenemos del mensaje
     logger.pretty.section("Debug mensaje", "🔎");
     logger.pretty.kv("pushName", message.pushName || "-");
     logger.pretty.kv("usuario", usuario);
@@ -1375,7 +1377,7 @@ async function logAllMessages(
     }
 
     const fechaHora = new Date().toLocaleString("es-ES", {
-      díay: "2-digit",
+      day: "2-digit",
       month: "2-digit",
       year: "numeric",
       hour: "2-digit",
@@ -1413,7 +1415,7 @@ async function logAllMessages(
     else if (!messageText && message.message?.stickerMessage)
       displayText = "[Sticker]";
     else if (!messageText && message.message?.locationMessage)
-      displayText = "[Ubicacion compartidía]";
+      displayText = "[Ubicacion compartida]";
     else if (!messageText && message.message?.contactMessage)
       displayText = "[Contacto compartido]";
     else if (!messageText) displayText = "[Mensaje sin texto]";
@@ -1498,7 +1500,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     let usuario;
 
     if (isGroup) {
-      // En grupos: usar participant (quéien envio el mensaje)
+      // En grupos: usar participant (quien envio el mensaje)
       sender = message.key.participant;
       if (!sender) {
         logger.pretty.line("⚠️ No se pudo obtener participant en grupo");
@@ -1516,13 +1518,13 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     // LOGS DECORADOS PARA TODOS LOS MENSAJES
     await logAllMessages(message, messageText, remoteJid, usuario, isGroup);
 
-    // Verificar quée el mensaje no este vacio
+    // Verificar que el mensaje no este vacio
     if (!messageText || messageText === "") {
       logger.pretty.line("⚠️ Mensaje vacío - no procesando");
       return;
     }
 
-    // Solo procesar comandos quée empiecen con /, !, o .
+    // Solo procesar comandos que empiecen con /, !, o .
     if (
       !messageText.startsWith("/") &&
       !messageText.startsWith("!") &&
@@ -1532,7 +1534,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
       return;
     }
 
-    // Verificar quée el comando tenga al menos una letra despues del prefijo
+    // Verificar que el comando tenga al menos una letra despues del prefijo
     const commandPart = messageText.substring(1);
     if (!commandPart || !/[a-zA-Z]/.test(commandPart)) {
       logger.pretty.line(`⚠️ Comando inválido - sin letras: "${messageText}"`);
@@ -1544,7 +1546,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     if (normalizedText.startsWith("!") || normalizedText.startsWith(".")) {
       normalizedText = "/" + normalizedText.substring(1);
     }
-    // Quéitar espacios luego del prefijo para soportar ". comando"
+    // Quitar espacios luego del prefijo para soportar ". comando"
     normalizedText = normalizedText.replace(/^\/\s+/, "/");
 
     // Agregar prefijo si existe
@@ -1568,7 +1570,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     logger.pretty.kv("Es owner", isOwner);
     logger.pretty.kv("Comando", command);
 
-    // 1. VERIFICACION GLOBAL (maxima prioridíad)
+    // 1. VERIFICACION GLOBAL (maxima prioridad)
     if (!isGloballyActive) {
       // Solo permitir /bot global on del owner
       if (
@@ -1580,7 +1582,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
         logger.pretty.line("✅ Excepción global: /bot global on permitido");
         // Continuar al switch
       } else {
-        logger.pretty.line("⛔ Bloquéeado por estado global");
+        logger.pretty.line("⛔ Bloqueado por estado global");
 
         const userKey = `global_notified_${usuario}`;
         if (!global.notifiedUsers) {
@@ -1617,7 +1619,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
           );
           // Continuar al switch
         } else {
-          logger.pretty.line("⛔ Bloquéeado por estado de grupo");
+          logger.pretty.line("⛔ Bloqueado por estado de grupo");
 
           const userKey = `group_notified_${usuario}_${remoteJid}`;
           if (!global.notifiedUsers) {
@@ -1636,7 +1638,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
       }
     }
 
-    // Solo llegar aquéi si el bot esta activo O es un comando de activacion permitido
+    // Solo llegar aqui si el bot esta activo O es un comando de activacion permitido
     let result = null;
 
     switch (command) {
@@ -1651,7 +1653,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
           );
           return;
         }
-        const qrResponse = await handleQROrCodeRequéest("qr", usuario);
+        const qrResponse = await handleQROrCodeRequest("qr", usuario);
         if (qrResponse.image) {
           await sock.sendMessage(
             remoteJid,
@@ -1790,16 +1792,16 @@ export async function handleMessage(message, customSock = null, prefix = "") {
       // Comandos basicos
       case "/test":
         await sock.sendMessage(remoteJid, {
-          text: `✅ Bot funcionando correctamente\n\n👤 📝 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
+          text: `✅ Bot funcionando correctamente\n\n👤 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
           mentions: [usuario + "@s.whatsapp.net"],
         });
         break;
 
       case "/help":
-      case "/ayudía":
+      case "/ayuda":
       case "/menu":
       case "/comandos":
-        // Funcion de ayudía simplificadía quée funciona directamente
+        // Funcion de ayuda simplificada que funciona directamente
         const helpText = `
 ┌────────────────────────────┐
 │ 🤖  KONMI BOT v2.5.0       │
@@ -1824,17 +1826,17 @@ export async function handleMessage(message, customSock = null, prefix = "") {
   /series · /addserie [título|género|desc]
 
 • 🎵 Multimedia
-  /music [canción] · /spotify [canción] · /video [búsquéedía]
+  /music [canción] · /spotify [canción] · /video [búsqueda]
   /play [canción] · /tts [texto]|[personaje] · /meme · /joke · /quote
 
 • 🌐 Redes
   /tiktok · /instagram · /facebook · /twitter · /pinterest · /youtube
 
-• 🧰 Utilidíades
-  /translate [texto] · /weather [ciudíad] · /fact · /trivia
+• 🧰 Utilidades
+  /translate [texto] · /weather [ciudad] · /fact · /trivia
 
 • 📁 Archivos
-  /archivos · /misarchivos · /descargar [url] · /guardíar
+  /archivos · /misarchivos · /descargar [url] · /guardar
 
 • 🛡️ Administración
   /kick @usuario · /promote @usuario · /demote @usuario
@@ -1851,7 +1853,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
 • 🧾 QR
   /qr [texto]
 
-📝 Solicitado por: @${usuario}
+Solicitado por: @${usuario}
 ${new Date().toLocaleString("es-ES")}`;
 
         await sock.sendMessage(remoteJid, {
@@ -1913,7 +1915,7 @@ ${new Date().toLocaleString("es-ES")}`;
               meta: JSON.stringify({ expiresInSec: res.expiresInSec }),
             });
           } catch (e) {
-            // continuar aunquée no se puedía persistir
+            // continuar aunque no se pueda persistir
             logger.warn("Persistencia subbot (qr) falló", {
               message: e?.message,
             });
@@ -1931,7 +1933,7 @@ ${new Date().toLocaleString("es-ES")}`;
 
 1️⃣ Abre WhatsApp en tu celular
 2️⃣ Ve a *Dispositivos vinculados*
-3️⃣ Toca en *Vincuálar dispositivo*
+3️⃣ Toca en *Vincular dispositivo*
 4️⃣ Escanea el código QR de arriba
 
 ⏱️ Válido por ${res.expiresInSec || 60} segundos
@@ -1940,7 +1942,7 @@ ${new Date().toLocaleString("es-ES")}`;
 Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del sistema.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🆔 Etiquéeta: ${label}
+🆔 Etiqueta: ${label}
 🕐 ${new Date().toLocaleString("es-ES")}`;
 
           let sentInDm = true;
@@ -2033,7 +2035,7 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
                 `📝 Tu número detectado: ${usuario}\n` +
                 `❌ El número debe tener al menos 10 dígitos\n\n` +
                 `💡 **SOLUCIÓN**\n` +
-                `• Verifica quée tu número esté registrado correctamente\n` +
+                `• Verifica que tu número esté registrado correctamente\n` +
                 `• Intenta nuevamente en unos momentos\n` +
                 `• Contacta al administrador si el problema persiste\n\n` +
                 `🕐 ${new Date().toLocaleString("es-ES")}`,
@@ -2072,7 +2074,7 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
               }),
             });
           } catch (e) {
-            logger.error("Error al guardíar en la base de datos:", e);
+            logger.error("Error al guardar en la base de datos:", e);
             throw new Error(
               "Error al procesar tu solicitud. Por favor, inténtalo de nuevo.",
             );
@@ -2097,8 +2099,8 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
 
 1️⃣ Abre WhatsApp en el dispositivo con número: +${phoneNumber}
 2️⃣ Ve a *Dispositivos vinculados*
-3️⃣ Toca en *Vincuálar dispositivo*
-4️⃣ Selecciona *Vincuálar con número de teléfono*
+3️⃣ Toca en *Vincular dispositivo*
+4️⃣ Selecciona *Vincular con número de teléfono*
 5️⃣ Ingresa este código:
 
    ╔═══════════════════╗
@@ -2209,7 +2211,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         const iaText = messageText.substring(command.length).trim();
         if (!iaText) {
           await sock.sendMessage(remoteJid, {
-            text: "ℹ️ Uso: /ia [tu pregunta]\nEjemplo: /ia ¿Quéé es JavaScript?",
+            text: "ℹ️ Uso: /ia [tu pregunta]\nEjemplo: /ia ¿Qué es JavaScript?",
           });
         } else {
           try {
@@ -2379,12 +2381,12 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           if (result?.message) {
             await sock.sendMessage(remoteJid, { text: result.message });
           } else {
-            await sock.sendMessage(remoteJid, { text: "🔒 Grupo bloquéeado." });
+            await sock.sendMessage(remoteJid, { text: "🔒 Grupo bloqueado." });
           }
         } catch (error) {
           logger.error("Error en lock:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️ Error al bloquéear el grupo.",
+            text: "⚠️ Error al bloquear el grupo.",
           });
         }
         break;
@@ -2396,13 +2398,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             await sock.sendMessage(remoteJid, { text: result.message });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: "🔓 Grupo desbloquéeado.",
+              text: "🔓 Grupo desbloqueado.",
             });
           }
         } catch (error) {
           logger.error("Error en unlock:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️ Error al desbloquéear el grupo.",
+            text: "⚠️ Error al desbloquear el grupo.",
           });
         }
         break;
@@ -2509,7 +2511,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             created_at: new Date().toISOString(),
           });
 
-          const extra = coverPath ? "\n🖼️ Adjunto guardíado" : "";
+          const extra = coverPath ? "\n🖼️ Adjunto guardado" : "";
           await sock.sendMessage(remoteJid, {
             text: `✅ *Manhwa agregado*
 
@@ -2545,7 +2547,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: `⚠️ *Manhwa no encontrado*\n\n🔎 Búsquéedía: "${searchTerm}"\n\n📚 Usa \`/manhwas\` para ver la lista completa.`,
+                text: `⚠️ *Manhwa no encontrado*\n\n🔎 Búsqueda: "${searchTerm}"\n\n📚 Usa \`/manhwas\` para ver la lista completa.`,
               });
             }
           } catch (error) {
@@ -2565,14 +2567,14 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             .limit(10);
           if (series.length === 0) {
             await sock.sendMessage(remoteJid, {
-              text: "📺 *Lista de series*\n\nℹ️ No hay series registradías.\n\n➕ Usa `/addserie` para agregar una.",
+              text: "📺 *Lista de series*\n\nℹ️ No hay series registradas.\n\n➕ Usa `/addserie` para agregar una.",
             });
           } else {
             let seriesList = "📺 *Lista de series*\n\n";
             series.forEach((serie, index) => {
               seriesList += `${index + 1}. **${serie.titulo}**\n`;
               seriesList += `   🏷️ Género: ${serie.genero}\n`;
-              seriesList += `   🗓️ Agregadía: ${new Date(serie.created_at).toLocaleDateString("es-ES")}\n\n`;
+              seriesList += `   🗓️ Agregada: ${new Date(serie.created_at).toLocaleDateString("es-ES")}\n\n`;
             });
             await sock.sendMessage(remoteJid, { text: seriesList });
           }
@@ -2626,9 +2628,9 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             created_at: new Date().toISOString(),
           });
 
-          const extra = coverPath ? "\n🖼️ Adjunto guardíado" : "";
+          const extra = coverPath ? "\n🖼️ Adjunto guardado" : "";
           await sock.sendMessage(remoteJid, {
-            text: `✅ *Serie agregadía*
+            text: `✅ *Serie agregada*
 
 📌 Título: ${titulo}
 🏷️ Género: ${genero}
@@ -2826,7 +2828,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } catch (error) {
             logger.error("Error agregando grupo:", error);
             await sock.sendMessage(remoteJid, {
-              text: "⚠️ Error agregando el grupo. Puede quée ya esté registrado.",
+              text: "⚠️ Error agregando el grupo. Puede que ya esté registrado.",
             });
           }
         }
@@ -2901,7 +2903,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               logger.pretty.banner("Bot activado globalmente", "✅");
               logger.pretty.kv("Por", `${usuario} (Owner)`);
               logger.pretty.kv("Fecha", new Date().toLocaleString("es-ES"));
-              logger.pretty.line("🧹 Notificaciones limpiadías");
+              logger.pretty.line("🧹 Notificaciones limpiadas");
             } catch (error) {
               await sock.sendMessage(remoteJid, {
                 text: "⚠️ Error activando el bot globalmente: " + error.message,
@@ -3138,7 +3140,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             ` isGroup: ${isGroup}\n` +
             ` message.key.participant: ${message.key.participant || "undefined"}\n` +
             ` message.key.remoteJid: ${message.key.remoteJid}\n` +
-            ` sender calcuálado: ${sender}\n` +
+            ` sender calculado: ${sender}\n` +
             ` usuario extraido: ${usuario}\n` +
             ` usuario limpio: ${usuario.replace(/[^\d]/g, "")}\n\n` +
             `🤖 **Bot info (API WhatsApp):**\n` +
@@ -3161,24 +3163,24 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         break;
 
       case "/setowner":
-        // Comando especial para agregar el número actual como owner
+        // Comando especial para agregar el nmero actual como owner
         if (usuario === "595974154768") {
-          // Solo el número principal puede ejecutar esto
+          // Solo el nmero principal puede ejecutar esto
           if (!global.owner.some(([num]) => num === usuario)) {
             global.owner.push([usuario, "Owner Real", true]);
             await sock.sendMessage(remoteJid, {
-              text: `✅ *Owner agregado*\n\n📞 **Número:** ${usuario}\n🟢 **Estado:** Agregado como owner\n\n📋 **Lista actual de owners:**\n${global.owner.map(([num, name]) => ` ${num} (${name})`).join("\n")}\n\n👤 📝 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
+              text: `✅ *Owner agregado*\n\n📞 **Número:** ${usuario}\n🟢 **Estado:** Agregado como owner\n\n📋 **Lista actual de owners:**\n${global.owner.map(([num, name]) => ` ${num} (${name})`).join("\n")}\n\n👤 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
               mentions: [usuario + "@s.whatsapp.net"],
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: `ℹ️ *Ya eres owner*\n\n📞 **Número:** ${usuario}\n🟢 **Estado:** Ya estás en la lista de owners\n\n👤 📝 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
+              text: `ℹ️ *Ya eres owner*\n\n📞 **Número:** ${usuario}\n🟢 **Estado:** Ya estás en la lista de owners\n\n👤 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
               mentions: [usuario + "@s.whatsapp.net"],
             });
           }
         } else {
           await sock.sendMessage(remoteJid, {
-            text: `⛔ *Sin autorización*\n\n📞 **Tu número:** ${usuario}\n🔒 **Requéerido:** 595974154768\n\n👑 Solo el owner principal puede usar este comando\n\n👤 📝 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
+            text: `⛔ *Sin autorización*\n\n📞 **Tu número:** ${usuario}\n🔒 **Requerido:** 595974154768\n\n👑 Solo el owner principal puede usar este comando\n\n👤 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
             mentions: [usuario + "@s.whatsapp.net"],
           });
         }
@@ -3210,7 +3212,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               groupMetadata.participants,
               userJid,
             );
-            // Si el numero del usuario es el mismo quée el del bot, usar el mismo participante
+            // Si el numero del usuario es el mismo que el del bot, usar el mismo participante
             if (
               !botParticipant &&
               normalizeJidToNumber(userJid) === normalizeJidToNumber(botJid)
@@ -3286,9 +3288,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             debugText += `• isSuperAdmin: ${isSuperAdmin(usuario) ? "Sí" : "No"}\n\n`;
 
             debugText += `📜 **Todos los administradores:**\n`;
-            const allAdmins = groupMetadata.participants.filter(
-              (p) => p.admin,
-            );
+            const allAdmins = groupMetadata.participants.filter((p) => p.admin);
             allAdmins.forEach((admin, index) => {
               const adminNumber = admin.id.split("@")[0];
               const isBot = adminNumber === botJid.split("@")[0];
@@ -3299,7 +3299,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               debugText += `\n`;
             });
 
-            debugText += `\n🧭 **Búsquéedías específicas:**\n`;
+            debugText += `\n🧭 **Búsquedas específicas:**\n`;
             const foundByNumber = groupMetadata.participants.find(
               (p) => normalizeJidToNumber(p.id) === usuario,
             );
@@ -3318,7 +3318,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               debugText += `• El bot no puede ser administrador de sí mismo\n`;
             }
 
-            // Muestra de participantes con ID crudo, número normalizado y rol
+            // Muestra de participantes con ID crudo, nmero normalizado y rol
             debugText += `\n🧪 **Muestra de participantes (raw => normalizado):**\n`;
             const botNumSession = getBotNumber(sock);
             groupMetadata.participants.slice(0, 30).forEach((p, idx) => {
@@ -3331,7 +3331,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               debugText += `${idx + 1}. ${raw} => ${num} (${role})${flags.length ? " · " + flags.join(" & ") : ""}\n`;
             });
 
-            debugText += `\n👤 📝 Solicitado por: @${usuario}\n`;
+            debugText += `\n👤 Solicitado por: @${usuario}\n`;
             debugText += `🕒 ${new Date().toLocaleString("es-ES")}`;
 
             await sock.sendMessage(remoteJid, {
@@ -3377,7 +3377,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
           if (!targetRaw) {
             await sock.sendMessage(remoteJid, {
-              text: `👢 *Expulsar usuario*\n\nℹ️ **Uso:**\n \`/kick @usuario\` — Mencionar usuario\n \`/kick [número]\` — Usar número directo\n Responder a un mensaje con \`/kick\`\n\n📌 **Ejemplos:**\n \`/kick @usuario\`\n \`/kick 5491234567890\`\n Responder mensaje + \`/kick\`\n\n👤 📝 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
+              text: `👢 *Expulsar usuario*\n\nℹ️ **Uso:**\n \`/kick @usuario\` — Mencionar usuario\n \`/kick [número]\` — Usar número directo\n Responder a un mensaje con \`/kick\`\n\n📌 **Ejemplos:**\n \`/kick @usuario\`\n \`/kick 5491234567890\`\n Responder mensaje + \`/kick\`\n\n👤 Solicitado por: @${usuario}\n🕒 ${new Date().toLocaleString("es-ES")}`,
               mentions: [usuario + "@s.whatsapp.net"],
             });
             break;
@@ -3495,7 +3495,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /demote:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️ Error procesando degradíación.",
+            text: "⚠️ Error procesando degradación.",
           });
         }
         break;
@@ -3517,7 +3517,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en lock:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️ Error bloquéeando el grupo.",
+            text: "⚠️ Error bloqueando el grupo.",
           });
         }
         break;
@@ -3539,7 +3539,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en unlock:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️ Error desbloquéeando el grupo.",
+            text: "⚠️ Error desbloqueando el grupo.",
           });
         }
         break;
@@ -3575,7 +3575,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
             if (!isUserAdmin && !isOwner) {
               await sock.sendMessage(remoteJid, {
-                text: "⛔ Solo administradores pueden etiquéetar a todos",
+                text: "⛔ Solo administradores pueden etiquetar a todos",
               });
               break;
             }
@@ -3594,7 +3594,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } catch (error) {
             logger.error("Error en tag:", error);
             await sock.sendMessage(remoteJid, {
-              text: "⚠️ Error etiquéetando usuarios",
+              text: "⚠️ Error etiquetando usuarios",
             });
           }
         }
@@ -3611,7 +3611,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           });
         } else {
           await sock.sendMessage(remoteJid, {
-            text: `🗳️ *Nueva votación creadía*\n\n❓ Pregunta: ${votacionData}\n👤 Creadía por: ${usuario}\n🕒 Fecha: ${new Date().toLocaleString("es-ES")}\n\n✅ Usa /votar [opción] para participar`,
+            text: `🗳️ *Nueva votación creada*\n\n❓ Pregunta: ${votacionData}\n👤 Creada por: ${usuario}\n🕒 Fecha: ${new Date().toLocaleString("es-ES")}\n\n✅ Usa /votar [opción] para participar`,
           });
         }
         break;
@@ -3631,7 +3631,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/cerrarvotacion":
         await sock.sendMessage(remoteJid, {
-          text: `🗳️ *Votación cerradía*\n\n🔒 Resultados finalizados\n👤 Cerradía por: ${usuario}\n🕒 Fecha: ${new Date().toLocaleString("es-ES")}`,
+          text: `🗳️ *Votación cerrada*\n\n🔒 Resultados finalizados\n👤 Cerrada por: ${usuario}\n🕒 Fecha: ${new Date().toLocaleString("es-ES")}`,
         });
         break;
 
@@ -3736,7 +3736,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               `📞 **Número:** ${phoneNumber}\n` +
               "⚙️ Creando nuevo subbot...\n" +
               "⏳ Generando código de vinculación...\n\n" +
-              "✅ El código apareceráá en unos segundos",
+              "✅ El código aparecerá en unos segundos",
           });
 
           // Importar el manager de subbots
@@ -3757,15 +3757,15 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                     `🧩 **Código SubBot:** ${event.subbot.code}\n` +
                     `📞 **Número:** ${event.data.targetNumber}\n` +
                     `🔢 **Pairing Code:** \`${event.data.code}\`\n` +
-                    `🪪 **Apareceráá como:** ${event.data.displayCode}\n` +
+                    `🪪 **Aparecerá como:** ${event.data.displayCode}\n` +
                     `⏳ **Válido por:** 10 minutos\n\n` +
                     `📋 **Instrucciones:**\n` +
                     `1. Abre WhatsApp en ${event.data.targetNumber}\n` +
                     `2. Ve a Configuración > Dispositivos vinculados\n` +
-                    `3. Toca "Vincuálar con código de teléfono"\n` +
+                    `3. Toca "Vincular con código de teléfono"\n` +
                     `4. Ingresa: **${event.data.code}**\n` +
                     `5. Verás "${event.data.displayCode}"\n\n` +
-                    `👤 📝 Solicitado por: @${usuario}\n` +
+                    `👤 Solicitado por: @${usuario}\n` +
                     `🕒 ${new Date().toLocaleString("es-ES")}`,
                   mentions: [usuario + "@s.whatsapp.net"],
                 });
@@ -3847,7 +3847,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               `🆔 ID: ${usuario}@s.whatsapp.net\n` +
               `👑 Owner: ${isOwner ? "Sí" : "No"}\n` +
               `🗂️ Contexto: ${isGroup ? "Grupo" : "Privado"}\n\n` +
-              `👤 📝 Solicitado por: @${usuario}\n` +
+              `👤 Solicitado por: @${usuario}\n` +
               `🕒 Fecha: ${new Date().toLocaleString("es-ES")}`;
 
             await sock.sendMessage(remoteJid, {
@@ -3863,7 +3863,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             `🆔 ID: ${usuario}@s.whatsapp.net\n` +
             `👑 Owner: ${isOwner ? "Sí" : "No"}\n` +
             `🗂️ Contexto: ${isGroup ? "Grupo" : "Privado"}\n\n` +
-            `👤 📝 Solicitado por: @${usuario}\n` +
+            `👤 Solicitado por: @${usuario}\n` +
             `🕒 Fecha: ${new Date().toLocaleString("es-ES")}`;
 
           await sock.sendMessage(remoteJid, {
@@ -3908,8 +3908,8 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       // COMANDOS MULTIMEDIA - IMPLEMENTACIN FUNCIONAL
       case "/music":
       case "/musica":
-        const musicQuéery = args.join(" ");
-        if (!musicQuéery) {
+        const musicQuery = args.join(" ");
+        if (!musicQuery) {
           await sock.sendMessage(remoteJid, {
             text: "ℹ️ Uso: /music [nombre de la canción]\nEjemplo: /music Despacito",
           });
@@ -3919,9 +3919,9 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               text: "🔎 Buscando música...",
             });
 
-            // Usar API de Vreden para busquéedía y descarga de musica
+            // Usar API de Vreden para busqueda y descarga de musica
             const searchResponse = await fetch(
-              `https://api.vreden.my.id/api/ytsearch?quéery=${encodeURIComponent(musicQuéery)}`,
+              `https://api.vreden.my.id/api/ytsearch?query=${encodeURIComponent(musicQuery)}`,
             );
             const searchData = await searchResponse.json();
 
@@ -3934,7 +3934,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
               await sock.sendMessage(remoteJid, {
                 text:
-                  `🎵 *Música encontradía*\n\n` +
+                  `🎵 *Música encontrada*\n\n` +
                   `📌 **Título:** ${video.title}\n` +
                   `👤 **Canal:** ${video.author.name}\n` +
                   `⏱️ **Duración:** ${video.duration.timestamp}\n` +
@@ -3968,8 +3968,8 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                     `✅ **Audio enviado**\n\n` +
                     `🎵 ${video.title}\n` +
                     `👤 ${video.author.name}\n` +
-                    `📶 Calidíad: ${downloadData.result.download.quéality}\n` +
-                    `👤 📝 Solicitado por: ${usuario}\n` +
+                    `📶 Calidad: ${downloadData.result.download.quality}\n` +
+                    `👤 Solicitado por: ${usuario}\n` +
                     `🕒 ${new Date().toLocaleString("es-ES")}`,
                 });
               } else {
@@ -3980,17 +3980,17 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             } else {
               await sock.sendMessage(remoteJid, {
                 text:
-                  `🔎 *Búsquéedía de música*\n\n` +
-                  `😕 No se encontraron resultados para: "${musicQuéery}"\n\n` +
+                  `🔎 *Búsqueda de música*\n\n` +
+                  `😕 No se encontraron resultados para: "${musicQuery}"\n\n` +
                   `💡 Intenta con otro nombre o artista.`,
               });
             }
           } catch (error) {
-            logger.error("Error en busquéedía de musica:", error);
+            logger.error("Error en busqueda de musica:", error);
             await sock.sendMessage(remoteJid, {
               text:
-                `⚠️ *Búsquéedía de música*\n\n` +
-                `❌ Error en la búsquéedía: "${musicQuéery}"\n\n` +
+                `⚠️ *Búsqueda de música*\n\n` +
+                `❌ Error en la búsqueda: "${musicQuery}"\n\n` +
                 `🔁 Intenta nuevamente en unos momentos.`,
             });
           }
@@ -3999,8 +3999,8 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/spotify":
       case "/spot":
-        const spotifyQuéery = args.join(" ");
-        if (!spotifyQuéery) {
+        const spotifyQuery = args.join(" ");
+        if (!spotifyQuery) {
           await sock.sendMessage(remoteJid, {
             text: "ℹ️ Uso: /spotify [nombre de la canción]\nEjemplo: /spotify Despacito Luis Fonsi",
           });
@@ -4010,9 +4010,9 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               text: "🔎 Buscando en Spotify...",
             });
 
-            // Usar API de Vreden para bsquéedía en Spotify
+            // Usar API de Vreden para bsqueda en Spotify
             const response = await fetch(
-              `https://api.vreden.my.id/api/spotify/search?quéery=${encodeURIComponent(spotifyQuéery)}`,
+              `https://api.vreden.my.id/api/spotify/search?query=${encodeURIComponent(spotifyQuery)}`,
             );
             const data = await response.json();
 
@@ -4021,7 +4021,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
               await sock.sendMessage(remoteJid, {
                 text:
-                  `🎶 *Música de Spotify encontradía*\n\n` +
+                  `🎶 *Música de Spotify encontrada*\n\n` +
                   `📌 **Título:** ${track.title}\n` +
                   `👤 **Artista:** ${track.artists}\n` +
                   `💽 **Álbum:** ${track.album}\n` +
@@ -4030,7 +4030,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                   `⬇️ Descargando audio de Spotify...`,
               });
 
-              // Enviar la imagen de portadía
+              // Enviar la imagen de portada
               if (track.cover_url) {
                 await sock.sendMessage(remoteJid, {
                   image: { url: track.cover_url },
@@ -4053,7 +4053,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                     `🎵 ${track.title}\n` +
                     `👤 ${track.artists}\n` +
                     `💽 ${track.album}\n` +
-                    `👤 📝 Solicitado por: ${usuario}\n` +
+                    `👤 Solicitado por: ${usuario}\n` +
                     `🕒 ${new Date().toLocaleString("es-ES")}`,
                 });
               } else {
@@ -4064,8 +4064,8 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             } else {
               await sock.sendMessage(remoteJid, {
                 text:
-                  `🔎 *Búsquéedía en Spotify*\n\n` +
-                  `😕 No se encontraron resultados para: "${spotifyQuéery}"\n\n` +
+                  `🔎 *Búsqueda en Spotify*\n\n` +
+                  `😕 No se encontraron resultados para: "${spotifyQuery}"\n\n` +
                   `💡 Intenta con el nombre exacto de la canción y el artista.`,
               });
             }
@@ -4073,8 +4073,8 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             logger.error("Error en Spotify:", error);
             await sock.sendMessage(remoteJid, {
               text:
-                `⚠️ *Búsquéedía en Spotify*\n\n` +
-                `❌ Error en la búsquéedía: "${spotifyQuéery}"\n\n` +
+                `⚠️ *Búsqueda en Spotify*\n\n` +
+                `❌ Error en la búsqueda: "${spotifyQuery}"\n\n` +
                 `🔁 Intenta nuevamente en unos momentos.`,
             });
           }
@@ -4083,18 +4083,18 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/video":
       case "/youtube":
-        const videoQuéery = args.join(" ");
-        if (!videoQuéery) {
+        const videoQuery = args.join(" ");
+        if (!videoQuery) {
           await sock.sendMessage(remoteJid, {
-            text: "ℹ️ Uso: /video [búsquéedía]\nEjemplo: /video tutorial javascript",
+            text: "ℹ️ Uso: /video [búsqueda]\nEjemplo: /video tutorial javascript",
           });
         } else {
           try {
             await sock.sendMessage(remoteJid, { text: "🔎 Buscando video..." });
 
-            // Usar API de Vreden para bsquéedía y descarga de video
+            // Usar API de Vreden para bsqueda y descarga de video
             const searchResponse = await fetch(
-              `https://api.vreden.my.id/api/ytsearch?quéery=${encodeURIComponent(videoQuéery)}`,
+              `https://api.vreden.my.id/api/ytsearch?query=${encodeURIComponent(videoQuery)}`,
             );
             const searchData = await searchResponse.json();
 
@@ -4134,15 +4134,15 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                   fileName:
                     downloadData.result.download.filename ||
                     `${video.title.substring(0, 50)}.mp4`,
-                  caption: `📹 ${video.title}\n👤 ${video.author.name}\n📶 Calidíad: ${downloadData.result.download.quéality}\n👤 📝 Solicitado por: ${usuario}`,
+                  caption: `📹 ${video.title}\n👤 ${video.author.name}\n📶 Calidad: ${downloadData.result.download.quality}\n👤 Solicitado por: ${usuario}`,
                 });
 
                 await sock.sendMessage(remoteJid, {
                   text:
                     `✅ **Video enviado**\n\n` +
                     `📹 ${video.title}\n` +
-                    `📶 Calidíad: ${downloadData.result.download.quéality}\n` +
-                    `👤 📝 Solicitado por: ${usuario}\n` +
+                    `📶 Calidad: ${downloadData.result.download.quality}\n` +
+                    `👤 Solicitado por: ${usuario}\n` +
                     `🕒 ${new Date().toLocaleString("es-ES")}`,
                 });
               } else {
@@ -4153,17 +4153,17 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             } else {
               await sock.sendMessage(remoteJid, {
                 text:
-                  `🔎 *Búsquéedía de video*\n\n` +
-                  `😕 No se encontraron resultados para: "${videoQuéery}"\n\n` +
-                  `💡 Intenta con otros términos de búsquéedía.`,
+                  `🔎 *Búsqueda de video*\n\n` +
+                  `😕 No se encontraron resultados para: "${videoQuery}"\n\n` +
+                  `💡 Intenta con otros términos de búsqueda.`,
               });
             }
           } catch (error) {
-            logger.error("Error en bsquéedía de video:", error);
+            logger.error("Error en bsqueda de video:", error);
             await sock.sendMessage(remoteJid, {
               text:
-                `⚠️ *Búsquéedía de video*\n\n` +
-                `❌ Error en la búsquéedía: "${videoQuéery}"\n\n` +
+                `⚠️ *Búsqueda de video*\n\n` +
+                `❌ Error en la búsqueda: "${videoQuery}"\n\n` +
                 `🔁 Intenta nuevamente en unos momentos.`,
             });
           }
@@ -4186,7 +4186,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 `📌 **Título:** ${data.data.title || "Meme divertido"}\n` +
                 `👤 **Autor:** ${data.data.author || "Anónimo"}\n` +
                 `👍 **Votos:** ${data.data.ups || "N/A"}\n\n` +
-                `👤 📝 Solicitado por: ${usuario}\n` +
+                `👤 Solicitado por: ${usuario}\n` +
                 `🕒 ${new Date().toLocaleString("es-ES")}`,
             });
           } else {
@@ -4232,11 +4232,11 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               await sock.sendMessage(remoteJid, {
                 image: { url: data.data.url },
                 caption:
-                  `🖼️ *Imagen generadía con IA*\n\n` +
+                  `🖼️ *Imagen generada con IA*\n\n` +
                   `📝 **Prompt:** "${imagePrompt}"\n` +
                   `🧠 **Motor:** Inteligencia Artificial\n` +
                   `⏱️ **Tiempo:** ${data.data.time || "N/A"}\n\n` +
-                  `👤 📝 Solicitado por: ${usuario}\n` +
+                  `👤 Solicitado por: ${usuario}\n` +
                   `🕒 ${new Date().toLocaleString("es-ES")}`,
               });
             } else {
@@ -4262,11 +4262,11 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/joke":
       case "/chiste":
         const jokes = [
-          "Por quééé los programadores prefieren el modo oscuro? Porquée la luz atrae a los bugs! 😄",
-          "Cuál es el colmo de un programador? Quée su mujer le diga quée tiene un bug y él le pregunte si es reproducible 😂",
-          "Por quééé los programadores odian la naturaleza? Porquée tiene demasiados bugs 🐛",
+          "Por qué los programadores prefieren el modo oscuro? Porque la luz atrae a los bugs! 😄",
+          "Cuál es el colmo de un programador? Que su mujer le diga que tiene un bug y él le pregunte si es reproducible 😂",
+          "Por qué los programadores odian la naturaleza? Porque tiene demasiados bugs 🐛",
           "Un programador va al médico y le dice: 'Doctor, me duele cuando programo'. El médico le responde: 'Entonces no programes' 😆",
-          "Quéé le dice un bit a otro bit? Nos vemos en el bus! 😄",
+          "Qué le dice un bit a otro bit? Nos vemos en el bus! 😄",
         ];
         const randomJoke = jokes[Math.floor(Math.random() * jokes.length)];
         await sock.sendMessage(remoteJid, {
@@ -4322,7 +4322,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         const city = args.join(" ");
         if (!city) {
           await sock.sendMessage(remoteJid, {
-            text: "ℹ️ Uso: /weather [ciudíad]\nEjemplo: /weather Madrid",
+            text: "ℹ️ Uso: /weather [ciudad]\nEjemplo: /weather Madrid",
           });
         } else {
           try {
@@ -4352,12 +4352,12 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                     `🌡️ **Temperatura:** ${current.temp_C}°C\n` +
                     `🥵 **Sensación térmica:** ${current.FeelsLikeC}°C\n` +
                     `☁️ **Condición:** ${current.weatherDesc[0].value}\n` +
-                    `💧 **Humedíad:** ${current.humidity}%\n` +
+                    `💧 **Humedad:** ${current.humidity}%\n` +
                     `🌬️ **Viento:** ${current.windspeedKmph} km/h\n` +
-                    `👁️ **Visibilidíad:** ${current.visibility} km`,
+                    `👁️ **Visibilidad:** ${current.visibility} km`,
                 });
               } else {
-                throw new Error("Ciudíad no encontradía");
+                throw new Error("Ciudad no encontrada");
               }
             } else {
               const data = await response.json();
@@ -4372,15 +4372,15 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 await sock.sendMessage(remoteJid, {
                   text:
                     `🌦️ *Clima*\n\n` +
-                    `🏙️ **Ciudíad:** ${data.name}, ${data.sys.country}\n\n` +
+                    `🏙️ **Ciudad:** ${data.name}, ${data.sys.country}\n\n` +
                     `🌡️ **Temperatura:** ${temp}°C\n` +
                     `🥵 **Sensación térmica:** ${feelsLike}°C\n` +
                     `☁️ **Condición:** ${description}\n` +
-                    `💧 **Humedíad:** ${humidity}%\n` +
+                    `💧 **Humedad:** ${humidity}%\n` +
                     `🌬️ **Viento:** ${windSpeed} km/h`,
                 });
               } else {
-                throw new Error("Ciudíad no encontradía");
+                throw new Error("Ciudad no encontrada");
               }
             }
           } catch (error) {
@@ -4400,13 +4400,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         try {
           // Intentar obtener cita real de API
           const response = await fetch(
-            "https://api.quéotable.io/random?tags=inspirational,motivational,wisdom",
+            "https://api.quotable.io/random?tags=inspirational,motivational,wisdom",
           );
           const data = await response.json();
 
           if (data.content && data.author) {
             await sock.sendMessage(remoteJid, {
-              text: `💭 *Frase Inspiradora* 💭 💭\n\n"${data.content}"\n\n👤 **Autor:** ${data.author}\n🏷️ **Categoría:** ${data.tags.join(", ")}\n\n📝 📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
+              text: `💭 *Frase Inspiradora Real*\n\n"${data.content}"\n\n👤 **Autor:** ${data.author}\n🏷️ **Categoría:** ${data.tags.join(", ")}\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
             });
           } else {
             throw new Error("No se pudo obtener cita");
@@ -4415,23 +4415,23 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           // Fallback con citas locales
           const quotes = [
             {
-              text: "El único modo de hacer un gran trabajo es amar lo quée haces.",
+              text: "El único modo de hacer un gran trabajo es amar lo que haces.",
               author: "Steve Jobs",
             },
             {
-              text: "La vidía es lo quée pasa mientras estás ocupado haciendo otros planes.",
+              text: "La vida es lo que pasa mientras estás ocupado haciendo otros planes.",
               author: "John Lennon",
             },
             {
-              text: "El futuro pertenece a quéienes creen en la belleza de sus sueños.",
+              text: "El futuro pertenece a quienes creen en la belleza de sus sueños.",
               author: "Eleanor Roosevelt",
             },
             {
-              text: "No es la especie más fuerte la quée sobrevive, sino la más adíaptable al cambio.",
-              author: "Charles Díarwin",
+              text: "No es la especie más fuerte la que sobrevive, sino la más adaptable al cambio.",
+              author: "Charles Darwin",
             },
             {
-              text: "La imaginación es más importante quée el conocimiento.",
+              text: "La imaginación es más importante que el conocimiento.",
               author: "Albert Einstein",
             },
             {
@@ -4439,30 +4439,29 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               author: "Winston Churchill",
             },
             {
-              text: "La única forma de hacer un trabajo excelente es amar lo quée haces.",
+              text: "La única forma de hacer un trabajo excelente es amar lo que haces.",
               author: "Steve Jobs",
             },
           ];
 
-          const randomQuéote =
-            quotes[Math.floor(Math.random() * quotes.length)];
+          const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
           await sock.sendMessage(remoteJid, {
-            text: `💭 *Frase Inspiradora* 💭\n\n"${randomQuéote.text}"\n\n👤 **Autor:** ${randomQuéote.author}\n\n📝 📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
+            text: `💭 *Frase Inspiradora*\n\n"${randomQuote.text}"\n\n👤 **Autor:** ${randomQuote.author}\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
           });
         }
         break;
 
       case "/fact":
-      case "/díato":
+      case "/dato":
         try {
-          // Intentar obtener díato curioso real de API
+          // Intentar obtener dato curioso real de API
           const response = await fetch(
             "https://uselessfacts.jsph.pl/random.json?language=en",
           );
           const data = await response.json();
 
           if (data.text) {
-            // Traducir el díato curioso
+            // Traducir el dato curioso
             try {
               const translateResponse = await fetch(
                 `https://api.mymemory.translated.net/get?q=${encodeURIComponent(data.text)}&langpair=en|es`,
@@ -4473,16 +4472,16 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 translateData.responseData?.translatedText || data.text;
 
               await sock.sendMessage(remoteJid, {
-                text: `🔍 *Díato Curioso Real*\n\n💡 ${translatedFact}\n\n📚 **Fuente:** Díatos verificados\n🏷️ **Categoría:** Conocimiento general\n\n📝 📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
+                text: `🔍 *Dato Curioso Real*\n\n💡 ${translatedFact}\n\n📚 **Fuente:** Datos verificados\n🏷️ **Categoría:** Conocimiento general\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
               });
             } catch (translateError) {
-              // Si falla la traducción, usar el díato en inglés
+              // Si falla la traducción, usar el dato en inglés
               await sock.sendMessage(remoteJid, {
-                text: `🔍 *Díato Curioso Real*\n\n💡 ${data.text}\n\n📚 **Fuente:** Díatos verificados\n🌐 **Idioma:** Inglés\n\n📝 📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
+                text: `🔍 *Dato Curioso Real*\n\n💡 ${data.text}\n\n📚 **Fuente:** Datos verificados\n🌐 **Idioma:** Inglés\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
               });
             }
           } else {
-            throw new Error("No se pudo obtener díato");
+            throw new Error("No se pudo obtener dato");
           }
         } catch (error) {
           // Fallback con datos curiosos locales
@@ -4490,18 +4489,18 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             "Los pulpos tienen tres corazones y sangre azul.",
             "Una cucaracha puede vivir hasta una semana sin cabeza.",
             "Los delfines tienen nombres para identificarse entre ellos.",
-            "El corazn de una ballena azul es tan grande como un automvil pequéeo.",
+            "El corazn de una ballena azul es tan grande como un automvil pequeo.",
             "Las abejas pueden reconocer rostros humanos.",
             "Los pinginos pueden saltar hasta 2 metros de altura.",
-            "El cerebro humano contiene aproximadíamente 86 mil millones de neuronas.",
+            "El cerebro humano contiene aproximadamente 86 mil millones de neuronas.",
             "Los gatos pueden hacer más de 100 sonidos diferentes.",
-            "Una gota de lluvia tardía aproximadíamente 10 minutos en caer desde una nube.",
-            "El ADN humano es 99.9% idéntico en todías las personas.",
+            "Una gota de lluvia tarda aproximadamente 10 minutos en caer desde una nube.",
+            "El ADN humano es 99.9% idéntico en todas las personas.",
           ];
 
           const randomFact = facts[Math.floor(Math.random() * facts.length)];
           await sock.sendMessage(remoteJid, {
-            text: `🔍 *Díato Curioso*\n\n💡 ${randomFact}\n\n🏷️ **Categoría:** Ciencia y naturaleza\n\n📝 📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
+            text: `🔍 *Dato Curioso*\n\n💡 ${randomFact}\n\n🏷️ **Categoría:** Ciencia y naturaleza\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
           });
         }
         break;
@@ -4510,7 +4509,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         try {
           // Intentar obtener pregunta de trivia real de API
           const response = await fetch(
-            "https://opentdb.com/api.php?amount=1&type=multiple&category=9&difficuálty=medium",
+            "https://opentdb.com/api.php?amount=1&type=multiple&category=9&difficulty=medium",
           );
           const data = await response.json();
 
@@ -4532,7 +4531,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             // Decodificar HTML entities
             const decodeHtml = (html) => {
               return html
-                .replace(/&quéot;/g, '"')
+                .replace(/&quot;/g, '"')
                 .replace(/&#039;/g, "'")
                 .replace(/&amp;/g, "&")
                 .replace(/&lt;/g, "<")
@@ -4540,18 +4539,18 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             };
 
             const triviaText =
-              `🧠 *Pregunta de Trivia* 🧠\n\n` +
+              `🧠 *Pregunta de Trivia*\n\n` +
               `❓ ${decodeHtml(question.question)}\n\n` +
-              `📋 **Opciones:** 📋\n` +
+              `📋 **Opciones:**\n` +
               `1️⃣ ${decodeHtml(allAnswers[0])}\n` +
               `2️⃣ ${decodeHtml(allAnswers[1])}\n` +
               `3️⃣ ${decodeHtml(allAnswers[2])}\n` +
               `4️⃣ ${decodeHtml(allAnswers[3])}\n\n` +
               `🏷️ **Categoría:** ${question.category}\n` +
-              `⭐ **Dificuáltad:** ${question.difficuálty.toUpperCase()}\n\n` +
-              `✅ **Respuesta correcta:** ✅ Opción ${correctIndex}\n` +
+              `⭐ **Dificultad:** ${question.difficulty.toUpperCase()}\n\n` +
+              `✅ **Respuesta correcta:** Opción ${correctIndex}\n` +
               `💡 **Respuesta:** ${decodeHtml(correctAnswer)}\n\n` +
-              `📝 📝 Solicitado por: @${usuario}\n` +
+              `📝 Solicitado por: @${usuario}\n` +
               `⏰ ${new Date().toLocaleString("es-ES")}`;
 
             await sock.sendMessage(remoteJid, {
@@ -4567,19 +4566,19 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           // Fallback con preguntas locales
           const localTrivia = [
             {
-              question: "Cuál es el planeta ms grande del sistema solar?",
+              question: "Cul es el planeta ms grande del sistema solar?",
               options: ["Tierra", "Jpiter", "Saturno", "Neptuno"],
               correct: 1,
               answer: "Jpiter",
             },
             {
-              question: "En qué ao se fund WhatsApp?",
+              question: "En qu ao se fund WhatsApp?",
               options: ["2007", "2009", "2011", "2013"],
               correct: 1,
               answer: "2009",
             },
             {
-              question: "Cuál es el lenguaje de programacin ms usado en 2024?",
+              question: "Cul es el lenguaje de programacin ms usado en 2024?",
               options: ["Python", "JavaScript", "Java", "C++"],
               correct: 1,
               answer: "JavaScript",
@@ -4596,18 +4595,18 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             localTrivia[Math.floor(Math.random() * localTrivia.length)];
 
           const triviaText =
-            `🧠 *Pregunta de Trivia* 🧠\n\n` +
+            `🧠 *Pregunta de Trivia*\n\n` +
             `❓ ${randomTrivia.question}\n\n` +
-            `📋 **Opciones:** 📋\n` +
+            `📋 **Opciones:**\n` +
             `1️⃣ ${randomTrivia.options[0]}\n` +
             `2️⃣ ${randomTrivia.options[1]}\n` +
             `3️⃣ ${randomTrivia.options[2]}\n` +
             `4️⃣ ${randomTrivia.options[3]}\n\n` +
             `🏷️ **Categoría:** Conocimiento General\n` +
-            `⭐ **Dificuáltad:** MEDIO\n\n` +
-            `✅ **Respuesta correcta:** ✅ Opción ${randomTrivia.correct + 1}\n` +
+            `⭐ **Dificultad:** MEDIO\n\n` +
+            `✅ **Respuesta correcta:** Opción ${randomTrivia.correct + 1}\n` +
             `💡 **Respuesta:** ${randomTrivia.answer}\n\n` +
-            `📝 📝 Solicitado por: @${usuario}\n` +
+            `📝 Solicitado por: @${usuario}\n` +
             `⏰ ${new Date().toLocaleString("es-ES")}`;
 
           await sock.sendMessage(remoteJid, {
@@ -4640,7 +4639,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               await sock.sendMessage(remoteJid, {
                 video: { url: data.result.video || data.result.download },
                 mimetype: "video/mp4",
-                caption: `📹 **TikTok Descargado**\n\n👤 **Autor:** ${data.result.author || data.result.username || "Desconocido"}\n📝 **Descripción:** ${data.result.title || data.result.description || "Sin descripción"}\n✅ 📝 Solicitado por: ${usuario}`,
+                caption: `📹 **TikTok Descargado**\n\n👤 **Autor:** ${data.result.author || data.result.username || "Desconocido"}\n📝 **Descripción:** ${data.result.title || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
               });
             } else {
               await sock.sendMessage(remoteJid, {
@@ -4678,19 +4677,19 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               if (data.result.type === "image" || data.result.image) {
                 await sock.sendMessage(remoteJid, {
                   image: { url: data.result.url || data.result.image },
-                  caption: `📸 **Instagram Descargado**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Descripción:** ${data.result.caption || data.result.description || "Sin descripción"}\n✅ 📝 Solicitado por: ${usuario}`,
+                  caption: `📸 **Instagram Descargado**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Descripción:** ${data.result.caption || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
                 });
               } else if (data.result.type === "video" || data.result.video) {
                 await sock.sendMessage(remoteJid, {
                   video: { url: data.result.url || data.result.video },
                   mimetype: "video/mp4",
-                  caption: `🎥 **Instagram Video**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Descripción:** ${data.result.caption || data.result.description || "Sin descripción"}\n✅ 📝 Solicitado por: ${usuario}`,
+                  caption: `🎥 **Instagram Video**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Descripción:** ${data.result.caption || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
                 });
               } else {
-                // Fallback para cualquéier tipo de contenido
+                // Fallback para cualquier tipo de contenido
                 await sock.sendMessage(remoteJid, {
                   image: { url: data.result.url || data.result.download },
-                  caption: `📸 **Instagram Descargado**\n\n👤 **Autor:** ${data.result.username || "Desconocido"}\n✅ 📝 Solicitado por: ${usuario}`,
+                  caption: `📸 **Instagram Descargado**\n\n👤 **Autor:** ${data.result.username || "Desconocido"}\n✅ Solicitado por: ${usuario}`,
                 });
               }
             } else {
@@ -4734,7 +4733,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                     data.result.url,
                 },
                 mimetype: "video/mp4",
-                caption: `📹 **Facebook Video**\n\n📝 **Título:** ${data.result.title || data.result.description || "Sin título"}\n⏱️ **Duración:** ${data.result.duration || "N/A"}\n👤 **Autor:** ${data.result.author || "Desconocido"}\n✅ 📝 Solicitado por: ${usuario}`,
+                caption: `📹 **Facebook Video**\n\n📝 **Título:** ${data.result.title || data.result.description || "Sin título"}\n⏱️ **Duración:** ${data.result.duration || "N/A"}\n👤 **Autor:** ${data.result.author || "Desconocido"}\n✅ Solicitado por: ${usuario}`,
               });
             } else {
               await sock.sendMessage(remoteJid, {
@@ -4776,16 +4775,16 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 await sock.sendMessage(remoteJid, {
                   video: { url: data.result.video || data.result.url },
                   mimetype: "video/mp4",
-                  caption: `🐦 **Twitter/X Video**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Tweet:** ${data.result.text || data.result.description || "Sin descripción"}\n✅ 📝 Solicitado por: ${usuario}`,
+                  caption: `🐦 **Twitter/X Video**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Tweet:** ${data.result.text || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
                 });
               } else if (data.result.type === "image" || data.result.image) {
                 await sock.sendMessage(remoteJid, {
                   image: { url: data.result.image || data.result.url },
-                  caption: `🖼️ **Twitter/X Imagen**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Tweet:** ${data.result.text || data.result.description || "Sin descripción"}\n✅ 📝 Solicitado por: ${usuario}`,
+                  caption: `🖼️ **Twitter/X Imagen**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Tweet:** ${data.result.text || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
                 });
               } else {
                 await sock.sendMessage(remoteJid, {
-                  text: `🐦 **Twitter/X Contenido**\n\n👤 **Autor:** ${data.result.username || "Desconocido"}\n📝 **Tweet:** ${data.result.text || "Contenido de Twitter/X"}\n✅ 📝 Solicitado por: ${usuario}`,
+                  text: `🐦 **Twitter/X Contenido**\n\n👤 **Autor:** ${data.result.username || "Desconocido"}\n📝 **Tweet:** ${data.result.text || "Contenido de Twitter/X"}\n✅ Solicitado por: ${usuario}`,
                 });
               }
             } else {
@@ -4823,7 +4822,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             if (data.status && data.result) {
               await sock.sendMessage(remoteJid, {
                 image: { url: data.result.image || data.result.url },
-                caption: `📌 **Pinterest Descargado**\n\n📝 **Título:** ${data.result.title || "Sin título"}\n💬 **Descripción:** ${data.result.description || "Sin descripción"}\n✅ 📝 Solicitado por: ${usuario}`,
+                caption: `📌 **Pinterest Descargado**\n\n📝 **Título:** ${data.result.title || "Sin título"}\n💬 **Descripción:** ${data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
               });
             } else {
               await sock.sendMessage(remoteJid, {
@@ -4956,7 +4955,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         }
         break;
 
-      case "/guardíar":
+      case "/guardar":
       case "/save":
         try {
           const { processWhatsAppMedia } = await import("./file-manager.js");
@@ -4972,7 +4971,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
           if (!hasDirectMedia && !quoted) {
             await sock.sendMessage(remoteJid, {
-              text: "ℹ️ Debes adjuntar un archivo o responder a un mensaje con un archivo para guardíar.",
+              text: "ℹ️ Debes adjuntar un archivo o responder a un mensaje con un archivo para guardar.",
             });
             break;
           }
@@ -4987,7 +4986,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
           if (res?.filepath) {
             await sock.sendMessage(remoteJid, {
-              text: `✅ *Archivo guardíado*
+              text: `✅ *Archivo guardado*
 
 📦 Categoría: ${categoria}
 📁 Ruta: ${res.filepath}
@@ -4996,13 +4995,13 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: "⚠️ No se pudo guardíar el archivo.",
+              text: "⚠️ No se pudo guardar el archivo.",
             });
           }
         } catch (error) {
-          logger.error("Error en /guardíar:", error);
+          logger.error("Error en /guardar:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️ Error al guardíar el archivo. Intenta de nuevo.",
+            text: "⚠️ Error al guardar el archivo. Intenta de nuevo.",
           });
         }
         break;
@@ -5054,7 +5053,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               }),
             });
           } catch (e) {
-            logger.error("Error al guardíar en la base de datos:", e);
+            logger.error("Error al guardar en la base de datos:", e);
             throw new Error(
               "Error al procesar tu solicitud. Por favor, inténtalo de nuevo.",
             );
@@ -5071,8 +5070,8 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 *INSTRUCCIONES:*
 1️⃣ Abre WhatsApp en tu teléfono
 2️⃣ Ve a *Ajustes* > *Dispositivos vinculados*
-3️⃣ Toca en *Vincuálar un dispositivo*
-4️⃣ Selecciona *Vincuálar con número de teléfono*
+3️⃣ Toca en *Vincular un dispositivo*
+4️⃣ Selecciona *Vincular con número de teléfono*
 5️⃣ Ingresa el código mostrado arriba
 
 ⚠️ *Importante:*
@@ -5133,7 +5132,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
         if (args.length < 2) {
           await sock.sendMessage(remoteJid, {
-            text: '? Uso: /addbot [nombre] [número]\nEjemplo: /addbot "Bot Asistente" 5491234567890',
+            text: '? Uso: /addbot [nombre] [nmero]\nEjemplo: /addbot "Bot Asistente" 5491234567890',
           });
           break;
         }
@@ -5142,7 +5141,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           const nombreBot = args[0];
           const numeroBot = args[1];
 
-          // Verificar si el número ya existe
+          // Verificar si el nmero ya existe
           const existingBot = await db("subbots")
             .where({ numero: numeroBot })
             .first();
@@ -5174,7 +5173,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           await db("subbot_activity").insert({
             subbot_id: subbotId,
             accion: "creado",
-            detalle: `SubBot "${nombreBot}" creado con número ${numeroBot}`,
+            detalle: `SubBot "${nombreBot}" creado con nmero ${numeroBot}`,
             usuario: usuario,
             created_at: new Date().toISOString(),
           });
@@ -5259,7 +5258,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         try {
           const botId = parseInt(args[0]);
 
-          // Obtener información del subbot
+          // Obtener informacin del subbot
           const subbot = await db("subbots").where({ id: botId }).first();
           if (!subbot) {
             await sock.sendMessage(remoteJid, {
@@ -5283,9 +5282,9 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           const createdDate = new Date(subbot.created_at).toLocaleString(
             "es-ES",
           );
-          const lastActivity = new Date(
-            subbot.ultima_actividad,
-          ).toLocaleString("es-ES");
+          const lastActivity = new Date(subbot.ultima_actividad).toLocaleString(
+            "es-ES",
+          );
 
           let infoText = `🤖 *Información Detallada del SubBot*\n\n`;
           infoText += `🆔 **ID:** ${subbot.id}\n`;
@@ -5298,7 +5297,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           infoText += `⏰ **Última actividad:** ${lastActivity}\n\n`;
 
           if (recentActivity.length > 0) {
-            infoText += `📋 **Actividíad Reciente:**\n`;
+            infoText += `📋 **Actividad Reciente:**\n`;
             recentActivity.forEach((activity, index) => {
               const activityDate = new Date(activity.created_at).toLocaleString(
                 "es-ES",
@@ -5314,7 +5313,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         } catch (error) {
           logger.error("Error obteniendo info del subbot:", error);
           await sock.sendMessage(remoteJid, {
-            text: `?? *Informacin del SubBot*\n\n? Error obteniendo información\n\n?? Intenta nuevamente ms tarde`,
+            text: `?? *Informacin del SubBot*\n\n? Error obteniendo informacin\n\n?? Intenta nuevamente ms tarde`,
           });
         }
         break;
@@ -5392,7 +5391,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                 await useMultiFileAuthState(authPath);
               const { version } = await fetchLatestBaileysVersion();
 
-              // Crear socket temporal para el subbot con configuración KONMI-BOT
+              // Crear socket temporal para el subbot con configuracin KONMI-BOT
               const subbotSocket = makeWASocket({
                 ...KONMI_BOT_CONFIG,
                 version,
@@ -5466,13 +5465,13 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
                   await sock.sendMessage(remoteJid, {
                     text:
-                      `✅ *SubBot Conectado con Pairing Code*\n\n` +
-                      `🎉 **${subbot.nombre}** se conectó exitosamente\n\n` +
-                      `📱 Número: ${subbot.numero}\n` +
-                      `🟢 Estado: Conectado\n` +
-                      `🔢 Código usado: ${realPairingCode}\n` +
-                      `📱 Aparece como: KONMI-BOT\n` +
-                      `✅ Conectado: ${new Date().toLocaleString("es-ES")}\n\n` +
+                      `?? *SubBot Conectado con Pairing Code*\n\n` +
+                      `? **${subbot.nombre}** se conect exitosamente\n\n` +
+                      `?? Nmero: ${subbot.numero}\n` +
+                      `?? Estado: Conectado\n` +
+                      `?? Cdigo usado: ${realPairingCode}\n` +
+                      `?? Aparece como: KONMI-BOT\n` +
+                      `? Conectado: ${new Date().toLocaleString("es-ES")}\n\n` +
                       `🎉 El SubBot ya está operativo y aparece como "KONMI-BOT" en WhatsApp`,
                   });
 
@@ -5496,7 +5495,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                         `❌ *Conexión SubBot Fallida*\n\n` +
                         `🤖 Nombre: ${subbot.nombre}\n` +
                         `📱 Número: ${subbot.numero}\n` +
-                        `🔴 Estado: Error\n\n` +
+                        `?? Estado: Error\n\n` +
                         `📋 **Posibles causas:**\n` +
                         `❌ Código expirado (10 minutos)\n` +
                         `❌ Código ingresado incorrectamente\n` +
@@ -5514,21 +5513,21 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                 }
               });
 
-              // Manejar actualización de credenciales
+              // Manejar actualizacin de credenciales
               subbotSocket.ev.on("creds.update", saveCreds);
             } catch (pairingError) {
               logger.error("Error generando pairing code real:", pairingError);
               await sock.sendMessage(remoteJid, {
                 text:
-                  `❌ *Error Generando Pairing Code*\n\n` +
-                  `🤖 SubBot: ${subbot.nombre}\n` +
-                  `📱 Número: ${subbot.numero}\n\n` +
-                  `🔴 Error: ${pairingError.message}\n\n` +
-                  `💡 Intenta nuevamente con \`/connectbot ${botId} code\``,
+                  `? *Error Generando Pairing Code*\n\n` +
+                  `?? SubBot: ${subbot.nombre}\n` +
+                  `?? Nmero: ${subbot.numero}\n\n` +
+                  `?? Error: ${pairingError.message}\n\n` +
+                  `?? Intenta nuevamente con \`/connectbot ${botId} code\``,
               });
             }
           } else {
-            // MÉTODO DE QR (ORIGINAL)
+            // MTODO DE QR (ORIGINAL)
 
             // Generar QR para conexión usando API de Vreden
             const connectionData = {
@@ -5555,9 +5554,9 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                   `📋 **INSTRUCCIONES QR:**\n` +
                   `1. Abre WhatsApp en ${subbot.numero}\n` +
                   `2. Ve a Configuración > Dispositivos vinculados\n` +
-                  `3. Toca "Vincuálar un dispositivo"\n` +
+                  `3. Toca "Vincular un dispositivo"\n` +
                   `4. Escanea este QR\n` +
-                  `5. Apareceráá como "KONMI-BOT"\n\n` +
+                  `5. Aparecerá como "KONMI-BOT"\n\n` +
                   `⏰ **Válido por:** 2 minutos\n` +
                   `💡 **Alternativa:** \`/connectbot ${botId} code\`\n\n` +
                   `📅 ${new Date().toLocaleString("es-ES")}`,
@@ -5746,7 +5745,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           const subbot = await db("subbots").where({ id: botId }).first();
           if (!subbot) {
             await sock.sendMessage(remoteJid, {
-              text: `?? *Codigo de Vincuálacion*\n\n? No existe un subbot con ID: ${botId}\n\n?? Usa \`/bots\` para ver la lista`,
+              text: `?? *Codigo de Vinculacion*\n\n? No existe un subbot con ID: ${botId}\n\n?? Usa \`/bots\` para ver la lista`,
             });
             break;
           }
@@ -5762,7 +5761,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
           if (!pairingCode) {
             await sock.sendMessage(remoteJid, {
-              text: `?? *Codigo de Vincuálacion*\n\n? No hay codigo generado para este subbot\n\n?? Usa \`/connectbot ${botId} code\` para generar uno`,
+              text: `?? *Codigo de Vinculacion*\n\n? No hay codigo generado para este subbot\n\n?? Usa \`/connectbot ${botId} code\` para generar uno`,
             });
             break;
           }
@@ -5774,18 +5773,18 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
           await sock.sendMessage(remoteJid, {
             text:
-              `🔗 *Código de Vincuálación - SubBot*\n\n` +
+              `🔗 *Código de Vinculación - SubBot*\n\n` +
               `🤖 **SubBot:** ${subbot.nombre}\n` +
               `📱 **Número:** ${subbot.numero}\n` +
               `🔄 **Estado:** ${subbot.estado}\n\n` +
-              `🔢 **Código de Vincuálación:**\n\`${pairingCode}\`\n\n` +
+              `🔢 **Código de Vinculación:**\n\`${pairingCode}\`\n\n` +
               `📅 **Generado:** ${pairingGeneratedAt || "No disponible"}\n` +
               `⏰ **Válido por:** 10 minutos desde generación\n` +
               `${isExpired ? "❌ **Estado:** Expirado" : "✅ **Estado:** Válido"}\n\n` +
               `📋 **Instrucciones:**\n` +
               `1. Abre WhatsApp en ${subbot.numero}\n` +
               `2. Ve a Dispositivos vinculados\n` +
-              `3. Vincuálar con código de teléfono\n` +
+              `3. Vincular con código de teléfono\n` +
               `4. Ingresa: \`${pairingCode}\`\n\n` +
               `💡 **Comandos útiles:**\n` +
               ` \`/connectbot ${botId} code\` - Nuevo codigo\n` +
@@ -5795,7 +5794,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         } catch (error) {
           logger.error("Error obteniendo pairing code:", error);
           await sock.sendMessage(remoteJid, {
-            text: `🔗 *Código de Vincuálación*\n\n❌ Error obteniendo código\n\n💡 Intenta nuevamente más tarde`,
+            text: `🔗 *Código de Vinculación*\n\n❌ Error obteniendo código\n\n💡 Intenta nuevamente más tarde`,
           });
         }
         break;
@@ -5804,7 +5803,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
       case "/qr_legacy":
         if (!isOwner) {
           await sock.sendMessage(remoteJid, {
-            text: "? Solo el owner puede generar códigos QR de subbots",
+            text: "? Solo el owner puede generar cdigos QR de subbots",
           });
           break;
         }
@@ -5815,7 +5814,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               "?? *Generando SubBot con QR*\n\n" +
               "?? Creando nuevo subbot...\n" +
               "? Generando codigo QR...\n\n" +
-              "?? El QR apareceráa en unos segundos",
+              "?? El QR aparecera en unos segundos",
           });
 
           // Importar el manager de subbots
@@ -5844,7 +5843,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                     `2. Ve a Dispositivos vinculados\n` +
                     `3. Escanea este codigo QR\n` +
                     `4. El subbot se conectar automaticamente\n\n` +
-                    `?? 📝 Solicitado por: @${usuario}\n` +
+                    `?? Solicitado por: @${usuario}\n` +
                     `? ${new Date().toLocaleString("es-ES")}`,
                   mentions: [usuario + "@s.whatsapp.net"],
                 });
@@ -5985,14 +5984,14 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           statusText += ` \`/connectbot [id] code\` - Pairing code\n`;
           statusText += ` \`/subbotqr [id]\` - QR real\n`;
           statusText += ` \`/disconnectbot [id]\` - Desconectar\n`;
-          statusText += ` \`/botinfo [id]\` - Info detalladía\n\n`;
+          statusText += ` \`/botinfo [id]\` - Info detallada\n\n`;
           statusText += `? ${new Date().toLocaleString("es-ES")}`;
 
           await sock.sendMessage(remoteJid, { text: statusText });
         } catch (error) {
           logger.error("Error obteniendo subbots activos:", error);
           await sock.sendMessage(remoteJid, {
-            text: `?? *SubBots Activos*\n\n? Error obteniendo información\n\n?? Intenta nuevamente ms tarde`,
+            text: `?? *SubBots Activos*\n\n? Error obteniendo informacin\n\n?? Intenta nuevamente ms tarde`,
           });
         }
         break;
@@ -6068,7 +6067,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               });
 
               await sock.sendMessage(remoteJid, {
-                text: `? *SubBot Reiniciado*\n\n?? **${subbot.nombre}** reiniciado exitosamente\n\n?? Nmero: ${subbot.numero}\n?? Estado: Desconectado (listo para conectar)\n?? Sesin limpiadía\n\n?? **Prximos pasos:**\n \`/connectbot ${botId}\` - Conectar con QR\n \`/connectbot ${botId} code\` - Conectar con KONMIBOT\n \`/subbotqr ${botId}\` - QR real de Baileys\n\n? ${new Date().toLocaleString("es-ES")}`,
+                text: `? *SubBot Reiniciado*\n\n?? **${subbot.nombre}** reiniciado exitosamente\n\n?? Nmero: ${subbot.numero}\n?? Estado: Desconectado (listo para conectar)\n?? Sesin limpiada\n\n?? **Prximos pasos:**\n \`/connectbot ${botId}\` - Conectar con QR\n \`/connectbot ${botId} code\` - Conectar con KONMIBOT\n \`/subbotqr ${botId}\` - QR real de Baileys\n\n? ${new Date().toLocaleString("es-ES")}`,
               });
             } catch (restartError) {
               logger.error("Error en reinicio de subbot:", restartError);
@@ -6117,7 +6116,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               const uptime = process.uptime();
 
               await sock.sendMessage(remoteJid, {
-                text: `? *Bot Actualizado*\n\n?? **Cambios aplicados:**\n Configuraciones recargadías\n Comandos actualizados\n Cacha limpiado\n Memoria optimizadía\n\n?? **Estado actual:**\n  ?? Memoria: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB\n ?? Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m\n ?? Versin: v2.5.0\n ?? Estado: Operativo\n\n?? **Actualizado por:** ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
+                text: `? *Bot Actualizado*\n\n?? **Cambios aplicados:**\n Configuraciones recargadas\n Comandos actualizados\n Cacha limpiado\n Memoria optimizada\n\n?? **Estado actual:**\n  ?? Memoria: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB\n ?? Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m\n ?? Versin: v2.5.0\n ?? Estado: Operativo\n\n?? **Actualizado por:** ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
               });
 
               logger.info(`? Bot actualizado por owner: ${usuario}`);
@@ -6158,7 +6157,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               // Enviar como sticker animado
               await sock.sendMessage(remoteJid, {
                 sticker: { url: data.data.url },
-                caption: `?? *BRAT VD - Sticker Animado*\n\n?? **Texto:** "${bratvdText}"\n?? **Estilo:** BRAT Animado\n? **Formato:** WebP Animado\n\n?? 📝 Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
+                caption: `?? *BRAT VD - Sticker Animado*\n\n?? **Texto:** "${bratvdText}"\n?? **Estilo:** BRAT Animado\n? **Formato:** WebP Animado\n\n?? Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
               });
             } else {
               await sock.sendMessage(remoteJid, {
@@ -6200,7 +6199,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
               // Enviar info del sticker
               await sock.sendMessage(remoteJid, {
-                text: `?? *BRAT - Sticker*\n\n?? **Texto:** "${bratText}"\n?? **Estilo:** BRAT\n?? **Formato:** WebP\n\n?? 📝 Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
+                text: `?? *BRAT - Sticker*\n\n?? **Texto:** "${bratText}"\n?? **Estilo:** BRAT\n?? **Formato:** WebP\n\n?? Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
               });
             } else {
               await sock.sendMessage(remoteJid, {
@@ -6223,7 +6222,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
         if (!ttsText) {
           await sock.sendMessage(remoteJid, {
-            text: "?? **TTS - Voces de Personajes:**\n\n?? `/tts [texto]|[personaje]`\n\n**Ejemplos:**\n `/tts Hola mundo` (narrador)\n `/tts Hola mundo|mario` (Mario Bros)\n `/tts Hello there|vader` (Díarth Vader)\n `/tts Quée pasa|bart` (Bart Simpson)\n\n?? **Personajes disponibles:**\n `narrator` - Narrador (defecto)\n `mario` - Mario Bros\n `luigi` - Luigi\n `vader` - Díarth Vader\n `yodía` - Maestro Yodía\n `homer` - Homer Simpson\n `bart` - Bart Simpson\n `marge` - Marge Simpson\n `spongebob` - Bob Esponja\n `patrick` - Patricio Estrella\n `squéidward` - Calamardo\n `mickey` - Mickey Mouse\n `donald` - Pato Donald\n `goofy` - Goofy\n `shrek` - Shrek\n `batman` - Batman\n `joker` - Joker\n `pikachu` - Pikachu\n `sonic` - Sonic\n `optimus` - Optimus Prime",
+            text: "?? **TTS - Voces de Personajes:**\n\n?? `/tts [texto]|[personaje]`\n\n**Ejemplos:**\n `/tts Hola mundo` (narrador)\n `/tts Hola mundo|mario` (Mario Bros)\n `/tts Hello there|vader` (Darth Vader)\n `/tts Que pasa|bart` (Bart Simpson)\n\n?? **Personajes disponibles:**\n `narrator` - Narrador (defecto)\n `mario` - Mario Bros\n `luigi` - Luigi\n `vader` - Darth Vader\n `yoda` - Maestro Yoda\n `homer` - Homer Simpson\n `bart` - Bart Simpson\n `marge` - Marge Simpson\n `spongebob` - Bob Esponja\n `patrick` - Patricio Estrella\n `squidward` - Calamardo\n `mickey` - Mickey Mouse\n `donald` - Pato Donald\n `goofy` - Goofy\n `shrek` - Shrek\n `batman` - Batman\n `joker` - Joker\n `pikachu` - Pikachu\n `sonic` - Sonic\n `optimus` - Optimus Prime",
           });
         } else {
           try {
@@ -6243,7 +6242,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                 audio: { url: data.data.url },
                 mimetype: "audio/mpeg",
                 ptt: true, // Como nota de voz
-                caption: `?? *TTS - Personaje*\n\n?? **Texto:** "${ttsText}"\n?? **Personaje:** ${ttsCharacter.toUpperCase()}\n? **Duracion:** ${data.data.duration || "N/A"}\n?? **Calidíad:** ${data.data.quéality || "HD"}\n\n?? 📝 Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
+                caption: `?? *TTS - Personaje*\n\n?? **Texto:** "${ttsText}"\n?? **Personaje:** ${ttsCharacter.toUpperCase()}\n? **Duracion:** ${data.data.duration || "N/A"}\n?? **Calidad:** ${data.data.quality || "HD"}\n\n?? Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
               });
             } else {
               // Fallback a TTS normal si el personaje no esta disponible
@@ -6262,7 +6261,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                     audio: { url: fallbackData.data.url },
                     mimetype: "audio/mpeg",
                     ptt: true,
-                    caption: `?? *TTS - Voz Normal*\n\n?? **Texto:** "${ttsText}"\n?? **Nota:** Personaje "${ttsCharacter}" no disponible\n?? **Voz:** Narrador estandíar\n\n?? 📝 Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
+                    caption: `?? *TTS - Voz Normal*\n\n?? **Texto:** "${ttsText}"\n?? **Nota:** Personaje "${ttsCharacter}" no disponible\n?? **Voz:** Narrador estandar\n\n?? Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
                   });
                 } else {
                   await sock.sendMessage(remoteJid, {
@@ -6285,8 +6284,8 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         break;
 
       case "/play":
-        const playQuéery = args.join(" ");
-        if (!playQuéery) {
+        const playQuery = args.join(" ");
+        if (!playQuery) {
           await sock.sendMessage(remoteJid, {
             text: "? Uso: /play [cancion]\nEjemplo: /play Despacito Luis Fonsi",
           });
@@ -6298,17 +6297,17 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
             // Buscar msica con API
             const response = await fetch(
-              `https://api.vreden.my.id/api/spotify/search?quéery=${encodeURIComponent(playQuéery)}`,
+              `https://api.vreden.my.id/api/spotify/search?query=${encodeURIComponent(playQuery)}`,
             );
             const data = await response.json();
 
             if (data.status && data.data && data.data.length > 0) {
               const track = data.data[0];
 
-              // Mostrar informacion con barra de progreso REAL quée se edita
+              // Mostrar informacion con barra de progreso REAL que se edita
               let progressMsg = await sock.sendMessage(remoteJid, {
                 text:
-                  `?? *Musica Encontradía*\n\n` +
+                  `?? *Musica Encontrada*\n\n` +
                   `?? **Artista:** ${track.artist}\n` +
                   `?? **Cancion:** ${track.title}\n` +
                   `?? **Album:** ${track.album}\n` +
@@ -6316,10 +6315,10 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                   `?? **URL:** ${track.url}\n\n` +
                   `?? **Descargando...** ?\n` +
                   `?????????? 0%\n\n` +
-                  `?? 📝 Solicitado por: ${usuario}`,
+                  `?? Solicitado por: ${usuario}`,
               });
 
-              // Barra de progreso REAL quée se actualiza dinamicamente
+              // Barra de progreso REAL que se actualiza dinamicamente
               const progressSteps = [
                 {
                   percent: 15,
@@ -6380,7 +6379,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                     }
                   } catch (err) {
                     logger.error("Error actualizando progreso:", err);
-                    // Continuar con el siguiente paso aunquée haya error
+                    // Continuar con el siguiente paso aunque haya error
                     currentStep++;
                     if (currentStep < progressSteps.length) {
                       setTimeout(updateProgress, 1000);
@@ -6399,11 +6398,11 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                     await sock.sendMessage(remoteJid, {
                       audio: { url: track.preview_url },
                       mimetype: "audio/mpeg",
-                      caption: `?? *${track.title}*\n\n?? ${track.artist}\n?? ${track.album}\n?? ${track.duration}\n\n?? 📝 Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
+                      caption: `?? *${track.title}*\n\n?? ${track.artist}\n?? ${track.album}\n?? ${track.duration}\n\n?? Solicitado por: ${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
                     });
                   } else {
                     await sock.sendMessage(remoteJid, {
-                      text: `?? *Musica Encontradía*\n\n? **Informacion completa disponible**\n\n?? **Escuchar en Spotify:**\n${track.url}\n\n?? Preview de audio no disponible para esta cancion.`,
+                      text: `?? *Musica Encontrada*\n\n? **Informacion completa disponible**\n\n?? **Escuchar en Spotify:**\n${track.url}\n\n?? Preview de audio no disponible para esta cancion.`,
                     });
                   }
                 } catch (audioError) {
@@ -6415,13 +6414,13 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               }, 7000); // 7 segundos despues de iniciar
             } else {
               await sock.sendMessage(remoteJid, {
-                text: `?? *Play*\n\n? No se encontraron resultados para: "${playQuéery}"\n\n?? Intenta con otros terminos de busquéedía.`,
+                text: `?? *Play*\n\n? No se encontraron resultados para: "${playQuery}"\n\n?? Intenta con otros terminos de busqueda.`,
               });
             }
           } catch (error) {
             logger.error("Error en play:", error);
             await sock.sendMessage(remoteJid, {
-              text: `?? *Play*\n\n? Error buscando musica: "${playQuéery}"\n\n?? Intenta nuevamente en unos momentos.`,
+              text: `?? *Play*\n\n? Error buscando musica: "${playQuery}"\n\n?? Intenta nuevamente en unos momentos.`,
             });
           }
         }
@@ -6449,16 +6448,16 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             if (data.status && data.data && data.data.shortUrl) {
               await sock.sendMessage(remoteJid, {
                 text:
-                  `?? *URL Acortadía*\n\n` +
+                  `?? *URL Acortada*\n\n` +
                   `?? **URL Original:**\n${urlToShorten}\n\n` +
-                  `?? **URL Acortadía:**\n${data.data.shortUrl}\n\n` +
+                  `?? **URL Acortada:**\n${data.data.shortUrl}\n\n` +
                   `?? **Ahorro:** ${(((urlToShorten.length - data.data.shortUrl.length) / urlToShorten.length) * 100).toFixed(1)}%\n\n` +
-                  `?? 📝 Solicitado por: ${usuario}\n` +
+                  `?? Solicitado por: ${usuario}\n` +
                   `? ${new Date().toLocaleString("es-ES")}`,
               });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: `?? *Acortador de URLs*\n\n? No se pudo acortar la URL: "${urlToShorten}"\n\n?? Verifica quée la URL sea vlidía y comience con http:// o https://`,
+                text: `?? *Acortador de URLs*\n\n? No se pudo acortar la URL: "${urlToShorten}"\n\n?? Verifica que la URL sea vlida y comience con http:// o https://`,
               });
             }
           } catch (error) {
@@ -6470,10 +6469,10 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         }
         break;
 
-      // Comandos adicionales quée faltaban
+      // Comandos adicionales que faltaban
       case "/ping":
         await sock.sendMessage(remoteJid, {
-          text: `?? Pong! Bot funcionando correctamente.\n\n?? 📝 Solicitado por: @${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
+          text: `?? Pong! Bot funcionando correctamente.\n\n?? Solicitado por: @${usuario}\n? ${new Date().toLocaleString("es-ES")}`,
           mentions: [usuario + "@s.whatsapp.net"],
         });
         break;
@@ -6488,12 +6487,12 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           const uptime = process.uptime();
 
           // Formatear uptime
-          const díays = Math.floor(uptime / 86400);
+          const days = Math.floor(uptime / 86400);
           const hours = Math.floor((uptime % 86400) / 3600);
           const minutes = Math.floor((uptime % 3600) / 60);
 
           let uptimeFormatted = "";
-          if (díays > 0) uptimeFormatted += `${díays}d `;
+          if (days > 0) uptimeFormatted += `${days}d `;
           if (hours > 0) uptimeFormatted += `${hours}h `;
           uptimeFormatted += `${minutes}m`;
 
@@ -6509,10 +6508,10 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             `?? Estado en Grupo: ${isGroup ? (groupStatus ? "? Activo" : "?? Desactivado") : "N/A"}\n\n` +
             `?? *Sistema:*\n` +
             `?? Tiempo activo: ${uptimeFormatted}\n` +
-            `?? Memoria usadía: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB\n` +
+            `?? Memoria usada: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB\n` +
             `?? Memoria total: ${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB\n` +
             `?? Node.js: ${process.version}\n\n` +
-            `?? *Actividíad:*\n` +
+            `?? *Actividad:*\n` +
             `?? Total aportes: ${totalAportes?.count || 0}\n` +
             `?? Total pedidos: ${totalPedidos?.count || 0}\n` +
             `?? Cache nombres: ${nameCache.size}\n` +
@@ -6520,7 +6519,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             `?? Owner: 595974154768 (Melodia)\n` +
             `⚙️ Engine: WhiskeySockets/Baileys\n` +
             `${globalStatus ? "✅ Funcionando correctamente" : "🔧 Modo mantenimiento"}\n\n` +
-            `📝 📝 Solicitado por: @${usuario}\n` +
+            `📝 Solicitado por: @${usuario}\n` +
             `? ${new Date().toLocaleString("es-ES")}`;
 
           await sock.sendMessage(remoteJid, {
@@ -6555,7 +6554,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             `💻 *Sistema:*\n` +
             `🖥️ Plataforma: ${process.platform}\n` +
             `⚡ Node.js: ${process.version}\n` +
-            `🔧 Arquéitectura: ${process.arch}\n` +
+            `🔧 Arquitectura: ${process.arch}\n` +
             `💾 Memoria: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB\n` +
             `⏱️ Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m\n\n` +
             `📊 *Estadísticas:*\n` +
@@ -6567,7 +6566,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             `🌐 Global: ${globalStatus ? "✅ Activo" : "⛔ Desactivado"}\n` +
             `📡 Conexión: ${connectionStatus}\n` +
             `⚙️ Estado: ${globalStatus ? "Operativo" : "Mantenimiento"}\n\n` +
-            `📝 📝 Solicitado por: @${usuario}\n` +
+            `📝 Solicitado por: @${usuario}\n` +
             `📅 Fecha: ${new Date().toLocaleDateString("es-ES")}\n` +
             `⏰ Hora: ${new Date().toLocaleTimeString("es-ES")}`;
 
@@ -6578,7 +6577,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         } catch (error) {
           logger.error("Error obteniendo info:", error);
           await sock.sendMessage(remoteJid, {
-            text: "? Error obteniendo información del sistema",
+            text: "? Error obteniendo informacin del sistema",
           });
         }
         break;
@@ -6592,13 +6591,13 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           `📱 **Número:** 595974154768\n` +
           `👤 **Nombre:** Melodía\n` +
           `🔑 **Permisos:** Administrador Total\n` +
-          `? **Capacidíades:** Control completo del bot\n` +
+          `? **Capacidades:** Control completo del bot\n` +
           `🌐 **Alcance:** Global en todos los grupos\n\n` +
           `🔍 **Verificación de Usuario:**\n` +
           `📱 Tu número: ${usuario}\n` +
           `🎯 Estado: ${ownerCheck ? "✅ OWNER VERIFICADO" : "👤 Usuario regular"}\n` +
           `🔐 Permisos: ${isOwner ? "✅ Acceso total" : "⚠️ Acceso limitado"}\n\n` +
-          `📝 📝 Solicitado por: @${usuario}\n` +
+          `📝 Solicitado por: @${usuario}\n` +
           `? ${new Date().toLocaleString("es-ES")}`;
 
         await sock.sendMessage(remoteJid, {
@@ -6684,7 +6683,7 @@ async function connectToWhatsApp(
     savedAuthPath = authPath;
   }
 
-  // Usar el authPath guardíado si no se proporciona uno nuevo
+  // Usar el authPath guardado si no se proporciona uno nuevo
   const effectiveAuthPath = authPath || savedAuthPath;
 
   if (!effectiveAuthPath) {
@@ -6709,7 +6708,7 @@ async function connectToWhatsApp(
       }
     }
 
-    // Asegurar quée la carpeta de auth exista (algunos forks no la crean automticamente)
+    // Asegurar que la carpeta de auth exista (algunos forks no la crean automticamente)
     try {
       const absAuthPath = path.resolve(effectiveAuthPath);
       fs.mkdirSync(absAuthPath, { recursive: true });
@@ -6720,7 +6719,7 @@ async function connectToWhatsApp(
       });
     }
 
-    // Validíar creds.json existente y resetear si est incompleto
+    // Validar creds.json existente y resetear si est incompleto
     try {
       const absAuthPath = path.resolve(effectiveAuthPath);
       const credsPath = path.join(absAuthPath, "creds.json");
@@ -6738,7 +6737,7 @@ async function connectToWhatsApp(
               `creds.backup.${Date.now()}.json`,
             );
             fs.renameSync(credsPath, backup);
-            logger.warn(`creds.json incompleto, respaldíado`, { backup });
+            logger.warn(`creds.json incompleto, respaldado`, { backup });
           }
         } catch (e) {
           const backup = path.join(
@@ -6749,7 +6748,7 @@ async function connectToWhatsApp(
             fs.renameSync(credsPath, backup);
           } catch (_) {}
           logger.warn(
-            "creds.json corrupto, respaldíado y se regenerará limpio",
+            "creds.json corrupto, respaldado y se regenerará limpio",
             { backup },
           );
         }
@@ -6763,7 +6762,7 @@ async function connectToWhatsApp(
     } catch (_) {}
 
     // Si no hay método definido y no hay sesión, preguntar interactivamente
-    // SOLO preguntar si no hay método guardíado de una sesión anterior
+    // SOLO preguntar si no hay método guardado de una sesión anterior
     if (
       !usePairingCode &&
       !phoneNumber &&
@@ -6786,12 +6785,12 @@ async function connectToWhatsApp(
 
           if (choice === "1") {
             logger.pretty.line("QR Code seleccionado");
-            logger.pretty.line("El código QR aparecerá en la terminal");
+            logger.pretty.line("El código QR aparecer en la terminal");
             rl.close();
             resolve({ method: "qr" });
           } else if (choice === "2") {
             rl.question(
-              "\n Ingrese número de teléfono con código de pas (ej: 595974154768): ",
+              "\n Ingrese nmero de telfono con cdigo de pas (ej: 595974154768): ",
               (phone) => {
                 const cleanedNumber = sanitizePhoneNumberInput(phone);
 
@@ -6799,7 +6798,7 @@ async function connectToWhatsApp(
                   logger.pretty.line("Pairing Code seleccionado");
                   logger.pretty.kv("Número", `+${cleanedNumber}`);
                   logger.pretty.line(
-                    "El código de 8 dígitos apareceráá en la terminal",
+                    "El código de 8 dígitos aparecerá en la terminal",
                   );
                   rl.close();
                   resolve({ method: "pairing", phoneNumber: cleanedNumber });
@@ -6813,7 +6812,7 @@ async function connectToWhatsApp(
               },
             );
           } else {
-            logger.pretty.line("⚠️ Opción inválidía, usando QR por defecto");
+            logger.pretty.line("⚠️ Opción inválida, usando QR por defecto");
             rl.close();
             resolve({ method: "qr" });
           }
@@ -6831,9 +6830,9 @@ async function connectToWhatsApp(
         phoneNumber = authConfig.phoneNumber;
       }
     } else if (userSelectedMethod && !usePairingCode && !phoneNumber) {
-      // Usar el método guardíado en reconexiones
+      // Usar el mtodo guardado en reconexiones
       logger.pretty.line(
-        `Usando método guardíado: ${userSelectedMethod === "qr" ? "QR Code" : "Pairing Code"}`,
+        `Usando método guardado: ${userSelectedMethod === "qr" ? "QR Code" : "Pairing Code"}`,
       );
       if (userSelectedMethod === "pairing" && userSelectedPhone) {
         usePairingCode = true;
@@ -6843,7 +6842,7 @@ async function connectToWhatsApp(
 
     const effectivePairingNumber = phoneNumber || pairingTargetNumber;
 
-    // Debug y validíacin explcita del número para pairing
+    // Debug y validacin explcita del nmero para pairing
     if (usePairingCode) {
       const onlyDigits = String(effectivePairingNumber || "").replace(
         /\D/g,
@@ -6854,7 +6853,7 @@ async function connectToWhatsApp(
       );
       if (!onlyDigits || onlyDigits.length < 7 || onlyDigits.length > 15) {
         logger.pretty.line(
-          "⚠️ [PAIRING DEBUG] Número inválido para pairing (se requéieren 7-15 dígitos).",
+          "⚠️ [PAIRING DEBUG] Número inválido para pairing (se requieren 7-15 dígitos).",
         );
       }
     }
@@ -6871,7 +6870,7 @@ async function connectToWhatsApp(
       } else {
         // Ya registrado: no forzar pairing de nuevo
         logger.pretty.line(
-          "Credenciales ya registradías, no se forzará pairing en esta reconexión.",
+          "Credenciales ya registradas, no se forzará pairing en esta reconexión.",
         );
         try {
           state.creds.usePairingCode = false;
@@ -6884,7 +6883,7 @@ async function connectToWhatsApp(
     try {
       const v = await baileys.fetchLatestBaileysVersion();
       version = v.version;
-      logger.pretty.kv("Versión WhatsApp Web soportadía", version.join("."));
+      logger.pretty.kv("Versión WhatsApp Web soportada", version.join("."));
     } catch (e) {
       // Fallback (en caso de error de red o cambios de API)
       version = [2, 3000, 1015901307];
@@ -6940,7 +6939,7 @@ async function connectToWhatsApp(
 
     sock = makeWASocket(socketOptions);
 
-    // Helper: esperar a quée las claves de autenticación estén listas
+    // Helper: esperar a que las claves de autenticación estén listas
     const waitForAuthKeysReady = async (maxMs = 8000) => {
       const start = Date.now();
       while (Date.now() - start < maxMs) {
@@ -6959,7 +6958,7 @@ async function connectToWhatsApp(
       return false;
     };
 
-    // Guardíado robusto de credenciales (crear carpeta si hiciera falta)
+    // Guardado robusto de credenciales (crear carpeta si hiciera falta)
     sock.ev.on("creds.update", async () => {
       try {
         const absAuthPath = path.resolve(effectiveAuthPath);
@@ -6969,7 +6968,7 @@ async function connectToWhatsApp(
       try {
         await saveCreds();
       } catch (e) {
-        console.error(" Error guardíando credenciales:", e.message);
+        console.error(" Error guardando credenciales:", e.message);
       }
     });
 
@@ -6978,16 +6977,16 @@ async function connectToWhatsApp(
     sock.ev.on("connection.update", async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
-      // Si estamos en pairing, solicitar el código SOLO cuando llega un QR (seal de socket listo)
+      // Si estamos en pairing, solicitar el cdigo SOLO cuando llega un QR (seal de socket listo)
       if (
         usePairingCode &&
         effectivePairingNumber &&
         !!qr &&
         !currentPairingCode &&
-        !pairingRequéestInProgress
+        !pairingRequestInProgress
       ) {
         try {
-          pairingRequéestInProgress = true;
+          pairingRequestInProgress = true;
           if (sock?.authState?.creds) {
             sock.authState.creds.usePairingCode = true;
           }
@@ -6995,13 +6994,13 @@ async function connectToWhatsApp(
             /\D/g,
             "",
           );
-          // Esperar un poco tras QR para asegurar quée WS est listo
+          // Esperar un poco tras QR para asegurar que WS est listo
           await new Promise((r) => setTimeout(r, 1200));
           const keysReady = await waitForAuthKeysReady(8000);
           logger.pretty.line(`🔧 [PAIRING DEBUG] keysReady=${keysReady}`);
           let pairingCode = null;
           const maxAttempts = 3;
-          // Preparar pairing code personalizado (solo letras/números, 8 chars)
+          // Preparar pairing code personalizado (solo letras/nmeros, 8 chars)
           const envCustom = (
             process.env.PAIRING_CODE ||
             process.env.CUSTOM_PAIRING_CODE ||
@@ -7067,15 +7066,15 @@ async function connectToWhatsApp(
             "Código",
             `${formattedCode}  (sin guiones: ${plainCode})`,
           );
-          logger.pretty.kv("Apareceráá como", deviceLabel);
+          logger.pretty.kv("Aparecerá como", deviceLabel);
           logger.pretty.kv("Válido por", "10 minutos");
           logger.pretty.section("Instrucciones", "📋");
           logger.pretty.line("1) Abre WhatsApp en tu teléfono");
           logger.pretty.line("2) Ve a Configuración > Dispositivos vinculados");
-          logger.pretty.line('3) Toca "Vincuálar con número de teléfono"');
+          logger.pretty.line('3) Toca "Vincular con número de teléfono"');
           logger.pretty.line(`4) Ingresa este código: ${formattedCode}`);
           logger.pretty.line(
-            "⏳ Esperando quée ingreses el código en WhatsApp...",
+            "⏳ Esperando que ingreses el código en WhatsApp...",
           );
         } catch (pairingError) {
           logger.error("Error generando código de pairing:", {
@@ -7083,10 +7082,10 @@ async function connectToWhatsApp(
             stack: pairingError.stack,
           });
           logger.pretty.line(
-            "🔎 Verifica quée el número esté registrado en WhatsApp y tengas conexión a internet.",
+            "🔎 Verifica que el número esté registrado en WhatsApp y tengas conexión a internet.",
           );
         } finally {
-          pairingRequéestInProgress = false;
+          pairingRequestInProgress = false;
         }
       }
 
@@ -7101,7 +7100,7 @@ async function connectToWhatsApp(
             width: 300,
             margin: 2,
             color: {
-              díark: "#000000",
+              dark: "#000000",
               light: "#FFFFFF",
             },
           });
@@ -7126,9 +7125,9 @@ async function connectToWhatsApp(
           console.log("\n Instrucciones:");
           console.log("  1️⃣  Abre WhatsApp en tu teléfono");
           console.log("  2️⃣  Ve a Configuración > Dispositivos vinculados");
-          console.log('  3️⃣  Toca "Vincuálar un dispositivo"');
+          console.log('  3️⃣  Toca "Vincular un dispositivo"');
           console.log("  4️⃣  Escanea este código QR\n");
-          console.log(" Esperando quée escanees el código QR...");
+          console.log(" Esperando que escanees el código QR...");
           console.log("\n");
         } catch (error) {
           logger.error("Error generando QR:", error);
@@ -7159,9 +7158,9 @@ async function connectToWhatsApp(
         currentPairingGeneratedAt = null;
         currentPairingExpiresAt = null;
         currentPairingNumber = null;
-        pairingRequéestInProgress = false;
+        pairingRequestInProgress = false;
 
-        // Configurar el número del bot como owner principal
+        // Configurar el nmero del bot como owner principal
         try {
           const botNumber = getBotNumber(sock);
           if (botNumber) {
@@ -7187,28 +7186,28 @@ async function connectToWhatsApp(
           typeof DisconnectReason?.loggedOut === "number"
             ? DisconnectReason.loggedOut
             : 401;
-        const restartRequéiredCode =
-          typeof DisconnectReason?.restartRequéired === "number"
-            ? DisconnectReason.restartRequéired
+        const restartRequiredCode =
+          typeof DisconnectReason?.restartRequired === "number"
+            ? DisconnectReason.restartRequired
             : 515;
         const shouldReconnect = statusCode !== loggedOutCode;
 
         connectionStatus = "disconnected";
-        pairingRequéestInProgress = false;
+        pairingRequestInProgress = false;
 
-        logger.pretty.banner("Conexión cerradía", "⚠️");
+        logger.pretty.banner("Conexión cerrada", "⚠️");
         logger.pretty.kv("Código de estado", statusCode ?? "n/a");
         logger.pretty.kv("Motivo", errorMsg);
         logger.pretty.kv("¿Debería reconectar?", shouldReconnect);
 
-        // Reconectar salvo errores de autenticación; forzar reconexión si es 'restart requéired'
+        // Reconectar salvo errores de autenticación; forzar reconexión si es 'restart required'
         if (
           (shouldReconnect &&
             statusCode !== 401 &&
             statusCode !== 403 &&
             statusCode !== 405 &&
             statusCode !== 428) ||
-          statusCode === restartRequéiredCode
+          statusCode === restartRequiredCode
         ) {
           logger.pretty.line("🔄 Reconectando en 5 segundos...");
           setTimeout(
@@ -7224,7 +7223,7 @@ async function connectToWhatsApp(
             '🧹 Ejecuta "node force-clean.js" y luego "npm start" para empezar de nuevo.',
           );
           logger.warn(
-            `Conexión cerradía. Código: ${statusCode ?? "n/a"} - Motivo: ${errorMsg}. No se reconectará.`,
+            `Conexión cerrada. Código: ${statusCode ?? "n/a"} - Motivo: ${errorMsg}. No se reconectará.`,
           );
         }
       }
@@ -7287,7 +7286,7 @@ async function connectToWhatsApp(
   }
 }
 
-// Funciones de utilidíad
+// Funciones de utilidad
 function getQRCode() {
   return qrCode;
 }
@@ -7370,9 +7369,9 @@ function setAuthMethod(method, options = {}) {
   logger.info("=============================================");
   logger.info(" MTODOS DE AUTENTICACIN DISPONIBLES");
   logger.info("=============================================");
-  logger.info(" QR Code: Escanea el código QR en la terminal");
+  logger.info(" QR Code: Escanea el cdigo QR en la terminal");
   logger.info(" PAIRING CODE EN LA TERMINAL ");
-  logger.info(" El bot soporta ambos métodos simultneamente");
+  logger.info(" El bot soporta ambos mtodos simultneamente");
   logger.info("=============================================");
   return pairingTargetNumber;
 }
@@ -7422,10 +7421,10 @@ function getBotJid(sock) {
   // El bot ID viene en formato: numero:sufijo@s.whatsapp.net
   // Necesitamos extraer solo el numero base
   if (botJid.includes("@")) {
-    // Quéitar el :sufijo si existe, mantener solo numero@s.whatsapp.net
+    // Quitar el :sufijo si existe, mantener solo numero@s.whatsapp.net
     botJid = botJid.replace(/:\d+/, "");
   } else {
-    // Si no tiene @, agregar @s.whatsapp.net despues de quéitar :sufijo
+    // Si no tiene @, agregar @s.whatsapp.net despues de quitar :sufijo
     botJid = botJid.replace(/:\d+/, "") + "@s.whatsapp.net";
   }
 
@@ -7439,11 +7438,11 @@ function getBotNumber(sock) {
 
   // Extraer solo el numero (sin @s.whatsapp.net)
   const number = botJid.split("@")[0];
-  // Limpiar cualquéier caracter no numurico
+  // Limpiar cualquier caracter no numurico
   return number.replace(/[^\d]/g, "");
 }
 
-// Funcion helper para encontrar participante con fallback por número
+// Funcion helper para encontrar participante con fallback por nmero
 function findParticipant(participants, jid) {
   // 1) Intento exacto por usuario usando Baileys (soporta LID vs s.whatsapp)
   const targetJid = jidNormalizedUser(String(jid || ""));

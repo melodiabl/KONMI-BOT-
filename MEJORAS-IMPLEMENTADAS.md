@@ -55,15 +55,15 @@ export async function markSubbotDisconnected(code, reason = null) {
     status: 'disconnected',
     is_online: false
   });
-  
+
   // 2. Auto-limpieza después de 5 segundos
   setTimeout(async () => {
     // Elimina carpeta
     fs.rmSync(subbotPath, { recursive: true });
-    
+
     // Elimina registro de BD
     await db('subbots').where({ code }).del();
-    
+
     logger.info(`✅ Auto-limpieza completada: ${code}`);
   }, 5000);
 }
@@ -457,9 +457,9 @@ Se han implementado mejoras significativas que hacen el sistema más:
 
 ---
 
-*Versión: 3.0.0*  
-*Fecha: 2024*  
-*Estado: ✅ IMPLEMENTADO Y FUNCIONAL*  
+*Versión: 3.0.0*
+*Fecha: 2024*
+*Estado: ✅ IMPLEMENTADO Y FUNCIONAL*
 *KONMI BOT Panel v2.5.0*
 
 ---

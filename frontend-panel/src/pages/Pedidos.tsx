@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FileText, 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  CheckCircle, 
-  XCircle, 
+  FileText,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  CheckCircle,
+  XCircle,
   Clock,
   User,
   Calendar,
@@ -147,7 +147,7 @@ const Pedidos: React.FC = () => {
       });
 
       if (response.ok) {
-        setPedidos(prev => prev.map(pedido => 
+        setPedidos(prev => prev.map(pedido =>
           pedido.id === id ? { ...pedido, estado: estado as any } : pedido
         ));
         setSuccess('Estado actualizado correctamente');
@@ -163,7 +163,7 @@ const Pedidos: React.FC = () => {
 
   const deletePedido = async (id: number) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este pedido?')) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/pedidos/${id}`, {
@@ -319,7 +319,7 @@ const Pedidos: React.FC = () => {
                 <FileText className="w-8 h-8 text-blue-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -329,7 +329,7 @@ const Pedidos: React.FC = () => {
                 <Clock className="w-8 h-8 text-yellow-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -339,7 +339,7 @@ const Pedidos: React.FC = () => {
                 <Clock className="w-8 h-8 text-blue-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -349,7 +349,7 @@ const Pedidos: React.FC = () => {
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -460,9 +460,9 @@ const Pedidos: React.FC = () => {
                           {pedido.prioridad.charAt(0).toUpperCase() + pedido.prioridad.slice(1)}
                         </span>
                       </div>
-                      
+
                       <p className="text-gray-600 mb-3 line-clamp-2">{pedido.descripcion}</p>
-                      
+
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <div className="flex items-center gap-1">
                           <User className="w-4 h-4" />
@@ -484,7 +484,7 @@ const Pedidos: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2 ml-4">
                       <button
                         onClick={() => handleViewPedido(pedido)}
@@ -493,7 +493,7 @@ const Pedidos: React.FC = () => {
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      
+
                       {pedido.estado === 'pendiente' && (
                         <>
                           <button
@@ -512,7 +512,7 @@ const Pedidos: React.FC = () => {
                           </button>
                                   </>
                                 )}
-                      
+
                                 {pedido.estado === 'en_proceso' && (
                         <button
                           onClick={() => updatePedidoStatus(pedido.id, 'completado')}
@@ -522,7 +522,7 @@ const Pedidos: React.FC = () => {
                           <CheckCircle className="w-4 h-4" />
                         </button>
                       )}
-                      
+
                       <button
                         onClick={() => deletePedido(pedido.id)}
                         className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"

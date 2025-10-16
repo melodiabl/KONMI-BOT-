@@ -72,7 +72,7 @@ export const RoleSelector: React.FC<RoleSelectorProps> = ({
   return (
     <Box>
       <FormLabel>{label}</FormLabel>
-      
+
       {isEditable && (
         <HStack mb={4} spacing={2}>
           <Select

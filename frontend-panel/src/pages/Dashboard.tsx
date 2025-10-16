@@ -321,7 +321,7 @@ export const Dashboard: React.FC = () => {
             </HStack>
           </CardHeader>
           <CardBody>
-        
+
           <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }} gap={6} mb={6}>
             <Stat textAlign="center">
               <Flex justify="center" mb={2}>
@@ -335,7 +335,7 @@ export const Dashboard: React.FC = () => {
                 {isConnected ? 'Bot activo' : 'Bot inactivo'}
                 </StatHelpText>
               </Stat>
-              
+
             <Stat textAlign="center">
               <Flex justify="center" mb={2}>
                 <Icon as={FiSmartphone} w={8} h={8} color="blue.500" />
@@ -346,7 +346,7 @@ export const Dashboard: React.FC = () => {
                 </StatNumber>
               <StatHelpText color="gray.400">WhatsApp conectado</StatHelpText>
               </Stat>
-              
+
             <Stat textAlign="center">
               <Flex justify="center" mb={2}>
                 <Icon as={FiClock} w={8} h={8} color="purple.500" />
@@ -355,7 +355,7 @@ export const Dashboard: React.FC = () => {
               <StatNumber color="gray.900">{formatUptime(botStatus?.uptime)}</StatNumber>
               <StatHelpText color="gray.400">Uptime del bot</StatHelpText>
               </Stat>
-              
+
             <Stat textAlign="center">
               <Flex justify="center" mb={2}>
                 <Icon as={FiActivity} w={8} h={8} color="orange.500" />
@@ -367,7 +367,7 @@ export const Dashboard: React.FC = () => {
               <StatHelpText color="gray.400">Última vez activo</StatHelpText>
               </Stat>
           </Grid>
-        
+
           <Flex justify="center" gap={4}>
             <Button
               onClick={handleRestartBot}
@@ -662,7 +662,7 @@ export const Dashboard: React.FC = () => {
                   </Box>
                 </Alert>
               )}
-              
+
               {(stats?.totalPedidos || 0) > 0 && (
                 <Alert status="warning" borderRadius="lg">
                   <AlertIcon />

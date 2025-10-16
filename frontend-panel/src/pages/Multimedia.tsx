@@ -232,7 +232,7 @@ export const Multimedia: React.FC = () => {
 
   const handleFileUpload = async (files: FileList) => {
     if (!files.length) return;
-    
+
     try {
       setUploading(true);
       let done = 0;
@@ -418,11 +418,11 @@ export const Multimedia: React.FC = () => {
             </div>
           </div>
         )}
-        
+
         {items.map((item: MultimediaItem) => {
           const TypeIcon = getTypeIcon(item.type);
           const typeColor = getTypeColor(item.type);
-          
+
           return (
             <div
               key={item.id}
@@ -450,16 +450,16 @@ export const Multimedia: React.FC = () => {
                   </span>
                 </div>
               </div>
-              
+
               <div className="p-4">
                 <h3 className="font-semibold text-gray-900 truncate mb-1">{item.name}</h3>
                 <p className="text-sm text-gray-500 line-clamp-2 mb-3">{item.description}</p>
-                
+
                 <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
                   <span>{formatFileSize(item.size)}</span>
                   <span>{item.views} vistas</span>
                 </div>
-                
+
                 <div className="flex flex-wrap gap-1 mb-3">
                   {item.tags.slice(0, 2).map((tag, index) => (
                     <span
@@ -475,12 +475,12 @@ export const Multimedia: React.FC = () => {
                     </span>
                   )}
                 </div>
-                
+
                 <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
                   <span>{item.uploadedBy}</span>
                   <span>{new Date(item.uploadedAt).toLocaleDateString()}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <button
@@ -549,7 +549,7 @@ export const Multimedia: React.FC = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div
                 className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors"
                 onDragOver={handleDragOver}
@@ -604,7 +604,7 @@ export const Multimedia: React.FC = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center space-x-4">
                   <div className={`p-3 bg-${getTypeColor(selectedItem.type)}-100 rounded-lg`}>
@@ -644,7 +644,7 @@ export const Multimedia: React.FC = () => {
                   <p>Fecha: {new Date(selectedItem.uploadedAt).toLocaleDateString()}</p>
                 </div>
               </div>
-              
+
               <div className="flex justify-end mt-6 space-x-3">
                 <button
                   onClick={() => setIsViewOpen(false)}

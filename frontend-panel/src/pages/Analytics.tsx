@@ -273,7 +273,7 @@ export const Analytics: React.FC = () => {
           {activeTab === 0 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Resumen General</h2>
-              
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Engagement */}
                 <div className="bg-gray-50 rounded-lg p-6">
@@ -286,12 +286,12 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
+                      <div
+                        className="bg-blue-600 h-2 rounded-full"
                         style={{ width: `${Math.min((analyticsData?.engagement?.dailyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100, 100)}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Usuarios Activos Semanales</span>
                       <span className="text-lg font-semibold text-gray-900">
@@ -299,12 +299,12 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full" 
+                      <div
+                        className="bg-green-600 h-2 rounded-full"
                         style={{ width: `${Math.min((analyticsData?.engagement?.weeklyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100, 100)}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Usuarios Activos Mensuales</span>
                       <span className="text-lg font-semibold text-gray-900">
@@ -312,8 +312,8 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-purple-600 h-2 rounded-full" 
+                      <div
+                        className="bg-purple-600 h-2 rounded-full"
                         style={{ width: `${Math.min((analyticsData?.engagement?.monthlyActiveUsers || 0) / (userStats?.totalUsuarios || 1) * 100, 100)}%` }}
                       ></div>
                     </div>
@@ -391,7 +391,7 @@ export const Analytics: React.FC = () => {
           {activeTab === 1 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Análisis de Usuarios</h2>
-              
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-gray-50 rounded-lg p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Distribución por Rol</h3>
@@ -404,12 +404,12 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{userStats?.totalAdmins || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-red-600 h-2 rounded-full" 
+                      <div
+                        className="bg-red-600 h-2 rounded-full"
                         style={{ width: `${(userStats?.totalAdmins || 0) / (userStats?.totalUsuarios || 1) * 100}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <span className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full mr-2">Creador</span>
@@ -418,12 +418,12 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{userStats?.totalCreadores || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
+                      <div
+                        className="bg-blue-600 h-2 rounded-full"
                         style={{ width: `${(userStats?.totalCreadores || 0) / (userStats?.totalUsuarios || 1) * 100}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <span className="px-2 py-1 text-xs font-medium text-green-600 bg-green-100 rounded-full mr-2">Moderador</span>
@@ -432,12 +432,12 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{userStats?.totalModeradores || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full" 
+                      <div
+                        className="bg-green-600 h-2 rounded-full"
                         style={{ width: `${(userStats?.totalModeradores || 0) / (userStats?.totalUsuarios || 1) * 100}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <span className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-full mr-2">Usuario</span>
@@ -448,8 +448,8 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-gray-600 h-2 rounded-full" 
+                      <div
+                        className="bg-gray-600 h-2 rounded-full"
                         style={{ width: `${((userStats?.totalUsuarios || 0) - (userStats?.totalAdmins || 0) - (userStats?.totalCreadores || 0) - (userStats?.totalModeradores || 0)) / (userStats?.totalUsuarios || 1) * 100}%` }}
                       ></div>
                     </div>
@@ -465,14 +465,14 @@ export const Analytics: React.FC = () => {
                                 {analyticsData?.engagement?.averageSessionTime || '0m'}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Tasa de Rebote</span>
                       <span className="text-sm font-semibold text-gray-900">
                                 {formatPercentage(analyticsData?.engagement?.bounceRate || 0)}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Usuarios Activos</span>
                       <span className="text-sm font-semibold text-gray-900">
@@ -489,7 +489,7 @@ export const Analytics: React.FC = () => {
           {activeTab === 2 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Análisis de Contenido</h2>
-              
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-gray-50 rounded-lg p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Estados de Aportes</h3>
@@ -502,12 +502,12 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{aporteStats?.aportesAprobados || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full" 
+                      <div
+                        className="bg-green-600 h-2 rounded-full"
                         style={{ width: `${(aporteStats?.aportesAprobados || 0) / (aporteStats?.totalAportes || 1) * 100}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <span className="px-2 py-1 text-xs font-medium text-yellow-600 bg-yellow-100 rounded-full mr-2">Pendientes</span>
@@ -516,12 +516,12 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{aporteStats?.aportesPendientes || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-yellow-600 h-2 rounded-full" 
+                      <div
+                        className="bg-yellow-600 h-2 rounded-full"
                         style={{ width: `${(aporteStats?.aportesPendientes || 0) / (aporteStats?.totalAportes || 1) * 100}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <span className="px-2 py-1 text-xs font-medium text-red-600 bg-red-100 rounded-full mr-2">Rechazados</span>
@@ -530,8 +530,8 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{aporteStats?.aportesRechazados || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-red-600 h-2 rounded-full" 
+                      <div
+                        className="bg-red-600 h-2 rounded-full"
                         style={{ width: `${(aporteStats?.aportesRechazados || 0) / (aporteStats?.totalAportes || 1) * 100}%` }}
                       ></div>
                     </div>
@@ -549,12 +549,12 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{pedidoStats?.pedidosCompletados || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full" 
+                      <div
+                        className="bg-green-600 h-2 rounded-full"
                         style={{ width: `${(pedidoStats?.pedidosCompletados || 0) / (pedidoStats?.totalPedidos || 1) * 100}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <span className="px-2 py-1 text-xs font-medium text-yellow-600 bg-yellow-100 rounded-full mr-2">Pendientes</span>
@@ -563,12 +563,12 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{pedidoStats?.pedidosPendientes || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-yellow-600 h-2 rounded-full" 
+                      <div
+                        className="bg-yellow-600 h-2 rounded-full"
                         style={{ width: `${(pedidoStats?.pedidosPendientes || 0) / (pedidoStats?.totalPedidos || 1) * 100}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <span className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full mr-2">En Proceso</span>
@@ -577,8 +577,8 @@ export const Analytics: React.FC = () => {
                       <span className="text-sm font-semibold text-gray-900">{pedidoStats?.pedidosEnProceso || 0}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
+                      <div
+                        className="bg-blue-600 h-2 rounded-full"
                         style={{ width: `${(pedidoStats?.pedidosEnProceso || 0) / (pedidoStats?.totalPedidos || 1) * 100}%` }}
                       ></div>
                     </div>
@@ -592,7 +592,7 @@ export const Analytics: React.FC = () => {
           {activeTab === 3 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Análisis de Rendimiento</h2>
-              
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-gray-50 rounded-lg p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Métricas del Sistema</h3>
@@ -604,12 +604,12 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className={`h-2 rounded-full ${analyticsData?.performance?.responseTime < 500 ? 'bg-green-600' : 'bg-orange-600'}`}
                         style={{ width: `${Math.min((analyticsData?.performance?.responseTime || 0) / 1000 * 100, 100)}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Uptime</span>
                       <span className="text-sm font-semibold text-gray-900">
@@ -617,12 +617,12 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full" 
+                      <div
+                        className="bg-green-600 h-2 rounded-full"
                         style={{ width: `${analyticsData?.performance?.uptime || 0}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Tasa de Error</span>
                       <span className="text-sm font-semibold text-gray-900">
@@ -630,7 +630,7 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className={`h-2 rounded-full ${analyticsData?.performance?.errorRate < 5 ? 'bg-green-600' : 'bg-red-600'}`}
                         style={{ width: `${analyticsData?.performance?.errorRate || 0}%` }}
                       ></div>
@@ -648,19 +648,19 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
+                      <div
+                        className="bg-blue-600 h-2 rounded-full"
                         style={{ width: `${Math.min((analyticsData?.performance?.throughput || 0) / 1000 * 100, 100)}%` }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Bot Uptime</span>
                       <span className="text-sm font-semibold text-gray-900">
                                 {analyticsData?.overview?.botUptime || '0h 0m'}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Grupos Autorizados</span>
                       <span className="text-sm font-semibold text-gray-900">
@@ -668,8 +668,8 @@ export const Analytics: React.FC = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full" 
+                      <div
+                        className="bg-green-600 h-2 rounded-full"
                         style={{ width: `${(groupStats?.gruposAutorizados || 0) / (groupStats?.totalGrupos || 1) * 100}%` }}
                       ></div>
                     </div>

@@ -3,14 +3,14 @@ import db from './db.js';
 async function recreateSubbotsTable() {
   try {
     console.log(' Recreando la tabla subbots...');
-    
+
     // Verificar si la tabla existe y eliminarla
     const tableExists = await db.schema.hasTable('subbots');
     if (tableExists) {
       console.log('  Eliminando tabla subbots existente...');
       await db.schema.dropTable('subbots');
     }
-    
+
     // Crear la tabla con la estructura correcta
     console.log(' Creando nueva tabla subbots...');
     await db.schema.createTable('subbots', (table) => {
@@ -29,16 +29,16 @@ async function recreateSubbotsTable() {
       table.boolean('is_active').defaultTo(false);
       table.integer('message_count').defaultTo(0);
       table.json('settings').nullable();
-      
+
       // ndices para optimizar consultas
       table.index('user_phone');
       table.index('status');
       table.index('is_active');
       table.index('last_activity');
     });
-    
+
     console.log(' Tabla subbots recreada exitosamente');
-    
+
   } catch (error) {
     console.error(' Error al recrear la tabla subbots:', error);
   } finally {

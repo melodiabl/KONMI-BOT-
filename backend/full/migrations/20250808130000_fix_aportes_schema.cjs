@@ -105,7 +105,7 @@ exports.down = async function down(knex) {
   try {
     await knex.raw(`
       INSERT INTO aportes_old (id, titulo, tipo, usuario, archivo, fecha_aporte)
-      SELECT 
+      SELECT
         id,
         contenido AS titulo,
         tipo,

@@ -41,7 +41,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     console.log('AuthContext: Token encontrado:', !!token);
-    
+
     if (token) {
       console.log('AuthContext: Verificando token con backend...');
       apiService.getMe()
@@ -59,7 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         })
         .catch((error) => {
           console.error('Error obteniendo usuario:', error);
-          
+
           // Solo remover token si es un error de autenticación crítico
           if (error.response?.status === 401 || error.response?.status === 403) {
             console.log('AuthContext: Token inválido, removiendo');

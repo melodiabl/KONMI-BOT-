@@ -333,10 +333,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                       Últimas 24h
                     </Text>
                   </HStack>
-                  <Progress 
-                    value={75} 
-                    colorScheme="blue" 
-                    size="lg" 
+                  <Progress
+                    value={75}
+                    colorScheme="blue"
+                    size="lg"
                     borderRadius="full"
                     bg="blue.100"
                   />
@@ -344,7 +344,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                     75% del promedio diario
                   </Text>
                 </Box>
-                
+
                 <Box>
                   <HStack justify="space-between" mb={3}>
                     <Text fontSize="sm" fontWeight="medium" color="green.600">
@@ -354,10 +354,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                       {stats.activeUsers}/{stats.totalUsers}
                     </Text>
                   </HStack>
-                  <Progress 
-                    value={stats.totalUsers > 0 ? (stats.activeUsers / stats.totalUsers) * 100 : 0} 
-                    colorScheme="green" 
-                    size="lg" 
+                  <Progress
+                    value={stats.totalUsers > 0 ? (stats.activeUsers / stats.totalUsers) * 100 : 0}
+                    colorScheme="green"
+                    size="lg"
                     borderRadius="full"
                     bg="green.100"
                   />
@@ -375,10 +375,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                       {stats.authorizedGroups}/{stats.totalGroups}
                     </Text>
                   </HStack>
-                  <Progress 
-                    value={stats.totalGroups > 0 ? (stats.authorizedGroups / stats.totalGroups) * 100 : 0} 
-                    colorScheme="purple" 
-                    size="lg" 
+                  <Progress
+                    value={stats.totalGroups > 0 ? (stats.authorizedGroups / stats.totalGroups) * 100 : 0}
+                    colorScheme="purple"
+                    size="lg"
                     borderRadius="full"
                     bg="purple.100"
                   />
@@ -418,7 +418,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                   >
                     Enviar Mensaje
                   </Button>
-                  
+
                   <Button
                     leftIcon={<ViewIcon />}
                     variant="ghost"
@@ -430,7 +430,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                   >
                     Ver Grupos
                   </Button>
-                  
+
                   <Button
                     leftIcon={<StarIcon />}
                     variant="ghost"
@@ -442,7 +442,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                   >
                     Gestionar Usuarios
                   </Button>
-                  
+
                   <Button
                     leftIcon={<TimeIcon />}
                     variant="ghost"
@@ -490,9 +490,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                       </Badge>
                     </HStack>
                   ))}
-                  
+
                   <Divider />
-                  
+
                   <HStack justify="space-between">
                     <Text fontSize="sm" color="gray.500">
                       Última Actividad

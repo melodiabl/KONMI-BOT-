@@ -101,7 +101,7 @@ export const BotStatus: React.FC = () => {
   const { hasRole } = useAuth();
   const isOwner = hasRole('owner');
   const toast = useToast();
-  
+
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isQROpen, setIsQROpen] = useState(false);
   const [isPairingOpen, setIsPairingOpen] = useState(false);
@@ -417,9 +417,9 @@ export const BotStatus: React.FC = () => {
           <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }} gap={6} mb={6}>
             <Stat textAlign="center">
               <Flex justify="center" mb={2}>
-                <Icon 
-                  as={connectionStatus.icon} 
-                  w={8} h={8} 
+                <Icon
+                  as={connectionStatus.icon}
+                  w={8} h={8}
                   color={connectionStatus.color}
                   animation={connectionStatus.icon === FiLoader2 ? 'spin 1s linear infinite' : undefined}
                 />

@@ -486,9 +486,9 @@ El sistema ahora tiene:
 
 ---
 
-*Versión: 3.0.0*  
-*Fecha: 2024*  
-*Estado: ✅ IMPLEMENTADO Y FUNCIONAL*  
+*Versión: 3.0.0*
+*Fecha: 2024*
+*Estado: ✅ IMPLEMENTADO Y FUNCIONAL*
 *KONMI BOT Panel v2.5.0*
 
 ---

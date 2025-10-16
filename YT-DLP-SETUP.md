@@ -273,13 +273,13 @@ df -h
 
 ## 🎯 **Resumen de Beneficios**
 
-✅ **Multiplataforma**: Funciona en Linux, Windows, macOS  
-✅ **Sin restricciones**: Usa cookies para saltar bloqueos  
-✅ **Progreso real**: Barra de progreso en tiempo real  
-✅ **Información rica**: Título, artista, duración, vistas, etc.  
-✅ **Optimizado**: Calidad apropiada para WhatsApp  
-✅ **Robusto**: Manejo de errores y fallbacks  
-✅ **Escalable**: Fácil de mantener y actualizar  
+✅ **Multiplataforma**: Funciona en Linux, Windows, macOS
+✅ **Sin restricciones**: Usa cookies para saltar bloqueos
+✅ **Progreso real**: Barra de progreso en tiempo real
+✅ **Información rica**: Título, artista, duración, vistas, etc.
+✅ **Optimizado**: Calidad apropiada para WhatsApp
+✅ **Robusto**: Manejo de errores y fallbacks
+✅ **Escalable**: Fácil de mantener y actualizar
 
 ¡Tu bot ahora tiene capacidades de descarga de YouTube de nivel profesional! 🚀
 

@@ -25,11 +25,11 @@ import {
   InputRightElement,
   IconButton,
 } from '@chakra-ui/react';
-import { 
-  FaUser, 
-  FaLock, 
-  FaEye, 
-  FaEyeSlash, 
+import {
+  FaUser,
+  FaLock,
+  FaEye,
+  FaEyeSlash,
   FaShieldAlt,
   FaSignInAlt,
   FaWhatsapp,
@@ -107,7 +107,7 @@ export const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -118,7 +118,7 @@ export const Login: React.FC = () => {
     try {
       // Enviar también el rol al backend
       await login(formData.username, formData.password);
-      
+
       toast({
         title: '¡Bienvenido!',
         description: `Has iniciado sesión como ${formData.role}`,
@@ -131,9 +131,9 @@ export const Login: React.FC = () => {
       navigate(from, { replace: true });
     } catch (error: any) {
       console.error('Error de login:', error);
-      
+
       let errorMessage = 'Error al iniciar sesión';
-      
+
       if (error.response?.status === 401) {
         errorMessage = 'Credenciales incorrectas';
       } else if (error.response?.status === 403) {

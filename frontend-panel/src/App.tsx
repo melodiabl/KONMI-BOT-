@@ -41,7 +41,7 @@ const queryClient = new QueryClient({
 // Componente para rutas protegidas
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
-  
+
   console.log('ProtectedRoute: isAuthenticated:', isAuthenticated, 'isLoading:', isLoading);
 
   if (isLoading) {

@@ -34,7 +34,7 @@ class ApiService {
         // Manejo de errores de autenticación
         if (error.response?.status === 401) {
           console.log('Error 401 detectado en:', error.config?.url);
-          if (error.config?.url?.includes('/auth/me') || 
+          if (error.config?.url?.includes('/auth/me') ||
               error.config?.url?.includes('/auth/login') ||
               error.config?.url?.includes('/auth/verify')) {
             console.log('Error de autenticación crítico, removiendo token');
@@ -172,7 +172,7 @@ class ApiService {
     const response = await this.api.delete(`/api/subbot/${subbotId}`);
     return response.data;
   }
-  
+
   async getSubbotQR(subbotId: string): Promise<{ success: boolean; qr?: string; error?: string }> {
     this.ensureApi();
     const response = await this.api.get(`/api/subbot/qr/${encodeURIComponent(subbotId)}`);
@@ -908,7 +908,7 @@ class ApiService {
     return response.data;
   }
 
-  
+
 
   // BOT: Captura y monitoreo de grupos
   async startGroupMonitoring(grupo_id: string, tipos_contenido: string[]) {
@@ -1061,23 +1061,23 @@ export const getBotGlobalState = () => apiService.getBotGlobalState();
 export const updateBotGlobalState = (state: any) => apiService.setBotGlobalState(state);
 
 // Funciones adicionales que se usan en useQuery
-export const getUsuarios = (page = 1, limit = 20, search?: string, rol?: string) => 
+export const getUsuarios = (page = 1, limit = 20, search?: string, rol?: string) =>
   apiService.getUsuarios(page, limit, search, rol);
-export const getAportes = (page = 1, limit = 20, search?: string, estado?: string, fuente?: string, tipo?: string) => 
+export const getAportes = (page = 1, limit = 20, search?: string, estado?: string, fuente?: string, tipo?: string) =>
   apiService.getAportes(page, limit, search, estado, fuente, tipo);
-export const getPedidos = (page = 1, limit = 20, search?: string, estado?: string, prioridad?: string) => 
+export const getPedidos = (page = 1, limit = 20, search?: string, estado?: string, prioridad?: string) =>
   apiService.getPedidos(page, limit, search, estado, prioridad);
-export const getGrupos = (page = 1, limit = 20, search?: string, botEnabled?: string, proveedor?: string) => 
+export const getGrupos = (page = 1, limit = 20, search?: string, botEnabled?: string, proveedor?: string) =>
   apiService.getGroups(page, limit, search, botEnabled, proveedor);
-export const getLogs = (page = 1, limit = 50, level?: string) => 
+export const getLogs = (page = 1, limit = 50, level?: string) =>
   apiService.getLogs(page, limit, level);
 export const getNotificaciones = (page = 1, limit = 20, filters?: { search?: string; type?: string; category?: string; read?: string }) =>
   apiService.getNotificaciones(page, limit, filters);
-export const getNotificationStats = () => 
+export const getNotificationStats = () =>
   apiService.getNotificationStats();
-export const getAnalytics = (timeRange?: string) => 
+export const getAnalytics = (timeRange?: string) =>
   apiService.getAnalytics(timeRange);
-export const getSystemStats = () => 
+export const getSystemStats = () =>
   apiService.getSystemStats();
 
 // ===== MÚSICA =====

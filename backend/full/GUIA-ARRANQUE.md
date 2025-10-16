@@ -388,6 +388,6 @@ Una vez completados todos los pasos, tu sistema estará 100% funcional:
 
 ---
 
-**Versión:** 2.5.0  
-**Última actualización:** Enero 2025  
+**Versión:** 2.5.0
+**Última actualización:** Enero 2025
 **Autor:** Sistema KONMI BOT

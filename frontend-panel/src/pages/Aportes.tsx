@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Star, 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  CheckCircle, 
-  XCircle, 
+  Star,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  CheckCircle,
+  XCircle,
   Clock,
   User,
   FileText,
@@ -120,7 +120,7 @@ const Aportes: React.FC = () => {
       });
 
       if (response.ok) {
-        setAportes(prev => prev.map(aporte => 
+        setAportes(prev => prev.map(aporte =>
           aporte.id === id ? { ...aporte, estado: estado as any } : aporte
         ));
         setSuccess('Estado actualizado correctamente');
@@ -136,7 +136,7 @@ const Aportes: React.FC = () => {
 
   const deleteAporte = async (id: number) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este aporte?')) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/aportes/${id}`, {
@@ -288,7 +288,7 @@ const Aportes: React.FC = () => {
                 <Star className="w-8 h-8 text-yellow-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -298,7 +298,7 @@ const Aportes: React.FC = () => {
                 <Clock className="w-8 h-8 text-yellow-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -308,7 +308,7 @@ const Aportes: React.FC = () => {
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -404,9 +404,9 @@ const Aportes: React.FC = () => {
                           {aporte.tipo.charAt(0).toUpperCase() + aporte.tipo.slice(1)}
                         </span>
                       </div>
-                      
+
                       <p className="text-gray-600 mb-3 line-clamp-2">{aporte.descripcion}</p>
-                      
+
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <div className="flex items-center gap-1">
                           <User className="w-4 h-4" />
@@ -424,7 +424,7 @@ const Aportes: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2 ml-4">
                       <button
                         onClick={() => handleViewAporte(aporte)}
@@ -433,7 +433,7 @@ const Aportes: React.FC = () => {
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      
+
                       <button
                         onClick={() => handleEditAporte(aporte)}
                         className="p-2 text-gray-600 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
@@ -441,7 +441,7 @@ const Aportes: React.FC = () => {
                       >
                         <Edit className="w-4 h-4" />
                       </button>
-                      
+
                       {aporte.estado === 'pendiente' && (
                         <>
                           <button
@@ -460,7 +460,7 @@ const Aportes: React.FC = () => {
                           </button>
                                   </>
                                 )}
-                      
+
                       <button
                         onClick={() => deleteAporte(aporte.id)}
                         className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"

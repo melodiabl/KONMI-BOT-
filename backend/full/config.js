@@ -34,7 +34,7 @@ const config = {
   cors: {
     origin: process.env.NODE_ENV === 'production'
       ? [
-          process.env.FRONTEND_URL, 
+          process.env.FRONTEND_URL,
           process.env.RAILWAY_STATIC_URL,
           'http://178.156.179.129',
           'http://178.156.179.129:80',
@@ -42,7 +42,7 @@ const config = {
           'http://178.156.179.129:5173'
         ].filter(Boolean)
       : [
-          'http://localhost:5173', 
+          'http://localhost:5173',
           'http://localhost:3000',
           'http://178.156.179.129',
           'http://178.156.179.129:80',

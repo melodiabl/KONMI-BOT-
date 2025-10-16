@@ -4,15 +4,15 @@ import { RUNTIME_CONFIG } from './runtime-config';
 export const API_CONFIG = {
   // URL base de la API
   BASE_URL: RUNTIME_CONFIG.API_BASE_URL,
-  
+
   // Timeouts
   TIMEOUT: 30000, // 30 segundos
-  
+
   // Headers por defecto
   DEFAULT_HEADERS: {
     'Content-Type': 'application/json',
   },
-  
+
   // Endpoints
   ENDPOINTS: {
     // Autenticación
@@ -21,7 +21,7 @@ export const API_CONFIG = {
       REGISTER: '/api/auth/register',
       ME: '/api/auth/me',
     },
-    
+
     // Bot
     BOT: {
       STATUS: '/api/bot/status',
@@ -30,7 +30,7 @@ export const API_CONFIG = {
       DISCONNECT: '/api/bot/disconnect',
       CONFIG: '/api/bot/config',
     },
-    
+
     // Grupos
     GROUPS: {
       LIST: '/api/grupos',
@@ -42,7 +42,7 @@ export const API_CONFIG = {
       PROVIDER: (id: number) => `/api/grupos/${id}/proveedor`,
       STATS: '/api/grupos/stats',
     },
-    
+
     // Aportes
     APORTES: {
       LIST: '/api/aportes',
@@ -53,7 +53,7 @@ export const API_CONFIG = {
       APPROVE: (id: number) => `/api/aportes/${id}/estado`,
       STATS: '/api/aportes/stats',
     },
-    
+
     // Pedidos
     PEDIDOS: {
       LIST: '/api/pedidos',
@@ -64,7 +64,7 @@ export const API_CONFIG = {
       RESOLVE: (id: number) => `/api/pedidos/${id}/resolver`,
       STATS: '/api/pedidos/stats',
     },
-    
+
     // Usuarios
     USUARIOS: {
       LIST: '/api/usuarios',
@@ -76,20 +76,20 @@ export const API_CONFIG = {
       STATS: '/api/usuarios/stats',
     },
   },
-  
+
   // Configuración de paginación
   PAGINATION: {
     DEFAULT_PAGE: 1,
     DEFAULT_LIMIT: 20,
     MAX_LIMIT: 100,
   },
-  
+
   // Configuración de caché
   CACHE: {
     STALE_TIME: 5 * 60 * 1000, // 5 minutos
     REFETCH_INTERVAL: 10 * 1000, // 10 segundos
   },
-  
+
   // Configuración de reintentos
   RETRY: {
     MAX_RETRIES: 3,

@@ -22,16 +22,16 @@ const config = {
 // Funcin para crear la tabla subbots
 async function createSubbotsTable() {
   const db = knex(config);
-  
+
   try {
     // Verificar si la tabla ya existe
     const tableExists = await db.schema.hasTable('subbots');
-    
+
     if (tableExists) {
       console.log(' La tabla subbots ya existe. Eliminando...');
       await db.schema.dropTable('subbots');
     }
-    
+
     // Crear la tabla con la estructura correcta
     console.log(' Creando tabla subbots...');
     await db.schema.createTable('subbots', (table) => {
@@ -50,16 +50,16 @@ async function createSubbotsTable() {
       table.boolean('is_active').defaultTo(false);
       table.integer('message_count').defaultTo(0);
       table.json('settings').nullable();
-      
+
       // ndices para optimizar consultas
       table.index('user_phone');
       table.index('status');
       table.index('is_active');
       table.index('last_activity');
     });
-    
+
     console.log(' Tabla subbots creada exitosamente');
-    
+
   } catch (error) {
     console.error(' Error al crear la tabla subbots:', error);
     throw error;
@@ -72,13 +72,13 @@ async function createSubbotsTable() {
 async function main() {
   try {
     console.log(' Inicializando base de datos...');
-    
+
     // Crear la tabla subbots
     await createSubbotsTable();
-    
+
     console.log('\n Base de datos inicializada correctamente');
     console.log(` Ubicacin: ${dbPath}`);
-    
+
   } catch (error) {
     console.error('\n Error durante la inicializacin:', error);
     process.exit(1);

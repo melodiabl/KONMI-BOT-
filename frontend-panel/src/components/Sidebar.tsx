@@ -167,22 +167,22 @@ export const Sidebar: React.FC = () => {
               borderRadius="lg"
               cursor="pointer"
               transition="all 0.2s"
-              bg={isActive(item.path) 
-                ? `${item.color}.100` 
+              bg={isActive(item.path)
+                ? `${item.color}.100`
                 : 'transparent'
               }
-              color={isActive(item.path) 
-                ? `${item.color}.700` 
+              color={isActive(item.path)
+                ? `${item.color}.700`
                 : colorMode === 'dark' ? 'gray.300' : 'gray.600'
               }
               _hover={{
-                bg: isActive(item.path) 
-                  ? `${item.color}.200` 
+                bg: isActive(item.path)
+                  ? `${item.color}.200`
                   : colorMode === 'dark' ? 'gray.700' : 'gray.100',
                 transform: 'translateX(4px)',
               }}
-              borderLeft={isActive(item.path) 
-                ? `4px solid` 
+              borderLeft={isActive(item.path)
+                ? `4px solid`
                 : '4px solid transparent'
               }
               borderLeftColor={isActive(item.path) ? `${item.color}.500` : 'transparent'}

@@ -74,7 +74,7 @@ async function downloadFile(url, filename, category, usuario) {
       }
 
       const protocol = url.startsWith('https://') ? https : http;
-      
+
       const request = protocol.get(url, (response) => {
         // Verificar cdigo de respuesta
         if (response.statusCode !== 200) {
@@ -94,10 +94,10 @@ async function downloadFile(url, filename, category, usuario) {
 
         response.on('end', async () => {
           fileStream.end();
-          
+
           // Registrar descarga en base de datos
           await registerDownload(filename, filepath, category, usuario, downloadedBytes, url);
-          
+
           resolve({
             success: true,
             message: 'Descarga completada',
@@ -171,12 +171,12 @@ async function processWhatsAppMedia(message, category, usuario) {
       chunks.push(chunk);
     }
     const buffer = Buffer.concat(chunks);
-    
+
     // Generar nombre de archivo
     const timestamp = Date.now();
     const extension = getFileExtension(mediaMessage.mimetype || 'application/octet-stream');
     const filename = `${category}_${timestamp}_${usuario}.${extension}`;
-    
+
     // Determinar directorio
     const mediaDir = path.join(MEDIA_DIR, mediaType + 's');
     const filepath = path.join(mediaDir, filename);
@@ -255,7 +255,7 @@ function getFileExtension(mimetype) {
     'application/rar': 'rar',
     'text/plain': 'txt'
   };
-  
+
   return mimeMap[mimetype] || 'bin';
 }
 

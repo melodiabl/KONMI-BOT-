@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Building2, 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  CheckCircle, 
-  XCircle, 
+  Building2,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  CheckCircle,
+  XCircle,
   Clock,
   User,
   Calendar,
@@ -153,7 +153,7 @@ const Proveedores: React.FC = () => {
       });
 
       if (response.ok) {
-        setProveedores(prev => prev.map(proveedor => 
+        setProveedores(prev => prev.map(proveedor =>
           proveedor.jid === jid ? { ...proveedor, estado: estado as any } : proveedor
         ));
         setSuccess('Estado actualizado correctamente');
@@ -169,7 +169,7 @@ const Proveedores: React.FC = () => {
 
   const deleteProveedor = async (jid: string) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este proveedor?')) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/proveedores/${jid}`, {
@@ -313,7 +313,7 @@ const Proveedores: React.FC = () => {
                 <Building2 className="w-8 h-8 text-purple-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -323,7 +323,7 @@ const Proveedores: React.FC = () => {
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -333,7 +333,7 @@ const Proveedores: React.FC = () => {
                 <Clock className="w-8 h-8 text-gray-500" />
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -431,9 +431,9 @@ const Proveedores: React.FC = () => {
                           <span className="text-sm text-gray-600">{proveedor.rating.toFixed(1)}</span>
                         </div>
                       </div>
-                      
+
                       <p className="text-gray-600 mb-3 line-clamp-2">{proveedor.descripcion}</p>
-                      
+
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <div className="flex items-center gap-1">
                           <User className="w-4 h-4" />
@@ -459,7 +459,7 @@ const Proveedores: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2 ml-4">
                       <button
                         onClick={() => handleViewProveedor(proveedor)}
@@ -468,7 +468,7 @@ const Proveedores: React.FC = () => {
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      
+
                       {proveedor.estado === 'activo' && (
                         <button
                           onClick={() => updateProveedorStatus(proveedor.jid, 'suspendido')}
@@ -478,7 +478,7 @@ const Proveedores: React.FC = () => {
                           <XCircle className="w-4 h-4" />
                         </button>
                       )}
-                      
+
                       {proveedor.estado === 'suspendido' && (
                         <button
                           onClick={() => updateProveedorStatus(proveedor.jid, 'activo')}
@@ -488,7 +488,7 @@ const Proveedores: React.FC = () => {
                           <CheckCircle className="w-4 h-4" />
                         </button>
                       )}
-                      
+
                       <button
                         onClick={() => deleteProveedor(proveedor.jid)}
                         className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"

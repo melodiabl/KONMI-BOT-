@@ -30,7 +30,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!username || !password) {
       toast({
         title: 'Error',
@@ -75,7 +75,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         <Heading size="lg" textAlign="center">
           Iniciar Sesión
         </Heading>
-        
+
         <Text textAlign="center" color="gray.600">
           Panel de Administración del Bot de WhatsApp
         </Text>

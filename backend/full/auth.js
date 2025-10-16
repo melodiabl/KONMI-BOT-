@@ -18,11 +18,11 @@ const authenticateToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, config.jwt.secret);
     const user = await db('usuarios').where({ username: decoded.username }).select('id', 'username', 'rol').first();
-    
+
     if (!user) {
       return res.status(403).json({ error: 'Usuario no valido' });
     }
-    
+
     req.user = user;
     next();
   } catch (error) {
@@ -50,13 +50,13 @@ router.post('/login', async (req, res) => {
     }
 
     const user = await db('usuarios').where({ username }).first();
-    
+
     if (!user) {
       return res.status(401).json({ error: 'Credenciales invlidas' });
     }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
-    
+
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Credenciales invlidas' });
     }
@@ -67,7 +67,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign({ username: user.username, rol: user.rol }, config.jwt.secret, { expiresIn: config.jwt.expiresIn });
-    
+
     res.json({
       token,
       user: {
@@ -95,7 +95,7 @@ router.post('/register', authenticateToken, authorizeRoles('admin', 'owner'), as
     }
 
     const hashedPassword = await bcrypt.hash(password, config.security.bcryptRounds);
-    
+
     await db('usuarios').insert({
       username,
       password: hashedPassword,
@@ -153,7 +153,7 @@ router.post('/auto-register', async (req, res) => {
     // Generar contrasea temporal
     const tempPassword = Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(tempPassword, config.security.bcryptRounds);
-    
+
     await db('usuarios').insert({
       username,
       password: hashedPassword,
@@ -163,8 +163,8 @@ router.post('/auto-register', async (req, res) => {
       fecha_registro: new Date()
     });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Usuario registrado correctamente',
       tempPassword: tempPassword,
       username: username
@@ -187,7 +187,7 @@ router.post('/reset-password', async (req, res) => {
     }
 
     const user = await db('usuarios').where({ username, whatsapp_number }).first();
-    
+
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado o nmero de WhatsApp no coincide' });
     }
@@ -195,11 +195,11 @@ router.post('/reset-password', async (req, res) => {
     // Generar nueva contrasea temporal
     const newTempPassword = Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(newTempPassword, config.security.bcryptRounds);
-    
+
     await db('usuarios').where({ id: user.id }).update({ password: hashedPassword });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Contrasea restablecida correctamente',
       tempPassword: newTempPassword,
       username: username
@@ -219,7 +219,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     }
 
     const user = await db('usuarios').where({ username: req.user.username }).first();
-    
+
     const isValidPassword = await bcrypt.compare(currentPassword, user.password);
     if (!isValidPassword) {
       return res.status(400).json({ error: 'Contrasea actual incorrecta' });

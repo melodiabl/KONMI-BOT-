@@ -327,7 +327,7 @@ export const Settings: React.FC = () => {
           {activeTab === 0 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Configuración del Bot de WhatsApp</h2>
-                    
+
                     {/* Control Global del Bot */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="flex items-center justify-between">
@@ -493,7 +493,7 @@ export const Settings: React.FC = () => {
           {activeTab === 1 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Configuración de Seguridad</h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">JWT Secret</label>
@@ -598,7 +598,7 @@ export const Settings: React.FC = () => {
           {activeTab === 2 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Configuración de Notificaciones</h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
@@ -698,7 +698,7 @@ export const Settings: React.FC = () => {
           {activeTab === 3 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Configuración del Sistema</h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">

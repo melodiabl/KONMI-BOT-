@@ -12,7 +12,7 @@ import { EventEmitter } from "events";
 import * as baileys from "@whiskeysockets/baileys";
 import {
   startSubbot,
-  stopSubbotRuntime,
+  stopSubbotRuntime as stopSubbot,
   getSubbotStatus as getRuntimeStatus,
 } from "./lib/subbots.js";
 import { processWhatsAppMedia } from "./file-manager.js";
@@ -37,7 +37,7 @@ async function ensureSubbotsTable() {
   if (!hasTable) {
     await db.schema.createTable("subbots", (table) => {
       table.increments("id").primary();
-      table.string("code").uniquée().notNullable();
+      table.string("code").unique().notNullable();
       table.string("user_phone").notNullable();
       table.string("user_name").nullable();
       table.string("status").defaultTo("pending");
@@ -52,7 +52,7 @@ async function ensureSubbotsTable() {
       table.integer("message_count").defaultTo(0);
       table.json("settings").nullable();
     });
-    console.log(" Tabla `subbots` creadía");
+    console.log(" Tabla `subbots` creada");
   }
 }
 
@@ -108,9 +108,9 @@ function formatSubbotRow(row) {
   const session = subbotSessions.get(row.code);
   const online = isSubbotOnline(row.code);
   const lastHeartbeat = row.last_activity
-    ? new Díate(row.last_activity).toISOString()
+    ? new Date(row.last_activity).toISOString()
     : session?.lastActivity
-      ? new Díate(session.lastActivity).toISOString()
+      ? new Date(session.lastActivity).toISOString()
       : null;
 
   return {
@@ -119,7 +119,7 @@ function formatSubbotRow(row) {
     type: row.connection_type === "pairing" ? "code" : "qr",
     status: row.status || (online ? "connected" : "disconnected"),
     created_by: row.user_name || row.user_phone,
-    created_at: row.created_at ? new Díate(row.created_at).toISOString() : null,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
     last_heartbeat: lastHeartbeat,
     qr_data: row.qr_code || null,
     pairing_code: row.pairing_code || null,
@@ -220,7 +220,7 @@ class SubbotService {
       }
       return { canCreate: true };
     } catch (error) {
-      console.error("Error verificando capacidíad de subbots:", error);
+      console.error("Error verificando capacidad de subbots:", error);
       return { canCreate: false, reason: "Error interno del sistema" };
     }
   }
@@ -259,7 +259,7 @@ class SubbotService {
 
   async intelligentCleanup() {
     try {
-      const now = Díate.now();
+      const now = Date.now();
       const candidates = [];
       for (const [code, session] of subbotSessions.entries()) {
         if (now - session.lastActivity > this.inactiveTimeout) {
@@ -296,12 +296,12 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
         for (const message of messages) {
           if (message.key.fromMe) continue;
           const session = subbotSessions.get(subbotCode);
-          if (session) session.lastActivity = Díate.now();
+          if (session) session.lastActivity = Date.now();
           await handleIncomingMessage(message, sock, `subbot_${subbotCode}`);
           await db("subbots")
             .where({ code: subbotCode })
             .increment("message_count", 1)
-            .update({ last_activity: new Díate().toISOString() });
+            .update({ last_activity: new Date().toISOString() });
         }
       } catch (error) {
         console.error(
@@ -322,7 +322,7 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
 async function generateQRCode(subbotCode) {
   try {
     const result = await multiAccount.generateSubbotQR(
-      `KONMI-QR-${Díate.now().toString().slice(-6)}`,
+      `KONMI-QR-${Date.now().toString().slice(-6)}`,
     );
     if (!result || !result.success) {
       throw new Error(result?.error || "Error generando QR");
@@ -333,7 +333,7 @@ async function generateQRCode(subbotCode) {
       .update({
         qr_code: result.qr || null,
         status: result.status || "waiting_scan",
-        last_activity: new Díate().toISOString(),
+        last_activity: new Date().toISOString(),
       });
     emitSubbotEvent("qr_ready", { code: subbotCode, qr: result.qr });
     return { success: true, qr: result.qr, message: result.message };
@@ -357,7 +357,7 @@ async function generatePairingCode(subbotCode, phoneNumber) {
       .update({
         pairing_code: result.code || null,
         status: result.status || "waiting_pairing",
-        last_activity: new Díate().toISOString(),
+        last_activity: new Date().toISOString(),
       });
     emitSubbotEvent("pairing_code", {
       code: subbotCode,
@@ -384,7 +384,7 @@ async function cleanupSubbotInternal(subbotCode) {
     await db("subbots").where({ code: subbotCode }).update({
       status: "disconnected",
       is_active: false,
-      last_activity: new Díate().toISOString(),
+      last_activity: new Date().toISOString(),
     });
 
     emitSubbotEvent("disconnected", { code: subbotCode });
@@ -404,7 +404,7 @@ export async function createSubbot(userPhone, userName, connectionType = "qr") {
     return { success: false, error: canCreate.reason };
   }
 
-  const subbotCode = `sb_${Díate.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const subbotCode = `sb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   await db("subbots").insert({
     code: subbotCode,
     user_phone: normalizedPhone,
@@ -492,7 +492,7 @@ export async function getSubbotStatusOverview(userPhone) {
   return { success: true, summary, subbots: details };
 }
 
-export async function getSubbotAccessDíata(subbotCode, userPhone) {
+export async function getSubbotAccessData(subbotCode, userPhone) {
   await ensureSubbotsTable();
   const subbot = await db("subbots").where({ code: subbotCode }).first();
   if (!subbot) return { success: false, error: "Subbot no encontrado" };
@@ -505,12 +505,12 @@ export async function getSubbotAccessDíata(subbotCode, userPhone) {
       };
     }
   }
-  const qrDíata = subbot.qr_code
+  const qrData = subbot.qr_code
     ? subbot.qr_code.replace(/^data:image\/png;base64,/, "")
     : null;
   return {
     success: true,
-    qr: qrDíata,
+    qr: qrData,
     qrImage: subbot.qr_code || null,
     pairingCode: subbot.pairing_code || null,
     subbot: formatSubbotRow(subbot),
@@ -544,7 +544,7 @@ export async function registerSubbotEvent({ subbotId, token, event, data }) {
   await ensureSubbotEventsTable();
 
   if (!subbotId || !event) {
-    return { success: false, error: "subbotId y event son requéeridos" };
+    return { success: false, error: "subbotId y event son requeridos" };
   }
   const subbot = await db("subbots").where({ code: subbotId }).first();
   if (!subbot) {
@@ -568,7 +568,7 @@ export function listAllSubbots() {
     isOnline: true,
     status: "connected",
     lastHeartbeat: subbotSessions.get(code)?.lastActivity
-      ? new Díate(subbotSessions.get(code).lastActivity).toISOString()
+      ? new Date(subbotSessions.get(code).lastActivity).toISOString()
       : null,
   }));
 }
@@ -598,8 +598,8 @@ export async function addAporte({
   metadata = {},
 }) {
   try {
-    const fecha = new Díate().toISOString();
-    const aporteDíata = {
+    const fecha = new Date().toISOString();
+    const aporteData = {
       usuario,
       grupo,
       tipo,
@@ -612,7 +612,7 @@ export async function addAporte({
       fecha,
       updated_at: fecha,
     };
-    const [id] = await db("aportes").insert(aporteDíata);
+    const [id] = await db("aportes").insert(aporteData);
     const aporte = await db("aportes").where({ id }).first();
     return {
       success: true,
@@ -662,8 +662,8 @@ export async function addProveedor({
   activo = true,
 }) {
   try {
-    const fecha = new Díate().toISOString();
-    const proveedorDíata = {
+    const fecha = new Date().toISOString();
+    const proveedorData = {
       grupo_jid: grupo,
       tipo,
       descripcion,
@@ -671,7 +671,7 @@ export async function addProveedor({
       fecha_creacion: fecha,
       updated_at: fecha,
     };
-    const [id] = await db("proveedores").insert(proveedorDíata);
+    const [id] = await db("proveedores").insert(proveedorData);
     const proveedor = await db("proveedores").where({ id }).first();
     return {
       success: true,
@@ -686,7 +686,7 @@ export async function addProveedor({
   }
 }
 
-// Funciones adicionales de comandos quée se movieron desde commands.js
+// Funciones adicionales de comandos que se movieron desde commands.js
 
 /**
  * Normaliza el tipo de aporte
@@ -746,7 +746,7 @@ export async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
 }
 
 /**
- * Handle the /pedido [contenido] - Hace un pedido y busca en la base de díatos si existe
+ * Handle the /pedido [contenido] - Hace un pedido y busca en la base de datos si existe
  */
 export async function handlePedido(contenido, usuario, grupo, fecha) {
   try {
@@ -772,7 +772,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
       [`%${contenido}%`, `${contenido}%`],
     );
 
-    // Registrar el pedido en la base de díatos
+    // Registrar el pedido en la base de datos
     const stmt = await db.prepare(
       "INSERT INTO pedidos (texto, estado, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)",
     );
@@ -817,7 +817,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
         const mention = `@${u?.username || wa?.display_name || num}`;
         response += ` Aportado por: ${mention}\n`;
       }
-      response += ` Fecha: ${new Díate(aporteEncontrado.fecha).toLocaleDíateString()}\n\n`;
+      response += ` Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
     }
 
     // Buscar y enviar archivos fsicos si existen
@@ -858,7 +858,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
             if (mediaType === "image") {
               sentMessage = await sock.sendMessage(remoteJid, {
                 image: fileBuffer,
-                caption: ` ${archivo.filename}\n ${archivo.category}\n Subido por: ${archivo.usuario}\n ${new Díate(archivo.fecha).toLocaleDíateString()}`,
+                caption: ` ${archivo.filename}\n ${archivo.category}\n Subido por: ${archivo.usuario}\n ${new Date(archivo.fecha).toLocaleDateString()}`,
               });
             } else if (mediaType === "video") {
               sentMessage = await sock.sendMessage(remoteJid, {
@@ -888,7 +888,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
                 .update({
                   estado: "completado",
                   completado_por: "bot",
-                  fecha_completado: new Díate().toISOString(),
+                  fecha_completado: new Date().toISOString(),
                 });
             }
           }
@@ -907,7 +907,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
     }
 
     if (!manhwaEncontrado && !aporteEncontrado && archivosEnviados === 0) {
-      response += ` *No encontrado en la base de díatos*\n`;
+      response += ` *No encontrado en la base de datos*\n`;
       response += `Tu pedido ha sido registrado y ser revisado por los administradores.\n`;
     } else if (archivosEnviados > 0) {
       response += `\n *Pedido completado automticamente!* `;
@@ -936,7 +936,7 @@ export async function handlePedidos(usuario, grupo) {
 
     let message = ` *Tus pedidos (${pedidos.length}):*\n\n`;
     pedidos.forEach((pedido, index) => {
-      const fecha = new Díate(pedido.fecha).toLocaleDíateString();
+      const fecha = new Date(pedido.fecha).toLocaleDateString();
       const estado =
         pedido.estado === "pendiente"
           ? ""
@@ -964,7 +964,7 @@ const GEMINI_API_URL =
 export async function analyzeContentWithAI(content, filename = "") {
   try {
     if (!GEMINI_API_KEY) {
-      return { success: false, error: "GEMINI_API_KEY no configuradía" };
+      return { success: false, error: "GEMINI_API_KEY no configurada" };
     }
 
     const prompt = `
@@ -984,14 +984,14 @@ Responde en formato JSON con la siguiente estructura:
 
 Reglas de clasificacin:
 - Si menciona "manhwa", "manga", "comic"  tipo: "manhwa"
-- Si menciona "serie", "episodio", "temporadía"  tipo: "serie"
+- Si menciona "serie", "episodio", "temporada"  tipo: "serie"
 - Si menciona "ilustracion", "fanart", "arte"  tipo: "ilustracion"
 - Si menciona "pack", "coleccion"  tipo: "pack"
 - Si menciona "anime", "animacion"  tipo: "anime"
 - Por defecto: "extra"
 
-Busca números quée parezcan captulos (ej: "cap 45", "episodio 12", "volumen 3").
-Extrae ttulos quée parezcan nombres de obras.
+Busca nmeros que parezcan captulos (ej: "cap 45", "episodio 12", "volumen 3").
+Extrae ttulos que parezcan nombres de obras.
 `;
 
     const response = await axios.post(
@@ -1002,8 +1002,7 @@ Extrae ttulos quée parezcan nombres de obras.
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse =
-      response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!aiResponse)
       return { success: false, error: "No se recibi respuesta de la IA" };
 
@@ -1036,7 +1035,7 @@ Extrae ttulos quée parezcan nombres de obras.
 export async function chatWithAI(message, context = "") {
   try {
     if (!GEMINI_API_KEY) {
-      return { success: false, error: "GEMINI_API_KEY no est configuradía" };
+      return { success: false, error: "GEMINI_API_KEY no est configurada" };
     }
 
     const prompt = `
@@ -1057,8 +1056,7 @@ Mantn un tono amigable y profesional.
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse =
-      response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!aiResponse)
       return { success: false, error: "No se recibi respuesta de la IA" };
 
@@ -1072,11 +1070,11 @@ Mantn un tono amigable y profesional.
 export async function analyzeManhwaContent(content) {
   try {
     if (!GEMINI_API_KEY) {
-      return { success: false, error: "GEMINI_API_KEY no configuradía" };
+      return { success: false, error: "GEMINI_API_KEY no configurada" };
     }
 
     const prompt = `
-Analiza si el siguiente contenido es de un manhwa y extrae información:
+Analiza si el siguiente contenido es de un manhwa y extrae informacin:
 
 Contenido: "${content}"
 
@@ -1098,8 +1096,7 @@ Responde en formato JSON:
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse =
-      response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
     const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
     const analysis = JSON.parse(jsonMatch[0]);
 
@@ -1119,7 +1116,7 @@ export async function processProviderMessage(message, groupJid, groupName) {
     if (!grupo) throw new Error("No es grupo proveedor");
 
     const usuario = message.key.participant || message.key.remoteJid;
-    const fecha = new Díate().toISOString();
+    const fecha = new Date().toISOString();
 
     const hasMedia =
       message.message.imageMessage ||
@@ -1184,7 +1181,7 @@ export async function processProviderMessage(message, groupJid, groupName) {
       result.filepath = archivoNuevo;
     }
 
-    const aporteDíata = {
+    const aporteData = {
       contenido: tituloDetectado || result.filename,
       tipo: tipoNormalizado,
       usuario,
@@ -1206,14 +1203,14 @@ export async function processProviderMessage(message, groupJid, groupName) {
       updated_at: fecha,
     };
 
-    const [aporteId] = await db("aportes").insert(aporteDíata);
+    const [aporteId] = await db("aportes").insert(aporteData);
     const aporte = await db("aportes").where({ id: aporteId }).first();
 
     return {
       success: true,
       message: "Aporte automtico procesado correctamente",
       aporte,
-      description: `Media clasificadía como ${tipoNormalizado}${tituloDetectado ? ` - ${tituloDetectado}` : ""}${capituloDetectado ? ` Cap ${capituloDetectado}` : ""}`,
+      description: `Media clasificada como ${tipoNormalizado}${tituloDetectado ? ` - ${tituloDetectado}` : ""}${capituloDetectado ? ` Cap ${capituloDetectado}` : ""}`,
     };
   } catch (error) {
     console.error("Error en processProviderMessage:", error);
@@ -1259,7 +1256,7 @@ async function ensureGruposTable() {
   if (!has) {
     await db.schema.createTable("grupos_autorizados", (t) => {
       t.increments("id").primary();
-      t.string("jid").notNullable().uniquée();
+      t.string("jid").notNullable().unique();
       t.string("nombre").defaultTo("");
       t.text("descripcion").defaultTo("");
       t.boolean("bot_enabled").defaultTo(true);
@@ -1290,8 +1287,8 @@ export async function handleIA(pregunta, usuario, grupo) {
     );
 
     if (!aiResult.success) {
-      const reason = aiResult.error?.includes("no está configuradía")
-        ? "La función de IA no está configuradía. Por favor establece GEMINI_API_KEY en el servidor."
+      const reason = aiResult.error?.includes("no está configurada")
+        ? "La función de IA no está configurada. Por favor establece GEMINI_API_KEY en el servidor."
         : aiResult.error || "La IA no pudo procesar tu solicitud.";
       return {
         success: false,
@@ -1308,16 +1305,16 @@ export async function handleIA(pregunta, usuario, grupo) {
         comando: "/ai",
         usuario,
         grupo,
-        fecha: new Díate().toISOString(),
+        fecha: new Date().toISOString(),
         detalles: JSON.stringify({
           pregunta,
           respuesta: aiResult.response,
           modelo: aiResult.model || "gemini-1.5-flash",
-          timestamp: new Díate().toISOString(),
+          timestamp: new Date().toISOString(),
         }),
       });
     } catch (logError) {
-      console.warn("Error guardíando log de IA:", logError);
+      console.warn("Error guardando log de IA:", logError);
     }
 
     return { success: true, message: finalResponse };
@@ -1356,7 +1353,7 @@ export async function handleMyAportes(usuario, grupo) {
       message += `${index + 1}. **${aporte.contenido}**\n`;
       message += `   • Tipo: ${aporte.tipo}\n`;
       message += `   • Estado: ${aporte.estado || "pendiente"}\n`;
-      message += `   • Fecha: ${new Díate(aporte.fecha).toLocaleDíateString("es-ES")}\n\n`;
+      message += `   • Fecha: ${new Date(aporte.fecha).toLocaleDateString("es-ES")}\n\n`;
     });
 
     message += `_Total: ${aportes.length} aportes_`;
@@ -1379,14 +1376,14 @@ export async function handleAportes(usuario, grupo, isGroup = false) {
   try {
     console.log(`📚 Comando /aportes recibido de ${usuario}`);
 
-    let quéery = db("aportes").orderBy("fecha", "desc").limit(20);
+    let query = db("aportes").orderBy("fecha", "desc").limit(20);
 
     // Si es un grupo, mostrar solo aportes de ese grupo
     if (isGroup && grupo) {
-      quéery = quéery.where({ grupo });
+      query = query.where({ grupo });
     }
 
-    const aportes = await quéery;
+    const aportes = await query;
 
     if (aportes.length === 0) {
       return {
@@ -1402,7 +1399,7 @@ export async function handleAportes(usuario, grupo, isGroup = false) {
       message += `   • Tipo: ${aporte.tipo}\n`;
       message += `   • Estado: ${aporte.estado || "pendiente"}\n`;
       message += `   👤 Por: ${aporte.usuario?.split("@")[0] || "Anónimo"}\n`;
-      message += `   🗓️ ${new Díate(aporte.fecha).toLocaleDíateString("es-ES")}\n\n`;
+      message += `   🗓️ ${new Date(aporte.fecha).toLocaleDateString("es-ES")}\n\n`;
     });
 
     message += `_Total: ${aportes.length} aportes_`;
@@ -1430,9 +1427,7 @@ export async function handleAddAporte(
   archivoPath = null,
 ) {
   try {
-    console.log(
-      `➕ Comando /addaporte recibido de ${usuario}: "${contenido}"`,
-    );
+    console.log(`➕ Comando /addaporte recibido de ${usuario}: "${contenido}"`);
 
     const result = await addAporte({
       contenido,
@@ -1451,7 +1446,7 @@ export async function handleAddAporte(
       if (archivoPath) {
         message += `📎 **Archivo:** Adjunto\n`;
       }
-      message += `📅 **Fecha:** ${new Díate(fecha).toLocaleString("es-ES")}\n\n`;
+      message += `📅 **Fecha:** ${new Date(fecha).toLocaleString("es-ES")}\n\n`;
       message += "✨ Tu aporte será revisado y publicado pronto.";
 
       return { success: true, message };
@@ -1482,7 +1477,7 @@ export async function handleAporteEstado(
       `🔄 Comando /aporteestado recibido de ${usuario}: ID=${aporteId}, Estado=${nuevoEstado}`,
     );
 
-    // Verificar quée el usuario sea admin
+    // Verificar que el usuario sea admin
     const whatsappNumber = usuario.split("@")[0];
     const user = await db("usuarios")
       .where({ whatsapp_number: whatsappNumber })
@@ -1497,7 +1492,7 @@ export async function handleAporteEstado(
       };
     }
 
-    // Validíar estado
+    // Validar estado
     const estadosValidos = ["pendiente", "aprobado", "rechazado", "publicado"];
     if (!estadosValidos.includes(nuevoEstado.toLowerCase())) {
       return {
@@ -1533,7 +1528,7 @@ export async function handleAporteEstado(
 
 /**
  * Handler para el comando /lock
- * Bloquéea el grupo (solo admins)
+ * Bloquea el grupo (solo admins)
  */
 export async function handleLock(usuario, grupo, isGroup) {
   try {
@@ -1544,7 +1539,7 @@ export async function handleLock(usuario, grupo, isGroup) {
       };
     }
 
-    // Verificar quée el usuario sea admin del grupo
+    // Verificar que el usuario sea admin del grupo
     const whatsappNumber = usuario.split("@")[0];
     const user = await db("usuarios")
       .where({ whatsapp_number: whatsappNumber })
@@ -1554,27 +1549,27 @@ export async function handleLock(usuario, grupo, isGroup) {
     if (!user || (user.rol !== "admin" && user.rol !== "owner")) {
       return {
         success: false,
-        message: "❌ Solo los administradores pueden bloquéear el grupo.",
+        message: "❌ Solo los administradores pueden bloquear el grupo.",
       };
     }
 
     return {
       success: true,
       message:
-        "🔒 *Grupo bloquéeado*\n\nSolo los administradores pueden enviar mensajes.",
+        "🔒 *Grupo bloqueado*\n\nSolo los administradores pueden enviar mensajes.",
     };
   } catch (error) {
     console.error("❌ Error en /lock:", error);
     return {
       success: false,
-      message: "⚠️ Error bloquéeando el grupo.",
+      message: "⚠️ Error bloqueando el grupo.",
     };
   }
 }
 
 /**
  * Handler para el comando /unlock
- * Desbloquéea el grupo (solo admins)
+ * Desbloquea el grupo (solo admins)
  */
 export async function handleUnlock(usuario, grupo, isGroup) {
   try {
@@ -1585,7 +1580,7 @@ export async function handleUnlock(usuario, grupo, isGroup) {
       };
     }
 
-    // Verificar quée el usuario sea admin del grupo
+    // Verificar que el usuario sea admin del grupo
     const whatsappNumber = usuario.split("@")[0];
     const user = await db("usuarios")
       .where({ whatsapp_number: whatsappNumber })
@@ -1595,20 +1590,20 @@ export async function handleUnlock(usuario, grupo, isGroup) {
     if (!user || (user.rol !== "admin" && user.rol !== "owner")) {
       return {
         success: false,
-        message: "❌ Solo los administradores pueden desbloquéear el grupo.",
+        message: "❌ Solo los administradores pueden desbloquear el grupo.",
       };
     }
 
     return {
       success: true,
       message:
-        "🔓 *Grupo desbloquéeado*\n\nTodos los miembros pueden enviar mensajes.",
+        "🔓 *Grupo desbloqueado*\n\nTodos los miembros pueden enviar mensajes.",
     };
   } catch (error) {
     console.error("❌ Error en /unlock:", error);
     return {
       success: false,
-      message: "⚠️ Error desbloquéeando el grupo.",
+      message: "⚠️ Error desbloqueando el grupo.",
     };
   }
 }
@@ -1670,7 +1665,7 @@ export async function handleWhoami(usuario, grupo) {
     if (user) {
       message += `👨💼 **Usuario:** ${user.username}\n`;
       message += `🎭 **Rol:** ${user.rol}\n`;
-      message += `📅 **Registrado:** ${new Díate(user.fecha_registro).toLocaleDíateString("es-ES")}\n`;
+      message += `📅 **Registrado:** ${new Date(user.fecha_registro).toLocaleDateString("es-ES")}\n`;
     } else {
       message += "\n⚠️ No estás registrado en el sistema.\n";
       message += "Usa `/registrar [username]` para registrarte.";
@@ -1719,8 +1714,8 @@ export async function handleDebugAdmin(usuario, grupo) {
     message += `📝 **Pedidos:** ${stats.pedidos?.count || 0}\n`;
     message += `👥 **Usuarios:** ${stats.usuarios?.count || 0}\n`;
     message += `🤖 **Subbots:** ${stats.subbots?.count || 0}\n`;
-    message += `\n💾 **Base de díatos:** Operativa\n`;
-    message += `⏰ **Tiempo:** ${new Díate().toLocaleString("es-ES")}`;
+    message += `\n💾 **Base de datos:** Operativa\n`;
+    message += `⏰ **Tiempo:** ${new Date().toLocaleString("es-ES")}`;
 
     return { success: true, message };
   } catch (error) {

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Bot, 
-  Users, 
-  MessageSquare, 
-  Upload, 
-  Activity, 
-  Clock, 
-  Wifi, 
+import {
+  Bot,
+  Users,
+  MessageSquare,
+  Upload,
+  Activity,
+  Clock,
+  Wifi,
   WifiOff,
   RefreshCw,
   AlertCircle,
@@ -52,12 +52,12 @@ export const Home: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    
+
     // Actualizar cada 30 segundos
     const interval = setInterval(() => {
       loadData();
     }, 30000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -65,23 +65,23 @@ export const Home: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Cargar estado del bot y estadísticas en paralelo
       const [botResponse, statsResponse] = await Promise.all([
         fetch('/api/bot/status'),
         fetch('/api/dashboard/stats')
       ]);
-      
+
       if (botResponse.ok) {
         const botData = await botResponse.json();
         setBotStatus(botData);
       }
-      
+
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         setStats(statsData);
       }
-      
+
       setLastUpdate(new Date());
     } catch (err) {
       setError('Error cargando datos del dashboard');
@@ -92,7 +92,7 @@ export const Home: React.FC = () => {
 
   const getConnectionStatus = () => {
     if (!botStatus) return { status: 'unknown', text: 'Desconocido', color: 'gray', icon: AlertCircle };
-    
+
     if (botStatus.connected) {
       return { status: 'connected', text: 'Conectado', color: 'green', icon: CheckCircle };
     } else if (botStatus.connectionStatus === 'connecting') {
@@ -115,7 +115,7 @@ export const Home: React.FC = () => {
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) return `${days}d ${hours % 24}h`;
     if (hours > 0) return `${hours}h ${minutes % 60}m`;
     return `${minutes}m`;
@@ -209,7 +209,7 @@ export const Home: React.FC = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-blue-100">
                 <Smartphone className="w-6 h-6 text-blue-600" />
@@ -221,7 +221,7 @@ export const Home: React.FC = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-purple-100">
                 <Clock className="w-6 h-6 text-purple-600" />
@@ -233,7 +233,7 @@ export const Home: React.FC = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-orange-100">
                 <Eye className="w-6 h-6 text-orange-600" />
@@ -262,7 +262,7 @@ export const Home: React.FC = () => {
               <Users className="w-8 h-8 text-blue-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -275,7 +275,7 @@ export const Home: React.FC = () => {
               <MessageSquare className="w-8 h-8 text-green-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -288,7 +288,7 @@ export const Home: React.FC = () => {
               <Send className="w-8 h-8 text-purple-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -317,7 +317,7 @@ export const Home: React.FC = () => {
               <Bot className="w-8 h-8 text-indigo-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -330,7 +330,7 @@ export const Home: React.FC = () => {
               <Heart className="w-8 h-8 text-red-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -359,7 +359,7 @@ export const Home: React.FC = () => {
                 <p className="text-sm text-blue-600">Crear y administrar subbots</p>
               </div>
             </button>
-            
+
             <button className="flex items-center gap-3 p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
               <Zap className="w-5 h-5 text-green-600" />
               <div className="text-left">
@@ -367,7 +367,7 @@ export const Home: React.FC = () => {
                 <p className="text-sm text-green-600">Configurar comandos del bot</p>
               </div>
             </button>
-            
+
             <button className="flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
               <Users className="w-5 h-5 text-purple-600" />
               <div className="text-left">
@@ -375,7 +375,7 @@ export const Home: React.FC = () => {
                 <p className="text-sm text-purple-600">Gestionar usuarios</p>
               </div>
             </button>
-            
+
             <button className="flex items-center gap-3 p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors">
               <BarChart3 className="w-5 h-5 text-orange-600" />
               <div className="text-left">

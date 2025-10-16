@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS logs (
 );
 
 -- Insertar configuración inicial
-INSERT INTO configuracion (clave, valor, descripcion) VALUES 
+INSERT INTO configuracion (clave, valor, descripcion) VALUES
 ('bot_name', 'KONMI BOT', 'Nombre del bot'),
 ('bot_version', '2.5.0', 'Versión del bot'),
 ('modo_privado', 'false', 'Modo privado del bot'),

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Users, 
-  Search, 
-  RefreshCw, 
-  Shield, 
-  UserCheck, 
-  Mail, 
-  Phone, 
+  Users,
+  Search,
+  RefreshCw,
+  Shield,
+  UserCheck,
+  Mail,
+  Phone,
   Calendar,
   AlertCircle,
   CheckCircle,
@@ -76,7 +76,7 @@ const Usuarios: React.FC = () => {
       });
 
       if (response.ok) {
-        setUsers(prev => prev.map(user => 
+        setUsers(prev => prev.map(user =>
           user.id === userId ? { ...user, rol: role as any } : user
         ));
         setSuccess('Rol actualizado correctamente');
@@ -206,7 +206,7 @@ const Usuarios: React.FC = () => {
               <Users className="w-8 h-8 text-blue-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -216,7 +216,7 @@ const Usuarios: React.FC = () => {
               <Shield className="w-8 h-8 text-red-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -226,7 +226,7 @@ const Usuarios: React.FC = () => {
               <UserCheck className="w-8 h-8 text-blue-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -236,7 +236,7 @@ const Usuarios: React.FC = () => {
               <Users className="w-8 h-8 text-green-500" />
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -369,8 +369,8 @@ const Usuarios: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          user.activo 
-                            ? 'bg-green-100 text-green-800' 
+                          user.activo
+                            ? 'bg-green-100 text-green-800'
                             : 'bg-red-100 text-red-800'
                         }`}>
                           {user.activo ? (
