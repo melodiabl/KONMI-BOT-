@@ -12,7 +12,7 @@ import { EventEmitter } from "events";
 import * as baileys from "@whiskeysockets/baileys";
 import {
   startSubbot,
-  stopSubbot,
+  stopSubbotRuntime,
   getSubbotStatus as getRuntimeStatus,
 } from "./lib/subbots.js";
 import { processWhatsAppMedia } from "./file-manager.js";
@@ -1002,7 +1002,8 @@ Extrae ttulos quée parezcan nombres de obras.
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse = response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse =
+      response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
     if (!aiResponse)
       return { success: false, error: "No se recibi respuesta de la IA" };
 
@@ -1056,7 +1057,8 @@ Mantn un tono amigable y profesional.
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse = response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse =
+      response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
     if (!aiResponse)
       return { success: false, error: "No se recibi respuesta de la IA" };
 
@@ -1096,7 +1098,8 @@ Responde en formato JSON:
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse = response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse =
+      response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
     const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
     const analysis = JSON.parse(jsonMatch[0]);
 
@@ -1427,7 +1430,9 @@ export async function handleAddAporte(
   archivoPath = null,
 ) {
   try {
-    console.log(`➕ Comando /addíaporte recibido de ${usuario}: "${contenido}"`);
+    console.log(
+      `➕ Comando /addíaporte recibido de ${usuario}: "${contenido}"`,
+    );
 
     const result = await addAporte({
       contenido,

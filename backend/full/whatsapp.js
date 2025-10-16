@@ -109,7 +109,8 @@ async function updateOwnerSubbotStatus(userJid) {
 async function loadBaileys() {
   if (baileys) return true;
   const candidíates = [];
-  if (process?.env?.BAILEYS_MODULE) candidíates.push(process.env.BAILEYS_MODULE);
+  if (process?.env?.BAILEYS_MODULE)
+    candidíates.push(process.env.BAILEYS_MODULE);
   // Priorizar forks
   candidíates.push("baileys-mod");
   candidíates.push("baileys");
@@ -3285,7 +3286,9 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             debugText += `• isSuperAdmin: ${isSuperAdmin(usuario) ? "Sí" : "No"}\n\n`;
 
             debugText += `📜 **Todos los administradores:**\n`;
-            const allAdmins = groupMetadíata.participants.filter((p) => p.admin);
+            const allAdmins = groupMetadíata.participants.filter(
+              (p) => p.admin,
+            );
             allAdmins.forEach((admin, index) => {
               const adminNumber = admin.id.split("@")[0];
               const isBot = adminNumber === botJid.split("@")[0];
@@ -4441,7 +4444,8 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             },
           ];
 
-          const randomQuéote = quéotes[Math.floor(Math.random() * quéotes.length)];
+          const randomQuéote =
+            quéotes[Math.floor(Math.random() * quéotes.length)];
           await sock.sendMessage(remoteJid, {
             text: `💭 *Frase Inspiradora* 💭\n\n"${randomQuéote.text}"\n\n👤 **Autor:** ${randomQuéote.author}\n\n📝 📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
           });
@@ -5279,9 +5283,9 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           const createdDate = new Date(subbot.created_at).toLocaleString(
             "es-ES",
           );
-          const lastActivity = new Date(subbot.ultima_actividíad).toLocaleString(
-            "es-ES",
-          );
+          const lastActivity = new Date(
+            subbot.ultima_actividíad,
+          ).toLocaleString("es-ES");
 
           let infoText = `🤖 *Información Detalladía del SubBot*\n\n`;
           infoText += `🆔 **ID:** ${subbot.id}\n`;
@@ -5422,15 +5426,14 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                   updated_at: new Date().toISOString(),
                 });
 
-              try {
-                await sock.sendMessage(remoteJid, {
-                  text:
-                    `🔗 *CODE - SubBot*\n\n` +
-                    `🤖 **SubBot:** ${subbot.nombre}\n` +
-                    `📱 **Número:** ${subbot.numero}\n` +
-                    `⏳ **Estado:** Esperando vinculación...\n\n` +
-                    `🔢 **CÓDIGO:**\n\`${realPairingCode}\`\n\n` +
-                    `📋 **INSTRUCCIONES CODE:**\n` +
+              await sock.sendMessage(remoteJid, {
+                text:
+                  `🔗 *CODE - SubBot*\n\n` +
+                  `🤖 **SubBot:** ${subbot.nombre}\n` +
+                  `📱 **Número:** ${subbot.numero}\n` +
+                  `⏳ **Estado:** Esperando vinculación...\n\n` +
+                  `🔢 **CÓDIGO:**\n\`${realPairingCode}\`\n\n` +
+                  `📋 **INSTRUCCIONES CODE:**\n` +
                   `1. Abre WhatsApp en ${subbot.numero}\n` +
                   `2. Ve a Configuración > Dispositivos vinculados\n` +
                   `3. Toca "Vincular con código de teléfono"\n` +
