@@ -88,7 +88,7 @@ async function isSubbotActive(subbotCode) {
 async function updateOwnerSubbotStatus(userJid) {
   try {
     // Actualizar estado de subbots del usuario
-    const subbots = await db("subbots").where({ requéest_jid: userJid });
+    const subbots = await db("subbots").where({ request_jid: userJid });
     for (const subbot of subbots) {
       const isActive = await isSubbotActive(subbot.code);
       if (isActive !== (subbot.status === "connected")) {
@@ -213,8 +213,8 @@ async function ensureSubbotsTable() {
           t.string("type", 20).notNullable().defaultTo("qr");
           t.string("status", 30).notNullable().defaultTo("pending");
           t.string("created_by", 30);
-          t.string("requéest_jid", 150);
-          t.string("requéest_participant", 150);
+          t.string("request_jid", 150);
+          t.string("request_participant", 150);
           t.string("target_number", 30);
           t.text("qr_díata");
           t.string("pairing_code", 12);
@@ -240,8 +240,8 @@ async function ensureSubbotsTable() {
             "type",
             "status",
             "created_by",
-            "requéest_jid",
-            "requéest_participant",
+            "request_jid",
+            "request_participant",
             "target_number",
             "qr_díata",
             "pairing_code",
@@ -313,7 +313,7 @@ async function ensureSubbotsTable() {
           await db.schema.dropTableIfExists("subbots_temp");
           await db.schema.createTable("subbots_temp", (t) => {
             t.increments("id").primary();
-            t.string("requéest_jid").notNullable().index();
+            t.string("request_jid").notNullable().index();
             t.string("method", 10).notNullable();
             t.string("state", 20).notNullable().defaultTo("pending");
             t.timestamp("created_at").defaultTo(db.fn.now());
@@ -395,7 +395,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
     try {
       // Obtener subbots existentes en la base de díatos
       const rows = await db(tableName)
-        .where({ requéest_jid: ownerNumber + "@s.whatsapp.net" })
+        .where({ request_jid: ownerNumber + "@s.whatsapp.net" })
         .orderBy("id", "desc");
 
       // Actualizar estado de los subbots existentes
@@ -467,7 +467,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
                 if (!existing) {
                   // Agregar subbot quée existe en el sistema de archivos pero no en la BD
                   await db(tableName).insert({
-                    requéest_jid: ownerNumber + "@s.whatsapp.net",
+                    request_jid: ownerNumber + "@s.whatsapp.net",
                     method: "qr",
                     label: `Dispositivo ${dir.slice(0, 6)}`,
                     session_id: dir,
@@ -1867,7 +1867,7 @@ ${new Date().toLocaleString("es-ES")}`;
 
           // Verificar límite de subbots por usuario (máximo 3)
           const userSubbots = await db("subbots").where({
-            requéest_jid: usuario + "@s.whatsapp.net",
+            request_jid: usuario + "@s.whatsapp.net",
             status: "connected",
           });
           if (userSubbots.length >= 3) {
@@ -1991,7 +1991,7 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
 
           // Verificar límite de subbots por usuario (máximo 3)
           const userSubbots = await db("subbots").where({
-            requéest_jid: usuario,
+            request_jid: usuario,
             status: "connected",
           });
           if (userSubbots.length >= 3) {
@@ -3744,8 +3744,8 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           // Configurar listeners para eventos del subbot
           const handlePairingCode = async (event) => {
             if (
-              event.subbot.requéest_jid === remoteJid ||
-              !event.subbot.requéest_jid
+              event.subbot.request_jid === remoteJid ||
+              !event.subbot.request_jid
             ) {
               try {
                 await sock.sendMessage(remoteJid, {
@@ -3806,12 +3806,12 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           const result = await launchSubbot({
             type: "code",
             createdBy: usuario,
-            requéestJid: remoteJid,
-            requéestParticipant: usuario,
+            requestJid: remoteJid,
+            requestParticipant: usuario,
             targetNumber: phoneNumber,
             metadíata: {
-              requéestJid: remoteJid,
-              requéesterJid: usuario,
+              requestJid: remoteJid,
+              requesterJid: usuario,
               customPairingDisplay: "KONMI-BOT",
               createdAt: new Date().toISOString(),
             },
@@ -5012,7 +5012,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           // Verificar límite de subbots por usuario (máximo 3)
           const userJid = usuario + "@s.whatsapp.net";
           const userSubbots = await db("subbots").where({
-            requéest_jid: userJid,
+            request_jid: userJid,
             status: "connected",
           });
           if (userSubbots.length >= 3) {
@@ -5036,7 +5036,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 
           try {
             await db("subbots").insert({
-              requéest_jid: userJid,
+              request_jid: userJid,
               method: "code",
               label: "KONMI-BOT",
               session_id: res.sessionId,
@@ -5400,7 +5400,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               });
 
               // Solicitar pairing code REAL de Baileys con código personalizado KONMIBOT
-              const realPairingCode = await subbotSocket.requéestPairingCode(
+              const realPairingCode = await subbotSocket.requestPairingCode(
                 subbot.numero,
                 "KONMIBOT",
               );
@@ -5523,8 +5523,6 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                   `🔴 Error: ${pairingError.message}\n\n` +
                   `💡 Intenta nuevamente con \`/connectbot ${botId} code\``,
               });
-            } catch (innerError) {
-              logger.error("Error en catch interno:", innerError);
             }
           } else {
             // MÉTODO DE QR (ORIGINAL)
@@ -5825,8 +5823,8 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           // Configurar listeners para eventos del subbot
           const handleQRReady = async (event) => {
             if (
-              event.subbot.requéest_jid === remoteJid ||
-              !event.subbot.requéest_jid
+              event.subbot.request_jid === remoteJid ||
+              !event.subbot.request_jid
             ) {
               try {
                 const qrBuffer = Buffer.from(event.díata.qrImage, "base64");
@@ -5888,11 +5886,11 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           const result = await launchSubbot({
             type: "qr",
             createdBy: usuario,
-            requéestJid: remoteJid,
-            requéestParticipant: usuario,
+            requestJid: remoteJid,
+            requestParticipant: usuario,
             metadíata: {
-              requéestJid: remoteJid,
-              requéesterJid: usuario,
+              requestJid: remoteJid,
+              requesterJid: usuario,
               createdAt: new Date().toISOString(),
             },
           });
@@ -7015,10 +7013,10 @@ async function connectToWhatsApp(
             try {
               if (useCustom && attempt === 1) {
                 logger.pretty.line(
-                  `🔧 [PAIRING DEBUG] requéestPairingCode(${target}, ${customCandidíate}) intento ${attempt}/${maxAttempts} (custom)`,
+                  `🔧 [PAIRING DEBUG] requestPairingCode(${target}, ${customCandidíate}) intento ${attempt}/${maxAttempts} (custom)`,
                 );
                 try {
-                  pairingCode = await sock.requéestPairingCode(
+                  pairingCode = await sock.requestPairingCode(
                     target,
                     customCandidíate,
                   );
@@ -7030,9 +7028,9 @@ async function connectToWhatsApp(
               }
               if (!pairingCode) {
                 logger.pretty.line(
-                  `🔧 [PAIRING DEBUG] requéestPairingCode(${target}) intento ${attempt}/${maxAttempts}`,
+                  `🔧 [PAIRING DEBUG] requestPairingCode(${target}) intento ${attempt}/${maxAttempts}`,
                 );
-                pairingCode = await sock.requéestPairingCode(target);
+                pairingCode = await sock.requestPairingCode(target);
               }
               break;
             } catch (e) {
