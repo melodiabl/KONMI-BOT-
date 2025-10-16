@@ -1,23 +1,40 @@
-import db from '../db.js';
 import logger from '../config/logger.js';
-import { getUserSubbots, deleteSubbot } from '../handler.js';
-import { formatDistanceToNow } from 'date-fns';
+import {
+  createSubbotWithPairing,
+  createSubbotWithQr,
+  listUserSubbots,
+  deleteUserSubbot,
+  attachRuntimeListeners,
+  updateSubbotMetadata
+} from '../subbot-manager.js';
+import { formatDistanceToNow, format } from 'date-fns';
 import pkg from 'date-fns/locale/es/index.js';
-import { startSubbot, stopSubbot, getSubbotStatus as getRuntimeStatus } from '../lib/subbots.js';
 const { es } = pkg;
 
 /**
  * Muestra la ayuda de comandos de subbots
  */
 async function handleHelp(sock, from, isGroup, msg) {
-  const helpText = ` *Comandos de SubBots* 
+  const helpText = `🤖 *Sistema de SubBots - Comandos Disponibles* 🤖
 
-` +
-  ` */subbot pair [nmero]* - Crea un nuevo subbot con cdigo de emparejamiento\n` +
-  ` */subbot qr* - Genera un cdigo QR para un nuevo subbot\n` +
-  ` */subbot list* - Muestra tus subbots\n` +
-  ` */subbot delete [id]* - Elimina un subbot\n` +
-  ` */subbot help* - Muestra esta ayuda`;
+📱 *Gestión de SubBots:*
+🔹 */subbot pair [número]* - Crear nuevo subbot usando código de emparejamiento
+🔹 */subbot qr* - Generar código QR para nuevo subbot
+🔹 */subbot list* - Ver lista de tus subbots activos
+🔹 */subbot delete [id]* - Eliminar un subbot existente
+🔹 */subbot status [id]* - Ver estado detallado de un subbot
+🔹 */subbot restart [id]* - Reiniciar un subbot específico
+
+⚙️ *Configuración:*
+🔹 */subbot config [id]* - Ver/modificar configuración de un subbot
+🔹 */subbot prefix [id] [prefijo]* - Cambiar prefijo de comandos
+🔹 */subbot mode [id] [modo]* - Cambiar modo de operación
+
+❓ *Ayuda:*
+🔹 */subbot help* - Mostrar este menú de ayuda
+🔹 */subbot info* - Ver información detallada del sistema
+
+📝 *Nota:* Para más detalles sobre cada comando, usa */subbot help [comando]*`;
 
   await sock.sendMessage(from, { 
     text: helpText,
@@ -28,120 +45,293 @@ async function handleHelp(sock, from, isGroup, msg) {
 /**
  * Maneja el comando de creacin de subbot con pairing code
  */
-async function handlePairSubbot(sock, from, isGroup, msg, args) {
-  const phoneNumber = args[0];
-  
-  if (!phoneNumber || phoneNumber.length < 10) {
-    return await sock.sendMessage(from, { 
-      text: ' Debes proporcionar un nmero de telfono vlido (mnimo 10 dgitos)\n' +
-            'Ejemplo: */subbot pair 595974154768*',
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+export async function handlePairSubbot(sock, from, isGroup, msg, args) {
+  const rawSenderJid = msg?.sender || (isGroup ? msg?.key?.participant : msg?.key?.remoteJid) || from;
+  const requesterJid = ensureJid(rawSenderJid);
+  const groupMentions = isGroup && requesterJid ? { mentions: [requesterJid] } : {};
+  const rawProvided = Array.isArray(args) ? args.join(' ') : '';
+  const providedNumber = rawProvided.replace(/[^0-9]/g, '');
+  const senderPart = String(rawSenderJid || '').split('@')[0] || '';
+  const senderNumber = senderPart.split(':')[0]?.replace(/[^0-9]/g, '') || '';
+  const targetNumber = providedNumber.length >= 8
+    ? providedNumber
+    : senderNumber.length >= 8
+      ? senderNumber
+      : null;
+
+  if (!targetNumber) {
+    return await sock.sendMessage(from, {
+      text: '⚠️ *No pude detectar el número destino*\n\nIntenta enviar `/code` desde el dispositivo que quieras vincular o especifica el número manualmente con `/code <número>`.',
+      ...groupMentions
     });
   }
 
-  try {
-    const processingMsg = await sock.sendMessage(from, { 
-      text: ' Generando cdigo de emparejamiento...',
-      ...(isGroup ? { mentions: [msg.sender] } : {})
-    });
+  const intro = await sock.sendMessage(from, {
+    text: '⏳ *Creando tu SubBot...*\n\nGenerando el Pairing Code, espera unos segundos. 🛠️',
+    ...groupMentions
+  });
 
-    // Generar cdigo de emparejamiento usando baileys-mod
-    const result = await generateSubbotPairingCode(
-      phoneNumber.replace(/[^0-9]/g, ''), // Limpiar nmero
-      `KONMI-${Date.now().toString().slice(-4)}`
-    );
+  let resolved = false;
+  let detachListeners = () => {};
+  let timeoutHandle;
+  let introDismissed = false;
 
-    if (result.success) {
-      // Guardar en la base de datos
-      await db('subbots').insert({
-        id: result.sessionId,
-        owner_jid: msg.sender,
-        phone_number: phoneNumber,
-        display_name: `KONMI-${Date.now().toString().slice(-4)}`,
-        type: 'pairing',
-        status: 'pending',
-        created_at: new Date(),
-        expires_at: new Date(result.expiresAt),
-        metadata: JSON.stringify({
-          code: result.code,
-          displayCode: result.displayCode,
-          expiresAt: result.expiresAt
-        })
-      });
-
-      await sock.sendMessage(from, {
-        text: ` *CDIGO DE EMPAREJAMIENTO* \n\n` +
-              ` *Nmero:* ${phoneNumber}\n` +
-              ` *Cdigo:* ${result.code}\n\n` +
-              `*Instrucciones:*\n` +
-              `1. Abre WhatsApp en tu celular\n` +
-              `2. Ve a Ajustes > Dispositivos vinculados\n` +
-              `3. Toca "Vincular un dispositivo"\n` +
-              `4. Ingresa este cdigo: *${result.code}*\n\n` +
-              ` *Expira en:* ${formatDistanceToNow(new Date(result.expiresAt), { locale: es })}`,
-        ...(isGroup ? { mentions: [msg.sender] } : {})
-      });
-    } else {
-      throw new Error(result.error || 'No se pudo generar el cdigo de emparejamiento');
+  const dismissIntro = async () => {
+    if (introDismissed || !intro?.key) return;
+    introDismissed = true;
+    try {
+      await sock.sendMessage(from, { delete: intro.key });
+    } catch (error) {
+      logger.warn('No se pudo eliminar mensaje inicial de /subbot pair', { error: error?.message });
     }
-  } catch (error) {
-    logger.error('Error en comando pair:', error);
-    await sock.sendMessage(from, { 
-      text: ` Error al generar el cdigo de emparejamiento: ${error.message}`,
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+  };
+
+  const sendWithContext = async (jid, message, includeMention = false) => {
+    const payload = { ...message };
+    if (includeMention && isGroup && requesterJid && jid === from) {
+      payload.mentions = [requesterJid];
+    }
+    await sock.sendMessage(jid, payload);
+  };
+
+  const cleanup = async (message, targetJid = from, mention = false) => {
+    if (resolved) return;
+    resolved = true;
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    }
+    try {
+      detachListeners();
+    } catch (_) {}
+    await dismissIntro();
+    if (message) {
+      await sendWithContext(targetJid, message, mention);
+    }
+  };
+
+  try {
+    const label = `KONMI-${Date.now().toString().slice(-4)}`;
+    const { code } = await createSubbotWithPairing({
+      ownerNumber: requesterJid,
+      targetNumber,
+      displayName: label,
+      requestJid: from,
+      requestParticipant: isGroup ? requesterJid : null
     });
+
+    detachListeners = attachRuntimeListeners(code, [
+      {
+        event: 'pairing_code',
+        handler: async (payload) => {
+          const data = payload?.data || {};
+          if (!data?.code) return;
+          await dismissIntro();
+          await updateSubbotMetadata(code, {
+            lastPairingDeliveredAt: new Date().toISOString(),
+            deliveredChat: from
+          });
+
+          const pairingMessage = {
+            text: [
+              '🔐 *Pairing Code listo*',
+              '',
+              `📞 *Número destino:* +${targetNumber}`,
+              `🆔 *Código:* *${data.code}*`,
+              '⏰ *Vence en:* ~10 minutos',
+              '',
+              '✨ *Cómo vincular*',
+              '1️⃣ Abre WhatsApp en el teléfono destino',
+              '2️⃣ Ve a *Ajustes ▸ Dispositivos vinculados*',
+              '3️⃣ Toca *Vincular con código de teléfono*',
+              `4️⃣ Escribe ${data.code}`,
+              '',
+              "⚠️ Si expira, vuelve a usar '/code'."
+            ].join('\n')
+          };
+
+          try {
+            await sendWithContext(requesterJid, pairingMessage);
+            if (isGroup) {
+              await sendWithContext(from, { text: '✅ Te envié el Pairing Code por privado. ¡Revisa tu chat! 💌' }, true);
+            }
+          } catch (error) {
+            logger.warn('No se pudo enviar Pairing Code por privado', { error: error?.message });
+            await sendWithContext(from, pairingMessage, true);
+          }
+        }
+      },
+      {
+        event: 'connected',
+        handler: async () => {
+          await cleanup(
+            {
+              text: [
+                '🟢 *SubBot conectado correctamente.*',
+                '',
+                "Consulta tus subbots con '/bots'."
+              ].join('\n')
+            },
+            from,
+            true
+          );
+        }
+      },
+      {
+        event: 'error',
+        handler: async (payload) => {
+          const reason = payload?.data?.message || 'Error desconocido';
+          await cleanup(
+            {
+              text: [
+                '❌ *Ocurrió un problema generando el Pairing Code*',
+                '',
+                `Motivo: ${reason}`,
+                '',
+                "Intenta nuevamente con '/code'."
+              ].join('\n')
+            },
+            from,
+            true
+          );
+        }
+      },
+      {
+        event: 'disconnected',
+        handler: async (payload) => {
+          const reason = payload?.data?.reason || payload?.data?.statusCode || 'Sesión cerrada';
+          await cleanup(
+            {
+              text: [
+                '⚠️ *SubBot desconectado mientras se vinculaba*',
+                '',
+                `Motivo: ${reason}`,
+                "Vuelve a intentar con '/code' cuando estés listo."
+              ].join('\n')
+            },
+            from,
+            true
+          );
+        }
+      }
+    ]);
+
+    timeoutHandle = setTimeout(async () => {
+      await cleanup(
+        {
+          text: [
+            '⌛ *No recibí respuesta de WhatsApp*',
+            '',
+            "Puede que el dispositivo tardara demasiado. Ejecuta '/code' cuando estés listo de nuevo."
+          ].join('\n')
+        },
+        from,
+        true
+      );
+    }, 60000);
+  } catch (error) {
+    logger.error('Error en comando /subbot pair:', error);
+    await cleanup(
+      { text: `❌ *No pude generar el Pairing Code*\n\nDetalle: ${error.message}` },
+      from,
+      true
+    );
   }
 }
 
 /**
  * Maneja el comando de creacin de subbot con QR
  */
-async function handleQRSubbot(sock, from, isGroup, msg) {
+export async function handleQRSubbot(sock, from, isGroup, msg) {
+  const requesterJid = ensureJid(msg.sender);
+  const groupMentions = isGroup && requesterJid ? { mentions: [requesterJid] } : {};
+  const intro = await sock.sendMessage(from, {
+    text: '🌀 *Preparando QR...*\n\nMantén la cámara lista para escanear 📷',
+    ...groupMentions
+  });
+
+  let resolved = false;
+  let detachListeners = () => {};
+  let timeoutHandle;
+  let introDismissed = false;
+
+  const dismissIntro = async () => {
+    if (introDismissed || !intro?.key) return;
+    introDismissed = true;
+    try {
+      await sock.sendMessage(from, { delete: intro.key });
+    } catch (error) {
+      logger.warn('No se pudo eliminar mensaje inicial de /subbot qr', { error: error?.message });
+    }
+  };
+
+  const finalize = async (message) => {
+    if (resolved) return;
+    resolved = true;
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    }
+    try {
+      detachListeners();
+    } catch (_) {}
+    await dismissIntro();
+    if (message) {
+      await sock.sendMessage(from, { ...message, ...groupMentions });
+    }
+  };
+
   try {
-    const processingMsg = await sock.sendMessage(from, { 
-      text: ' Generando cdigo QR...',
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+    const label = `KONMI-QR-${Date.now().toString().slice(-4)}`;
+    const { code } = await createSubbotWithQr({
+      ownerNumber: requesterJid,
+      displayName: label,
+      requestJid: from
     });
 
-    // Generar cdigo QR usando baileys-mod
-    const result = await generateSubbotQR(`KONMI-QR-${Date.now().toString().slice(-4)}`);
+    detachListeners = attachRuntimeListeners(code, [
+      {
+        event: 'qr_ready',
+        handler: async (payload) => {
+          const data = payload?.data || {};
+          if (!data?.qrImage) return;
+          await dismissIntro();
+          const caption = `📲 *QR listo para escanear*\n\n🆔 *ID:* ${code}\n⏳ *Generado:* ${formatDistanceToNow(new Date(), { addSuffix: true, locale: es })}\n\n✨ *Pasos*\n1️⃣ Abre WhatsApp en tu teléfono\n2️⃣ Ve a *Ajustes ▸ Dispositivos vinculados*\n3️⃣ Toca *Vincular dispositivo*\n4️⃣ Escanea este código y espera la confirmación ✅`;
+          await sock.sendMessage(from, {
+            image: Buffer.from(data.qrImage, 'base64'),
+            caption,
+            ...groupMentions
+          });
+        }
+      },
+      {
+        event: 'connected',
+        handler: async () => {
+          await finalize({
+            text: `🟢 *SubBot conectado correctamente por QR.*\n\nConsulta tus subbots con ${'`/bots`'}.`
+          });
+        }
+      },
+      {
+        event: 'error',
+        handler: async (payload) => {
+          const reason = payload?.data?.message || 'Error desconocido';
+          await finalize({
+            text: `❌ *No pude generar el QR*\n\nMotivo: ${reason}\nIntenta nuevamente con ${'`/qr`'}.`
+          });
+        }
+      }
+    ]);
 
-    if (result.success) {
-      // Guardar en la base de datos
-      await db('subbots').insert({
-        id: result.sessionId,
-        owner_jid: msg.sender,
-        type: 'qr',
-        status: 'pending',
-        created_at: new Date(),
-        expires_at: new Date(result.expiresAt),
-        metadata: JSON.stringify({
-          qr: result.png,
-          expiresAt: result.expiresAt
-        })
+    timeoutHandle = setTimeout(async () => {
+      await finalize({
+        text: `⌛ *No recibí el QR a tiempo*\n\nQuizás WhatsApp tardó demasiado. Intenta de nuevo con ${'`/qr`'}.`
       });
-
-      // Enviar el cdigo QR como imagen
-      await sock.sendMessage(from, {
-        image: Buffer.from(result.png, 'base64'),
-        caption: ` *CDIGO QR PARA VINCULAR SUBBOT* \n\n` +
-                 `*ID del Subbot:* \`${result.sessionId}\`\n\n` +
-                 `*Instrucciones:*\n` +
-                 `1. Abre WhatsApp en tu celular\n` +
-                 `2. Ve a Ajustes > Dispositivos vinculados\n` +
-                 `3. Toca "Vincular un dispositivo"\n` +
-                 `4. Escanea este cdigo QR\n\n` +
-                 ` *Expira en:* ${formatDistanceToNow(new Date(result.expiresAt), { locale: es })}`,
-        ...(isGroup ? { mentions: [msg.sender] } : {})
-      });
-    } else {
-      throw new Error(result.error || 'No se pudo generar el cdigo QR');
-    }
+    }, 60000);
   } catch (error) {
-    logger.error('Error en comando qr:', error);
-    await sock.sendMessage(from, { 
-      text: ` Error al generar el cdigo QR: ${error.message}`,
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+    logger.error('Error en comando /subbot qr:', error);
+    await finalize({
+      text: `❌ *No pude generar el QR*\n\nDetalle: ${error.message}`
     });
   }
 }
@@ -149,55 +339,102 @@ async function handleQRSubbot(sock, from, isGroup, msg) {
 /**
  * Maneja el comando para listar subbots
  */
-async function handleListSubbots(sock, from, isGroup, msg) {
+export async function handleListSubbots(sock, from, isGroup, msg) {
+  const rawSenderJid = msg?.sender || (isGroup ? msg?.key?.participant : msg?.key?.remoteJid) || from;
+  const cleanedSender = String(rawSenderJid || '').split('@')[0]?.split(':')[0]?.replace(/[^0-9]/g, '') || '';
+  const requesterJid = ensureJid(rawSenderJid);
+
+  const mentionSet = new Set();
+  if (isGroup && requesterJid) mentionSet.add(requesterJid);
+
+  const addMention = (digits) => {
+    const clean = String(digits || '').replace(/[^0-9]/g, '');
+    if (!clean) return null;
+    const jid = `${clean}@s.whatsapp.net`;
+    mentionSet.add(jid);
+    return jid;
+  };
+
   try {
-    const result = await getUserSubbots(msg.sender);
-    const subbots = result.success ? result.subbots : [];
-    
-    if (subbots.length === 0) {
+    const subbots = await listUserSubbots(cleanedSender || msg.sender);
+
+    if (!subbots.length) {
       return await sock.sendMessage(from, {
-        text: 'No tienes subbots creados. Usa */subbot pair* o */subbot qr* para crear uno.',
-        ...(isGroup ? { mentions: [msg.sender] } : {})
+        text: '🤖 *Aún no tienes SubBots*\n\nUsa `/code [número]` para Pairing Code o `/qr` para QR. ¡Conéctate ahora! ✨',
+        mentions: Array.from(mentionSet)
       });
     }
-    
-    let message = ` *Tus Subbots (${subbots.length})*\n\n`;
-    
-    for (const [index, subbot] of subbots.entries()) {
-      const metadata = typeof subbot.metadata === 'string' ? JSON.parse(subbot.metadata) : subbot.metadata || {};
-      const statusEmoji = getStatusEmoji(subbot.status);
-      
-      message += `${index + 1}. ${statusEmoji} *${subbot.display_name || 'Sin nombre'}*\n`;
-      message += `   : ${subbot.id}\n`;
-      
-      if (subbot.phone_number) {
-        message += `   : ${subbot.phone_number}\n`;
+
+    const now = Date.now();
+    let message = `🤖 *Tus SubBots (${subbots.length})*\n\n`;
+
+    subbots.forEach((subbot, index) => {
+      const meta = subbot.metadata || {};
+      const statusEmoji = getStatusEmoji(subbot.status, subbot.is_online);
+      const display = meta.displayName || subbot.code;
+      const ownerDigits = subbot.owner_number || subbot.created_by || subbot.user_phone || '';
+      const botDigits = subbot.bot_number || '';
+      const targetDigits = meta.targetNumber || subbot.target_number || '';
+
+      const ownerJid = addMention(ownerDigits);
+      const botJid = addMention(botDigits);
+      const targetJid = addMention(targetDigits);
+
+      const ownerText = ownerJid ? `@${ownerJid.split('@')[0]}` : 'N/D';
+      const targetText = targetJid ? `@${targetJid.split('@')[0]}` : (targetDigits ? `@${String(targetDigits).replace(/[^0-9]/g, '')}` : 'N/D');
+      const botText = botDigits ? `+${String(botDigits).replace(/[^0-9]/g, '')}` : 'N/D';
+
+      const createdAtIso = subbot.created_at || subbot.createdAt || null;
+      const connectedAtIso = subbot.connected_at || null;
+      const lastActivityIso = subbot.last_heartbeat || subbot.updated_at || connectedAtIso || createdAtIso || null;
+
+      let uptime = 'N/D';
+      if (connectedAtIso && subbot.is_online) {
+        const ms = now - new Date(connectedAtIso).getTime();
+        if (ms > 0) {
+          const h = Math.floor(ms / 3600000);
+          const m = Math.floor((ms % 3600000) / 60000);
+          uptime = `${h}h ${m}m`;
+        }
       }
-      
-      message += `   : ${formatDistanceToNow(new Date(subbot.created_at), { addSuffix: true, locale: es })}\n`;
-      message += `   : ${formatDistanceToNow(new Date(subbot.updated_at), { addSuffix: true, locale: es })}\n`;
-      
-      if (subbot.status === 'connected') {
-        message += `    Conectado\n`;
-      } else if (subbot.status === 'pending') {
-        message += `    Esperando conexin\n`;
+
+      const createdAtText = createdAtIso ? new Date(createdAtIso).toLocaleString('es-ES') : 'N/D';
+      const connectedAtText = connectedAtIso ? new Date(connectedAtIso).toLocaleString('es-ES') : 'N/D';
+      const lastActivityText = lastActivityIso ? new Date(lastActivityIso).toLocaleString('es-ES') : 'N/D';
+
+      message += `${index + 1}. ${statusEmoji} *${display}*\n`;
+      message += `   🔑 Código: ${subbot.code}\n`;
+      message += `   📡 Estado: ${prettifyStatus(subbot.status)}\n`;
+      message += `   🧑💻 Creado por: ${ownerText}\n`;
+      message += `   👑 Propietario: ${targetText}\n`;
+      message += `   🤖 Bot: ${botText}\n`;
+      message += `   🗓 Creado: ${createdAtText}\n`;
+      message += `   🔌 Conectado desde: ${connectedAtText}\n`;
+      message += `   🔄 Última actividad: ${lastActivityText}\n`;
+      if (subbot.is_online && uptime !== 'N/D') {
+        message += `   ⏱ Uptime: ${uptime}\n`;
       }
-      
+      if (subbot.message_count != null) {
+        message += `   ✉️ Mensajes manejados: ${subbot.message_count}\n`;
+      }
       message += '\n';
-    }
-    
-    message += '\nUsa */subbot delete [id]* para eliminar un subbot';
-    
+    });
+
+    message += '🧰 *Atajos útiles*\n';
+    message += '   • `/delsubbot <código>` para eliminar\n';
+    message += '   • `/code <número>` para otro Pairing Code\n';
+    message += '   • `/qr` para generar un nuevo QR\n';
+
     await sock.sendMessage(from, {
       text: message,
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+      mentions: Array.from(mentionSet)
     });
-    
+
   } catch (error) {
     logger.error('Error al listar subbots:', error);
-    await sock.sendMessage(from, { 
-      text: ' Error al listar los subbots',
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+    await sock.sendMessage(from, {
+      text: '❌ *Error al listar tus SubBots*\n\nIntenta nuevamente en unos segundos.',
+      mentions: Array.from(mentionSet)
     });
   }
 }
@@ -205,49 +442,75 @@ async function handleListSubbots(sock, from, isGroup, msg) {
 /**
  * Maneja el comando para eliminar un subbot
  */
-async function handleDeleteSubbot(sock, from, isGroup, msg, args) {
-  const subbotId = args[0];
-  
-  if (!subbotId) {
+export async function handleDeleteSubbot(sock, from, isGroup, msg, args) {
+  const rawSenderJid = msg?.sender || (isGroup ? msg?.key?.participant : msg?.key?.remoteJid) || from;
+  const requesterJid = ensureJid(rawSenderJid);
+  const cleanedSender = String(rawSenderJid || '').split('@')[0]?.split(':')[0]?.replace(/[^0-9]/g, '') || '';
+
+  if (!args[0]) {
     return await sock.sendMessage(from, { 
       text: ' Debes proporcionar el ID del subbot a eliminar\n' +
             'Ejemplo: */subbot delete subbot_1234567890*',
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+      ...(isGroup && requesterJid ? { mentions: [requesterJid] } : {})
     });
   }
   
+  const subbotId = args[0];
+  
   try {
-    const result = await deleteSubbot(subbotId, msg.sender);
-    if (!result.success) {
-      throw new Error(result.error || 'Error al eliminar el subbot');
-    }
-    
+    await deleteUserSubbot(subbotId, cleanedSender || msg.sender);
+
     await sock.sendMessage(from, {
-      text: ` Subbot *${subbotId}* eliminado correctamente`,
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+      text: `🗑️ *SubBot eliminado*\n\nID: ${subbotId}\nSe removió la sesión y sus credenciales.\n\nPuedes crear uno nuevo cuando quieras ✨`,
+      ...(isGroup && requesterJid ? { mentions: [requesterJid] } : {})
     });
   } catch (error) {
     logger.error(`Error al eliminar subbot ${subbotId}:`, error);
-    await sock.sendMessage(from, { 
-      text: ` Error al eliminar el subbot: ${error.message}`,
-      ...(isGroup ? { mentions: [msg.sender] } : {})
+    await sock.sendMessage(from, {
+      text: `❌ *No pude eliminar el SubBot*\n\nDetalle: ${error.message}`,
+      ...(isGroup && requesterJid ? { mentions: [requesterJid] } : {})
     });
   }
 }
 
-/**
- * Obtiene el emoji correspondiente al estado del subbot
- */
-function getStatusEmoji(status) {
+function getStatusEmoji(status, onlineFlag = false) {
   const statusEmojis = {
-    'connected': '',
-    'pending': '',
-    'error': '',
-    'disconnected': '',
-    'expired': ''
+    connected: '🟢',
+    pending: '🕒',
+    error: '🔴',
+    disconnected: '🛑',
+    logged_out: '🚪',
+    expired: '⌛'
   };
-  
-  return statusEmojis[status] || '';
+
+  if (onlineFlag) return '🟢';
+  return statusEmojis[status] || '⚪';
+}
+
+function prettifyStatus(status) {
+  const map = {
+    connected: 'Conectado',
+    pending: 'Esperando vinculación',
+    disconnected: 'Desconectado',
+    logged_out: 'Sesión cerrada',
+    expired: 'Expirado',
+    error: 'Con error'
+  };
+  return map[status] || status;
+}
+
+function safeFormatDistance(value) {
+  if (!value) return 'N/D';
+  try {
+    return formatDistanceToNow(new Date(value), { addSuffix: true, locale: es });
+  } catch (error) {
+    return 'N/D';
+  }
+}
+
+function ensureJid(value) {
+  if (!value) return null;
+  return value.includes('@') ? value : `${value}@s.whatsapp.net`;
 }
 
 /**

@@ -2,6 +2,12 @@ import * as baileys from 'baileys-mod';
 import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
+import { handleMessage as handleMainMessage } from './whatsapp.js';
+import { isBotGloballyActive, isBotActiveInGroup } from './subbot-manager.js';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const {
   makeWASocket,
@@ -18,6 +24,15 @@ const TARGET = RAW_TARGET
   ? (RAW_TARGET.startsWith('+') ? RAW_TARGET : `+${RAW_TARGET.replace(/[^0-9]/g, '')}`)
   : '';
 const DISPLAY = process.env.SUB_DISPLAY || 'KONMI-BOT';
+
+const RAW_METADATA = process.env.SUB_METADATA || '';
+let SUBBOT_METADATA = {};
+try {
+  SUBBOT_METADATA = RAW_METADATA ? JSON.parse(RAW_METADATA) : {};
+} catch (error) {
+  console.log('No se pudo parsear SUB_METADATA para el subbot:', error?.message || error);
+  SUBBOT_METADATA = {};
+}
 
 const RAW_CUSTOM_PAIRING = (process.env.PAIRING_CODE || process.env.CUSTOM_PAIRING_CODE || '').toString().trim();
 const SANITIZED_CUSTOM_PAIRING = RAW_CUSTOM_PAIRING.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -91,6 +106,15 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
 
   console.log('Auth state preparado');
 
+  const runtimeContext = {
+    mode: 'subbot',
+    subbotCode: CODE,
+    storageDir: DIR,
+    authDir,
+    metadata: SUBBOT_METADATA,
+    displayName: SUBBOT_METADATA?.uiLabel || DISPLAY
+  };
+
   const { version, isLatest } = await fetchLatestBaileysVersion();
   console.log('Baileys version:', { version, isLatest });
 
@@ -135,6 +159,39 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
   let connectedReported = false;
   let resolved = false;
   let registeredSession = false;
+
+  function attachSubbotMessageHandler(sock) {
+    if (!sock || sock.__subbotHandlersAttached) return;
+    sock.__subbotHandlersAttached = true;
+
+    sock.ev.on('messages.upsert', async (upsert) => {
+      try {
+        const { messages } = upsert || {};
+        if (!Array.isArray(messages)) return;
+        for (const message of messages) {
+          try {
+            if (!await isBotGloballyActive()) {
+              continue;
+            }
+
+            const remoteJid = message.key?.remoteJid || '';
+            if (remoteJid.endsWith('@g.us')) {
+              const activeInGroup = await isBotActiveInGroup(CODE, remoteJid);
+              if (!activeInGroup) {
+                continue;
+              }
+            }
+
+            await handleMainMessage(message, sock, `[SUBBOT ${CODE}] `, runtimeContext);
+          } catch (handlerError) {
+            console.error('Error manejando mensaje en subbot:', handlerError?.message || handlerError);
+          }
+        }
+      } catch (error) {
+        console.error('Error en messages.upsert del subbot:', error?.message || error);
+      }
+    });
+  }
 
   return await new Promise((resolve) => {
     let timeoutTimer;
@@ -307,6 +364,7 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
 
         registeredSession = true;
         awaitingConnection = false;
+        attachSubbotMessageHandler(sock);
         return;
       }
 
