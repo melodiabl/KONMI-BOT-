@@ -170,6 +170,25 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
         if (!Array.isArray(messages)) return;
         for (const message of messages) {
           try {
+            // FILTRO INTELIGENTE fromMe:
+            // - Si fromMe = true, verificar si es un COMANDO
+            // - Si es comando, PERMITIR (para que el owner pueda usar el subbot)
+            // - Si NO es comando, IGNORAR (son respuestas del subbot)
+            if (message.key.fromMe) {
+              const txt = (
+                message.message?.conversation ||
+                message.message?.extendedTextMessage?.text ||
+                ''
+              ).trim();
+              const isCommand = txt.startsWith('/') || txt.startsWith('!') || txt.startsWith('.');
+              
+              // Solo permitir si es un comando
+              if (!isCommand) {
+                continue; // Ignorar respuestas del subbot
+              }
+              // Si es comando, continuar procesando
+            }
+
             if (!await isBotGloballyActive()) {
               continue;
             }
@@ -325,7 +344,7 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
         return;
       }
 
-      if (TYPE === 'qr' && !pairingDelivered) {
+      if (TYPE === 'qr' && qr && !pairingDelivered) {
         import('qrcode').then((QR) => {
           QR.default
             .toDataURL(qr, {

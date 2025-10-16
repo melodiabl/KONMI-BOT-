@@ -8,6 +8,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "jest",
+    "test:apis": "node scripts/test-apis.js",
+    "test:api": "node scripts/test-apis.js",
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "seed": "knex seed:run"
@@ -35,6 +37,7 @@
     "pino": "^9.12.0",
     "pino-pretty": "^13.1.1",
     "qrcode": "^1.5.4",
+    "simple-update-notifier": "^2.0.0",
     "sqlite3": "^5.1.7",
     "systeminformation": "^5.27.10",
     "winston": "^3.11.0",

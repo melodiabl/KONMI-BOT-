@@ -21,56 +21,142 @@ import {
   getSubbotStatus as getRuntimeStatus,
   getAllSubbots as getAllSubbotsFromLib,
 } from "./lib/subbots.js";
+// Importaciones de handler.js movidas a importación dinámica para evitar ciclos
+// Las funciones se importarán cuando se necesiten
+
+// Comandos de sistema y configuración
 import {
-  handleIA,
-  handleMyAportes,
-  handleAportes,
-  handleAddAporte,
-  handleAporteEstado,
-  handlePedido,
-  handlePedidos,
-  handleLock,
-  handleUnlock,
-  handleTag,
-  handleWhoami,
-  handleDebugAdmin,
-} from "./handler.js";
+  handleAI,
+  handleClasificar,
+  handleListClasificados,
+  handleLogs,
+  handleConfig,
+  handleRegistrarUsuario,
+  handleResetPassword,
+  handleMiInfo,
+  handleCleanSession,
+} from "./commands.js";
+
+// Comandos de descarga con fallback automático
+import {
+  handleTikTokDownload,
+  handleInstagramDownload,
+  handleFacebookDownload,
+  handleTwitterDownload,
+  handlePinterestDownload,
+  handleMusicDownload,
+  handleVideoDownload,
+  handleSpotifySearch,
+  handleTranslate,
+  handleWeather,
+  handleQuote,
+  handleFact,
+  handleTriviaCommand,
+  handleMemeCommand,
+} from "./commands/download-commands.js";
 
 // Handlers para QR y código de vinculación
 async function handleQROrCodeRequest(method, ownerNumber) {
   try {
+    // Crear el subbot y esperar el evento QR
     const result = await generateSubbotQR(ownerNumber);
-    if (!result.success) {
-      return { message: result.error || "Error al generar el código QR" };
+    
+    if (!result || !result.code) {
+      return { message: "❌ Error al crear el subbot" };
     }
-    if (result.qr) {
-      return {
-        image: result.qr,
-        message: "Escanea este código QR para vincular tu bot",
-      };
-    }
-    return { message: "Error: no se pudo generar el código QR" };
+
+    const subbotCode = result.code;
+
+    // Esperar el evento qr_ready con timeout usando registerSubbotListeners
+    return new Promise((resolve) => {
+      let detach = null;
+      const timeout = setTimeout(() => {
+        if (detach) detach();
+        resolve({ message: "⏱️ Timeout esperando el código QR. Intenta nuevamente." });
+      }, 30000); // 30 segundos
+
+      import('./inproc-subbots.js').then(({ registerSubbotListeners }) => {
+      
+        detach = registerSubbotListeners(subbotCode, [
+          {
+            event: 'qr_ready',
+            handler: (payload) => {
+              const data = payload?.data || payload;
+              if (data?.qrImage) {
+                clearTimeout(timeout);
+                if (detach) detach();
+                resolve({
+                  image: data.qrImage,
+                  message: `✅ Código QR generado\n\n📱 Escanea este código para vincular tu subbot\n\n🆔 Código: ${subbotCode}`
+                });
+              }
+            }
+          }
+        ]);
+      }).catch(err => {
+        clearTimeout(timeout);
+        resolve({ message: `❌ Error cargando listeners: ${err.message}` });
+      });
+    });
   } catch (error) {
     logger.error("Error al generar QR:", error);
-    return { message: "Ocurrió un error al generar el código QR" };
+    return { message: `❌ Error: ${error.message}` };
   }
 }
 
 async function handlePairingCode(phoneNumber) {
   try {
-    const result = await generateSubbotPairingCode(phoneNumber, "KONMI-BOT");
-    if (!result.success) {
-      return {
-        message: result.error || "Error al generar el código de vinculación",
-      };
+    // Limpiar el número
+    const cleanNumber = String(phoneNumber).replace(/\D/g, '');
+    
+    if (!cleanNumber || cleanNumber.length < 10) {
+      return { message: "❌ Número inválido. Debe tener al menos 10 dígitos." };
     }
-    if (result.code) {
-      return { message: `Tu código de vinculación es: ${result.code}` };
+
+    // Crear el subbot con pairing code
+    const result = await generateSubbotPairingCode(cleanNumber, cleanNumber, {
+      displayName: "KONMI-BOT"
+    });
+    
+    if (!result || !result.code) {
+      return { message: "❌ Error al crear el subbot" };
     }
-    return { message: "Error: no se pudo generar el código de vinculación" };
+
+    const subbotCode = result.code;
+
+    // Esperar el evento pairing_code con timeout usando registerSubbotListeners
+    return new Promise((resolve) => {
+      let detach = null;
+      const timeout = setTimeout(() => {
+        if (detach) detach();
+        resolve({ message: "⏱️ Timeout esperando el código. Intenta nuevamente." });
+      }, 30000); // 30 segundos
+
+      import('./inproc-subbots.js').then(({ registerSubbotListeners }) => {
+        detach = registerSubbotListeners(subbotCode, [
+          {
+            event: 'pairing_code',
+            handler: (payload) => {
+              const data = payload?.data || payload;
+              if (data?.pairingCode || data?.code) {
+                const code = data.pairingCode || data.code;
+                clearTimeout(timeout);
+                if (detach) detach();
+                resolve({
+                  message: `✅ Código de vinculación generado\n\n🔢 Código: *${code}*\n📱 Número: +${cleanNumber}\n\n📲 Instrucciones:\n1. Abre WhatsApp en el dispositivo con número +${cleanNumber}\n2. Ve a Dispositivos vinculados\n3. Toca "Vincular dispositivo"\n4. Selecciona "Vincular con número de teléfono"\n5. Ingresa el código: *${code}*\n\n⏱️ Válido por 10 minutos\n🆔 Código subbot: ${subbotCode}`
+                });
+              }
+            }
+          }
+        ]);
+      }).catch(err => {
+        clearTimeout(timeout);
+        resolve({ message: `❌ Error cargando listeners: ${err.message}` });
+      });
+    });
   } catch (error) {
     logger.error("Error al generar código:", error);
-    return { message: "Ocurrió un error al generar el código" };
+    return { message: `❌ Error: ${error.message}` };
   }
 }
 
@@ -541,16 +627,7 @@ initializeDatabase().catch((error) => {
 });
 
 import { isSuperAdmin, setPrimaryOwner } from "./global-config.js";
-import {
-  handleAI,
-  handleListClasificados,
-  handleLogs,
-  handleConfig,
-  handleRegistrarUsuario,
-  handleMiInfo,
-  handleCleanSession,
-  logConfigurationChange,
-} from "./commands.js";
+import { logConfigurationChange } from "./commands.js";
 import {
   chatWithAI,
   analyzeManhwaContent,
@@ -581,15 +658,7 @@ import {
   handleBuscarArchivo,
   handleYouTubeDownload,
   handleSticker,
-  handleTikTokDownload,
-  handleInstagramDownload,
-  handleTwitterDownload,
   handleImage,
-  handleTranslate,
-  handleWeather,
-  handleQuote,
-  handleFact,
-  handleTrivia,
   handleHoroscope,
   handleKick,
   handlePromote,
@@ -1466,9 +1535,21 @@ async function logAllMessages(
 // Manejar mensajes entrantes - VERSION COMPLETA CON LOGS DECORADOS
 // Función principal para manejar todos los mensajes entrantes
 export async function handleMessage(message, customSock = null, prefix = "") {
-  const sock = customSock || global.sock; // Usar socket personalizado o el global
   try {
-    if (!message.message || !message.key.remoteJid) return;
+    // Obtener el socket de manera segura
+    const sock = customSock || global.sock;
+    
+    // Verificar que el socket esté disponible
+    if (!sock || !sock.ev || typeof sock.ev.on !== 'function') {
+      console.error("❌ ERROR: Intento de procesar mensaje sin conexión activa");
+      return; // Salir silenciosamente si no hay conexión
+    }
+    
+    // Verificar que el mensaje tenga la estructura esperada
+    if (!message || !message.key || !message.key.remoteJid) {
+      console.error("❌ Mensaje recibido sin estructura válida:", message);
+      return;
+    }
 
     // Capturar TODOS los tipos de mensajes de texto posibles
     let messageText =
@@ -1499,19 +1580,42 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     let sender;
     let usuario;
 
-    if (isGroup) {
-      // En grupos: usar participant (quien envio el mensaje)
-      sender = message.key.participant;
-      if (!sender) {
-        logger.pretty.line("⚠️ No se pudo obtener participant en grupo");
-        return;
+    // CASO ESPECIAL: Si fromMe = true, el mensaje lo envió el bot
+    // Necesitamos obtener el número del bot, no del destinatario
+    if (message.key.fromMe) {
+      // El mensaje lo envió el bot (owner)
+      if (isGroup) {
+        // En grupos: participant es el JID del bot
+        sender = message.key.participant;
+        if (!sender) {
+          // Fallback: obtener el número del bot del socket
+          const botNum = getBotNumber(sock);
+          usuario = botNum || "595974154768"; // Fallback al owner conocido
+        } else {
+          usuario = normalizeJidToNumber(sender);
+        }
+      } else {
+        // En privado: obtener el número del bot del socket
+        const botNum = getBotNumber(sock);
+        usuario = botNum || "595974154768"; // Fallback al owner conocido
+        sender = `${usuario}@s.whatsapp.net`;
       }
-      // Extraer numero normalizado del participant (soporta LID)
-      usuario = normalizeJidToNumber(sender);
     } else {
-      // En privado: usar remoteJid (el chat directo)
-      sender = remoteJid;
-      usuario = normalizeJidToNumber(remoteJid);
+      // Mensaje de otro usuario
+      if (isGroup) {
+        // En grupos: usar participant (quien envio el mensaje)
+        sender = message.key.participant;
+        if (!sender) {
+          logger.pretty.line("⚠️ No se pudo obtener participant en grupo");
+          return;
+        }
+        // Extraer numero normalizado del participant (soporta LID)
+        usuario = normalizeJidToNumber(sender);
+      } else {
+        // En privado: usar remoteJid (el chat directo)
+        sender = remoteJid;
+        usuario = normalizeJidToNumber(remoteJid);
+      }
     }
     // usuario ya viene normalizado a solo digitos
 
@@ -1645,6 +1749,24 @@ export async function handleMessage(message, customSock = null, prefix = "") {
       // Comandos de subbots
       case "/qr":
       case "/subqr":
+        // REDIRIGIR A PRIVADO SI ES EN GRUPO
+        if (isGroup) {
+          await sock.sendMessage(
+            remoteJid,
+            { 
+              text: "🔒 *Comando de Subbot*\n\n" +
+                    "⚠️ Por seguridad, este comando solo funciona en chat privado.\n\n" +
+                    "📱 *Instrucciones:*\n" +
+                    "1. Abre un chat privado conmigo\n" +
+                    "2. Envía el comando `/qr`\n" +
+                    "3. Escanea el código QR que te enviaré\n\n" +
+                    "💡 Esto evita que otros vean tu código de vinculación."
+            },
+            { quoted: message },
+          );
+          return;
+        }
+        
         if (!isOwner) {
           await sock.sendMessage(
             remoteJid,
@@ -1674,24 +1796,28 @@ export async function handleMessage(message, customSock = null, prefix = "") {
 
       case "/code":
       case "/subcode":
-        if (!isOwner) {
+        // REDIRIGIR A PRIVADO SI ES EN GRUPO
+        if (isGroup) {
           await sock.sendMessage(
             remoteJid,
-            { text: "❌ Solo el owner puede usar este comando" },
+            { 
+              text: "🔒 *Comando de Subbot*\n\n" +
+                    "⚠️ Por seguridad, este comando solo funciona en chat privado.\n\n" +
+                    "📱 *Instrucciones:*\n" +
+                    "1. Abre un chat privado conmigo\n" +
+                    "2. Envía el comando `/code`\n" +
+                    "3. Te enviaré un código de 8 dígitos\n" +
+                    "4. Ingrésalo en WhatsApp > Dispositivos vinculados\n\n" +
+                    "💡 Esto evita que otros vean tu código de vinculación."
+            },
             { quoted: message },
           );
           return;
         }
-        const pairNumber = args[0];
-        if (!pairNumber) {
-          await sock.sendMessage(
-            remoteJid,
-            { text: "ℹ️ Uso: /code <número>" },
-            { quoted: message },
-          );
-          return;
-        }
-        const codeResponse = await handlePairingCode(pairNumber);
+        
+        // Comando disponible para todos los usuarios
+        // Usar el número del usuario automáticamente
+        const codeResponse = await handlePairingCode(usuario);
         await sock.sendMessage(
           remoteJid,
           { text: codeResponse.message },
@@ -1862,8 +1988,9 @@ ${new Date().toLocaleString("es-ES")}`;
         });
         break;
 
-      // SUBBOTS (solo /qr y /code)
-      case "/qr": {
+      // SUBBOTS (solo /qr y /code) - CASOS DUPLICADOS COMENTADOS
+      // NOTA: Los casos /qr y /code ya están manejados arriba con verificación de owner
+      /* case "/qr": {
         try {
           await ensureSubbotsTable();
           await updateOwnerSubbotStatus(usuario);
@@ -1981,9 +2108,9 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
           });
         }
         break;
-      }
+      } */
 
-      case ".code":
+      /* case ".code":
       case "/code": {
         try {
           // Verificar si el comando es .code (sin slash)
@@ -2151,7 +2278,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           });
         }
         break;
-      }
+      } */
 
       // COMANDOS DE SISTEMA - INFO/RUNTIME/HARDWARE
       case "/status":
@@ -2205,58 +2332,74 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         }
         break;
 
-      // IA y clasificacion
+      // IA y clasificacion - CON FALLBACK
       case "/ia":
       case "/ai":
-        const iaText = messageText.substring(command.length).trim();
-        if (!iaText) {
-          await sock.sendMessage(remoteJid, {
-            text: "ℹ️ Uso: /ia [tu pregunta]\nEjemplo: /ia ¿Qué es JavaScript?",
-          });
-        } else {
-          try {
-            result = await handleIA(iaText, usuario, remoteJid);
-            if (!result || !result.message) {
+        try {
+          const iaText = messageText.substring(command.length).trim();
+          if (!iaText) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /ia [tu pregunta]\nEjemplo: /ia ¿Qué es JavaScript?",
+            });
+          } else {
+            const res = await handleAI(
+              iaText,
+              usuario,
+              remoteJid,
+              new Date().toISOString(),
+            );
+            if (res?.message) {
+              await sock.sendMessage(remoteJid, { text: res.message });
+            } else {
               await sock.sendMessage(remoteJid, {
                 text: `🤖 *IA — Respuesta:*\n\n❓ Pregunta: "${iaText}"\n\n⚠️ Servicio de IA temporalmente no disponible. Intenta más tarde.`,
               });
             }
-          } catch (error) {
-            logger.error("Error en IA:", error);
-            await sock.sendMessage(remoteJid, {
-              text: `🤖 *IA — Respuesta:*\n\n❓ Pregunta: "${iaText}"\n\n⚠️ Servicio de IA temporalmente no disponible. Intenta más tarde.`,
-            });
           }
+        } catch (error) {
+          logger.error("Error en /ia:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error en IA. Intenta nuevamente.",
+          });
         }
         break;
 
       case "/clasificar":
         try {
-          // Obtener aportes sin clasificar
-          const aportesNoClasificados = await db("aportes")
-            .where("estado", "pendiente")
-            .limit(5);
-
-          if (aportesNoClasificados.length === 0) {
-            await sock.sendMessage(remoteJid, {
-              text: "🗂️ *Clasificador de contenido*\n\n✅ No hay contenido pendiente de clasificar.\n\n🆗 Todo el contenido está actualizado.",
-            });
-          } else {
-            let clasificarText = "🗂️ *Contenido pendiente de clasificar:*\n\n";
-            aportesNoClasificados.forEach((aporte, index) => {
-              clasificarText += `${index + 1}. **${aporte.contenido}**\n`;
-              clasificarText += `   • Tipo: ${aporte.tipo}\n`;
-              clasificarText += `   👤 Por: ${aporte.usuario}\n`;
-              clasificarText += `   🗓️ ${new Date(aporte.fecha).toLocaleDateString()}\n\n`;
-            });
-            clasificarText +=
-              "🛡️ Los administradores pueden revisar y aprobar este contenido.";
-            await sock.sendMessage(remoteJid, { text: clasificarText });
+          const textoClasificar = messageText
+            .substring("/clasificar".length)
+            .trim();
+          const res = await handleClasificar(
+            textoClasificar,
+            usuario,
+            remoteJid,
+            new Date().toISOString(),
+          );
+          if (res?.message) {
+            await sock.sendMessage(remoteJid, { text: res.message });
           }
         } catch (error) {
-          logger.error("Error en clasificar:", error);
+          logger.error("Error en /clasificar:", error);
           await sock.sendMessage(remoteJid, {
             text: "⚠️ Error en el clasificador de contenido.",
+          });
+        }
+        break;
+
+      case "/listclasificados":
+        try {
+          const res = await handleListClasificados(
+            usuario,
+            remoteJid,
+            new Date().toISOString(),
+          );
+          if (res?.message) {
+            await sock.sendMessage(remoteJid, { text: res.message });
+          }
+        } catch (error) {
+          logger.error("Error en /listclasificados:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al listar clasificados.",
           });
         }
         break;
@@ -2264,6 +2407,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       // Aportes - FUNCIONES REALES
       case "/myaportes":
         try {
+          const { handleMyAportes } = await import("./handler.js");
           result = await handleMyAportes(usuario, remoteJid);
         } catch (error) {
           logger.error("Error en myaportes:", error);
@@ -2276,6 +2420,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/aportes":
         try {
           // Llamar con parametros correctos - la funcion espera (usuario, grupo, isGroup)
+          const { handleAportes } = await import("./handler.js");
           result = await handleAportes(usuario, remoteJid, isGroup);
 
           // Si no hay resultado, crear uno basico
@@ -2329,6 +2474,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               text: "ℹ️ Uso: /addaporte [texto opcional] adjuntando un archivo o respondiendo a uno.",
             });
           } else {
+            const { handleAddAporte } = await import("./handler.js");
             result = await handleAddAporte(
               aporteText || "(archivo adjunto)",
               archivoPath ? "media" : "general",
@@ -2353,6 +2499,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           });
         } else {
           try {
+            const { handleAporteEstado } = await import("./handler.js");
             result = await handleAporteEstado(
               args[0],
               args[1],
@@ -2377,6 +2524,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/lock":
         try {
+          const { handleLock } = await import("./handler.js");
           result = await handleLock(usuario, remoteJid, isGroup);
           if (result?.message) {
             await sock.sendMessage(remoteJid, { text: result.message });
@@ -2393,6 +2541,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/unlock":
         try {
+          const { handleUnlock } = await import("./handler.js");
           result = await handleUnlock(usuario, remoteJid, isGroup);
           if (result?.message) {
             await sock.sendMessage(remoteJid, { text: result.message });
@@ -2418,6 +2567,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           });
         } else {
           try {
+            const { handlePedido } = await import("./handler.js");
             result = await handlePedido(
               pedidoContent,
               usuario,
@@ -2435,6 +2585,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/pedidos":
         try {
+          const { handlePedidos } = await import("./handler.js");
           result = await handlePedidos(usuario, remoteJid);
         } catch (error) {
           logger.error("Error en pedidos:", error);
@@ -2867,6 +3018,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       // Comandos /promote y /demote movidos a la seccion de administracion mas abajo
 
       case "/tag":
+        const { handleTag } = await import("./handler.js");
         result = await handleTag(messageText, usuario, remoteJid);
         break;
 
@@ -3508,6 +3660,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           break;
         }
         try {
+          const { handleLock } = await import("./handler.js");
           const resLock = await handleLock(usuario, remoteJid);
           if (resLock?.message) {
             await sock.sendMessage(remoteJid, { text: resLock.message });
@@ -3530,6 +3683,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           break;
         }
         try {
+          const { handleUnlock } = await import("./handler.js");
           const resUnlock = await handleUnlock(usuario, remoteJid);
           if (resUnlock?.message) {
             await sock.sendMessage(remoteJid, { text: resUnlock.message });
@@ -3656,6 +3810,104 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           logger.error("Error en /logs:", error);
           await sock.sendMessage(remoteJid, {
             text: "⚠️ Error al cargar registros. Intenta de nuevo.",
+          });
+        }
+        break;
+
+      case "/config":
+        try {
+          const parametro = args[0];
+          const valor = args.slice(1).join(" ");
+          const res = await handleConfig(
+            parametro,
+            valor,
+            usuario,
+            remoteJid,
+            new Date().toISOString(),
+          );
+          if (res?.message) {
+            await sock.sendMessage(remoteJid, { text: res.message });
+          }
+        } catch (error) {
+          logger.error("Error en /config:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al procesar configuración.",
+          });
+        }
+        break;
+
+      case "/registrar":
+        try {
+          const username = args[0];
+          const res = await handleRegistrarUsuario(
+            username,
+            usuario,
+            remoteJid,
+            new Date().toISOString(),
+          );
+          if (res?.message) {
+            await sock.sendMessage(remoteJid, { text: res.message });
+          }
+        } catch (error) {
+          logger.error("Error en /registrar:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al registrar usuario.",
+          });
+        }
+        break;
+
+      case "/resetpass":
+        try {
+          const username = args[0];
+          const res = await handleResetPassword(
+            username,
+            usuario,
+            remoteJid,
+            new Date().toISOString(),
+          );
+          if (res?.message) {
+            await sock.sendMessage(remoteJid, { text: res.message });
+          }
+        } catch (error) {
+          logger.error("Error en /resetpass:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al resetear contraseña.",
+          });
+        }
+        break;
+
+      case "/miinfo":
+        try {
+          const res = await handleMiInfo(
+            usuario,
+            remoteJid,
+            new Date().toISOString(),
+          );
+          if (res?.message) {
+            await sock.sendMessage(remoteJid, { text: res.message });
+          }
+        } catch (error) {
+          logger.error("Error en /miinfo:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al obtener información.",
+          });
+        }
+        break;
+
+      case "/cleansession":
+        try {
+          const res = await handleCleanSession(
+            usuario,
+            remoteJid,
+            new Date().toISOString(),
+          );
+          if (res?.message) {
+            await sock.sendMessage(remoteJid, { text: res.message });
+          }
+        } catch (error) {
+          logger.error("Error en /cleansession:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al limpiar sesión.",
           });
         }
         break;
@@ -3838,6 +4090,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/whoami":
         try {
+          const { handleWhoami } = await import("./handler.js");
           result = await handleWhoami(usuario, remoteJid);
           if (!result || !result.message) {
             // Implementacin simple de whoami
@@ -3875,6 +4128,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/debugadmin":
         try {
+          const { handleDebugAdmin } = await import("./handler.js");
           result = await handleDebugAdmin(usuario, remoteJid);
           if (!result || !result.message) {
             const debugInfo =
@@ -3905,268 +4159,162 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         }
         break;
 
-      // COMANDOS MULTIMEDIA - IMPLEMENTACIN FUNCIONAL
+      // COMANDOS MULTIMEDIA CON FALLBACK AUTOMÁTICO
       case "/music":
       case "/musica":
-        const musicQuery = args.join(" ");
-        if (!musicQuery) {
+        try {
+          const musicQuery = args.join(" ");
           await sock.sendMessage(remoteJid, {
-            text: "ℹ️ Uso: /music [nombre de la canción]\nEjemplo: /music Despacito",
+            text: "🔎 Buscando música...",
           });
-        } else {
-          try {
+
+          const result = await handleMusicDownload(
+            musicQuery,
+            usuario.split("@")[0],
+          );
+
+          if (result.success && result.audio) {
             await sock.sendMessage(remoteJid, {
-              text: "🔎 Buscando música...",
+              audio: { url: result.audio },
+              mimetype: "audio/mpeg",
+              ptt: false,
             });
 
-            // Usar API de Vreden para busqueda y descarga de musica
-            const searchResponse = await fetch(
-              `https://api.vreden.my.id/api/ytsearch?query=${encodeURIComponent(musicQuery)}`,
-            );
-            const searchData = await searchResponse.json();
-
-            if (
-              searchData.status &&
-              searchData.result &&
-              searchData.result.length > 0
-            ) {
-              const video = searchData.result[0];
-
-              await sock.sendMessage(remoteJid, {
-                text:
-                  `🎵 *Música encontrada*\n\n` +
-                  `📌 **Título:** ${video.title}\n` +
-                  `👤 **Canal:** ${video.author.name}\n` +
-                  `⏱️ **Duración:** ${video.duration.timestamp}\n` +
-                  `👁️ **Vistas:** ${video.views.toLocaleString()}\n\n` +
-                  `⬇️ Descargando audio...`,
-              });
-
-              // Descargar el audio usando la API
-              const downloadResponse = await fetch(
-                `https://api.vreden.my.id/api/ytdl?url=${video.url}&type=audio`,
-              );
-              const downloadData = await downloadResponse.json();
-
-              if (
-                downloadData.status &&
-                downloadData.result &&
-                downloadData.result.download
-              ) {
-                // Enviar el archivo de audio
-                await sock.sendMessage(remoteJid, {
-                  audio: { url: downloadData.result.download.url },
-                  mimetype: "audio/mpeg",
-                  ptt: false,
-                  fileName:
-                    downloadData.result.download.filename ||
-                    `${video.title.substring(0, 50)}.mp3`,
-                });
-
-                await sock.sendMessage(remoteJid, {
-                  text:
-                    `✅ **Audio enviado**\n\n` +
-                    `🎵 ${video.title}\n` +
-                    `👤 ${video.author.name}\n` +
-                    `📶 Calidad: ${downloadData.result.download.quality}\n` +
-                    `👤 Solicitado por: ${usuario}\n` +
-                    `🕒 ${new Date().toLocaleString("es-ES")}`,
-                });
-              } else {
-                await sock.sendMessage(remoteJid, {
-                  text: `? Error descargando el audio. Intenta con otra cancin.`,
-                });
-              }
-            } else {
-              await sock.sendMessage(remoteJid, {
-                text:
-                  `🔎 *Búsqueda de música*\n\n` +
-                  `😕 No se encontraron resultados para: "${musicQuery}"\n\n` +
-                  `💡 Intenta con otro nombre o artista.`,
-              });
-            }
-          } catch (error) {
-            logger.error("Error en busqueda de musica:", error);
             await sock.sendMessage(remoteJid, {
-              text:
-                `⚠️ *Búsqueda de música*\n\n` +
-                `❌ Error en la búsqueda: "${musicQuery}"\n\n` +
-                `🔁 Intenta nuevamente en unos momentos.`,
+              text: result.caption,
+              mentions: result.mentions,
+            });
+          } else {
+            await sock.sendMessage(remoteJid, {
+              text: result.message || "⚠️ Error al buscar música.",
             });
           }
+        } catch (error) {
+          logger.error("Error en /music:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al buscar música. Intenta nuevamente.",
+          });
         }
         break;
 
       case "/spotify":
       case "/spot":
-        const spotifyQuery = args.join(" ");
-        if (!spotifyQuery) {
+        try {
+          const spotifyQuery = args.join(" ");
           await sock.sendMessage(remoteJid, {
-            text: "ℹ️ Uso: /spotify [nombre de la canción]\nEjemplo: /spotify Despacito Luis Fonsi",
+            text: "🔎 Buscando en Spotify...",
           });
-        } else {
-          try {
-            await sock.sendMessage(remoteJid, {
-              text: "🔎 Buscando en Spotify...",
-            });
 
-            // Usar API de Vreden para bsqueda en Spotify
-            const response = await fetch(
-              `https://api.vreden.my.id/api/spotify/search?query=${encodeURIComponent(spotifyQuery)}`,
-            );
-            const data = await response.json();
+          const result = await handleSpotifySearch(
+            spotifyQuery,
+            usuario.split("@")[0],
+          );
 
-            if (data.status && data.result) {
-              const track = data.result;
-
+          if (result.success) {
+            if (result.image) {
               await sock.sendMessage(remoteJid, {
-                text:
-                  `🎶 *Música de Spotify encontrada*\n\n` +
-                  `📌 **Título:** ${track.title}\n` +
-                  `👤 **Artista:** ${track.artists}\n` +
-                  `💽 **Álbum:** ${track.album}\n` +
-                  `⏱️ **Duración:** ${Math.floor(track.duration_ms / 60000)}:${String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, "0")}\n` +
-                  `📅 **Lanzamiento:** ${track.release_date}\n\n` +
-                  `⬇️ Descargando audio de Spotify...`,
-              });
-
-              // Enviar la imagen de portada
-              if (track.cover_url) {
-                await sock.sendMessage(remoteJid, {
-                  image: { url: track.cover_url },
-                  caption: `🎵 **${track.title}** - ${track.artists}`,
-                });
-              }
-
-              // Descargar y enviar el audio
-              if (track.download) {
-                await sock.sendMessage(remoteJid, {
-                  audio: { url: track.download },
-                  mimetype: "audio/mpeg",
-                  ptt: false,
-                  fileName: `${track.artists} - ${track.title}.mp3`,
-                });
-
-                await sock.sendMessage(remoteJid, {
-                  text:
-                    `✅ **Audio de Spotify enviado**\n\n` +
-                    `🎵 ${track.title}\n` +
-                    `👤 ${track.artists}\n` +
-                    `💽 ${track.album}\n` +
-                    `👤 Solicitado por: ${usuario}\n` +
-                    `🕒 ${new Date().toLocaleString("es-ES")}`,
-                });
-              } else {
-                await sock.sendMessage(remoteJid, {
-                  text: `⚠️ No se pudo descargar el audio de Spotify. El enlace no está disponible.`,
-                });
-              }
-            } else {
-              await sock.sendMessage(remoteJid, {
-                text:
-                  `🔎 *Búsqueda en Spotify*\n\n` +
-                  `😕 No se encontraron resultados para: "${spotifyQuery}"\n\n` +
-                  `💡 Intenta con el nombre exacto de la canción y el artista.`,
+                image: { url: result.image },
+                caption: `🎵 **${result.info.title}** - ${result.info.artists}`,
               });
             }
-          } catch (error) {
-            logger.error("Error en Spotify:", error);
+
+            if (result.audio) {
+              await sock.sendMessage(remoteJid, {
+                audio: { url: result.audio },
+                mimetype: "audio/mpeg",
+                ptt: false,
+              });
+            }
+
             await sock.sendMessage(remoteJid, {
-              text:
-                `⚠️ *Búsqueda en Spotify*\n\n` +
-                `❌ Error en la búsqueda: "${spotifyQuery}"\n\n` +
-                `🔁 Intenta nuevamente en unos momentos.`,
+              text: result.caption,
+              mentions: result.mentions,
+            });
+          } else {
+            await sock.sendMessage(remoteJid, {
+              text: result.message || "⚠️ Error al buscar en Spotify.",
             });
           }
+        } catch (error) {
+          logger.error("Error en /spotify:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al buscar en Spotify. Intenta nuevamente.",
+          });
         }
         break;
 
       case "/video":
       case "/youtube":
-        const videoQuery = args.join(" ");
-        if (!videoQuery) {
+        try {
+          const videoQuery = args.join(" ");
           await sock.sendMessage(remoteJid, {
-            text: "ℹ️ Uso: /video [búsqueda]\nEjemplo: /video tutorial javascript",
+            text: "🔎 Buscando video...",
           });
-        } else {
-          try {
-            await sock.sendMessage(remoteJid, { text: "🔎 Buscando video..." });
 
-            // Usar API de Vreden para bsqueda y descarga de video
-            const searchResponse = await fetch(
-              `https://api.vreden.my.id/api/ytsearch?query=${encodeURIComponent(videoQuery)}`,
-            );
-            const searchData = await searchResponse.json();
+          const result = await handleVideoDownload(
+            videoQuery,
+            usuario.split("@")[0],
+          );
 
-            if (
-              searchData.status &&
-              searchData.result &&
-              searchData.result.length > 0
-            ) {
-              const video = searchData.result[0];
-
-              await sock.sendMessage(remoteJid, {
-                text:
-                  `📹 *Video encontrado*\n\n` +
-                  `📌 **Título:** ${video.title}\n` +
-                  `👤 **Canal:** ${video.author.name}\n` +
-                  `⏱️ **Duración:** ${video.duration.timestamp}\n` +
-                  `👁️ **Vistas:** ${video.views.toLocaleString()}\n` +
-                  `🗓️ **Publicado:** ${video.ago}\n\n` +
-                  `⬇️ Descargando video...`,
-              });
-
-              // Descargar el video usando la API
-              const downloadResponse = await fetch(
-                `https://api.vreden.my.id/api/ytdl?url=${video.url}&type=video`,
-              );
-              const downloadData = await downloadResponse.json();
-
-              if (
-                downloadData.status &&
-                downloadData.result &&
-                downloadData.result.download
-              ) {
-                // Enviar el archivo de video
-                await sock.sendMessage(remoteJid, {
-                  video: { url: downloadData.result.download.url },
-                  mimetype: "video/mp4",
-                  fileName:
-                    downloadData.result.download.filename ||
-                    `${video.title.substring(0, 50)}.mp4`,
-                  caption: `📹 ${video.title}\n👤 ${video.author.name}\n📶 Calidad: ${downloadData.result.download.quality}\n👤 Solicitado por: ${usuario}`,
-                });
-
-                await sock.sendMessage(remoteJid, {
-                  text:
-                    `✅ **Video enviado**\n\n` +
-                    `📹 ${video.title}\n` +
-                    `📶 Calidad: ${downloadData.result.download.quality}\n` +
-                    `👤 Solicitado por: ${usuario}\n` +
-                    `🕒 ${new Date().toLocaleString("es-ES")}`,
-                });
-              } else {
-                await sock.sendMessage(remoteJid, {
-                  text: `⚠️ Error descargando el video. Intenta con otro.`,
-                });
-              }
-            } else {
-              await sock.sendMessage(remoteJid, {
-                text:
-                  `🔎 *Búsqueda de video*\n\n` +
-                  `😕 No se encontraron resultados para: "${videoQuery}"\n\n` +
-                  `💡 Intenta con otros términos de búsqueda.`,
-              });
-            }
-          } catch (error) {
-            logger.error("Error en bsqueda de video:", error);
+          if (result.success && result.video) {
             await sock.sendMessage(remoteJid, {
-              text:
-                `⚠️ *Búsqueda de video*\n\n` +
-                `❌ Error en la búsqueda: "${videoQuery}"\n\n` +
-                `🔁 Intenta nuevamente en unos momentos.`,
+              video: { url: result.video },
+              mimetype: "video/mp4",
+              caption: result.caption,
+              mentions: result.mentions,
+            });
+          } else {
+            await sock.sendMessage(remoteJid, {
+              text: result.message || "⚠️ Error al buscar video.",
             });
           }
+        } catch (error) {
+          logger.error("Error en /video:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al buscar video. Intenta nuevamente.",
+          });
+        }
+        break;
+
+      case "/play":
+        try {
+          const playQuery = args.join(" ");
+          if (!playQuery) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /play [canción]\nEjemplo: /play Despacito",
+            });
+          } else {
+            await sock.sendMessage(remoteJid, {
+              text: "🔎 Buscando música...",
+            });
+
+            const result = await handleMusicDownload(
+              playQuery,
+              usuario.split("@")[0],
+            );
+
+            if (result.success && result.audio) {
+              await sock.sendMessage(remoteJid, {
+                audio: { url: result.audio },
+                mimetype: "audio/mpeg",
+                ptt: false,
+              });
+
+              await sock.sendMessage(remoteJid, {
+                text: result.caption,
+                mentions: result.mentions,
+              });
+            } else {
+              await sock.sendMessage(remoteJid, {
+                text: result.message || "⚠️ Error al buscar música.",
+              });
+            }
+          }
+        } catch (error) {
+          logger.error("Error en /play:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al buscar música. Intenta nuevamente.",
+          });
         }
         break;
 
@@ -4276,44 +4424,34 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
       case "/translate":
       case "/traducir":
-        const textToTranslate = messageText.substring(command.length).trim();
-        if (!textToTranslate) {
-          await sock.sendMessage(remoteJid, {
-            text: "ℹ️ Uso: /translate [texto a traducir]\nEjemplo: /translate Hello world",
-          });
-        } else {
-          try {
-            // Usar API de traduccin gratuita (MyMemory)
-            const response = await fetch(
-              `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|es`,
-            );
-            const data = await response.json();
+        try {
+          const translateArgs = messageText
+            .substring(command.length)
+            .trim()
+            .split("|");
+          const textToTranslate = translateArgs[0]?.trim();
+          const targetLang = translateArgs[1]?.trim() || "es";
 
-            if (data.responseStatus === 200 && data.responseData) {
-              const translatedText = data.responseData.translatedText;
-              const detectedLang =
-                data.responseData.match?.split("-")[0] || "auto";
-
-              await sock.sendMessage(remoteJid, {
-                text:
-                  `📘 *Traductor*\n\n` +
-                  `🔤 **Texto original:**\n"${textToTranslate}"\n\n` +
-                  `🗣️ **Traducción:**\n"${translatedText}"\n\n` +
-                  `🌐 Idioma detectado: ${detectedLang}\n` +
-                  `🕒 ${new Date().toLocaleString("es-ES")}`,
-              });
-            } else {
-              throw new Error("No se pudo traducir");
-            }
-          } catch (error) {
-            logger.error("Error en traducción:", error);
+          if (!textToTranslate) {
             await sock.sendMessage(remoteJid, {
-              text:
-                `⚠️ *Traductor*\n\n` +
-                `❌ No se pudo traducir: "${textToTranslate}"\n\n` +
-                `🔁 Intenta con frases más simples o verifica tu conexión.`,
+              text: "ℹ️ Uso: /translate [texto] | [idioma]\nEjemplo: /translate Hello world\n/translate Hola | en",
+            });
+          } else {
+            const result = await handleTranslate(
+              textToTranslate,
+              targetLang,
+              usuario.split("@")[0],
+            );
+            await sock.sendMessage(remoteJid, {
+              text: result.message,
+              mentions: result.mentions,
             });
           }
+        } catch (error) {
+          logger.error("Error en /translate:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al traducir. Intenta nuevamente.",
+          });
         }
         break;
 
@@ -4616,225 +4754,193 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         }
         break;
 
-      // COMANDOS DE REDES SOCIALES CON API VREDEN
+      // COMANDOS DE REDES SOCIALES CON FALLBACK AUTOMÁTICO
       case "/tiktok":
       case "/tt":
-        const tiktokUrl = args.join(" ");
-        if (!tiktokUrl || !tiktokUrl.includes("tiktok.com")) {
+        try {
+          const tiktokUrl = args.join(" ");
           await sock.sendMessage(remoteJid, {
-            text: "? Uso: /tiktok [URL de TikTok]\nEjemplo: /tiktok https://www.tiktok.com/@user/video/123456789",
+            text: "📥 Descargando video de TikTok...",
           });
-        } else {
-          try {
+          const result = await handleTikTokDownload(
+            tiktokUrl,
+            usuario.split("@")[0],
+          );
+          if (result.success && result.video) {
             await sock.sendMessage(remoteJid, {
-              text: "?? Descargando video de TikTok... ?",
+              video: { url: result.video },
+              mimetype: "video/mp4",
+              caption: result.caption,
+              mentions: result.mentions,
             });
-
-            const response = await fetch(
-              `https://api.vreden.my.id/api/tiktok?url=${encodeURIComponent(tiktokUrl)}`,
-            );
-            const data = await response.json();
-
-            if (data.status && data.result) {
-              await sock.sendMessage(remoteJid, {
-                video: { url: data.result.video || data.result.download },
-                mimetype: "video/mp4",
-                caption: `📹 **TikTok Descargado**\n\n👤 **Autor:** ${data.result.author || data.result.username || "Desconocido"}\n📝 **Descripción:** ${data.result.title || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
-              });
-            } else {
-              await sock.sendMessage(remoteJid, {
-                text: "? No se pudo descargar el video de TikTok. Verifica la URL.",
-              });
-            }
-          } catch (error) {
-            logger.error("Error en TikTok:", error);
+          } else {
             await sock.sendMessage(remoteJid, {
-              text: "? Error descargando video de TikTok.",
+              text:
+                result.message || "⚠️ Error al descargar el video de TikTok.",
             });
           }
+        } catch (error) {
+          logger.error("Error en /tiktok:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al descargar el video de TikTok. Intenta nuevamente.",
+          });
         }
         break;
 
       case "/instagram":
       case "/ig":
-        const igUrl = args.join(" ");
-        if (!igUrl || !igUrl.includes("instagram.com")) {
+        try {
+          const igUrl = args.join(" ");
           await sock.sendMessage(remoteJid, {
-            text: "? Uso: /instagram [URL de Instagram]\nEjemplo: /instagram https://www.instagram.com/p/ABC123/",
+            text: "📥 Descargando contenido de Instagram...",
           });
-        } else {
-          try {
-            await sock.sendMessage(remoteJid, {
-              text: "?? Descargando contenido de Instagram... ?",
-            });
-
-            const response = await fetch(
-              `https://api.vreden.my.id/api/instagram?url=${encodeURIComponent(igUrl)}`,
-            );
-            const data = await response.json();
-
-            if (data.status && data.result) {
-              if (data.result.type === "image" || data.result.image) {
-                await sock.sendMessage(remoteJid, {
-                  image: { url: data.result.url || data.result.image },
-                  caption: `📸 **Instagram Descargado**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Descripción:** ${data.result.caption || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
-                });
-              } else if (data.result.type === "video" || data.result.video) {
-                await sock.sendMessage(remoteJid, {
-                  video: { url: data.result.url || data.result.video },
-                  mimetype: "video/mp4",
-                  caption: `🎥 **Instagram Video**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Descripción:** ${data.result.caption || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
-                });
-              } else {
-                // Fallback para cualquier tipo de contenido
-                await sock.sendMessage(remoteJid, {
-                  image: { url: data.result.url || data.result.download },
-                  caption: `📸 **Instagram Descargado**\n\n👤 **Autor:** ${data.result.username || "Desconocido"}\n✅ Solicitado por: ${usuario}`,
-                });
-              }
+          const result = await handleInstagramDownload(
+            igUrl,
+            usuario.split("@")[0],
+          );
+          if (result.success) {
+            if (result.type === "image" && result.image) {
+              await sock.sendMessage(remoteJid, {
+                image: { url: result.image || result.url },
+                caption: result.caption,
+                mentions: result.mentions,
+              });
+            } else if (result.type === "video" && result.video) {
+              await sock.sendMessage(remoteJid, {
+                video: { url: result.video || result.url },
+                mimetype: "video/mp4",
+                caption: result.caption,
+                mentions: result.mentions,
+              });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: "? No se pudo descargar el contenido de Instagram. Verifica la URL.",
+                image: { url: result.url },
+                caption: result.caption,
+                mentions: result.mentions,
               });
             }
-          } catch (error) {
-            logger.error("Error en Instagram:", error);
+          } else {
             await sock.sendMessage(remoteJid, {
-              text: "? Error descargando contenido de Instagram.",
+              text:
+                result.message ||
+                "⚠️ Error al descargar el contenido de Instagram.",
             });
           }
+        } catch (error) {
+          logger.error("Error en /instagram:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al descargar el contenido de Instagram. Intenta nuevamente.",
+          });
         }
         break;
 
       case "/facebook":
       case "/fb":
-        const fbUrl = args.join(" ");
-        if (!fbUrl || !fbUrl.includes("facebook.com")) {
+        try {
+          const fbUrl = args.join(" ");
           await sock.sendMessage(remoteJid, {
-            text: "? Uso: /facebook [URL de Facebook]\nEjemplo: /facebook https://www.facebook.com/watch/?v=123456789",
+            text: "📥 Descargando video de Facebook...",
           });
-        } else {
-          try {
+          const result = await handleFacebookDownload(
+            fbUrl,
+            usuario.split("@")[0],
+          );
+          if (result.success && result.video) {
             await sock.sendMessage(remoteJid, {
-              text: "?? Descargando video de Facebook... ?",
+              video: { url: result.video },
+              mimetype: "video/mp4",
+              caption: result.caption,
+              mentions: result.mentions,
             });
-
-            const response = await fetch(
-              `https://api.vreden.my.id/api/facebook?url=${encodeURIComponent(fbUrl)}`,
-            );
-            const data = await response.json();
-
-            if (data.status && data.result) {
-              await sock.sendMessage(remoteJid, {
-                video: {
-                  url:
-                    data.result.video ||
-                    data.result.download ||
-                    data.result.url,
-                },
-                mimetype: "video/mp4",
-                caption: `📹 **Facebook Video**\n\n📝 **Título:** ${data.result.title || data.result.description || "Sin título"}\n⏱️ **Duración:** ${data.result.duration || "N/A"}\n👤 **Autor:** ${data.result.author || "Desconocido"}\n✅ Solicitado por: ${usuario}`,
-              });
-            } else {
-              await sock.sendMessage(remoteJid, {
-                text: "? No se pudo descargar el video de Facebook. Verifica la URL.",
-              });
-            }
-          } catch (error) {
-            logger.error("Error en Facebook:", error);
+          } else {
             await sock.sendMessage(remoteJid, {
-              text: "? Error descargando video de Facebook.",
+              text:
+                result.message || "⚠️ Error al descargar el video de Facebook.",
             });
           }
+        } catch (error) {
+          logger.error("Error en /facebook:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al descargar el video de Facebook. Intenta nuevamente.",
+          });
         }
         break;
 
       case "/twitter":
       case "/x":
-        const twitterUrl = args.join(" ");
-        if (
-          !twitterUrl ||
-          (!twitterUrl.includes("twitter.com") && !twitterUrl.includes("x.com"))
-        ) {
+        try {
+          const twitterUrl = args.join(" ");
           await sock.sendMessage(remoteJid, {
-            text: "? Uso: /twitter [URL de Twitter/X]\nEjemplo: /twitter https://twitter.com/user/status/123456789",
+            text: "📥 Descargando contenido de Twitter/X...",
           });
-        } else {
-          try {
-            await sock.sendMessage(remoteJid, {
-              text: "?? Descargando contenido de Twitter/X... ?",
-            });
-
-            const response = await fetch(
-              `https://api.vreden.my.id/api/twitter?url=${encodeURIComponent(twitterUrl)}`,
-            );
-            const data = await response.json();
-
-            if (data.status && data.result) {
-              if (data.result.type === "video" || data.result.video) {
-                await sock.sendMessage(remoteJid, {
-                  video: { url: data.result.video || data.result.url },
-                  mimetype: "video/mp4",
-                  caption: `🐦 **Twitter/X Video**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Tweet:** ${data.result.text || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
-                });
-              } else if (data.result.type === "image" || data.result.image) {
-                await sock.sendMessage(remoteJid, {
-                  image: { url: data.result.image || data.result.url },
-                  caption: `🖼️ **Twitter/X Imagen**\n\n👤 **Autor:** ${data.result.username || data.result.author || "Desconocido"}\n📝 **Tweet:** ${data.result.text || data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
-                });
-              } else {
-                await sock.sendMessage(remoteJid, {
-                  text: `🐦 **Twitter/X Contenido**\n\n👤 **Autor:** ${data.result.username || "Desconocido"}\n📝 **Tweet:** ${data.result.text || "Contenido de Twitter/X"}\n✅ Solicitado por: ${usuario}`,
-                });
-              }
+          const result = await handleTwitterDownload(
+            twitterUrl,
+            usuario.split("@")[0],
+          );
+          if (result.success) {
+            if (result.type === "video" && result.video) {
+              await sock.sendMessage(remoteJid, {
+                video: { url: result.video },
+                mimetype: "video/mp4",
+                caption: result.caption,
+                mentions: result.mentions,
+              });
+            } else if (result.type === "image" && result.image) {
+              await sock.sendMessage(remoteJid, {
+                image: { url: result.image },
+                caption: result.caption,
+                mentions: result.mentions,
+              });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: "? No se pudo descargar el contenido de Twitter/X. Verifica la URL.",
+                text: result.caption || "Contenido de Twitter/X",
+                mentions: result.mentions,
               });
             }
-          } catch (error) {
-            logger.error("Error en Twitter:", error);
+          } else {
             await sock.sendMessage(remoteJid, {
-              text: "? Error descargando contenido de Twitter/X.",
+              text:
+                result.message ||
+                "⚠️ Error al descargar el contenido de Twitter/X.",
             });
           }
+        } catch (error) {
+          logger.error("Error en /twitter:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al descargar el contenido de Twitter/X. Intenta nuevamente.",
+          });
         }
         break;
 
       case "/pinterest":
       case "/pin":
-        const pinterestUrl = args.join(" ");
-        if (!pinterestUrl || !pinterestUrl.includes("pinterest.com")) {
+        try {
+          const pinterestUrl = args.join(" ");
           await sock.sendMessage(remoteJid, {
-            text: "? Uso: /pinterest [URL de Pinterest]\nEjemplo: /pinterest https://www.pinterest.com/pin/123456789/",
+            text: "📥 Descargando de Pinterest...",
           });
-        } else {
-          try {
+          const result = await handlePinterestDownload(
+            pinterestUrl,
+            usuario.split("@")[0],
+          );
+          if (result.success && result.image) {
             await sock.sendMessage(remoteJid, {
-              text: "?? Descargando imagen de Pinterest... ?",
+              image: { url: result.image },
+              caption: result.caption,
+              mentions: result.mentions,
             });
-
-            const response = await fetch(
-              `https://api.vreden.my.id/api/pinterest?url=${encodeURIComponent(pinterestUrl)}`,
-            );
-            const data = await response.json();
-
-            if (data.status && data.result) {
-              await sock.sendMessage(remoteJid, {
-                image: { url: data.result.image || data.result.url },
-                caption: `📌 **Pinterest Descargado**\n\n📝 **Título:** ${data.result.title || "Sin título"}\n💬 **Descripción:** ${data.result.description || "Sin descripción"}\n✅ Solicitado por: ${usuario}`,
-              });
-            } else {
-              await sock.sendMessage(remoteJid, {
-                text: "? No se pudo descargar la imagen de Pinterest. Verifica la URL.",
-              });
-            }
-          } catch (error) {
-            logger.error("Error en Pinterest:", error);
+          } else {
             await sock.sendMessage(remoteJid, {
-              text: "? Error descargando imagen de Pinterest.",
+              text:
+                result.message ||
+                "⚠️ Error al descargar la imagen de Pinterest.",
             });
           }
+        } catch (error) {
+          logger.error("Error en /pinterest:", error);
+          await sock.sendMessage(remoteJid, {
+            text: "⚠️ Error al descargar la imagen de Pinterest. Intenta nuevamente.",
+          });
         }
         break;
 
@@ -6670,14 +6776,15 @@ async function connectToWhatsApp(
   usePairingCode = false,
   phoneNumber = null,
 ) {
-  // Cargar Baileys dinmicamente (permite forks)
+  // Cargar Baileys dinámicamente (permite forks)
   const ok = await loadBaileys();
   if (!ok) {
     connectionStatus = "error";
     throw new Error(
-      "Baileys no est disponible. Instala la dependencia o tu fork y reinicia.",
+      "Baileys no está disponible. Instala la dependencia o tu fork y reinicia.",
     );
   }
+  
   // Guardar authPath para reconexiones
   if (authPath) {
     savedAuthPath = authPath;
@@ -6694,20 +6801,6 @@ async function connectToWhatsApp(
   logger.pretty.section("Sistema de autenticación interactivo", "🔐");
 
   try {
-    // Si vamos a usar pairing, NO borrar la carpeta de auth: mantener claves evita errores internos
-    if (usePairingCode && (phoneNumber || pairingTargetNumber)) {
-      try {
-        const absAuthPath = path.resolve(effectiveAuthPath);
-        fs.mkdirSync(absAuthPath, { recursive: true });
-        fs.mkdirSync(path.join(absAuthPath, "keys"), { recursive: true });
-      } catch (cleanErr) {
-        logger.warn(
-          "No se pudo preparar la carpeta de auth antes del pairing",
-          { error: cleanErr?.message },
-        );
-      }
-    }
-
     // Asegurar que la carpeta de auth exista (algunos forks no la crean automticamente)
     try {
       const absAuthPath = path.resolve(effectiveAuthPath);
@@ -6938,6 +7031,7 @@ async function connectToWhatsApp(
     }
 
     sock = makeWASocket(socketOptions);
+    global.sock = sock; // Asignar socket a global para que handleMessage pueda accederlo
 
     // Helper: esperar a que las claves de autenticación estén listas
     const waitForAuthKeysReady = async (maxMs = 8000) => {
@@ -7246,35 +7340,66 @@ async function connectToWhatsApp(
               .replace(/:\\d+$/, "")
               .replace(/\D/g, "");
           }
-          const ownerNumber =
-            process.env.OWNER_WHATSAPP_NUMBER || "595974154768";
-          const isOwnerMsg = message.key.fromMe
-            ? true
-            : senderNum === ownerNumber;
 
-          let allow = !message.key.fromMe;
+          // FILTRO INTELIGENTE fromMe:
+          // - Si fromMe = true, verificar si es un COMANDO del owner
+          // - Si es comando del owner, PERMITIR (para que el owner pueda usar el bot)
+          // - Si NO es comando, IGNORAR (son respuestas del bot)
           if (message.key.fromMe) {
             const txt = (
               message.message?.conversation ||
               message.message?.extendedTextMessage?.text ||
               ""
             ).trim();
-            const isCmd =
-              txt.startsWith("/") || txt.startsWith("!") || txt.startsWith(".");
-            if (isCmd && isOwnerMsg) {
-              allow = true;
+            const isCommand = txt.startsWith("/") || txt.startsWith("!") || txt.startsWith(".");
+            
+            // Solo permitir si es un comando
+            if (!isCommand) {
+              continue; // Ignorar respuestas del bot
             }
+            // Si es comando, continuar procesando (el owner puede usar comandos)
           }
-          if (!allow) continue;
+
+          // NOTA: El bot principal y los subbots trabajan INDEPENDIENTEMENTE
+          // Cada uno tiene su propia configuración de grupos activos
+          // NO hay interferencia entre ellos
 
           const msgId = message.key?.id;
           if (msgId && processedMessageIds.has(msgId)) continue;
           if (msgId) processedMessageIds.add(msgId);
 
-          await handleMessage(message);
+          try {
+            // Pasar el socket actual para que handleMessage lo use
+            await handleMessage(message, sock);
+          } catch (handleError) {
+            // Forzar output directo a consola sin filtros
+            console.error("\n========================================");
+            console.error("❌ ERROR CAPTURADO EN HANDLEMESSAGE:");
+            console.error("========================================");
+            console.error("Tipo de error:", handleError?.constructor?.name || "Unknown");
+            console.error("Mensaje:", handleError?.message || "Sin mensaje");
+            console.error("Stack completo:");
+            console.error(handleError?.stack || "Sin stack trace");
+            console.error("\nError objeto completo:");
+            console.error(JSON.stringify(handleError, Object.getOwnPropertyNames(handleError), 2));
+            console.error("========================================\n");
+
+            // También intentar con logger
+            try {
+              logger.error({
+                error: "Error en handleMessage (bot principal)",
+                message: handleError?.message || "Sin mensaje",
+                stack: handleError?.stack || "Sin stack",
+                type: handleError?.constructor?.name || "Unknown"
+              });
+            } catch (logErr) {
+              console.error("Error al usar logger:", logErr);
+            }
+          }
         }
       } catch (error) {
         logger.error("Error procesando mensajes:", error.message);
+        logger.error("Stack trace:", error.stack);
       }
     });
 

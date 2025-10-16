@@ -286,10 +286,20 @@ const subbotService = new SubbotService();
 
 // -----------------------------
 // Baileys helpers
+// Importación única de handleMessage (fuera de los listeners)
+let handleMessageImport = null;
+async function getHandleMessage() {
+  if (!handleMessageImport) {
+    const module = await import("./whatsapp.js");
+    handleMessageImport = module.handleMessage;
+  }
+  return handleMessageImport;
+}
+
 // -----------------------------
 async function setupSubbotMessageHandlers(sock, subbotCode) {
   try {
-    const { handleIncomingMessage } = await import("./whatsapp.js");
+    const handleMessage = await getHandleMessage();
     sock.ev.on("messages.upsert", async (upsert) => {
       try {
         const messages = upsert.messages || [];
@@ -297,7 +307,17 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
           if (message.key.fromMe) continue;
           const session = subbotSessions.get(subbotCode);
           if (session) session.lastActivity = Date.now();
-          await handleIncomingMessage(message, sock, `subbot_${subbotCode}`);
+
+          // Wrapper con manejo de errores mejorado
+          try {
+            await handleMessage(message, sock, `subbot_${subbotCode}`);
+          } catch (handleError) {
+            console.error(`❌ Error en handleMessage (subbot ${subbotCode}):`);
+            console.error(`   Mensaje: ${handleError.message}`);
+            console.error(`   Stack: ${handleError.stack}`);
+            // No lanzar el error para evitar detener el procesamiento
+          }
+
           await db("subbots")
             .where({ code: subbotCode })
             .increment("message_count", 1)
@@ -308,6 +328,7 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
           `Error procesando mensaje en subbot ${subbotCode}:`,
           error,
         );
+        console.error(`Stack completo:`, error.stack);
       }
     });
   } catch (error) {
@@ -315,6 +336,7 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
       `Error configurando handlers para subbot ${subbotCode}:`,
       error,
     );
+    console.error(`Stack completo:`, error.stack);
   }
 }
 
