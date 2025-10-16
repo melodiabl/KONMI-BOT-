@@ -25,3 +25,22 @@
 {"level":30,"time":"2025-10-16T00:08:06.632Z","pid":16252,"hostname":"DESKTOP-I3NRDVL","msg":"✨ [Sistema] Versión: 2.5.0"}
 {"level":30,"time":"2025-10-16T00:08:06.633Z","pid":16252,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Sistema] Iniciado exitosamente"}
 {"level":30,"time":"2025-10-16T00:08:06.642Z","pid":16252,"hostname":"DESKTOP-I3NRDVL","msg":"✅ Base de datos inicializada correctamente"}
+{"level":30,"time":"2025-10-16T01:10:46.057Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"Baileys cargado desde mdulo: baileys-mod"}
+{"level":30,"time":"2025-10-16T01:10:46.074Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Servidor] Backend iniciado en puerto 3001"}
+{"level":30,"time":"2025-10-16T01:10:46.074Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"🌐 [Servidor] Host: 0.0.0.0"}
+{"level":30,"time":"2025-10-16T01:10:46.074Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"📦 [Servidor] Entorno: production"}
+{"level":30,"time":"2025-10-16T01:10:46.075Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"🎨 [Frontend] URL: http://localhost:5173"}
+{"level":30,"time":"2025-10-16T01:10:46.075Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"🤖 [Bot] KONMI BOT v2.5.0"}
+{"level":30,"time":"2025-10-16T01:10:46.075Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"✨ [Sistema] Versión: 2.5.0"}
+{"level":30,"time":"2025-10-16T01:10:46.075Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Sistema] Iniciado exitosamente"}
+{"level":30,"time":"2025-10-16T01:10:46.086Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"✅ Base de díatos inicializadía correctamente"}
+{"level":50,"time":"2025-10-16T01:10:46.091Z","pid":12064,"hostname":"DESKTOP-I3NRDVL","msg":"Error conectando a WhatsApp:"}
+{"level":30,"time":"2025-10-16T01:11:08.949Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"Baileys cargado desde mdulo: baileys-mod"}
+{"level":30,"time":"2025-10-16T01:11:08.967Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Servidor] Backend iniciado en puerto 3001"}
+{"level":30,"time":"2025-10-16T01:11:08.967Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"🌐 [Servidor] Host: 0.0.0.0"}
+{"level":30,"time":"2025-10-16T01:11:08.967Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"📦 [Servidor] Entorno: production"}
+{"level":30,"time":"2025-10-16T01:11:08.967Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"🎨 [Frontend] URL: http://localhost:5173"}
+{"level":30,"time":"2025-10-16T01:11:08.967Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"🤖 [Bot] KONMI BOT v2.5.0"}
+{"level":30,"time":"2025-10-16T01:11:08.968Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"✨ [Sistema] Versión: 2.5.0"}
+{"level":30,"time":"2025-10-16T01:11:08.968Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"🚀 [Sistema] Iniciado exitosamente"}
+{"level":30,"time":"2025-10-16T01:11:08.982Z","pid":12156,"hostname":"DESKTOP-I3NRDVL","msg":"✅ Base de datos inicializadía correctamente"}

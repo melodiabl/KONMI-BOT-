@@ -394,7 +394,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
     const tableName = useTempTable ? "subbots_temp" : "subbots";
 
     try {
-      // Obtener subbots existentes en la base de díatos
+      // Obtener subbots existentes en la base de datos
       const rows = await db(tableName)
         .where({ request_jid: ownerNumber + "@s.whatsapp.net" })
         .orderBy("id", "desc");
@@ -448,7 +448,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
         }
       }
 
-      // Verificar si hay subbots en el sistema de archivos quée no están en la base de díatos
+      // Verificar si hay subbots en el sistema de archivos quée no están en la base de datos
       if (!useTempTable) {
         const subbotsDir = path.join(process.cwd(), "storage", "subbots");
         if (fs.existsSync(subbotsDir)) {
@@ -499,7 +499,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
       return true;
     } catch (dbError) {
       logger.error(
-        "Error al consultar/actualizar la base de díatos de subbots:",
+        "Error al consultar/actualizar la base de datos de subbots:",
         dbError?.message || "Error desconocido",
       );
       throw dbError;
@@ -511,31 +511,31 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
     return false;
   }
 }
-// Inicialización de la base de díatos
+// Inicialización de la base de datos
 async function initializeDatabase() {
   try {
-    // Verificar conexión a la base de díatos
+    // Verificar conexión a la base de datos
     const isConnected = await checkDatabaseConnection();
     if (!isConnected) {
-      throw new Error("No se pudo conectar a la base de díatos");
+      throw new Error("No se pudo conectar a la base de datos");
     }
 
     // Asegurar quée las tablas existan
     await ensureBotGlobalStateTable();
     await ensureSubbotsTable();
 
-    logger.info("✅ Base de díatos inicializadía correctamente");
+    logger.info("✅ Base de datos inicializadía correctamente");
     return true;
   } catch (error) {
-    logger.error("❌ Error al inicializar la base de díatos:", error);
-    process.exit(1); // Salir con error si no se puede inicializar la base de díatos
+    logger.error("❌ Error al inicializar la base de datos:", error);
+    process.exit(1); // Salir con error si no se puede inicializar la base de datos
   }
 }
 
-// Inicializar la base de díatos al cargar el módulo
+// Inicializar la base de datos al cargar el módulo
 initializeDatabase().catch((error) => {
   logger.error(
-    "Error fatal durante la inicialización de la base de díatos:",
+    "Error fatal durante la inicialización de la base de datos:",
     error,
   );
   process.exit(1);
@@ -588,11 +588,11 @@ import {
   handleImage,
   handleTranslate,
   handleWeather,
-  handleQuéote,
+  handleQuote,
   handleFact,
   handleTrivia,
   handleHoroscope,
-  handleBotsLegacy,
+  
   handleKick,
   handlePromote,
   handleDemote,
@@ -601,7 +601,7 @@ import {
 } from "./commands-complete.js";
 
 // Gestor multi-cuenta (subbots reales)
-import { startSubbot, stopSubbot, getAllSubbots } from "./lib/subbots.js";
+import { startSubbot, stopSubbotRuntime, getAllSubbots } from "./lib/subbots.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1013,7 +1013,7 @@ async function isBotActiveInGroup(groupId) {
   }
 }
 
-// Verificar estado global del bot desde la base de díatos
+// Verificar estado global del bot desde la base de datos
 async function isBotGloballyActiveFromDB() {
   try {
     await ensureBotGlobalStateTable();
@@ -1050,7 +1050,7 @@ async function getGroupName(groupId) {
       return groupNameCache.get(groupId);
     }
 
-    // Intentar obtener metadíatos del grupo
+    // Intentar obtener metadatos del grupo
     try {
       const groupMetadata = await sock.groupMetadata(groupId);
       if (groupMetadata && groupMetadata.subject) {
@@ -1059,7 +1059,7 @@ async function getGroupName(groupId) {
         return groupMetadata.subject;
       }
     } catch (metaError) {
-      logger.error("Error obteniendo metadíatos del grupo:", metaError);
+      logger.error("Error obteniendo metadatos del grupo:", metaError);
     }
 
     // Fallback: usar los ultimos 4 digitos del ID del grupo
@@ -1355,7 +1355,7 @@ async function logAllMessages(
     let groupName = null;
     if (isGroup) {
       try {
-        // Intentar obtener desde metadíatos directamente
+        // Intentar obtener desde metadatos directamente
         const groupMetadata = await sock.groupMetadata(remoteJid);
         if (groupMetadata && groupMetadata.subject) {
           groupName = groupMetadata.subject;
@@ -2072,7 +2072,7 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
               }),
             });
           } catch (e) {
-            logger.error("Error al guardíar en la base de díatos:", e);
+            logger.error("Error al guardíar en la base de datos:", e);
             throw new Error(
               "Error al procesar tu solicitud. Por favor, inténtalo de nuevo.",
             );
@@ -2288,7 +2288,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           // Crear respuesta de fallback
           result = {
             message:
-              "🗃️ *Lista de aportes*\n\n⚠️ Error accediendo a la base de díatos.\n\n➕ Usa `/addaporte [contenido]` para agregar un aporte.",
+              "🗃️ *Lista de aportes*\n\n⚠️ Error accediendo a la base de datos.\n\n➕ Usa `/addaporte [contenido]` para agregar un aporte.",
           };
         }
         break;
@@ -2808,7 +2808,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } else {
           const groupName = args.join(" ");
           try {
-            // Agregar grupo a la base de díatos
+            // Agregar grupo a la base de datos
             await db("grupos_autorizados").insert({
               jid: remoteJid,
               nombre: groupName,
@@ -2848,7 +2848,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: "ℹ️ Este grupo no estaba registrado en la base de díatos.",
+                text: "ℹ️ Este grupo no estaba registrado en la base de datos.",
               });
             }
           } catch (error) {
@@ -4326,7 +4326,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           });
         } else {
           try {
-            // Usar API gratuita de OpenWeatherMap (sin API key para díatos bsicos)
+            // Usar API gratuita de OpenWeatherMap (sin API key para datos bsicos)
             const response = await fetch(
               `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=demo&units=metric&lang=es`,
             );
@@ -4485,7 +4485,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             throw new Error("No se pudo obtener díato");
           }
         } catch (error) {
-          // Fallback con díatos curiosos locales
+          // Fallback con datos curiosos locales
           const facts = [
             "Los pulpos tienen tres corazones y sangre azul.",
             "Una cucaracha puede vivir hasta una semana sin cabeza.",
@@ -4519,9 +4519,9 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             data.results &&
             data.results.length > 0
           ) {
-            const quéestion = data.results[0];
-            const correctAnswer = quéestion.correct_answer;
-            const incorrectAnswers = quéestion.incorrect_answers;
+            const question = data.results[0];
+            const correctAnswer = question.correct_answer;
+            const incorrectAnswers = question.incorrect_answers;
 
             // Mezclar respuestas
             const allAnswers = [...incorrectAnswers, correctAnswer].sort(
@@ -4541,14 +4541,14 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
             const triviaText =
               `🧠 *Pregunta de Trivia* 🧠\n\n` +
-              `❓ ${decodeHtml(quéestion.quéestion)}\n\n` +
+              `❓ ${decodeHtml(question.question)}\n\n` +
               `📋 **Opciones:** 📋\n` +
               `1️⃣ ${decodeHtml(allAnswers[0])}\n` +
               `2️⃣ ${decodeHtml(allAnswers[1])}\n` +
               `3️⃣ ${decodeHtml(allAnswers[2])}\n` +
               `4️⃣ ${decodeHtml(allAnswers[3])}\n\n` +
-              `🏷️ **Categoría:** ${quéestion.category}\n` +
-              `⭐ **Dificuáltad:** ${quéestion.difficuálty.toUpperCase()}\n\n` +
+              `🏷️ **Categoría:** ${question.category}\n` +
+              `⭐ **Dificuáltad:** ${question.difficuálty.toUpperCase()}\n\n` +
               `✅ **Respuesta correcta:** ✅ Opción ${correctIndex}\n` +
               `💡 **Respuesta:** ${decodeHtml(correctAnswer)}\n\n` +
               `📝 📝 Solicitado por: @${usuario}\n` +
@@ -4567,25 +4567,25 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           // Fallback con preguntas locales
           const localTrivia = [
             {
-              quéestion: "Cuál es el planeta ms grande del sistema solar?",
+              question: "Cuál es el planeta ms grande del sistema solar?",
               options: ["Tierra", "Jpiter", "Saturno", "Neptuno"],
               correct: 1,
               answer: "Jpiter",
             },
             {
-              quéestion: "En qué ao se fund WhatsApp?",
+              question: "En qué ao se fund WhatsApp?",
               options: ["2007", "2009", "2011", "2013"],
               correct: 1,
               answer: "2009",
             },
             {
-              quéestion: "Cuál es el lenguaje de programacin ms usado en 2024?",
+              question: "Cuál es el lenguaje de programacin ms usado en 2024?",
               options: ["Python", "JavaScript", "Java", "C++"],
               correct: 1,
               answer: "JavaScript",
             },
             {
-              quéestion: "Cuntos continentes hay en el mundo?",
+              question: "Cuntos continentes hay en el mundo?",
               options: ["5", "6", "7", "8"],
               correct: 2,
               answer: "7",
@@ -4597,7 +4597,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
           const triviaText =
             `🧠 *Pregunta de Trivia* 🧠\n\n` +
-            `❓ ${randomTrivia.quéestion}\n\n` +
+            `❓ ${randomTrivia.question}\n\n` +
             `📋 **Opciones:** 📋\n` +
             `1️⃣ ${randomTrivia.options[0]}\n` +
             `2️⃣ ${randomTrivia.options[1]}\n` +
@@ -5054,7 +5054,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               }),
             });
           } catch (e) {
-            logger.error("Error al guardíar en la base de díatos:", e);
+            logger.error("Error al guardíar en la base de datos:", e);
             throw new Error(
               "Error al procesar tu solicitud. Por favor, inténtalo de nuevo.",
             );
@@ -5153,7 +5153,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             break;
           }
 
-          // Agregar el subbot a la base de díatos
+          // Agregar el subbot a la base de datos
           const [subbotId] = await db("subbots").insert({
             nombre: nombreBot,
             numero: numeroBot,
@@ -5196,7 +5196,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         } catch (error) {
           logger.error("Error agregando subbot:", error);
           await sock.sendMessage(remoteJid, {
-            text: `🤖 *Agregar SubBot*\n\n❌ Error agregando subbot\n\n💡 Verifica los díatos e intenta nuevamente`,
+            text: `🤖 *Agregar SubBot*\n\n❌ Error agregando subbot\n\n💡 Verifica los datos e intenta nuevamente`,
           });
         }
         break;
@@ -6781,7 +6781,7 @@ async function connectToWhatsApp(
         logger.pretty.line("1) QR Code - Escanear código QR en terminal");
         logger.pretty.line("2) Pairing Code - Código de 8 dígitos");
 
-        rl.quéestion(" Seleccione método (1 o 2): ", (answer) => {
+        rl.question(" Seleccione método (1 o 2): ", (answer) => {
           const choice = answer.trim();
 
           if (choice === "1") {
@@ -6790,7 +6790,7 @@ async function connectToWhatsApp(
             rl.close();
             resolve({ method: "qr" });
           } else if (choice === "2") {
-            rl.quéestion(
+            rl.question(
               "\n Ingrese número de teléfono con código de pas (ej: 595974154768): ",
               (phone) => {
                 const cleanedNumber = sanitizePhoneNumberInput(phone);
@@ -7497,13 +7497,13 @@ async function connectWithPairingCode(phoneNumber, authPath = null) {
   return await connectToWhatsApp(effectiveAuthPath, true, normalized);
 }
 
-// Función para verificar la conexión a la base de díatos
+// Función para verificar la conexión a la base de datos
 async function checkDatabaseConnection() {
   try {
     await db.raw("SELECT 1");
     return true;
   } catch (error) {
-    logger.error("Error de conexión a la base de díatos:", error);
+    logger.error("Error de conexión a la base de datos:", error);
     return false;
   }
 }
