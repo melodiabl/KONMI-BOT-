@@ -12,7 +12,7 @@ import {
   isPremium,
   getOwnerName,
 } from "./global-config.js";
-// Consolidíacion de comandos: reexportamos funciones de modulos especificos
+// Consolidacion de comandos: reexportamos funciones de modulos especificos
 import {
   // Media
   handleMusic,
@@ -79,7 +79,7 @@ async function ensureGruposAutorizadosTable() {
   if (!hasTable) {
     await db.schema.createTable("grupos_autorizados", (t) => {
       t.increments("id");
-      t.string("jid").uniquée().notNullable();
+      t.string("jid").unique().notNullable();
       t.boolean("bot_enabled").defaultTo(true);
       t.string("tipo").nullable();
     });
@@ -97,7 +97,7 @@ async function handleBots(usuario) {
     // Obtener todos los subbots con flag de conexión
     const subs = await fetchSubbotListWithOnlineFlag();
 
-    // Filtrar por propietario (compatibilidíad con distintos esquéemas de tabla)
+    // Filtrar por propietario (compatibilidad con distintos esquemas de tabla)
     const mine = (subs || []).filter((s) => {
       const createdBy = String(s.created_by || "").replace(/[^0-9]/g, "");
       const ownerNumber = String(s.owner_number || "").replace(/[^0-9]/g, "");
@@ -117,7 +117,7 @@ async function handleBots(usuario) {
       };
     }
 
-    const now = Díate.now();
+    const now = Date.now();
     let text = `  *Mis SubBots (${mine.length})*\n\n`;
     for (let i = 0; i < mine.length; i++) {
       const sb = mine[i];
@@ -130,7 +130,7 @@ async function handleBots(usuario) {
       const refTime = connectedAtIso || createdAtIso || sb.updated_at || null;
       let uptime = "N/D";
       if (refTime) {
-        const ms = now - new Díate(refTime).getTime();
+        const ms = now - new Date(refTime).getTime();
         const h = Math.floor(ms / 3600000);
         const m = Math.floor((ms % 3600000) / 60000);
         uptime = `${h}h ${m}m`;
@@ -141,7 +141,7 @@ async function handleBots(usuario) {
       text += `   Estado: ${status}\n`;
       if (sb.bot_number) text += `   Número: +${sb.bot_number}\n`;
       if (createdAtIso)
-        text += `   Creado: ${new Díate(createdAtIso).toLocaleString("es-ES")}\n`;
+        text += `   Creado: ${new Date(createdAtIso).toLocaleString("es-ES")}\n`;
       if (sb.isOnline) text += `   Tiempo funcionando: ${uptime}\n`;
       text += `\n`;
     }
@@ -175,12 +175,12 @@ function isSpecificOwner(usuario) {
  * Verificar si un usuario es admin del grupo o tiene rol de owner/superadmin/moderador
  */
 async function isOwnerOrAdmin(usuario, grupo = null) {
-  // Prioridíad 1: owner especfico o superadmin global
+  // Prioridad 1: owner especfico o superadmin global
   try {
     if (isSpecificOwner(usuario) || isSuperAdmin(usuario)) return true;
   } catch (_) {}
 
-  // Prioridíad 2: admin real del grupo
+  // Prioridad 2: admin real del grupo
   if (grupo && grupo.endsWith("@g.us")) {
     try {
       const adminInGroup = await isGroupAdmin(usuario, grupo);
@@ -193,12 +193,12 @@ async function isOwnerOrAdmin(usuario, grupo = null) {
     }
   }
 
-  // Prioridíad 3: moderadores configurados dinámicamente
+  // Prioridad 3: moderadores configurados dinámicamente
   try {
     if (isModerator(usuario)) return true;
   } catch (_) {}
 
-  // Prioridíad 4: lista dinmica de administradores
+  // Prioridad 4: lista dinmica de administradores
   const normalized = String(usuario)
     .split(":")[0]
     .replace(/[^0-9]/g, "");
@@ -219,7 +219,7 @@ function updateAdminNumbers(newAdminNumbers) {
   const merged = new Set([...base, ...normalized]);
   dynamicAdminNumbers = Array.from(merged);
   console.log(
-    ` Lista de admins actualizadía: ${dynamicAdminNumbers.join(", ")}`,
+    ` Lista de admins actualizada: ${dynamicAdminNumbers.join(", ")}`,
   );
 }
 
@@ -266,7 +266,7 @@ async function isProviderGroup(grupoId) {
  */
 async function logCommand(tipo, comando, usuario, grupo, detalles = null) {
   try {
-    const fecha = new Díate().toISOString();
+    const fecha = new Date().toISOString();
     const payload = { tipo, comando, usuario, grupo, fecha };
     if (detalles) {
       try {
@@ -281,7 +281,7 @@ async function logCommand(tipo, comando, usuario, grupo, detalles = null) {
   }
 }
 
-// Helper para construir un menu de ayudía mas legible y bonito
+// Helper para construir un menu de ayuda mas legible y bonito
 function buildPrettyHelp(isAdmin) {
   const divider = "";
   let text = `\n`;
@@ -308,8 +308,8 @@ function buildPrettyHelp(isAdmin) {
 
   text += " *MEDIA & ENTRETENIMIENTO*\n";
   text += "\n";
-  text += " `play <busquéedía>`   Audio de YouTube   \n";
-  text += " `video <busquéedía>`  Video de YouTube   \n";
+  text += " `play <busqueda>`   Audio de YouTube   \n";
+  text += " `video <busqueda>`  Video de YouTube   \n";
   text += " `meme`              Meme aleatorio     \n";
   text += " `sticker`           Crear sticker      \n";
   text += "\n\n";
@@ -317,7 +317,7 @@ function buildPrettyHelp(isAdmin) {
   text += " *DESCARGAS & ARCHIVOS*\n";
   text += "\n";
   text += " `descargar <url> <nombre> <cat>`       \n";
-  text += " `guardíar <cat>` (responde a media)     \n";
+  text += " `guardar <cat>` (responde a media)     \n";
   text += " `archivos [cat]`  `misarchivos`        \n";
   text += "\n\n";
 
@@ -343,7 +343,7 @@ function buildPrettyHelp(isAdmin) {
     text += " `bot global on/off`   Modo global      \n";
     text += " `update`           Actualizar bot      \n";
     text += " `logs [tipo]`      Ver logs del sistema\n";
-    text += " `lock` / `unlock`  Bloquéear/desbloquéear\n";
+    text += " `lock` / `unlock`  Bloquear/desbloquear\n";
     text += " `addgroup` / `delgroup`   Gestionar grupos\n";
     text += "\n\n";
   }
@@ -351,8 +351,8 @@ function buildPrettyHelp(isAdmin) {
   text += " *CONSEJOS DE USO*\n";
   text += "\n";
   text += "  Usa `/`, `!` o `.` para comandos      \n";
-  text += "  Algunos comandos requéieren admin      \n";
-  text += "  Los subbots se vencen: guardía QR/code \n";
+  text += "  Algunos comandos requieren admin      \n";
+  text += "  Los subbots se vencen: guarda QR/code \n";
   text += "  El bot detecta tu numero automaticamente\n";
   text += "  Escribe `help <comando>` para mas info\n";
   text += "\n\n";
@@ -392,7 +392,7 @@ async function getDisplayMention(userJidOrNum) {
 }
 
 /**
- * /help - Muestra lista de comandos disponibles (solo verifica admin por WhatsApp, no por base de díatos)
+ * /help - Muestra lista de comandos disponibles (solo verifica admin por WhatsApp, no por base de datos)
  */
 async function handleHelp(usuario, grupo, isGroup) {
   const isAdmin = await isOwnerOrAdmin(usuario, grupo);
@@ -402,7 +402,7 @@ async function handleHelp(usuario, grupo, isGroup) {
   return { success: true, message: pretty };
 }
 
-// Reutilizamos las implementaciones centralizadías en commands.js para evitar duplicados.
+// Reutilizamos las implementaciones centralizadas en commands.js para evitar duplicados.
 const handleIA = handleAICommand;
 const handleClasificar = handleClasificarCommand;
 
@@ -500,7 +500,7 @@ async function handleMyAportes(usuario, grupo, filtroTipo = null) {
     for (const tipo of tipos) {
       message += `\n ${tipo.toUpperCase()} (${byTipo[tipo].length})\n`;
       byTipo[tipo].slice(0, 10).forEach((r, i) => {
-        const fecha = new Díate(r.fecha).toLocaleDíateString("es-ES");
+        const fecha = new Date(r.fecha).toLocaleDateString("es-ES");
         message += `  ${i + 1}. ${r.contenido}  ${fecha}\n`;
       });
     }
@@ -526,7 +526,7 @@ async function handleAportes(usuario, grupo, isGroup, filtroTipo = null) {
       return { success: true, message: " No hay aportes registrados." };
     }
     // Resolver nombres de usuario a partir del numero (JID) de forma robusta
-    const uniquéeNums = [
+    const uniqueNums = [
       ...new Set(
         aportes.map((a) => String(a.usuario).split("@")[0].split(":")[0]),
       ),
@@ -535,9 +535,9 @@ async function handleAportes(usuario, grupo, isGroup, filtroTipo = null) {
     let waByNumber = {};
     try {
       const hasUsers = await db.schema.hasTable("usuarios");
-      if (hasUsers && uniquéeNums.length) {
+      if (hasUsers && uniqueNums.length) {
         const users = await db("usuarios")
-          .whereIn("whatsapp_number", uniquéeNums)
+          .whereIn("whatsapp_number", uniqueNums)
           .select("whatsapp_number", "username");
         nameByNumber = Object.fromEntries(
           (users || []).map((u) => [u.whatsapp_number, u.username]),
@@ -545,7 +545,7 @@ async function handleAportes(usuario, grupo, isGroup, filtroTipo = null) {
       }
     } catch (_) {}
     try {
-      const missing = uniquéeNums.filter((n) => !nameByNumber[n]);
+      const missing = uniqueNums.filter((n) => !nameByNumber[n]);
       const hasWa = await db.schema.hasTable("wa_contacts");
       if (hasWa && missing.length) {
         const waNames = await db("wa_contacts")
@@ -580,7 +580,7 @@ async function handleAportes(usuario, grupo, isGroup, filtroTipo = null) {
     for (const tipo of tipos) {
       message += `\n ${tipo.toUpperCase()} (${byTipo[tipo].length})\n`;
       byTipo[tipo].slice(0, 10).forEach((r, i) => {
-        const fecha = new Díate(r.fecha).toLocaleDíateString("es-ES");
+        const fecha = new Date(r.fecha).toLocaleDateString("es-ES");
         const num = String(r.usuario).split("@")[0].split(":")[0];
         const resolved = nameByNumber[num] || waByNumber[num] || num;
         const uname = `@${resolved}`;
@@ -625,7 +625,7 @@ async function handleManhwas(usuario, grupo) {
 }
 
 /**
- * /addaporte [díatos] - Permite enviar un aporte
+ * /addaporte [datos] - Permite enviar un aporte
  */
 async function handleAddAporte(
   contenido,
@@ -647,10 +647,10 @@ async function handleAddAporte(
     await logCommand("comando", "addaporte", usuario, grupo);
     return {
       success: true,
-      message: ` Aporte de tipo "${tipo}" guardíado correctamente.`,
+      message: ` Aporte de tipo "${tipo}" guardado correctamente.`,
     };
   } catch (error) {
-    return { success: false, message: "Error al guardíar aporte." };
+    return { success: false, message: "Error al guardar aporte." };
   }
 }
 
@@ -679,7 +679,7 @@ async function handleAporteEstado(id, estado, usuario, grupo) {
       .update({
         estado: normalized,
         procesado_por: usuario,
-        fecha_procesado: new Díate().toISOString(),
+        fecha_procesado: new Date().toISOString(),
       });
     await logCommand("administracion", "aporteestado", usuario, grupo);
     return {
@@ -702,7 +702,7 @@ async function handleLock(usuario, grupo, isGroup) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
     return {
       success: false,
-      message: " Solo administradores pueden bloquéear el grupo.",
+      message: " Solo administradores pueden bloquear el grupo.",
     };
   }
 
@@ -718,7 +718,7 @@ async function handleLock(usuario, grupo, isGroup) {
     });
     return {
       success: true,
-      message: " Grupo bloquéeado. Solo administradores pueden enviar mensajes.",
+      message: " Grupo bloqueado. Solo administradores pueden enviar mensajes.",
     };
   } catch (error) {
     // Usar el logger de WhatsApp para mejor formato
@@ -727,13 +727,13 @@ async function handleLock(usuario, grupo, isGroup) {
       stack: error.stack,
       grupo,
       usuario,
-      timestamp: new Díate().toISOString(),
+      timestamp: new Date().toISOString(),
     });
 
     const detail = error?.message
       ? ` Detalle: ${error.message}`
-      : " Asegrate de quée el bot sea administrador.";
-    return { success: false, message: ` Error al bloquéear el grupo.${detail}` };
+      : " Asegrate de que el bot sea administrador.";
+    return { success: false, message: ` Error al bloquear el grupo.${detail}` };
   }
 }
 
@@ -748,7 +748,7 @@ async function handleUnlock(usuario, grupo, isGroup) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
     return {
       success: false,
-      message: " Solo administradores pueden desbloquéear el grupo.",
+      message: " Solo administradores pueden desbloquear el grupo.",
     };
   }
 
@@ -765,7 +765,7 @@ async function handleUnlock(usuario, grupo, isGroup) {
     return {
       success: true,
       message:
-        " Grupo desbloquéeado. Todos los participantes pueden enviar mensajes.",
+        " Grupo desbloqueado. Todos los participantes pueden enviar mensajes.",
     };
   } catch (error) {
     // Usar el logger de WhatsApp para mejor formato
@@ -774,30 +774,30 @@ async function handleUnlock(usuario, grupo, isGroup) {
       stack: error.stack,
       grupo,
       usuario,
-      timestamp: new Díate().toISOString(),
+      timestamp: new Date().toISOString(),
     });
 
     const detail = error?.message
       ? ` Detalle: ${error.message}`
-      : " Asegrate de quée el bot sea administrador.";
+      : " Asegrate de que el bot sea administrador.";
     return {
       success: false,
-      message: ` Error al desbloquéear el grupo.${detail}`,
+      message: ` Error al desbloquear el grupo.${detail}`,
     };
   }
 }
 
 /**
- * /addmanhwa [díatos] - Permite agregar un nuevo manhwa (solo Admin)
+ * /addmanhwa [datos] - Permite agregar un nuevo manhwa (solo Admin)
  */
-async function handleAddManhwa(díatos, usuario, grupo) {
+async function handleAddManhwa(datos, usuario, grupo) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
     return { success: false, message: " Solo Admin puede agregar manhwas." };
   }
 
   try {
-    // Parsear díatos: titulo|autor|genero|estado|descripcion|url|proveedor
-    const parts = díatos.split("|");
+    // Parsear datos: titulo|autor|genero|estado|descripcion|url|proveedor
+    const parts = datos.split("|");
     if (parts.length < 4) {
       return {
         success: false,
@@ -814,7 +814,7 @@ async function handleAddManhwa(díatos, usuario, grupo) {
       url = "",
       proveedor = "General",
     ] = parts;
-    const fecha_registro = new Díate().toISOString();
+    const fecha_registro = new Date().toISOString();
 
     const stmt = await db.prepare(
       "INSERT INTO manhwas (titulo, autor, genero, estado, descripcion, url, proveedor, fecha_registro, usuario_registro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -843,9 +843,9 @@ async function handleAddManhwa(díatos, usuario, grupo) {
 }
 
 /**
- * /addserie [díatos] - Permite agregar una nueva serie (cualquéier usuario si el bot esta activo)
+ * /addserie [datos] - Permite agregar una nueva serie (cualquier usuario si el bot esta activo)
  */
-async function handleAddSerie(díatos, usuario, grupo, isGroup) {
+async function handleAddSerie(datos, usuario, grupo, isGroup) {
   // Verificar si el bot esta activo en el grupo o usuario admin
   if (
     isGroup &&
@@ -859,19 +859,19 @@ async function handleAddSerie(díatos, usuario, grupo, isGroup) {
   }
 
   try {
-    // Parsear díatos con formato mas simple: titulo|genero|estado|descripcion
-    const parts = díatos.split("|");
+    // Parsear datos con formato mas simple: titulo|genero|estado|descripcion
+    const parts = datos.split("|");
     if (parts.length < 2) {
       return {
         success: false,
         message:
-          " Formato: ttulo|gnero|estado|descripcin\nEjemplo: /addserie Attack on Titan|Accin|Finalizadía|Serie sobre titanes",
+          " Formato: ttulo|gnero|estado|descripcin\nEjemplo: /addserie Attack on Titan|Accin|Finalizada|Serie sobre titanes",
       };
     }
 
     const [titulo, genero = "Serie", estado = "En emision", descripcion = ""] =
       parts;
-    const fecha_registro = new Díate().toISOString();
+    const fecha_registro = new Date().toISOString();
 
     // Verificar si la serie ya existe
     const serieExistente = await db.get(
@@ -882,7 +882,7 @@ async function handleAddSerie(díatos, usuario, grupo, isGroup) {
     if (serieExistente) {
       return {
         success: false,
-        message: ` La serie "${titulo}" ya existe en la base de díatos.`,
+        message: ` La serie "${titulo}" ya existe en la base de datos.`,
       };
     }
 
@@ -907,7 +907,7 @@ async function handleAddSerie(díatos, usuario, grupo, isGroup) {
       "INSERT INTO aportes (contenido, tipo, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)",
     );
     await stmtAporte.run(
-      `Serie agregadía: ${titulo}`,
+      `Serie agregada: ${titulo}`,
       "serie",
       usuario,
       grupo,
@@ -919,7 +919,7 @@ async function handleAddSerie(díatos, usuario, grupo, isGroup) {
     const mention = await getDisplayMention(usuario);
     return {
       success: true,
-      message: ` *Serie agregadía correctamente:*\n\n **${titulo}**\n Gnero: ${genero}\n Estado: ${estado}\n ${descripcion}\n Agregadía por: ${mention}`,
+      message: ` *Serie agregada correctamente:*\n\n **${titulo}**\n Gnero: ${genero}\n Estado: ${estado}\n ${descripcion}\n Agregada por: ${mention}`,
     };
   } catch (error) {
     return { success: false, message: "Error al agregar serie." };
@@ -927,7 +927,7 @@ async function handleAddSerie(díatos, usuario, grupo, isGroup) {
 }
 
 /**
- * /series - Lista todías las series disponibles
+ * /series - Lista todas las series disponibles
  */
 async function handleSeries(usuario, grupo) {
   try {
@@ -937,10 +937,10 @@ async function handleSeries(usuario, grupo) {
     );
 
     if (series.length === 0) {
-      return { success: true, message: " No hay series registradías." };
+      return { success: true, message: " No hay series registradas." };
     }
 
-    // Resolver nombres de quéien registr
+    // Resolver nombres de quien registr
     const nums = [
       ...new Set(
         series.map(
@@ -994,7 +994,7 @@ async function handleSeries(usuario, grupo) {
 }
 
 /**
- * /pedido [contenido] - Hace un pedido y busca en la base de díatos si existe
+ * /pedido [contenido] - Hace un pedido y busca en la base de datos si existe
  */
 async function handlePedido(contenido, usuario, grupo, fecha) {
   try {
@@ -1020,7 +1020,7 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
       [`%${contenido}%`, `${contenido}%`],
     );
 
-    // Registrar el pedido en la base de díatos
+    // Registrar el pedido en la base de datos
     const stmt = await db.prepare(
       "INSERT INTO pedidos (texto, estado, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)",
     );
@@ -1065,7 +1065,7 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
         const mention = `@${u?.username || wa?.display_name || num}`;
         response += ` Aportado por: ${mention}\n`;
       }
-      response += ` Fecha: ${new Díate(aporteEncontrado.fecha).toLocaleDíateString()}\n\n`;
+      response += ` Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
     }
 
     // Buscar y enviar archivos fsicos si existen
@@ -1109,7 +1109,7 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
             if (mediaType === "image") {
               sentMessage = await sock.sendMessage(remoteJid, {
                 image: fileBuffer,
-                caption: ` ${archivo.filename}\n ${archivo.category}\n Subido por: ${archivo.usuario}\n ${new Díate(archivo.fecha).toLocaleDíateString()}`,
+                caption: ` ${archivo.filename}\n ${archivo.category}\n Subido por: ${archivo.usuario}\n ${new Date(archivo.fecha).toLocaleDateString()}`,
               });
             } else if (mediaType === "video") {
               sentMessage = await sock.sendMessage(remoteJid, {
@@ -1139,7 +1139,7 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
                 .update({
                   estado: "completado",
                   completado_por: "bot",
-                  fecha_completado: new Díate().toISOString(),
+                  fecha_completado: new Date().toISOString(),
                 });
             }
           }
@@ -1158,7 +1158,7 @@ async function handlePedido(contenido, usuario, grupo, fecha) {
     }
 
     if (!manhwaEncontrado && !aporteEncontrado && archivosEnviados === 0) {
-      response += ` *No encontrado en la base de díatos*\n`;
+      response += ` *No encontrado en la base de datos*\n`;
       response += `Tu pedido ha sido registrado y ser revisado por los administradores.\n`;
     } else if (archivosEnviados > 0) {
       response += `\n *Pedido completado automticamente!* `;
@@ -1188,7 +1188,7 @@ async function handlePedidos(usuario, grupo) {
 
     let message = ` *Tus pedidos (${pedidos.length}):*\n\n`;
     pedidos.forEach((pedido, index) => {
-      const fecha = new Díate(pedido.fecha).toLocaleDíateString();
+      const fecha = new Date(pedido.fecha).toLocaleDateString();
       const estado =
         pedido.estado === "pendiente"
           ? ""
@@ -1239,7 +1239,7 @@ async function handleExtra(nombre, usuario, grupo, fecha) {
 }
 
 /**
- * /ilustraciones - Lista las ilustraciones guardíadías
+ * /ilustraciones - Lista las ilustraciones guardadas
  */
 async function handleIlustraciones(usuario, grupo) {
   try {
@@ -1248,12 +1248,12 @@ async function handleIlustraciones(usuario, grupo) {
     );
 
     if (ilustraciones.length === 0) {
-      return { success: true, message: " No hay ilustraciones registradías." };
+      return { success: true, message: " No hay ilustraciones registradas." };
     }
 
     let message = ` *Ilustraciones disponibles (${ilustraciones.length}):*\n\n`;
     ilustraciones.forEach((ilustracion, index) => {
-      const fecha = new Díate(ilustracion.fecha).toLocaleDíateString();
+      const fecha = new Date(ilustracion.fecha).toLocaleDateString();
       message += `${index + 1}. Por @${ilustracion.usuario}\n`;
       message += `    ${fecha}\n\n`;
     });
@@ -1284,7 +1284,7 @@ async function handleLogs(usuario, grupo) {
 
     let message = ` *ltimos logs (${logs.length}):*\n\n`;
     logs.forEach((log, index) => {
-      const fecha = new Díate(log.fecha).toLocaleString();
+      const fecha = new Date(log.fecha).toLocaleString();
       message += `${index + 1}. *${log.comando}* (${log.tipo})\n`;
       message += `    @${log.usuario}\n`;
       message += `    ${fecha}\n\n`;
@@ -1362,12 +1362,12 @@ async function handleAdvertencias(estado, usuario, grupo) {
   await logCommand("configuracion", "advertencias", usuario, grupo);
   return {
     success: true,
-    message: ` Advertencias ${advertenciasActivas ? "activadías" : "desactivadías"}.`,
+    message: ` Advertencias ${advertenciasActivas ? "activadas" : "desactivadas"}.`,
   };
 }
 
 /**
- * /votar [opción] - Permite votar en una votacin activa
+ * /votar [opcin] - Permite votar en una votacin activa
  */
 async function handleVotar(opcion, usuario, grupo) {
   try {
@@ -1392,7 +1392,7 @@ async function handleVotar(opcion, usuario, grupo) {
     }
 
     // Registrar voto
-    const fecha = new Díate().toISOString();
+    const fecha = new Date().toISOString();
     const stmt = await db.prepare(
       "INSERT INTO votos (votacion_id, usuario, opcion, fecha) VALUES (?, ?, ?, ?)",
     );
@@ -1407,28 +1407,28 @@ async function handleVotar(opcion, usuario, grupo) {
 }
 
 /**
- * /crearvotacion [pregunta | opción1 | opción2...] - Crea una nueva votacin
+ * /crearvotacion [pregunta | opcin1 | opcin2...] - Crea una nueva votacin
  */
-async function handleCrearVotacion(díatos, usuario, grupo) {
+async function handleCrearVotacion(datos, usuario, grupo) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
     return { success: false, message: " Solo Admin puede crear votaciones." };
   }
 
   try {
-    const parts = díatos.split("|").map((part) => part.trim());
+    const parts = datos.split("|").map((part) => part.trim());
     if (parts.length < 3) {
       return {
         success: false,
         message:
-          " Formato: pregunta | opción1 | opción2 | ...\n\nEjemplo: /crearvotacion Cuál es tu manhwa favorito? | Solo Leveling | Tower of God | The Beginning After The End",
+          " Formato: pregunta | opcin1 | opcin2 | ...\n\nEjemplo: /crearvotacion Cul es tu manhwa favorito? | Solo Leveling | Tower of God | The Beginning After The End",
       };
     }
 
     const [titulo, ...opciones] = parts;
-    const fecha_inicio = new Díate().toISOString();
-    const fecha_fin = new Díate(
-      Díate.now() + 7 * 24 * 60 * 60 * 1000,
-    ).toISOString(); // 7 días
+    const fecha_inicio = new Date().toISOString();
+    const fecha_fin = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
+    ).toISOString(); // 7 das
 
     const stmt = await db.prepare(
       "INSERT INTO votaciones (titulo, descripcion, opciones, fecha_inicio, fecha_fin, estado, creador) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -1455,22 +1455,22 @@ async function handleCrearVotacion(díatos, usuario, grupo) {
       mensajeVotacion += `${index + 1}. ${opcion}\n`;
     });
 
-    mensajeVotacion += `\n *Duracin:* 7 días\n`;
+    mensajeVotacion += `\n *Duracin:* 7 das\n`;
     {
       const mention = await getDisplayMention(usuario);
-      mensajeVotacion += ` *Creadía por:* ${mention}\n`;
+      mensajeVotacion += ` *Creada por:* ${mention}\n`;
     }
     mensajeVotacion += ` *ID:* #${votacionId}\n\n`;
-    mensajeVotacion += ` *Para votar usa:* /votar [opción]\n`;
+    mensajeVotacion += ` *Para votar usa:* /votar [opcin]\n`;
     mensajeVotacion += ` *Ejemplo:* /votar ${opciones[0]}\n\n`;
-    mensajeVotacion += `_Participa y haz quée tu voz sea escuchadía!_ `;
+    mensajeVotacion += `_Participa y haz que tu voz sea escuchada!_ `;
 
     await logCommand("administracion", "crearvotacion", usuario, grupo);
 
     return {
       success: true,
       message: mensajeVotacion,
-      votacionCreadía: true,
+      votacionCreada: true,
       votacionId: votacionId,
     };
   } catch (error) {
@@ -1491,11 +1491,11 @@ async function handleCerrarVotacion(id, usuario, grupo) {
     const stmt = await db.prepare(
       "UPDATE votaciones SET estado = ? WHERE id = ?",
     );
-    await stmt.run("cerradía", id);
+    await stmt.run("cerrada", id);
     await stmt.finalize();
 
     await logCommand("administracion", "cerrarvotacion", usuario, grupo);
-    return { success: true, message: ` Votacin #${id} cerradía correctamente.` };
+    return { success: true, message: ` Votacin #${id} cerrada correctamente.` };
   } catch (error) {
     return { success: false, message: "Error al cerrar votacin." };
   }
@@ -1504,7 +1504,7 @@ async function handleCerrarVotacion(id, usuario, grupo) {
 // Comandos de obtencin desde grupos proveedor (solo Admin)
 
 /**
- * /obtenermanhwa [nombre] - Descarga y guardía un manhwa desde grupo proveedor
+ * /obtenermanhwa [nombre] - Descarga y guarda un manhwa desde grupo proveedor
  */
 async function handleObtenerManhwa(nombre, usuario, grupo) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
@@ -1520,7 +1520,7 @@ async function handleObtenerManhwa(nombre, usuario, grupo) {
 
   try {
     // Simular obtencin de manhwa
-    const fecha = new Díate().toISOString();
+    const fecha = new Date().toISOString();
     const stmt = await db.prepare(
       "INSERT INTO aportes (contenido, tipo, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)",
     );
@@ -1536,7 +1536,7 @@ async function handleObtenerManhwa(nombre, usuario, grupo) {
     await logCommand("obtencion", "obtenermanhwa", usuario, grupo);
     return {
       success: true,
-      message: ` Manhwa "${nombre}" obtenido y guardíado.`,
+      message: ` Manhwa "${nombre}" obtenido y guardado.`,
     };
   } catch (error) {
     return { success: false, message: "Error al obtener manhwa." };
@@ -1544,7 +1544,7 @@ async function handleObtenerManhwa(nombre, usuario, grupo) {
 }
 
 /**
- * /obtenerextra [nombre] - Descarga y guardía el extra de un manhwa
+ * /obtenerextra [nombre] - Descarga y guarda el extra de un manhwa
  */
 async function handleObtenerExtra(nombre, usuario, grupo) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
@@ -1559,7 +1559,7 @@ async function handleObtenerExtra(nombre, usuario, grupo) {
   }
 
   try {
-    const fecha = new Díate().toISOString();
+    const fecha = new Date().toISOString();
     const stmt = await db.prepare(
       "INSERT INTO aportes (contenido, tipo, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)",
     );
@@ -1569,7 +1569,7 @@ async function handleObtenerExtra(nombre, usuario, grupo) {
     await logCommand("obtencion", "obtenerextra", usuario, grupo);
     return {
       success: true,
-      message: ` Extra "${nombre}" obtenido y guardíado.`,
+      message: ` Extra "${nombre}" obtenido y guardado.`,
     };
   } catch (error) {
     return { success: false, message: "Error al obtener extra." };
@@ -1577,7 +1577,7 @@ async function handleObtenerExtra(nombre, usuario, grupo) {
 }
 
 /**
- * /obtenerilustracion [nombre] - Guardía una ilustracin desde grupo proveedor
+ * /obtenerilustracion [nombre] - Guarda una ilustracin desde grupo proveedor
  */
 async function handleObtenerIlustracion(nombre, usuario, grupo) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
@@ -1592,7 +1592,7 @@ async function handleObtenerIlustracion(nombre, usuario, grupo) {
   }
 
   try {
-    const fecha = new Díate().toISOString();
+    const fecha = new Date().toISOString();
     const stmt = await db.prepare(
       "INSERT INTO ilustraciones (imagen, usuario, grupo, fecha) VALUES (?, ?, ?, ?)",
     );
@@ -1602,7 +1602,7 @@ async function handleObtenerIlustracion(nombre, usuario, grupo) {
     await logCommand("obtencion", "obtenerilustracion", usuario, grupo);
     return {
       success: true,
-      message: ` Ilustracin "${nombre}" obtenidía y guardíadía.`,
+      message: ` Ilustracin "${nombre}" obtenida y guardada.`,
     };
   } catch (error) {
     return { success: false, message: "Error al obtener ilustracin." };
@@ -1610,7 +1610,7 @@ async function handleObtenerIlustracion(nombre, usuario, grupo) {
 }
 
 /**
- * /obtenerpack [nombre] - Guardía un pack de contenido desde grupo proveedor
+ * /obtenerpack [nombre] - Guarda un pack de contenido desde grupo proveedor
  */
 async function handleObtenerPack(nombre, usuario, grupo) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
@@ -1625,7 +1625,7 @@ async function handleObtenerPack(nombre, usuario, grupo) {
   }
 
   try {
-    const fecha = new Díate().toISOString();
+    const fecha = new Date().toISOString();
     const stmt = await db.prepare(
       "INSERT INTO aportes (contenido, tipo, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)",
     );
@@ -1633,7 +1633,7 @@ async function handleObtenerPack(nombre, usuario, grupo) {
     await stmt.finalize();
 
     await logCommand("obtencion", "obtenerpack", usuario, grupo);
-    return { success: true, message: ` Pack "${nombre}" obtenido y guardíado.` };
+    return { success: true, message: ` Pack "${nombre}" obtenido y guardado.` };
   } catch (error) {
     return { success: false, message: "Error al obtener pack." };
   }
@@ -1701,7 +1701,7 @@ async function handleBotOff(grupoId, usuario) {
       .insert({
         jid: grupoId,
         desactivado_por: normalizedUsuario,
-        fecha_desactivacion: new Díate().toISOString(),
+        fecha_desactivacion: new Date().toISOString(),
       })
       .onConflict("jid")
       .merge();
@@ -1745,7 +1745,7 @@ async function handleBotGlobalOn(usuario) {
     await db("bot_global_state").insert({
       estado: "on",
       activado_por: normalizedUsuario,
-      fecha_cambio: new Díate().toISOString(),
+      fecha_cambio: new Date().toISOString(),
     });
 
     // Limpiar notificaciones de mantenimiento
@@ -1789,25 +1789,25 @@ async function notifyAllGroupsAboutGlobalShutdown(usuario) {
     const notificationMessage =
       ` *NOTIFICACIN GLOBAL*\n\n` +
       `El bot ha sido desactivado globalmente por el administrador.\n` +
-      `El bot no responder a ningn comando hasta quée se reactive.\n\n` +
+      `El bot no responder a ningn comando hasta que se reactive.\n\n` +
       `Solo el administrador puede reactivarlo usando:\n` +
       ` \`/bot global on\` (comando)\n` +
       ` Panel de administracin\n\n` +
       `_Esta notificación se envió a todos los grupos activos._`;
 
-    // Enviar notificación a cadía grupo
+    // Enviar notificación a cada grupo
     for (const grupo of grupos) {
       try {
         await sock.sendMessage(grupo.jid, { text: notificationMessage });
 
-        // Registrar la notificación enviadía
+        // Registrar la notificación enviada
         await db("notificaciones_globales").insert({
           grupo_jid: grupo.jid,
           grupo_nombre: grupo.nombre,
           tipo: "global_shutdown",
           mensaje: notificationMessage,
           enviado_por: normalizeUserNumber(usuario),
-          fecha_envio: new Díate().toISOString(),
+          fecha_envio: new Date().toISOString(),
           estado: "enviado",
         });
 
@@ -1817,9 +1817,9 @@ async function notifyAllGroupsAboutGlobalShutdown(usuario) {
           status: "success",
         });
 
-        console.log(` Notificacin enviadía a grupo: ${grupo.nombre}`);
+        console.log(` Notificacin enviada a grupo: ${grupo.nombre}`);
 
-        // Pequéea pausa para evitar spam
+        // Pequea pausa para evitar spam
         await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (error) {
         console.error(
@@ -1834,7 +1834,7 @@ async function notifyAllGroupsAboutGlobalShutdown(usuario) {
           tipo: "global_shutdown",
           mensaje: notificationMessage,
           enviado_por: normalizeUserNumber(usuario),
-          fecha_envio: new Díate().toISOString(),
+          fecha_envio: new Date().toISOString(),
           estado: "error",
           error_message: error.message,
         });
@@ -1890,7 +1890,7 @@ async function handleBotGlobalOff(usuario) {
       return {
         success: true,
         message:
-          " *El bot ya est desactivado globalmente.*\n\nEl bot no responder a ningn comando hasta quée se reactive.",
+          " *El bot ya est desactivado globalmente.*\n\nEl bot no responder a ningn comando hasta que se reactive.",
       };
     }
 
@@ -1898,7 +1898,7 @@ async function handleBotGlobalOff(usuario) {
     await db("bot_global_state").insert({
       estado: "off",
       activado_por: normalizedUsuario,
-      fecha_cambio: new Díate().toISOString(),
+      fecha_cambio: new Date().toISOString(),
     });
 
     // Notificar a todos los grupos
@@ -1915,12 +1915,12 @@ async function handleBotGlobalOff(usuario) {
     let message = " *Bot desactivado globalmente.*\n\n";
     if (notificationResult.success) {
       message +=
-        ` Notificaciones enviadías:\n` +
+        ` Notificaciones enviadas:\n` +
         ` Grupos notificados: ${notificationResult.successfulNotifications}/${notificationResult.totalGroups}\n` +
         ` Exitosas: ${notificationResult.successfulNotifications}\n` +
-        ` Fallidías: ${notificationResult.failedNotifications}\n\n`;
+        ` Fallidas: ${notificationResult.failedNotifications}\n\n`;
     }
-    message += "El bot no responder a ningn comando hasta quée se reactive.";
+    message += "El bot no responder a ningn comando hasta que se reactive.";
 
     return {
       success: true,
@@ -1974,7 +1974,7 @@ async function markUserAsNotifiedAboutMaintenance(usuario, grupo = null) {
       .insert({
         usuario,
         grupo,
-        fecha_notificacion: new Díate().toISOString(),
+        fecha_notificacion: new Date().toISOString(),
       })
       .onConflict(["usuario", "grupo"])
       .ignore();
@@ -1989,7 +1989,7 @@ async function markUserAsNotifiedAboutMaintenance(usuario, grupo = null) {
 async function clearMaintenanceNotifications() {
   try {
     await db("usuarios_notificados_mantenimiento").del();
-    console.log(" Notificaciones de mantenimiento limpiadías");
+    console.log(" Notificaciones de mantenimiento limpiadas");
   } catch (error) {
     console.error("Error al limpiar notificaciones de mantenimiento:", error);
   }
@@ -2008,7 +2008,7 @@ async function clearGroupOffNotices(grupoId) {
 }
 
 /**
- * /update - Actualizar configuración desde el bot principal
+ * /update - Actualizar configuracin desde el bot principal
  */
 // ...existing code...
 // ...existing code...
@@ -2047,7 +2047,7 @@ async function _handleDelSubbot(code, usuario) {
           ` ID: ${code}\n` +
           ` Error: ${result.error}\n` +
           "\n\n" +
-          " *Verifica quée el ID sea correcto*",
+          " *Verifica que el ID sea correcto*",
       };
     }
     return {
@@ -2061,7 +2061,7 @@ async function _handleDelSubbot(code, usuario) {
         "\n" +
         ` ID: ${code}\n` +
         " Estado: Eliminado permanentemente\n" +
-        ` Fecha: ${new Díate().toLocaleString("es-ES")}\n` +
+        ` Fecha: ${new Date().toLocaleString("es-ES")}\n` +
         "\n\n" +
         " *Usa `bots` para ver tus subbots restantes*",
     };
@@ -2083,17 +2083,17 @@ async function handleCode(usuario, grupo, remoteJid, args, sender, messageId) {
     let phoneNumber = args[0];
     let alias = args[1] || "";
 
-    // Validíar número de teléfono
+    // Validar nmero de telfono
     if (!phoneNumber || phoneNumber === "auto") {
-      // Usar el número del remitente si no se proporciona
+      // Usar el nmero del remitente si no se proporciona
       phoneNumber = usuario.split("@")[0];
     } else {
-      // Limpiar el número de teléfono
+      // Limpiar el nmero de telfono
       phoneNumber = phoneNumber.replace(/[^0-9]/g, "");
       if (phoneNumber.length < 10) {
         return {
           success: false,
-          message: " Nmero de teléfono inválido. Debe tener al menos 10 dgitos.",
+          message: " Nmero de telfono invlido. Debe tener al menos 10 dgitos.",
         };
       }
     }
@@ -2101,7 +2101,7 @@ async function handleCode(usuario, grupo, remoteJid, args, sender, messageId) {
     // Generar un código de 6 dígitos
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Aquéí iría la lógica para guardíar el código en la base de díatos
+    // Aquí iría la lógica para guardar el código en la base de datos
     // await savePairingCode(code, phoneNumber, usuario, alias);
 
     const message = `
@@ -2112,8 +2112,8 @@ async function handleCode(usuario, grupo, remoteJid, args, sender, messageId) {
 
 *Instrucciones:*
 1. Abre WhatsApp en tu celular
-2. Ve a Ajustes > Dispositivos vincuálados
-3. Toca "Vincuálar un dispositivo"
+2. Ve a Ajustes > Dispositivos vinculados
+3. Toca "Vincular un dispositivo"
 4. Ingresa este código: *${code}*
 
 *Nota:* Este código expira en 5 minutos`;
@@ -2123,7 +2123,7 @@ async function handleCode(usuario, grupo, remoteJid, args, sender, messageId) {
       message,
       code,
       phoneNumber,
-      expiresAt: Díate.now() + 5 * 60 * 1000, // 5 minutos
+      expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutos
     };
   } catch (error) {
     console.error("Error en handleCode:", error);
@@ -2179,7 +2179,7 @@ async function handleQR(subbotCode) {
           " Estado: Generando QR...\n" +
           " Tipo: QR Code\n" +
           "\n\n" +
-          " *Te avisar aqué mismo cuando est listo*",
+          " *Te avisar aqu mismo cuando est listo*",
       };
     }
 
@@ -2190,8 +2190,8 @@ async function handleQR(subbotCode) {
       " *CONECTA TU SUBBOT:*\n" +
       "\n" +
       " 1 Abre WhatsApp en tu celular         \n" +
-      " 2 Ve a *Dispositivos vincuálados*      \n" +
-      " 3 Toca *Vincuálar dispositivo*         \n" +
+      " 2 Ve a *Dispositivos vinculados*      \n" +
+      " 3 Toca *Vincular dispositivo*         \n" +
       "📱 4️⃣ Escanea este código QR              \n" +
       "\n\n" +
       ` *ID del Subbot:* \`${subbotCode}\`\n` +
@@ -2222,7 +2222,7 @@ async function handleQR(subbotCode) {
 }
 
 /**
- * /whoami - Mostrar información del usuario
+ * /whoami - Mostrar informacin del usuario
  */
 async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
   try {
@@ -2238,7 +2238,7 @@ async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
     const display =
       waUserInfo?.pushName || wa?.display_name || user?.username || number;
     const registro = user?.fecha_registro
-      ? new Díate(user.fecha_registro).toLocaleDíateString("es-ES")
+      ? new Date(user.fecha_registro).toLocaleDateString("es-ES")
       : "N/D";
     const rol = user?.rol ? user.rol.toUpperCase() : "USUARIO";
 
@@ -2266,12 +2266,12 @@ async function handleWhoami(usuario, grupo, isGroup, waUserInfo) {
         `\n` +
         `            *INFORMACIN BSICA*     \n` +
         `\n\n` +
-        ` *Díatos disponibles:*\n` +
+        ` *Datos disponibles:*\n` +
         `\n` +
         `  Usuario: \`${usuario}\`\n` +
         `  Chat: ${grupo || "Privado"}\n` +
         `\n\n` +
-        ` *Informacin limitadía - contacta al administrador*`,
+        ` *Informacin limitada - contacta al administrador*`,
     };
   }
 }
@@ -2363,7 +2363,7 @@ async function handleReplyTag(mensaje, usuario, grupo, quotedMessage) {
 }
 
 /**
- * Moderacin de grupos va WhatsApp (requéiere quée el bot sea admin del grupo)
+ * Moderacin de grupos va WhatsApp (requiere que el bot sea admin del grupo)
  */
 async function handleKick(target, usuario, grupo) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
@@ -2425,7 +2425,7 @@ async function handleKick(target, usuario, grupo) {
     return {
       success: false,
       message:
-        " No se pudo expulsar. Asegrate de quée el bot sea admin del grupo.",
+        " No se pudo expulsar. Asegrate de que el bot sea admin del grupo.",
     };
   }
 }
@@ -2507,14 +2507,14 @@ async function handlePromote(target, usuario, grupo) {
     return {
       success: false,
       message:
-        " No se pudo promover. Asegrate de quée el bot sea admin del grupo.",
+        " No se pudo promover. Asegrate de que el bot sea admin del grupo.",
     };
   }
 }
 
 async function handleDemote(target, usuario, grupo) {
   if (!(await isOwnerOrAdmin(usuario, grupo))) {
-    return { success: false, message: " Solo Admin puede degradíar miembros." };
+    return { success: false, message: " Solo Admin puede degradar miembros." };
   }
   const sock = getSocket();
   if (!sock) return { success: false, message: " Bot no conectado." };
@@ -2578,7 +2578,7 @@ async function handleDemote(target, usuario, grupo) {
 
     return {
       success: true,
-      message: ` Usuario degradíado de admin: @${displayName}`,
+      message: ` Usuario degradado de admin: @${displayName}`,
       mentions: [mentionJid],
     };
   } catch (error) {
@@ -2586,7 +2586,7 @@ async function handleDemote(target, usuario, grupo) {
     return {
       success: false,
       message:
-        " No se pudo degradíar. Asegrate de quée el bot sea admin del grupo.",
+        " No se pudo degradar. Asegrate de que el bot sea admin del grupo.",
     };
   }
 }
@@ -2599,12 +2599,12 @@ async function isGroupAdmin(usuario, grupo) {
     const sock = getSocket();
     if (!sock || !grupo) return false;
 
-    // Normalizar números para comparacin
+    // Normalizar nmeros para comparacin
     const userNumber = normalizeUserNumber(usuario);
     const rawBotJid = sock.user && sock.user.id ? sock.user.id : "";
     const botNumber = normalizeUserNumber(rawBotJid);
 
-    // Si el usuario es el mismo número quée el bot, no considerarlo admin
+    // Si el usuario es el mismo nmero que el bot, no considerarlo admin
     // para evitar conflictos en la deteccin de permisos
     if (userNumber && botNumber && userNumber === botNumber) {
       console.log(
@@ -2654,7 +2654,7 @@ async function isGroupAdmin(usuario, grupo) {
   }
 }
 
-// Helper para normalizar usuario a solo número
+// Helper para normalizar usuario a solo nmero
 function normalizeUserNumber(usuarioJid) {
   if (!usuarioJid) return "";
   try {
@@ -2703,7 +2703,7 @@ async function isBotAdmin(grupo) {
     );
     if (botIsAdmin) return true;
 
-    // Si no encontramos al bot como participante, asumir quée no es admin
+    // Si no encontramos al bot como participante, asumir que no es admin
     return false;
   } catch (error) {
     console.error("[MOD][isBotAdmin] Error:", error);
@@ -2789,16 +2789,16 @@ async function getParticipantName(grupo, numero) {
     const meta = await sock.groupMetadata(grupo);
     const participants = meta.participants || [];
 
-    console.log(` Buscando participante con número: ${numero}`);
+    console.log(` Buscando participante con nmero: ${numero}`);
     console.log(` Total participantes: ${participants.length}`);
 
-    // Buscar participante por número (ms flexible)
+    // Buscar participante por nmero (ms flexible)
     const participant = participants.find((p) => {
       const pid = p.id || "";
-      // Buscar por número en cualquéier parte del JID
+      // Buscar por nmero en cualquier parte del JID
       const found = pid.includes(numero);
       if (found) {
-        console.log(` Encontrado por número: ${pid}`);
+        console.log(` Encontrado por nmero: ${pid}`);
         console.log(`   - notify: ${p.notify}`);
         console.log(`   - name: ${p.name}`);
         console.log(`   - admin: ${p.admin}`);
@@ -2829,7 +2829,7 @@ async function getParticipantName(grupo, numero) {
       return cleanId || numero;
     }
 
-    // Si no encontramos por número directo, buscar por JID normalizado
+    // Si no encontramos por nmero directo, buscar por JID normalizado
     const normalizedTarget = `${numero}@s.whatsapp.net`;
     console.log(` Buscando por JID normalizado: ${normalizedTarget}`);
 
@@ -2860,7 +2860,7 @@ async function getParticipantName(grupo, numero) {
       }
     }
 
-    console.log(` No se encontr participante para número: ${numero}`);
+    console.log(` No se encontr participante para nmero: ${numero}`);
     return numero;
   } catch (error) {
     console.error("Error en getParticipantName:", error);
@@ -2880,17 +2880,17 @@ async function handleYouTubeDownload(usuario, grupo, isGroup, args) {
         success: false,
         message:
           ` *Descarga de YouTube*\n\n` +
-          ` *Uso:* \`/yt <enlace o bsquéedía>\`\n` +
+          ` *Uso:* \`/yt <enlace o bsqueda>\`\n` +
           ` *Ejemplo:* \`/yt https://youtube.com/watch?v=...\`\n` +
           ` *Ejemplo:* \`/yt msica relajante\`\n\n` +
           ` *Funciones:*\n` +
           ` Descargar videos de YouTube\n` +
           ` Buscar y descargar por nombre\n` +
-          ` Calidíad automtica HD`,
+          ` Calidad automtica HD`,
       };
     }
 
-    const quéery = args.join(" ");
+    const query = args.join(" ");
     const socket = getSocket();
 
     if (!socket) {
@@ -2900,10 +2900,10 @@ async function handleYouTubeDownload(usuario, grupo, isGroup, args) {
       };
     }
 
-    // Simular bsquéedía (en implementacin real usaras yt-search)
+    // Simular bsqueda (en implementacin real usaras yt-search)
     const searchResults = [
       {
-        title: `Resultado para: ${quéery}`,
+        title: `Resultado para: ${query}`,
         url: `https://youtube.com/watch?v=dQw4w9WgXcQ`,
         duration: "3:32",
         views: "1.2B",
@@ -2947,7 +2947,7 @@ async function handleSticker(usuario, grupo, isGroup, args) {
       success: true,
       message: ` *Crear Sticker*
 
-1 Enva o reenva la imagen/video quée quéieres convertir.
+1 Enva o reenva la imagen/video que quieres convertir.
 2 Respndelo con \`/sticker\` (o su alias \`.s\`).
 3 Espera unos segundos y recibirs el sticker listo para usar.
 
@@ -2972,28 +2972,28 @@ async function handleTikTokDownload(usuario, grupo, isGroup, args) {
         success: false,
         message:
           ` *Descarga de TikTok*\n\n` +
-          ` *Uso:* \`/tiktok <enlace o bsquéedía>\`\n` +
+          ` *Uso:* \`/tiktok <enlace o bsqueda>\`\n` +
           ` *Ejemplo:* \`/tiktok https://tiktok.com/@user/video/123\`\n` +
           ` *Ejemplo:* \`/tiktok baile viral\`\n\n` +
           ` *Funciones:*\n` +
           ` Descargar videos de TikTok\n` +
           ` Buscar videos por hashtag\n` +
-          ` Calidíad HD sin marca de agua`,
+          ` Calidad HD sin marca de agua`,
       };
     }
 
-    const quéery = args.join(" ");
+    const query = args.join(" ");
 
     const response =
       ` *TikTok Downloader*\n\n` +
-      ` *Buscando:* ${quéery}\n` +
+      ` *Buscando:* ${query}\n` +
       ` *Procesando...*\n` +
       ` 50%\n\n` +
       ` *Caractersticas:*\n` +
       ` Sin marca de agua\n` +
-      ` Calidíad HD\n` +
-      ` Descarga rpidía\n` +
-      ` Soporte para enlaces y bsquéedías`;
+      ` Calidad HD\n` +
+      ` Descarga rpida\n` +
+      ` Soporte para enlaces y bsquedas`;
 
     return {
       success: true,
@@ -3037,7 +3037,7 @@ async function handleInstagramDownload(usuario, grupo, isGroup, args) {
       ` 75%\n\n` +
       ` *Procesando:*\n` +
       ` Detecting media type\n` +
-      ` Optimizing quéality\n` +
+      ` Optimizing quality\n` +
       ` Preparing download`;
 
     return {
@@ -3081,9 +3081,9 @@ async function handleTwitterDownload(usuario, grupo, isGroup, args) {
       ` *Procesando...*\n` +
       ` 80%\n\n` +
       ` *Caractersticas:*\n` +
-      ` Calidíad original\n` +
+      ` Calidad original\n` +
       ` Sin compresin\n` +
-      ` Descarga rpidía`;
+      ` Descarga rpida`;
 
     return {
       success: true,
@@ -3099,15 +3099,15 @@ async function handleTwitterDownload(usuario, grupo, isGroup, args) {
 }
 
 /**
- * Obtener información del LID del usuario
+ * Obtener informacin del LID del usuario
  */
 async function handleGetLID(usuario, grupo, isGroup, args) {
   try {
-    // Solo superadmins pueden ver esta información
+    // Solo superadmins pueden ver esta informacin
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: " Solo los superadmins pueden obtener esta información.",
+        message: " Solo los superadmins pueden obtener esta informacin.",
       };
     }
 
@@ -3119,7 +3119,7 @@ async function handleGetLID(usuario, grupo, isGroup, args) {
       };
     }
 
-    // Obtener información del bot
+    // Obtener informacin del bot
     const botJid = socket.user?.jid || "No disponible";
     const botNumber = botJid.split("@")[0];
     const botServer = botJid.split("@")[1];
@@ -3129,7 +3129,7 @@ async function handleGetLID(usuario, grupo, isGroup, args) {
     response += ` *Bot Nmero:* ${botNumber}\n`;
     response += ` *Servidor:* ${botServer}\n\n`;
 
-    response += ` *Tu información:*\n`;
+    response += ` *Tu informacin:*\n`;
     response += ` Usuario: ${usuario}\n`;
     response += ` Nmero: ${usuario.split("@")[0]}\n`;
     response += ` Servidor: ${usuario.split("@")[1]}\n\n`;
@@ -3152,7 +3152,7 @@ async function handleGetLID(usuario, grupo, isGroup, args) {
     console.error("Error en handleGetLID:", error);
     return {
       success: false,
-      message: " Error al obtener información del LID.",
+      message: " Error al obtener informacin del LID.",
     };
   }
 }
@@ -3186,7 +3186,7 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
       // Detectar automticamente el LID del usuario actual
       const currentLid = usuario; // El usuario ya viene con el formato correcto
 
-      // Actualizar en la configuración global
+      // Actualizar en la configuracin global
       const userIndex = global.owner.findIndex(([num]) => isSuperAdmin(num));
       if (userIndex !== -1) {
         global.owner[userIndex][0] = currentLid.split("@")[0];
@@ -3205,18 +3205,18 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
       // LID manual
       const lid = args[0];
 
-      // Validíar formato bsico
+      // Validar formato bsico
       if (!lid.includes("@")) {
         return {
           success: false,
           message:
-            " Formato de LID inválido. Debe incluir @ (ej: 1234567890@lid)",
+            " Formato de LID invlido. Debe incluir @ (ej: 1234567890@lid)",
         };
       }
 
       const [numero, servidor] = lid.split("@");
 
-      // Actualizar en la configuración global
+      // Actualizar en la configuracin global
       const userIndex = global.owner.findIndex(([num]) => isSuperAdmin(num));
       if (userIndex !== -1) {
         global.owner[userIndex][0] = numero;
@@ -3244,7 +3244,7 @@ async function handleUpdateLID(usuario, grupo, isGroup, args) {
 // ==================== COMANDOS DE ADMINISTRACIN GLOBAL ====================
 
 /**
- * Mostrar información del sistema de administradores
+ * Mostrar informacin del sistema de administradores
  */
 async function handleAdminInfo(usuario, grupo, isGroup, args) {
   try {
@@ -3252,7 +3252,7 @@ async function handleAdminInfo(usuario, grupo, isGroup, args) {
     if (!(await isOwnerOrAdmin(usuario, grupo))) {
       return {
         success: false,
-        message: " Solo los administradores pueden ver esta información.",
+        message: " Solo los administradores pueden ver esta informacin.",
       };
     }
 
@@ -3262,7 +3262,7 @@ async function handleAdminInfo(usuario, grupo, isGroup, args) {
     const isPrem = isPremium(usuario);
 
     let response = ` *Sistema de Administracin*\n\n`;
-    response += ` *Tu información:*\n`;
+    response += ` *Tu informacin:*\n`;
     response += ` Nombre: ${ownerName}\n`;
     response += ` Nmero: ${usuario}\n`;
     response += ` Superadmin: ${isSuper ? "" : ""}\n`;
@@ -3278,12 +3278,12 @@ async function handleAdminInfo(usuario, grupo, isGroup, args) {
     response += ` *Usuarios Premium:* ${global.prems.length}\n\n`;
 
     response += ` *Comandos disponibles:*\n`;
-    response += ` \`/addíadmin <numero> <nombre>\` - Agregar superadmin\n`;
-    response += ` \`/deladmin <numero>\` - Quéitar superadmin\n`;
+    response += ` \`/addadmin <numero> <nombre>\` - Agregar superadmin\n`;
+    response += ` \`/deladmin <numero>\` - Quitar superadmin\n`;
     response += ` \`/addmod <numero>\` - Agregar moderador\n`;
-    response += ` \`/delmod <numero>\` - Quéitar moderador\n`;
+    response += ` \`/delmod <numero>\` - Quitar moderador\n`;
     response += ` \`/addprem <numero>\` - Agregar premium\n`;
-    response += ` \`/delprem <numero>\` - Quéitar premium\n`;
+    response += ` \`/delprem <numero>\` - Quitar premium\n`;
 
     return {
       success: true,
@@ -3293,7 +3293,7 @@ async function handleAdminInfo(usuario, grupo, isGroup, args) {
     console.error("Error en handleAdminInfo:", error);
     return {
       success: false,
-      message: " Error al obtener información de administracin.",
+      message: " Error al obtener informacin de administracin.",
     };
   }
 }
@@ -3315,8 +3315,8 @@ async function handleAddAdmin(usuario, grupo, isGroup, args) {
       return {
         success: false,
         message:
-          " *Uso:* `/addíadmin <numero> <nombre>`\n\n" +
-          " *Ejemplo:* `/addíadmin 1234567890 Juan Prez`",
+          " *Uso:* `/addadmin <numero> <nombre>`\n\n" +
+          " *Ejemplo:* `/addadmin 1234567890 Juan Prez`",
       };
     }
 
@@ -3328,7 +3328,7 @@ async function handleAddAdmin(usuario, grupo, isGroup, args) {
     if (existingAdmin) {
       return {
         success: false,
-        message: ` El número ${numero} ya es superadmin.`,
+        message: ` El nmero ${numero} ya es superadmin.`,
       };
     }
 
@@ -3353,15 +3353,15 @@ async function handleAddAdmin(usuario, grupo, isGroup, args) {
 }
 
 /**
- * Quéitar superadmin
+ * Quitar superadmin
  */
 async function handleDelAdmin(usuario, grupo, isGroup, args) {
   try {
-    // Solo superadmins pueden quéitar otros superadmins
+    // Solo superadmins pueden quitar otros superadmins
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: " Solo los superadmins pueden quéitar otros superadmins.",
+        message: " Solo los superadmins pueden quitar otros superadmins.",
       };
     }
 
@@ -3381,20 +3381,20 @@ async function handleDelAdmin(usuario, grupo, isGroup, args) {
     if (adminIndex === -1) {
       return {
         success: false,
-        message: ` El número ${numero} no es superadmin.`,
+        message: ` El nmero ${numero} no es superadmin.`,
       };
     }
 
-    // No permitir quéitarse a s mismo
+    // No permitir quitarse a s mismo
     const usuarioNumero = usuario.replace(/[^0-9]/g, "");
     if (numero === usuarioNumero) {
       return {
         success: false,
-        message: " No puedes quéitarte a ti mismo como superadmin.",
+        message: " No puedes quitarte a ti mismo como superadmin.",
       };
     }
 
-    // Quéitar de la lista global
+    // Quitar de la lista global
     const removedAdmin = global.owner.splice(adminIndex, 1)[0];
 
     return {
@@ -3409,7 +3409,7 @@ async function handleDelAdmin(usuario, grupo, isGroup, args) {
     console.error("Error en handleDelAdmin:", error);
     return {
       success: false,
-      message: " Error al quéitar superadmin.",
+      message: " Error al quitar superadmin.",
     };
   }
 }
@@ -3441,7 +3441,7 @@ async function handleAddMod(usuario, grupo, isGroup, args) {
     if (isSuperAdmin(`${numero}@s.whatsapp.net`)) {
       return {
         success: false,
-        message: ` El número ${numero} ya es superadmin.`,
+        message: ` El nmero ${numero} ya es superadmin.`,
       };
     }
 
@@ -3449,7 +3449,7 @@ async function handleAddMod(usuario, grupo, isGroup, args) {
     if (isModerator(`${numero}@s.whatsapp.net`)) {
       return {
         success: false,
-        message: ` El número ${numero} ya es moderador.`,
+        message: ` El nmero ${numero} ya es moderador.`,
       };
     }
 
@@ -3473,15 +3473,15 @@ async function handleAddMod(usuario, grupo, isGroup, args) {
 }
 
 /**
- * Quéitar moderador
+ * Quitar moderador
  */
 async function handleDelMod(usuario, grupo, isGroup, args) {
   try {
-    // Solo superadmins pueden quéitar moderadores
+    // Solo superadmins pueden quitar moderadores
     if (!isSuperAdmin(usuario)) {
       return {
         success: false,
-        message: " Solo los superadmins pueden quéitar moderadores.",
+        message: " Solo los superadmins pueden quitar moderadores.",
       };
     }
 
@@ -3500,11 +3500,11 @@ async function handleDelMod(usuario, grupo, isGroup, args) {
     if (modIndex === -1) {
       return {
         success: false,
-        message: ` El número ${numero} no es moderador.`,
+        message: ` El nmero ${numero} no es moderador.`,
       };
     }
 
-    // Quéitar de la lista global
+    // Quitar de la lista global
     global.mods.splice(modIndex, 1);
 
     return {
@@ -3518,7 +3518,7 @@ async function handleDelMod(usuario, grupo, isGroup, args) {
     console.error("Error en handleDelMod:", error);
     return {
       success: false,
-      message: " Error al quéitar moderador.",
+      message: " Error al quitar moderador.",
     };
   }
 }
@@ -3560,7 +3560,7 @@ async function handleUnban(target, usuario, grupo) {
     if (!number) {
       return {
         success: false,
-        message: " Debes mencionar o indicar un número válido.",
+        message: " Debes mencionar o indicar un nmero vlido.",
       };
     }
 
@@ -3589,8 +3589,8 @@ async function handleUnban(target, usuario, grupo) {
   }
 }
 
-// Exportar todías las funciones necesarias de manera organizadía
-// Usando export individual para cadía funcin
+// Exportar todas las funciones necesarias de manera organizada
+// Usando export individual para cada funcin
 
 // ===== COMANDOS BSICOS =====
 export { handleHelp };
