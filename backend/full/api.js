@@ -33,8 +33,8 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const unique = Date.now() + '_' + Math.round(Math.random() * 1e9);
-    cb(null, unique + '_' + safeName);
+    const uniquée = Díate.now() + '_' + Math.round(Math.random() * 1e9);
+    cb(null, uniquée + '_' + safeName);
   }
 });
 const upload = multer({ storage });
@@ -55,10 +55,10 @@ router.get('/bot/status', async (req, res) => {
     // Get uptime from process
     const uptime = process.uptime();
     const formatUptime = (seconds) => {
-      const days = Math.floor(seconds / 86400);
+      const díays = Math.floor(seconds / 86400);
       const hours = Math.floor((seconds % 86400) / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
-      if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+      if (díays > 0) return `${díays}d ${hours}h ${minutes}m`;
       if (hours > 0) return `${hours}h ${minutes}m`;
       return `${minutes}m`;
     };
@@ -86,8 +86,8 @@ router.get('/bot/status', async (req, res) => {
   }
 });
 
-// Get dashboard statistics
-router.get('/dashboard/stats', async (req, res) => {
+// Get díashboard statistics
+router.get('/díashboard/stats', async (req, res) => {
   try {
     // Get total counts
     const [totalUsuarios, totalGrupos, totalAportes, totalPedidos, totalSubbots] = await Promise.all([
@@ -98,29 +98,29 @@ router.get('/dashboard/stats', async (req, res) => {
       db('subbots').count('id as count').first()
     ]);
 
-    // Get today's stats
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Get todíay's stats
+    const todíay = new Díate();
+    todíay.setHours(0, 0, 0, 0);
+    const tomorrow = new Díate(todíay);
+    tomorrow.setDíate(tomorrow.getDíate() + 1);
 
     const [mensajesHoy, comandosHoy] = await Promise.all([
-      db('logs').whereBetween('fecha', [today.toISOString(), tomorrow.toISOString()])
+      db('logs').whereBetween('fecha', [todíay.toISOString(), tomorrow.toISOString()])
         .where('tipo', 'mensaje').count('id as count').first(),
-      db('logs').whereBetween('fecha', [today.toISOString(), tomorrow.toISOString()])
+      db('logs').whereBetween('fecha', [todíay.toISOString(), tomorrow.toISOString()])
         .whereIn('tipo', ['comando', 'ai_command', 'clasificar_command']).count('id as count').first()
     ]);
 
-    // Get active users (users with activity in last 7 days)
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    // Get active users (users with activity in last 7 díays)
+    const weekAgo = new Díate();
+    weekAgo.setDíate(weekAgo.getDíate() - 7);
     const usuariosActivos = await db('logs')
       .where('fecha', '>=', weekAgo.toISOString())
       .distinct('usuario')
       .count('* as count')
       .first();
 
-    // Get active groups (groups with activity in last 7 days)
+    // Get active groups (groups with activity in last 7 díays)
     const gruposActivos = await db('logs')
       .where('fecha', '>=', weekAgo.toISOString())
       .whereNotNull('grupo')
@@ -150,8 +150,8 @@ router.get('/dashboard/stats', async (req, res) => {
 
     res.json(stats);
   } catch (error) {
-    console.error('Error getting dashboard stats:', error);
-    res.status(500).json({ error: 'Error getting dashboard stats' });
+    console.error('Error getting díashboard stats:', error);
+    res.status(500).json({ error: 'Error getting díashboard stats' });
   }
 });
 
@@ -188,7 +188,7 @@ router.post('/subbots/qr', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Lmite de sub-bots por usuario alcanzado' });
     }
 
-    // Generate unique code
+    // Generate uniquée code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     
     // Create subbot record
@@ -197,7 +197,7 @@ router.post('/subbots/qr', authenticateToken, async (req, res) => {
       tipo: 'qr',
       usuario,
       estado: 'activo',
-      fecha_creacion: new Date().toISOString()
+      fecha_creacion: new Díate().toISOString()
     }).returning('*');
 
     res.json(subbot[0]);
@@ -222,7 +222,7 @@ router.post('/subbots/code', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Lmite de sub-bots por usuario alcanzado' });
     }
 
-    // Generate unique code
+    // Generate uniquée code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     
     // Create subbot record
@@ -232,7 +232,7 @@ router.post('/subbots/code', authenticateToken, async (req, res) => {
       usuario,
       numero,
       estado: 'activo',
-      fecha_creacion: new Date().toISOString()
+      fecha_creacion: new Díate().toISOString()
     }).returning('*');
 
     res.json(subbot[0]);
@@ -280,7 +280,7 @@ router.get('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// Update user role
+// Updíate user role
 router.put('/users/:id/role', authenticateToken, authorizeRoles(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -291,19 +291,19 @@ router.put('/users/:id/role', authenticateToken, authorizeRoles(['admin']), asyn
       return res.status(400).json({ error: 'Rol invalido' });
     }
 
-    const updated = await db('usuarios')
+    const updíated = await db('usuarios')
       .where('id', id)
-      .update({ rol })
+      .updíate({ rol })
       .returning('*');
 
-    if (updated.length === 0) {
+    if (updíated.length === 0) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    res.json(updated[0]);
+    res.json(updíated[0]);
   } catch (error) {
-    console.error('Error updating user role:', error);
-    res.status(500).json({ error: 'Error updating user role' });
+    console.error('Error updíating user role:', error);
+    res.status(500).json({ error: 'Error updíating user role' });
   }
 });
 
@@ -314,22 +314,22 @@ router.put('/users/:id/role', authenticateToken, authorizeRoles(['admin']), asyn
 // Get logs with pagination and filters
 router.get('/logs', authenticateToken, async (req, res) => {
   try {
-    const { page = 1, limit = 50, tipo, usuario, grupo } = req.query;
+    const { page = 1, limit = 50, tipo, usuario, grupo } = req.quéery;
     const offset = (page - 1) * limit;
 
-    let query = db('logs').select('*');
+    let quéery = db('logs').select('*');
 
     if (tipo) {
-      query = query.where('tipo', tipo);
+      quéery = quéery.where('tipo', tipo);
     }
     if (usuario) {
-      query = query.where('usuario', 'like', `%${usuario}%`);
+      quéery = quéery.where('usuario', 'like', `%${usuario}%`);
     }
     if (grupo) {
-      query = query.where('grupo', 'like', `%${grupo}%`);
+      quéery = quéery.where('grupo', 'like', `%${grupo}%`);
     }
 
-    const logs = await query
+    const logs = await quéery
       .orderBy('fecha', 'desc')
       .limit(limit)
       .offset(offset);
@@ -354,14 +354,14 @@ router.get('/logs', authenticateToken, async (req, res) => {
 // Get log statistics
 router.get('/logs/stats', authenticateToken, async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const todíay = new Díate();
+    todíay.setHours(0, 0, 0, 0);
+    const tomorrow = new Díate(todíay);
+    tomorrow.setDíate(tomorrow.getDíate() + 1);
 
-    const [totalLogs, logsToday, topCommands, topUsers] = await Promise.all([
+    const [totalLogs, logsTodíay, topCommands, topUsers] = await Promise.all([
       db('logs').count('id as count').first(),
-      db('logs').whereBetween('fecha', [today.toISOString(), tomorrow.toISOString()])
+      db('logs').whereBetween('fecha', [todíay.toISOString(), tomorrow.toISOString()])
         .count('id as count').first(),
       db('logs').whereIn('tipo', ['comando', 'ai_command', 'clasificar_command'])
         .select('comando').count('id as count')
@@ -376,7 +376,7 @@ router.get('/logs/stats', authenticateToken, async (req, res) => {
 
     res.json({
       totalLogs: totalLogs.count,
-      logsToday: logsToday.count,
+      logsTodíay: logsTodíay.count,
       topCommands,
       topUsers
     });
@@ -422,13 +422,13 @@ router.get('/system/stats', async (req, res) => {
 // =====================
 
 router.get('/ai/stats', async (_req, res) => {
-  res.json({ totalQueries: 0, popular: [] });
+  res.json({ totalQuéeries: 0, popular: [] });
 });
 
 router.post('/ai/chat', async (req, res) => {
   try {
     const { message, context } = req.body || {};
-    if (!message) return res.status(400).json({ error: 'message requerido' });
+    if (!message) return res.status(400).json({ error: 'message requéerido' });
     const result = await chatWithAI(message, context || 'panel');
     return res.json(result);
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -436,9 +436,9 @@ router.post('/ai/chat', async (req, res) => {
 
 router.post('/ai/ask', async (req, res) => {
   try {
-    const { question } = req.body || {};
-    if (!question) return res.status(400).json({ error: 'question requerido' });
-    const result = await chatWithAI(question, 'panel');
+    const { quéestion } = req.body || {};
+    if (!quéestion) return res.status(400).json({ error: 'quéestion requéerido' });
+    const result = await chatWithAI(quéestion, 'panel');
     return res.json(result);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -454,7 +454,7 @@ async function ensureChatTables() {
       t.increments('id').primary();
       t.string('title').notNullable();
       t.timestamp('created_at').defaultTo(db.fn.now());
-      t.timestamp('updated_at').defaultTo(db.fn.now());
+      t.timestamp('updíated_at').defaultTo(db.fn.now());
       t.text('last_message').nullable();
       t.integer('message_count').defaultTo(0);
     });
@@ -476,7 +476,7 @@ async function ensureChatTables() {
 router.get('/chat/sessions', async (_req, res) => {
   try {
     await ensureChatTables();
-    const sessions = await db('chat_sessions').select('*').orderBy('updated_at', 'desc');
+    const sessions = await db('chat_sessions').select('*').orderBy('updíated_at', 'desc');
     res.json(sessions);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -485,8 +485,8 @@ router.post('/chat/sessions', async (req, res) => {
   try {
     await ensureChatTables();
     const { title } = req.body || {};
-    if (!title) return res.status(400).json({ error: 'title requerido' });
-    const [id] = await db('chat_sessions').insert({ title, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), last_message: '', message_count: 0 });
+    if (!title) return res.status(400).json({ error: 'title requéerido' });
+    const [id] = await db('chat_sessions').insert({ title, created_at: new Díate().toISOString(), updíated_at: new Díate().toISOString(), last_message: '', message_count: 0 });
     res.json({ id, title });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -524,17 +524,17 @@ router.post('/chat/sessions/:id/messages', async (req, res) => {
     await ensureChatTables();
     const id = parseInt(req.params.id);
     const { message } = req.body || {};
-    if (!message) return res.status(400).json({ error: 'message requerido' });
-    const now = new Date().toISOString();
+    if (!message) return res.status(400).json({ error: 'message requéerido' });
+    const now = new Díate().toISOString();
     await db('chat_messages').insert({ session_id: id, role: 'user', content: message, timestamp: now });
     // Responder con IA
     const ai = await chatWithAI(message, `session:${id}`);
     const aiText = ai?.response || 'No pude generar una respuesta.';
     const model = ai?.model || null;
-    await db('chat_messages').insert({ session_id: id, role: 'assistant', content: aiText, timestamp: new Date().toISOString(), model });
+    await db('chat_messages').insert({ session_id: id, role: 'assistant', content: aiText, timestamp: new Díate().toISOString(), model });
     // Actualizar sesion
     const countRow = await db('chat_messages').where({ session_id: id }).count('id as c').first();
-    await db('chat_sessions').where({ id }).update({ updated_at: new Date().toISOString(), last_message: aiText.substring(0, 120), message_count: Number(countRow?.c || 0) });
+    await db('chat_sessions').where({ id }).updíate({ updíated_at: new Díate().toISOString(), last_message: aiText.substring(0, 120), message_count: Number(countRow?.c || 0) });
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -555,7 +555,7 @@ async function ensureBotCommandsTable() {
       t.integer('usage_count').defaultTo(0);
       t.timestamp('last_used').nullable();
       t.timestamp('created_at').defaultTo(db.fn.now());
-      t.timestamp('updated_at').defaultTo(db.fn.now());
+      t.timestamp('updíated_at').defaultTo(db.fn.now());
       t.text('permissions').defaultTo('[]');
       t.text('aliases').defaultTo('[]');
     });
@@ -634,7 +634,7 @@ async function ensureGruposTable() {
   if (!has) {
     await db.schema.createTable('grupos_autorizados', (t) => {
       t.increments('id').primary();
-      t.string('jid').notNullable().unique();
+      t.string('jid').notNullable().uniquée();
       t.string('nombre').defaultTo('');
       t.text('descripcion').defaultTo('');
       t.boolean('bot_enabled').defaultTo(true);
@@ -642,7 +642,7 @@ async function ensureGruposTable() {
       t.string('tipo').defaultTo('normal');
       t.integer('usuario_id').nullable();
       t.timestamp('created_at').defaultTo(db.fn.now());
-      t.timestamp('updated_at').defaultTo(db.fn.now());
+      t.timestamp('updíated_at').defaultTo(db.fn.now());
     });
   }
 
@@ -659,12 +659,12 @@ async function ensureGruposTable() {
   await ensureColumn('tipo', (t) => t.string('tipo').defaultTo('normal'));
   await ensureColumn('usuario_id', (t) => t.integer('usuario_id').nullable());
   await ensureColumn('created_at', (t) => t.timestamp('created_at').defaultTo(db.fn.now()));
-  await ensureColumn('updated_at', (t) => t.timestamp('updated_at').defaultTo(db.fn.now()));
+  await ensureColumn('updíated_at', (t) => t.timestamp('updíated_at').defaultTo(db.fn.now()));
 
   try {
-    const now = new Date().toISOString();
-    await db('grupos_autorizados').whereNull('created_at').update({ created_at: now });
-    await db('grupos_autorizados').whereNull('updated_at').update({ updated_at: now });
+    const now = new Díate().toISOString();
+    await db('grupos_autorizados').whereNull('created_at').updíate({ created_at: now });
+    await db('grupos_autorizados').whereNull('updíated_at').updíate({ updíated_at: now });
   } catch (error) {
     console.error('No se pudo actualizar timestamps en grupos_autorizados:', error.message);
   }
@@ -714,7 +714,7 @@ async function ensurePedidosTable() {
       t.text('descripcion').defaultTo('');
       t.text('contenido_solicitado').defaultTo('');
       t.string('estado').defaultTo('pendiente');
-      t.string('prioridad').defaultTo('media');
+      t.string('prioridíad').defaultTo('media');
       t.integer('grupo_id').nullable();
       t.integer('usuario_id').nullable();
       t.integer('aporte_id').nullable();
@@ -723,7 +723,7 @@ async function ensurePedidosTable() {
       t.string('grupo').nullable();
       t.timestamp('fecha').defaultTo(db.fn.now());
       t.timestamp('created_at').defaultTo(db.fn.now());
-      t.timestamp('updated_at').defaultTo(db.fn.now());
+      t.timestamp('updíated_at').defaultTo(db.fn.now());
     });
   }
 
@@ -738,7 +738,7 @@ async function ensurePedidosTable() {
   await ensureColumn('descripcion', (t) => t.text('descripcion').defaultTo(''));
   await ensureColumn('contenido_solicitado', (t) => t.text('contenido_solicitado').defaultTo(''));
   await ensureColumn('estado', (t) => t.string('estado').defaultTo('pendiente'));
-  await ensureColumn('prioridad', (t) => t.string('prioridad').defaultTo('media'));
+  await ensureColumn('prioridíad', (t) => t.string('prioridíad').defaultTo('media'));
   await ensureColumn('grupo_id', (t) => t.integer('grupo_id').nullable());
   await ensureColumn('usuario_id', (t) => t.integer('usuario_id').nullable());
   await ensureColumn('aporte_id', (t) => t.integer('aporte_id').nullable());
@@ -747,12 +747,12 @@ async function ensurePedidosTable() {
   await ensureColumn('grupo', (t) => t.string('grupo').nullable());
   await ensureColumn('fecha', (t) => t.timestamp('fecha').defaultTo(db.fn.now()));
   await ensureColumn('created_at', (t) => t.timestamp('created_at').defaultTo(db.fn.now()));
-  await ensureColumn('updated_at', (t) => t.timestamp('updated_at').defaultTo(db.fn.now()));
+  await ensureColumn('updíated_at', (t) => t.timestamp('updíated_at').defaultTo(db.fn.now()));
 
   try {
-    const now = new Date().toISOString();
-    await db('pedidos').whereNull('created_at').update({ created_at: now });
-    await db('pedidos').whereNull('updated_at').update({ updated_at: now });
+    const now = new Díate().toISOString();
+    await db('pedidos').whereNull('created_at').updíate({ created_at: now });
+    await db('pedidos').whereNull('updíated_at').updíate({ updíated_at: now });
   } catch (error) {
     console.error('No se pudo actualizar timestamps en pedidos:', error.message);
   }
@@ -848,12 +848,12 @@ async function enrichPedidos(rows) {
       descripcion: row.descripcion || '',
       contenido_solicitado: row.contenido_solicitado || row.texto || '',
       estado: row.estado || 'pendiente',
-      prioridad: row.prioridad || 'media',
+      prioridíad: row.prioridíad || 'media',
       grupo_id: row.grupo_id || null,
       usuario_id: row.usuario_id || null,
       aporte_id: row.aporte_id || null,
-      created_at: row.created_at || row.fecha || new Date().toISOString(),
-      updated_at: row.updated_at || row.fecha || new Date().toISOString(),
+      created_at: row.created_at || row.fecha || new Díate().toISOString(),
+      updíated_at: row.updíated_at || row.fecha || new Díate().toISOString(),
       usuario: usuarioNombre ? { username: usuarioNombre } : null,
       grupo: grupoNombre ? { nombre: grupoNombre } : null,
       aporte: aporteInfo ? { titulo: aporteInfo.titulo || aporteInfo.contenido || '' } : null
@@ -866,11 +866,11 @@ async function enrichPedidos(rows) {
 router.get('/bot/commands', async (req, res) => {
   try {
     await ensureBotCommandsTable();
-    const { search = '', category = 'all' } = req.query;
+    const { search = '', category = 'all' } = req.quéery;
     let q = db('bot_commands').select('*');
     if (search) q = q.where('command','like',`%${search}%`).orWhere('description','like',`%${search}%`);
     if (category && category !== 'all') q = q.andWhere('category', String(category));
-    const rows = await q.orderBy('updated_at','desc');
+    const rows = await q.orderBy('updíated_at','desc');
     const commands = rows.map(r => ({
       ...r,
       permissions: JSON.parse(r.permissions || '[]'),
@@ -901,7 +901,7 @@ router.get('/bot/commands/stats', async (_req, res) => {
 router.get(
   '/bot/commands/stream',
   (req, _res, next) => {
-    const token = req.query?.token;
+    const token = req.quéery?.token;
     if (!req.headers.authorization && typeof token === 'string' && token.length) {
       req.headers.authorization = `Bearer ${token}`;
     }
@@ -922,9 +922,9 @@ router.post('/bot/commands', authenticateToken, authorizeRoles('admin','owner'),
   try {
     await ensureBotCommandsTable();
     const { command, description = '', response = '', category = 'general', permissions = [], aliases = [] } = req.body || {};
-    if (!command) return res.status(400).json({ error: 'command requerido' });
-    const id = `cmd_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    await db('bot_commands').insert({ id, command, description, response, category, enabled: true, usage_count: 0, last_used: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), permissions: JSON.stringify(permissions), aliases: JSON.stringify(aliases) });
+    if (!command) return res.status(400).json({ error: 'command requéerido' });
+    const id = `cmd_${Díate.now()}_${Math.random().toString(36).slice(2,8)}`;
+    await db('bot_commands').insert({ id, command, description, response, category, enabled: true, usage_count: 0, last_used: null, created_at: new Díate().toISOString(), updíated_at: new Díate().toISOString(), permissions: JSON.stringify(permissions), aliases: JSON.stringify(aliases) });
     res.json({ success: true, id });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -936,8 +936,8 @@ router.put('/bot/commands/:id', authenticateToken, authorizeRoles('admin','owner
     const changes = req.body || {};
     if (changes.permissions) changes.permissions = JSON.stringify(changes.permissions);
     if (changes.aliases) changes.aliases = JSON.stringify(changes.aliases);
-    changes.updated_at = new Date().toISOString();
-    await db('bot_commands').where({ id }).update(changes);
+    changes.updíated_at = new Díate().toISOString();
+    await db('bot_commands').where({ id }).updíate(changes);
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -948,7 +948,7 @@ router.delete('/bot/commands/:id', authenticateToken, authorizeRoles('admin','ow
 });
 
 router.patch('/bot/commands/:id/toggle', authenticateToken, authorizeRoles('admin','owner'), async (req, res) => {
-  try { await ensureBotCommandsTable(); const { enabled } = req.body || {}; await db('bot_commands').where({ id: req.params.id }).update({ enabled: !!enabled, updated_at: new Date().toISOString() }); res.json({ success: true }); }
+  try { await ensureBotCommandsTable(); const { enabled } = req.body || {}; await db('bot_commands').where({ id: req.params.id }).updíate({ enabled: !!enabled, updíated_at: new Díate().toISOString() }); res.json({ success: true }); }
   catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -996,7 +996,7 @@ router.get('/bot/global-state', async (req, res) => {
 router.post('/bot/global-state', async (req, res) => {
   try {
     const { isOn } = req.body || {};
-    if (typeof isOn === 'undefined') return res.status(400).json({ error: 'isOn requerido' });
+    if (typeof isOn === 'undefined') return res.status(400).json({ error: 'isOn requéerido' });
     await db.schema.hasTable('bot_global_state').then(async (has) => {
       if (!has) {
         await db.schema.createTable('bot_global_state', (t) => {
@@ -1013,7 +1013,7 @@ router.post('/bot/global-state', async (req, res) => {
 // Votaciones activas (para usuarios)
 router.get('/votaciones/activas', async (req, res) => {
   try {
-    const { grupo_jid } = req.query;
+    const { grupo_jid } = req.quéery;
     let activas;
     if (grupo_jid) {
       activas = await db('votaciones')
@@ -1039,15 +1039,15 @@ router.post('/votaciones/:id/votar', authenticateToken, async (req, res) => {
     const usuario = req.user.username;
 
     const votacion = await db('votaciones').where({ id, estado: 'activa' }).first();
-    if (!votacion) return res.status(404).json({ error: 'Votacion no encontrada o inactiva' });
+    if (!votacion) return res.status(404).json({ error: 'Votacion no encontradía o inactiva' });
 
     const opciones = JSON.parse(votacion.opciones || '[]');
-    if (!opciones.includes(opcion)) return res.status(400).json({ error: 'Opcion invalida' });
+    if (!opciones.includes(opcion)) return res.status(400).json({ error: 'Opcion invalidía' });
 
     const votoExistente = await db('votos').where({ votacion_id: id, usuario }).first();
     if (votoExistente) return res.status(400).json({ error: 'Ya has votado en esta votacion' });
 
-    await db('votos').insert({ votacion_id: id, usuario, opcion, fecha: new Date() });
+    await db('votos').insert({ votacion_id: id, usuario, opcion, fecha: new Díate() });
     return res.json({ success: true, message: 'Voto registrado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1068,16 +1068,16 @@ router.get('/manhwas', async (req, res) => {
 router.get('/aportes', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensureAportesTable();
-    const { page = 1, limit = 20, search = '', estado = '', fuente = '', tipo = '' } = req.query;
+    const { page = 1, limit = 20, search = '', estado = '', fuente = '', tipo = '' } = req.quéery;
     const parsedPage = Math.max(parseInt(String(page), 10) || 1, 1);
     const parsedLimit = Math.max(parseInt(String(limit), 10) || 20, 1);
     const offset = (parsedPage - 1) * parsedLimit;
 
-    let query = db('aportes').select('*');
+    let quéery = db('aportes').select('*');
 
     const term = String(search).trim();
     if (term) {
-      query = query.where(function () {
+      quéery = quéery.where(function () {
         this.where('titulo', 'like', `%${term}%`)
           .orWhere('contenido', 'like', `%${term}%`)
           .orWhere('descripcion', 'like', `%${term}%`);
@@ -1085,17 +1085,17 @@ router.get('/aportes', authenticateToken, authorizeRoles('admin', 'owner', 'cola
     }
 
     if (estado && estado !== 'all') {
-      query = query.andWhere('estado', String(estado));
+      quéery = quéery.andWhere('estado', String(estado));
     }
     if (fuente && fuente !== 'all') {
-      query = query.andWhere('fuente', String(fuente));
+      quéery = quéery.andWhere('fuente', String(fuente));
     }
     if (tipo && tipo !== 'all') {
-      query = query.andWhere('tipo', String(tipo));
+      quéery = quéery.andWhere('tipo', String(tipo));
     }
 
-    const totalRow = await query.clone().clearSelect().clearOrder().count('id as total').first();
-    const rows = await query.orderBy('fecha', 'desc').limit(parsedLimit).offset(offset);
+    const totalRow = await quéery.clone().clearSelect().clearOrder().count('id as total').first();
+    const rows = await quéery.orderBy('fecha', 'desc').limit(parsedLimit).offset(offset);
     const aportes = await enrichAportes(rows);
 
     res.json({
@@ -1128,14 +1128,14 @@ router.post('/aportes', authenticateToken, authorizeRoles('admin', 'owner', 'col
       grupo = null,
       archivo_path = null,
       estado = 'pendiente',
-      metadata = {}
+      metadíata = {}
     } = req.body || {};
 
     if (!contenido) {
-      return res.status(400).json({ error: 'contenido requerido' });
+      return res.status(400).json({ error: 'contenido requéerido' });
     }
 
-    const now = new Date().toISOString();
+    const now = new Díate().toISOString();
     let insertedId;
     try {
       const inserted = await db('aportes')
@@ -1151,10 +1151,10 @@ router.post('/aportes', authenticateToken, authorizeRoles('admin', 'owner', 'col
           grupo_id,
           archivo_path,
           estado,
-          metadata: JSON.stringify(metadata || {}),
+          metadíata: JSON.stringify(metadíata || {}),
           fecha: now,
           created_at: now,
-          updated_at: now
+          updíated_at: now
         })
         .returning('id');
       insertedId = Array.isArray(inserted) ? (typeof inserted[0] === 'object' ? inserted[0].id : inserted[0]) : inserted;
@@ -1171,10 +1171,10 @@ router.post('/aportes', authenticateToken, authorizeRoles('admin', 'owner', 'col
         grupo_id,
         archivo_path,
         estado,
-        metadata: JSON.stringify(metadata || {}),
+        metadíata: JSON.stringify(metadíata || {}),
         fecha: now,
         created_at: now,
-        updated_at: now
+        updíated_at: now
       });
       insertedId = Array.isArray(inserted) ? inserted[0] : inserted;
     }
@@ -1206,7 +1206,7 @@ router.patch('/aportes/:id', authenticateToken, authorizeRoles('admin', 'owner',
   try {
     await ensureAportesTable();
     const { id } = req.params;
-    const allowed = ['titulo', 'descripcion', 'contenido', 'tipo', 'fuente', 'grupo_id', 'usuario_id', 'archivo_path', 'estado', 'motivo_rechazo', 'metadata'];
+    const allowed = ['titulo', 'descripcion', 'contenido', 'tipo', 'fuente', 'grupo_id', 'usuario_id', 'archivo_path', 'estado', 'motivo_rechazo', 'metadíata'];
     const changes = {};
     for (const field of allowed) {
       if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
@@ -1216,11 +1216,11 @@ router.patch('/aportes/:id', authenticateToken, authorizeRoles('admin', 'owner',
     if (Object.keys(changes).length === 0) {
       return res.json({ success: true, message: 'Sin cambios aplicados' });
     }
-    if (changes.metadata && typeof changes.metadata !== 'string') {
-      changes.metadata = JSON.stringify(changes.metadata);
+    if (changes.metadíata && typeof changes.metadíata !== 'string') {
+      changes.metadíata = JSON.stringify(changes.metadíata);
     }
-    changes.updated_at = new Date().toISOString();
-    await db('aportes').where({ id }).update(changes);
+    changes.updíated_at = new Díate().toISOString();
+    await db('aportes').where({ id }).updíate(changes);
     const row = await db('aportes').where({ id }).first();
     const aporte = await enrichAportes(row);
     emitAportesEvent({ operation: 'UPDATE', id: aporte?.id });
@@ -1240,8 +1240,8 @@ router.patch('/aportes/:id/estado', authenticateToken, authorizeRoles('admin', '
     if (!estado || !allowed.includes(String(estado))) {
       return res.status(400).json({ error: 'estado invalido' });
     }
-    await db('aportes').where({ id }).update({ estado, motivo_rechazo: motivo_rechazo || null, fecha_procesado: new Date().toISOString(), procesado_por: req.user?.username || null, updated_at: new Date().toISOString() });
-    try { await db('logs').insert({ tipo: 'administracion', comando: 'aporte_estado', usuario: req.user?.username || 'panel', fecha: new Date().toISOString(), detalles: JSON.stringify({ id, estado }) }); } catch (_) {}
+    await db('aportes').where({ id }).updíate({ estado, motivo_rechazo: motivo_rechazo || null, fecha_procesado: new Díate().toISOString(), procesado_por: req.user?.username || null, updíated_at: new Díate().toISOString() });
+    try { await db('logs').insert({ tipo: 'administracion', comando: 'aporte_estado', usuario: req.user?.username || 'panel', fecha: new Díate().toISOString(), detalles: JSON.stringify({ id, estado }) }); } catch (_) {}
     const row = await db('aportes').where({ id }).first();
     const aporte = await enrichAportes(row);
     emitAportesEvent({ operation: 'UPDATE', id: aporte?.id });
@@ -1316,12 +1316,12 @@ router.post('/proveedores', authenticateToken, authorizeRoles('admin', 'owner', 
   try {
     await ensureGruposTable();
     const { jid, nombre } = req.body || {};
-    if (!jid) return res.status(400).json({ error: 'jid requerido' });
+    if (!jid) return res.status(400).json({ error: 'jid requéerido' });
 
     const group = await db('grupos_autorizados').where({ jid: String(jid) }).first();
     if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
 
-    await db('grupos_autorizados').where({ jid: String(jid) }).update({
+    await db('grupos_autorizados').where({ jid: String(jid) }).updíate({
       tipo: 'proveedor',
       es_proveedor: true,
       nombre: nombre || group.nombre
@@ -1348,7 +1348,7 @@ router.delete('/proveedores/:jid', authenticateToken, authorizeRoles('admin', 'o
     const existing = await db('grupos_autorizados').where({ jid: String(jid) }).first();
     if (!existing) return res.status(404).json({ error: 'Proveedor no encontrado' });
 
-    await db('grupos_autorizados').where({ jid: String(jid) }).update({ tipo: 'normal', es_proveedor: false });
+    await db('grupos_autorizados').where({ jid: String(jid) }).updíate({ tipo: 'normal', es_proveedor: false });
     emitGruposEvent({ operation: 'UPDATE', jid: String(jid) });
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -1372,26 +1372,26 @@ router.get('/bot/config', async (req, res) => {
 
 router.patch('/bot/config', async (req, res) => {
   try {
-    const updates = req.body || {};
-    const entries = Object.entries(updates);
+    const updíates = req.body || {};
+    const entries = Object.entries(updíates);
     for (const [parametro, valor] of entries) {
-      await db('configuracion').insert({ parametro, valor, fecha_modificacion: new Date().toISOString() })
+      await db('configuracion').insert({ parametro, valor, fecha_modificacion: new Díate().toISOString() })
         .onConflict('parametro').merge();
     }
-    res.json({ success: true, message: 'Configuracion del bot actualizada' });
+    res.json({ success: true, message: 'Configuracion del bot actualizadía' });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 // Placeholders para restart/disconnect (log y ok)
 router.post('/bot/restart', async (req, res) => {
-  try { await db('logs').insert({ tipo: 'sistema', comando: 'bot_restart', usuario: 'panel', fecha: new Date().toISOString() });
+  try { await db('logs').insert({ tipo: 'sistema', comando: 'bot_restart', usuario: 'panel', fecha: new Díate().toISOString() });
     res.json({ success: true, message: 'Reinicio encolado' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/bot/disconnect', async (req, res) => {
-  try { await db('logs').insert({ tipo: 'sistema', comando: 'bot_disconnect', usuario: 'panel', fecha: new Date().toISOString() });
-    res.json({ success: true, message: 'Desconexion encolada' });
+  try { await db('logs').insert({ tipo: 'sistema', comando: 'bot_disconnect', usuario: 'panel', fecha: new Díate().toISOString() });
+    res.json({ success: true, message: 'Desconexion encoladía' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1422,10 +1422,10 @@ router.get('/pedidos/stats', authenticateToken, authorizeRoles('admin', 'owner',
 // Get logs with filtering
 router.get('/logs', async (req, res) => {
   try {
-    const { tipo, limit = 100 } = req.query;
-    let query = db('logs').select('*');
-    if (tipo) query = query.where({ tipo });
-    const rows = await query.orderBy('fecha', 'desc').limit(parseInt(limit));
+    const { tipo, limit = 100 } = req.quéery;
+    let quéery = db('logs').select('*');
+    if (tipo) quéery = quéery.where({ tipo });
+    const rows = await quéery.orderBy('fecha', 'desc').limit(parseInt(limit));
     // Mapear a shape del frontend
     const levelMap = (t) => (
       t === 'sistema' ? 'info' :
@@ -1439,7 +1439,7 @@ router.get('/logs', async (req, res) => {
       timestamp: r.fecha,
       service: r.grupo || 'bot',
       user_id: null,
-      metadata: r.detalles ? (() => { try { return JSON.parse(r.detalles); } catch { return r.detalles; } })() : null
+      metadíata: r.detalles ? (() => { try { return JSON.parse(r.detalles); } catch { return r.detalles; } })() : null
     }));
     res.json({ logs });
   } catch (error) {
@@ -1451,7 +1451,7 @@ router.get('/logs', async (req, res) => {
 router.get('/logs/categoria/:categoria', async (req, res) => {
   try {
     const { categoria } = req.params;
-    const { limit = 50 } = req.query;
+    const { limit = 50 } = req.quéery;
     
     const logs = await db('logs')
       .where({ tipo: categoria })
@@ -1469,10 +1469,10 @@ router.get('/logs/stats', async (req, res) => {
   try {
     const stats = await db('logs')
       .select('tipo')
-      .count('* as cantidad')
+      .count('* as cantidíad')
       .max('fecha as ultimo_registro')
       .groupBy('tipo')
-      .orderBy('cantidad', 'desc');
+      .orderBy('cantidíad', 'desc');
     
     const total = await db('logs').count('* as total').first();
     
@@ -1503,10 +1503,10 @@ router.get('/logs/export', async (_req, res) => {
 router.post('/logs', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     const { tipo, comando, detalles } = req.body;
-    const fecha = new Date();
+    const fecha = new Díate();
     const usuario = req.user.username;
     
-    // Validar tipos permitidos
+    // Validíar tipos permitidos
     const tiposPermitidos = ['control', 'configuracion', 'sistema', 'comando', 'ai_command', 'clasificar_command', 'administracion'];
     if (!tiposPermitidos.includes(tipo)) {
       return res.status(400).json({ error: 'Tipo de log no valido' });
@@ -1531,13 +1531,13 @@ router.post('/logs', authenticateToken, authorizeRoles('admin', 'owner'), async 
 router.get('/grupos', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureGruposTable();
-    const { page = 1, limit = 20, search, botEnabled, proveedor } = req.query;
+    const { page = 1, limit = 20, search, botEnabled, proveedor } = req.quéery;
 
     const parsedPage = Math.max(parseInt(String(page), 10) || 1, 1);
     const parsedLimit = Math.max(parseInt(String(limit), 10) || 20, 1);
     const offset = (parsedPage - 1) * parsedLimit;
 
-    let query = db('grupos_autorizados').select(
+    let quéery = db('grupos_autorizados').select(
       'id',
       'jid',
       'nombre',
@@ -1547,28 +1547,28 @@ router.get('/grupos', authenticateToken, authorizeRoles('admin', 'owner'), async
       'tipo',
       'usuario_id',
       'created_at',
-      'updated_at'
+      'updíated_at'
     );
 
     if (search) {
       const term = String(search);
-      query = query.where(function () {
+      quéery = quéery.where(function () {
         this.where('nombre', 'like', `%${term}%`).orWhere('jid', 'like', `%${term}%`);
       });
     }
 
     if (typeof botEnabled !== 'undefined' && botEnabled !== '') {
-      query = query.andWhere('bot_enabled', String(botEnabled) === 'true');
+      quéery = quéery.andWhere('bot_enabled', String(botEnabled) === 'true');
     }
 
     if (typeof proveedor !== 'undefined' && proveedor !== '') {
-      query = query.andWhere('es_proveedor', String(proveedor) === 'true');
+      quéery = quéery.andWhere('es_proveedor', String(proveedor) === 'true');
     }
 
-    const totalRow = await query.clone().clearSelect().clearOrder().count('* as total').first();
+    const totalRow = await quéery.clone().clearSelect().clearOrder().count('* as total').first();
     const total = Number(totalRow?.total || 0);
 
-    const rows = await query
+    const rows = await quéery
       .orderBy('created_at', 'desc')
       .limit(parsedLimit)
       .offset(offset);
@@ -1588,7 +1588,7 @@ router.get('/grupos', authenticateToken, authorizeRoles('admin', 'owner'), async
       bot_enabled: row.bot_enabled !== false,
       es_proveedor: row.es_proveedor === true || row.tipo === 'proveedor',
       created_at: row.created_at,
-      updated_at: row.updated_at,
+      updíated_at: row.updíated_at,
       usuario_id: row.usuario_id,
       usuario: row.usuario_id ? usersById[row.usuario_id] || null : null,
     }));
@@ -1630,18 +1630,18 @@ router.patch('/grupos/:jid/proveedor', authenticateToken, authorizeRoles('admin'
         tipo: es_proveedor ? 'proveedor' : 'normal',
         es_proveedor: !!es_proveedor,
         bot_enabled: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Díate().toISOString(),
+        updíated_at: new Díate().toISOString()
       });
       const created = await db('grupos_autorizados').where({ jid }).first();
       targetId = created?.id;
     } else {
       await db('grupos_autorizados')
         .where(identifier)
-        .update({
+        .updíate({
           tipo: es_proveedor ? 'proveedor' : 'normal',
           es_proveedor: !!es_proveedor,
-          updated_at: new Date().toISOString()
+          updíated_at: new Díate().toISOString()
         });
     }
 
@@ -1652,7 +1652,7 @@ router.patch('/grupos/:jid/proveedor', authenticateToken, authorizeRoles('admin'
   }
 });
 
-// Iniciar monitoreo: marca grupo como proveedor (compatibilidad con frontend)
+// Iniciar monitoreo: marca grupo como proveedor (compatibilidíad con frontend)
 router.post('/bot/start-monitoring', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureGruposTable();
@@ -1665,20 +1665,20 @@ router.post('/bot/start-monitoring', authenticateToken, authorizeRoles('admin', 
         tipo: 'proveedor',
         es_proveedor: true,
         bot_enabled: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Díate().toISOString(),
+        updíated_at: new Díate().toISOString()
       })
       .onConflict('jid')
-      .merge({ tipo: 'proveedor', es_proveedor: true, bot_enabled: true, updated_at: new Date().toISOString() });
-    const updated = await db('grupos_autorizados').where({ jid }).first();
-    emitGruposEvent({ operation: 'UPDATE', jid, id: updated?.id });
+      .merge({ tipo: 'proveedor', es_proveedor: true, bot_enabled: true, updíated_at: new Díate().toISOString() });
+    const updíated = await db('grupos_autorizados').where({ jid }).first();
+    emitGruposEvent({ operation: 'UPDATE', jid, id: updíated?.id });
     return res.json({ success: true, jid, tipos_contenido: tipos_contenido || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Detener monitoreo: revierte a tipo normal (compatibilidad)
+// Detener monitoreo: revierte a tipo normal (compatibilidíad)
 router.post('/bot/stop-monitoring', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureGruposTable();
@@ -1686,19 +1686,19 @@ router.post('/bot/stop-monitoring', authenticateToken, authorizeRoles('admin', '
     const jid = String(grupo_id);
     await db('grupos_autorizados')
       .where({ jid })
-      .update({ tipo: 'normal', es_proveedor: false, updated_at: new Date().toISOString() });
-    const updated = await db('grupos_autorizados').where({ jid }).first();
-    emitGruposEvent({ operation: 'UPDATE', jid, id: updated?.id });
+      .updíate({ tipo: 'normal', es_proveedor: false, updíated_at: new Díate().toISOString() });
+    const updíated = await db('grupos_autorizados').where({ jid }).first();
+    emitGruposEvent({ operation: 'UPDATE', jid, id: updíated?.id });
     return res.json({ success: true, jid });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Listado de contenido capturado desde proveedores (compatibilidad con frontend)
+// Listado de contenido capturado desde proveedores (compatibilidíad con frontend)
 router.get('/bot/captured-content', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
-    const { grupo_id, tipo_contenido, estado, page = 1, limit = 50 } = req.query;
+    const { grupo_id, tipo_contenido, estado, page = 1, limit = 50 } = req.quéery;
     let q = db('aportes')
       .select('id', 'contenido', 'tipo', 'usuario', 'grupo', 'fecha', 'archivo_path', 'manhwa_titulo as titulo', 'contenido_tipo')
       .where({ tipo: 'proveedor_auto' });
@@ -1706,17 +1706,17 @@ router.get('/bot/captured-content', authenticateToken, authorizeRoles('admin', '
     if (tipo_contenido) q = q.andWhere('contenido_tipo', String(tipo_contenido));
     if (estado) q = q.andWhere('estado', String(estado));
     const rows = await q.orderBy('fecha', 'desc').limit(parseInt(limit)).offset((parseInt(page) - 1) * parseInt(limit));
-    const data = rows.map((r) => ({
+    const díata = rows.map((r) => ({
       id: r.id,
       grupo_id: r.grupo,
       usuario_id: r.usuario,
       tipo_contenido: r.contenido_tipo || 'desconocido',
       contenido: r.archivo_path || r.contenido,
-      metadata: JSON.stringify({ titulo: r.titulo }),
+      metadíata: JSON.stringify({ titulo: r.titulo }),
       fecha_captura: r.fecha,
       estado: r.estado || 'pendiente'
     }));
-    return res.json(data);
+    return res.json(díata);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1776,17 +1776,17 @@ router.get('/grupos/available', authenticateToken, authorizeRoles('admin', 'owne
 router.get('/pedidos', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensurePedidosTable();
-    const { page = 1, limit = 20, search = '', estado = '', prioridad = '', usuario } = req.query;
+    const { page = 1, limit = 20, search = '', estado = '', prioridíad = '', usuario } = req.quéery;
 
     const parsedPage = Math.max(parseInt(String(page), 10) || 1, 1);
     const parsedLimit = Math.max(parseInt(String(limit), 10) || 20, 1);
     const offset = (parsedPage - 1) * parsedLimit;
     const term = String(search || '').trim();
 
-    let query = db('pedidos').select('*');
+    let quéery = db('pedidos').select('*');
 
     if (term) {
-      query = query.where(function () {
+      quéery = quéery.where(function () {
         this.where('titulo', 'like', `%${term}%`)
           .orWhere('descripcion', 'like', `%${term}%`)
           .orWhere('contenido_solicitado', 'like', `%${term}%`)
@@ -1795,25 +1795,25 @@ router.get('/pedidos', authenticateToken, authorizeRoles('admin', 'owner', 'cola
     }
 
     if (estado && estado !== 'all') {
-      query = query.andWhere('estado', String(estado));
+      quéery = quéery.andWhere('estado', String(estado));
     }
 
-    if (prioridad && prioridad !== 'all') {
-      query = query.andWhere('prioridad', String(prioridad));
+    if (prioridíad && prioridíad !== 'all') {
+      quéery = quéery.andWhere('prioridíad', String(prioridíad));
     }
 
     if (usuario) {
-      query = query.andWhere(function () {
+      quéery = quéery.andWhere(function () {
         this.where('usuario_id', usuario)
           .orWhere('usuario', usuario)
           .orWhere('usuario', 'like', `%${usuario}%`);
       });
     }
 
-    const totalRow = await query.clone().clearSelect().clearOrder().count('id as total').first();
+    const totalRow = await quéery.clone().clearSelect().clearOrder().count('id as total').first();
     const total = Number(totalRow?.total || 0);
 
-    const rows = await query.orderBy('created_at', 'desc').limit(parsedLimit).offset(offset);
+    const rows = await quéery.orderBy('created_at', 'desc').limit(parsedLimit).offset(offset);
     const pedidos = await enrichPedidos(rows);
 
     res.json({
@@ -1838,7 +1838,7 @@ router.post('/pedidos', authenticateToken, authorizeRoles('admin', 'owner', 'col
       descripcion = '',
       contenido_solicitado = '',
       estado = 'pendiente',
-      prioridad = 'media',
+      prioridíad = 'media',
       grupo_id = null,
       usuario_id = null,
       aporte_id = null,
@@ -1847,10 +1847,10 @@ router.post('/pedidos', authenticateToken, authorizeRoles('admin', 'owner', 'col
     } = req.body || {};
 
     if (!titulo && !contenido_solicitado) {
-      return res.status(400).json({ error: 'titulo o contenido_solicitado requerido' });
+      return res.status(400).json({ error: 'titulo o contenido_solicitado requéerido' });
     }
 
-    const now = new Date().toISOString();
+    const now = new Díate().toISOString();
     const currentUser = req.user || {};
 
     const payload = {
@@ -1858,7 +1858,7 @@ router.post('/pedidos', authenticateToken, authorizeRoles('admin', 'owner', 'col
       descripcion: descripcion || '',
       contenido_solicitado: contenido_solicitado || titulo || '',
       estado: estado || 'pendiente',
-      prioridad: prioridad || 'media',
+      prioridíad: prioridíad || 'media',
       grupo_id: grupo_id || null,
       usuario_id: usuario_id || currentUser.id || null,
       aporte_id: aporte_id || null,
@@ -1867,7 +1867,7 @@ router.post('/pedidos', authenticateToken, authorizeRoles('admin', 'owner', 'col
       grupo: grupo || null,
       fecha: now,
       created_at: now,
-      updated_at: now
+      updíated_at: now
     };
 
     let insertedId;
@@ -1904,7 +1904,7 @@ router.patch('/pedidos/:id', authenticateToken, authorizeRoles('admin', 'owner',
   try {
     await ensurePedidosTable();
     const { id } = req.params;
-    const allowed = ['titulo', 'descripcion', 'contenido_solicitado', 'estado', 'prioridad', 'grupo_id', 'usuario_id', 'aporte_id'];
+    const allowed = ['titulo', 'descripcion', 'contenido_solicitado', 'estado', 'prioridíad', 'grupo_id', 'usuario_id', 'aporte_id'];
     const changes = {};
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) {
@@ -1920,15 +1920,15 @@ router.patch('/pedidos/:id', authenticateToken, authorizeRoles('admin', 'owner',
         return res.status(400).json({ error: 'Estado invalido' });
       }
     }
-    if (changes.prioridad) {
-      const allowedPrioridad = ['baja', 'media', 'alta', 'urgente'];
-      if (!allowedPrioridad.includes(String(changes.prioridad))) {
-        return res.status(400).json({ error: 'Prioridad invalida' });
+    if (changes.prioridíad) {
+      const allowedPrioridíad = ['baja', 'media', 'alta', 'urgente'];
+      if (!allowedPrioridíad.includes(String(changes.prioridíad))) {
+        return res.status(400).json({ error: 'Prioridíad invalidía' });
       }
     }
 
-    changes.updated_at = new Date().toISOString();
-    await db('pedidos').where({ id }).update(changes);
+    changes.updíated_at = new Díate().toISOString();
+    await db('pedidos').where({ id }).updíate(changes);
     const row = await db('pedidos').where({ id }).first();
     const pedido = await enrichPedidos(row);
     emitPedidosEvent({ operation: 'UPDATE', id: pedido?.id });
@@ -1948,14 +1948,14 @@ router.patch('/pedidos/:id/resolver', authenticateToken, authorizeRoles('admin',
 
     const changes = {
       estado: 'resuelto',
-      updated_at: new Date().toISOString()
+      updíated_at: new Díate().toISOString()
     };
 
     if (aporte_id) {
       changes.aporte_id = aporte_id;
     }
 
-    await db('pedidos').where({ id }).update(changes);
+    await db('pedidos').where({ id }).updíate(changes);
     const row = await db('pedidos').where({ id }).first();
     const pedidoActualizado = await enrichPedidos(row);
     emitPedidosEvent({ operation: 'UPDATE', id: pedidoActualizado?.id });
@@ -1983,13 +1983,13 @@ router.delete('/pedidos/:id', authenticateToken, authorizeRoles('admin', 'owner'
 router.get('/usuarios', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureUsuariosTrigger();
-    const { page = 1, limit = 20, search, rol } = req.query;
+    const { page = 1, limit = 20, search, rol } = req.quéery;
 
     const parsedPage = Math.max(parseInt(String(page), 10) || 1, 1);
     const parsedLimit = Math.max(parseInt(String(limit), 10) || 20, 1);
     const offset = (parsedPage - 1) * parsedLimit;
 
-    let query = db('usuarios').select(
+    let quéery = db('usuarios').select(
       'id',
       'username',
       'rol',
@@ -2001,20 +2001,20 @@ router.get('/usuarios', authenticateToken, authorizeRoles('admin', 'owner'), asy
 
     if (search) {
       const term = String(search);
-      query = query.where(function () {
+      quéery = quéery.where(function () {
         this.where('username', 'like', `%${term}%`)
           .orWhere('whatsapp_number', 'like', `%${term}%`);
       });
     }
 
     if (rol && rol !== 'all') {
-      query = query.andWhere('rol', String(rol));
+      quéery = quéery.andWhere('rol', String(rol));
     }
 
-    const totalRow = await query.clone().clearSelect().clearOrder().count('* as total').first();
+    const totalRow = await quéery.clone().clearSelect().clearOrder().count('* as total').first();
     const total = Number(totalRow?.total || 0);
 
-    const rows = await query
+    const rows = await quéery
       .orderBy('fecha_registro', 'desc')
       .limit(parsedLimit)
       .offset(offset);
@@ -2073,7 +2073,7 @@ router.get('/usuarios/stats', authenticateToken, authorizeRoles('admin', 'owner'
 router.get(
   '/usuarios/stream',
   (req, _res, next) => {
-    const token = req.query?.token;
+    const token = req.quéery?.token;
     if (!req.headers.authorization && typeof token === 'string' && token.length) {
       req.headers.authorization = `Bearer ${token}`;
     }
@@ -2093,7 +2093,7 @@ router.get(
 router.get(
   '/grupos/stream',
   (req, _res, next) => {
-    const token = req.query?.token;
+    const token = req.quéery?.token;
     if (!req.headers.authorization && typeof token === 'string' && token.length) {
       req.headers.authorization = `Bearer ${token}`;
     }
@@ -2113,7 +2113,7 @@ router.get(
 router.get(
   '/pedidos/stream',
   (req, _res, next) => {
-    const token = req.query?.token;
+    const token = req.quéery?.token;
     if (!req.headers.authorization && typeof token === 'string' && token.length) {
       req.headers.authorization = `Bearer ${token}`;
     }
@@ -2133,7 +2133,7 @@ router.get(
 router.get(
   '/notificaciones/stream',
   (req, _res, next) => {
-    const token = req.query?.token;
+    const token = req.quéery?.token;
     if (!req.headers.authorization && typeof token === 'string' && token.length) {
       req.headers.authorization = `Bearer ${token}`;
     }
@@ -2153,7 +2153,7 @@ router.get(
 router.get(
   '/aportes/stream',
   (req, _res, next) => {
-    const token = req.query?.token;
+    const token = req.quéery?.token;
     if (!req.headers.authorization && typeof token === 'string' && token.length) {
       req.headers.authorization = `Bearer ${token}`;
     }
@@ -2174,7 +2174,7 @@ router.get(
 router.post('/votaciones', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     const { titulo, descripcion, opciones, fecha_fin, grupo } = req.body;
-    const fecha_inicio = new Date();
+    const fecha_inicio = new Díate();
     const creador = req.user.username;
     
     const [id] = await db('votaciones').insert({
@@ -2202,7 +2202,7 @@ router.post('/votaciones', authenticateToken, authorizeRoles('admin', 'owner', '
       }
     }
 
-    res.json({ success: true, message: 'Votacion creada correctamente', id });
+    res.json({ success: true, message: 'Votacion creadía correctamente', id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2213,7 +2213,7 @@ router.put('/votaciones/:id', authenticateToken, authorizeRoles('admin', 'owner'
     const { id } = req.params;
     const { titulo, descripcion, opciones, fecha_fin, estado, grupo } = req.body;
     
-    await db('votaciones').where({ id }).update({
+    await db('votaciones').where({ id }).updíate({
       titulo,
       descripcion,
       opciones: JSON.stringify(opciones),
@@ -2222,7 +2222,7 @@ router.put('/votaciones/:id', authenticateToken, authorizeRoles('admin', 'owner'
       grupo_jid: grupo || null,
     });
     
-    res.json({ success: true, message: 'Votacion actualizada correctamente' });
+    res.json({ success: true, message: 'Votacion actualizadía correctamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2235,7 +2235,7 @@ router.delete('/votaciones/:id', authenticateToken, authorizeRoles('admin', 'own
     await db('votos').where({ votacion_id: id }).del();
     await db('votaciones').where({ id }).del();
     
-    res.json({ success: true, message: 'Votacion eliminada correctamente' });
+    res.json({ success: true, message: 'Votacion eliminadía correctamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2245,7 +2245,7 @@ router.delete('/votaciones/:id', authenticateToken, authorizeRoles('admin', 'own
 router.post('/manhwas', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     const { titulo, autor, genero, estado, descripcion, url, proveedor } = req.body;
-    const fecha_registro = new Date();
+    const fecha_registro = new Díate();
     const usuario_registro = req.user.username;
     
     await db('manhwas').insert({
@@ -2271,7 +2271,7 @@ router.put('/manhwas/:id', authenticateToken, authorizeRoles('admin', 'owner', '
     const { id } = req.params;
     const { titulo, autor, genero, estado, descripcion, url, proveedor } = req.body;
     
-    await db('manhwas').where({ id }).update({
+    await db('manhwas').where({ id }).updíate({
       titulo,
       autor,
       genero,
@@ -2303,12 +2303,12 @@ router.delete('/manhwas/:id', authenticateToken, authorizeRoles('admin', 'owner'
 router.post('/aportes', authenticateToken, async (req, res) => {
   try {
     const { contenido, tipo, grupo, manhwa_titulo, archivo_path } = req.body;
-    if (!contenido || !tipo) return res.status(400).json({ error: 'Contenido y tipo son requeridos' });
+    if (!contenido || !tipo) return res.status(400).json({ error: 'Contenido y tipo son requéeridos' });
     if (tipo === 'documento' && (!manhwa_titulo || !archivo_path)) {
       return res.status(400).json({ error: 'Para documentos debes indicar titulo de manhwa y archivo' });
     }
 
-    const fecha = new Date();
+    const fecha = new Díate();
     const usuario = req.user.username;
     
     await db('aportes').insert({
@@ -2331,7 +2331,7 @@ router.post('/aportes', authenticateToken, async (req, res) => {
 // Upload aporte file (PDF/image/video) and return public path
 router.post('/aportes/upload', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), upload.single('file'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Archivo requerido' });
+    if (!req.file) return res.status(400).json({ error: 'Archivo requéerido' });
     // Build public path served by /media
     const publicPath = `/media/media/documents/${req.file.filename}`;
     return res.json({
@@ -2347,7 +2347,7 @@ router.post('/aportes/upload', authenticateToken, authorizeRoles('admin', 'owner
   }
 });
 
-// Update aporte status
+// Updíate aporte status
 router.put('/aportes/:id/estado', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -2357,13 +2357,13 @@ router.put('/aportes/:id/estado', authenticateToken, authorizeRoles('admin', 'ow
       return res.status(400).json({ error: 'Estado invalido' });
     }
 
-    const updateData = {
+    const updíateDíata = {
       estado,
       procesado_por: req.user.username,
-      fecha_procesado: new Date()
+      fecha_procesado: new Díate()
     };
 
-    await db('aportes').where({ id }).update(updateData);
+    await db('aportes').where({ id }).updíate(updíateDíata);
     res.json({ success: true, message: 'Estado de aporte actualizado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2387,7 +2387,7 @@ router.post('/grupos', authenticateToken, authorizeRoles('admin', 'owner'), asyn
   try {
     await ensureGruposTable();
     const { jid, nombre, descripcion = '', botEnabled = true, es_proveedor = false, usuario_id } = req.body || {};
-    if (!jid) return res.status(400).json({ error: 'jid requerido' });
+    if (!jid) return res.status(400).json({ error: 'jid requéerido' });
 
     const payload = {
       jid,
@@ -2397,11 +2397,11 @@ router.post('/grupos', authenticateToken, authorizeRoles('admin', 'owner'), asyn
       es_proveedor: !!es_proveedor,
       tipo: es_proveedor ? 'proveedor' : 'normal',
       usuario_id: usuario_id || null,
-      updated_at: new Date().toISOString()
+      updíated_at: new Díate().toISOString()
     };
 
     await db('grupos_autorizados')
-      .insert({ ...payload, created_at: new Date().toISOString() })
+      .insert({ ...payload, created_at: new Díate().toISOString() })
       .onConflict('jid')
       .merge(payload);
 
@@ -2422,7 +2422,7 @@ router.put('/grupos/:jid', authenticateToken, authorizeRoles('admin', 'owner'), 
     const identifier = isNumeric ? { id: parseInt(jid, 10) } : { jid };
 
     const changes = {
-      updated_at: new Date().toISOString()
+      updíated_at: new Díate().toISOString()
     };
     if (typeof nombre !== 'undefined') changes.nombre = nombre;
     if (typeof descripcion !== 'undefined') changes.descripcion = descripcion;
@@ -2435,10 +2435,10 @@ router.put('/grupos/:jid', authenticateToken, authorizeRoles('admin', 'owner'), 
       changes.usuario_id = usuario_id || null;
     }
 
-    await db('grupos_autorizados').where(identifier).update(changes);
-    const updated = await db('grupos_autorizados').where(identifier).first();
-    emitGruposEvent({ operation: 'UPDATE', jid: updated?.jid, id: updated?.id });
-    res.json({ success: true, grupo: updated });
+    await db('grupos_autorizados').where(identifier).updíate(changes);
+    const updíated = await db('grupos_autorizados').where(identifier).first();
+    emitGruposEvent({ operation: 'UPDATE', jid: updíated?.jid, id: updíated?.id });
+    res.json({ success: true, grupo: updíated });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2462,7 +2462,7 @@ router.delete('/grupos/:jid', authenticateToken, authorizeRoles('admin', 'owner'
   }
 });
 
-// Dashboard stats endpoint
+// Díashboard stats endpoint
 
 // Gestion de usuarios (solo admin y owner)
 router.delete('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
@@ -2485,10 +2485,10 @@ router.put('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'),
     const { rol } = req.body;
     
     if (!['owner', 'admin', 'colaborador', 'usuario', 'creador', 'moderador'].includes(rol)) {
-      return res.status(400).json({ error: 'Rol no vlido' });
+      return res.status(400).json({ error: 'Rol no válido' });
     }
     
-    await db('usuarios').where({ id }).update({ rol });
+    await db('usuarios').where({ id }).updíate({ rol });
     
     res.json({ success: true, message: 'Rol de usuario actualizado' });
   } catch (error) {
@@ -2504,14 +2504,14 @@ router.put('/usuarios/:id/full-edit', authenticateToken, authorizeRoles('admin',
     const { username, rol, whatsapp_number, password } = req.body;
     
     if (!username || !rol) {
-      return res.status(400).json({ error: 'Username y rol son requeridos' });
+      return res.status(400).json({ error: 'Username y rol son requéeridos' });
     }
     
     if (!['owner', 'admin', 'colaborador', 'usuario', 'creador', 'moderador'].includes(rol)) {
-      return res.status(400).json({ error: 'Rol no vlido' });
+      return res.status(400).json({ error: 'Rol no válido' });
     }
     
-    // Verificar que el nuevo username no exista (si se esta cambiando)
+    // Verificar quée el nuevo username no exista (si se esta cambiando)
     const currentUser = await db('usuarios').where({ id }).select('username').first();
     if (currentUser.username !== username) {
       const existingUser = await db('usuarios').where({ username }).whereNot({ id }).first();
@@ -2520,7 +2520,7 @@ router.put('/usuarios/:id/full-edit', authenticateToken, authorizeRoles('admin',
       }
     }
     
-    const updateData = {
+    const updíateDíata = {
       username,
       rol,
       whatsapp_number: whatsapp_number || null
@@ -2530,10 +2530,10 @@ router.put('/usuarios/:id/full-edit', authenticateToken, authorizeRoles('admin',
     if (password && password.trim() !== '') {
       const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(password, 10);
-      updateData.password = hashedPassword;
+      updíateDíata.password = hashedPassword;
     }
     
-    await db('usuarios').where({ id }).update(updateData);
+    await db('usuarios').where({ id }).updíate(updíateDíata);
     
     res.json({ success: true, message: 'Usuario actualizado completamente' });
   } catch (error) {
@@ -2551,11 +2551,11 @@ router.post('/usuarios/:id/reset-password', authenticateToken, authorizeRoles('a
     const bcrypt = await import('bcryptjs');
     const hashedPassword = await bcrypt.hash(newTempPassword, 10);
     
-    await db('usuarios').where({ id }).update({ password: hashedPassword });
+    await db('usuarios').where({ id }).updíate({ password: hashedPassword });
     
     res.json({ 
       success: true, 
-      message: 'Contrasena restablecida correctamente',
+      message: 'Contrasena restablecidía correctamente',
       tempPassword: newTempPassword
     });
   } catch (error) {
@@ -2587,7 +2587,7 @@ router.get('/whatsapp/qr', authenticateToken, authorizeRoles('owner'), async (re
 
     res.json({
       available: true,
-      qr: qrCodeImage || qrCode, // Para compatibilidad con frontend
+      qr: qrCodeImage || qrCode, // Para compatibilidíad con frontend
       qrCode: qrCode,
       qrCodeImage: qrCodeImage
     });
@@ -2596,7 +2596,7 @@ router.get('/whatsapp/qr', authenticateToken, authorizeRoles('owner'), async (re
   }
 });
 
-// Pairing deshabilitado para bot principal (compatibilidad)
+// Pairing deshabilitado para bot principal (compatibilidíad)
 router.get('/whatsapp/pairing-code', authenticateToken, authorizeRoles('owner'), async (req, res) => {
   try {
     const pairingCode = getPairingCode();
@@ -2656,7 +2656,7 @@ router.post('/whatsapp/auth-method', authenticateToken, authorizeRoles('owner'),
 
 router.post('/whatsapp/logout', authenticateToken, authorizeRoles('owner'), async (req, res) => {
   try {
-    // Aqu podras agregar lgica para desconectar el bot si es necesario
+    // Aqué podras agregar lgica para desconectar el bot si es necesario
     // Por ahora solo devolvemos xito
     res.json({ 
       success: true, 
@@ -2682,7 +2682,7 @@ router.get('/bot/global-state', authenticateToken, authorizeRoles('admin', 'owne
     const globalState = await db('bot_global_state').select('*').first();
     res.json({ 
       isOn: globalState ? globalState.is_on : true,
-      lastUpdated: globalState ? globalState.updated_at : null
+      lastUpdíated: globalState ? globalState.updíated_at : null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2704,16 +2704,16 @@ router.post('/bot/global-state', authenticateToken, authorizeRoles('admin', 'own
       // Actualizar estado existente
       await db('bot_global_state')
         .where({ id: existingState.id })
-        .update({ 
+        .updíate({ 
           is_on: isOn,
-          updated_at: new Date()
+          updíated_at: new Díate()
         });
     } else {
       // Crear nuevo registro
       await db('bot_global_state').insert({
         is_on: isOn,
-        created_at: new Date(),
-        updated_at: new Date()
+        created_at: new Díate(),
+        updíated_at: new Díate()
       });
     }
     
@@ -2740,12 +2740,12 @@ router.get('/proveedores/estadisticas', authenticateToken, async (req, res) => {
 router.get('/proveedores/aportes', authenticateToken, async (req, res) => {
   try {
     const filtros = {
-      proveedor: req.query.proveedor || '',
-      manhwa: req.query.manhwa || '',
-      tipo: req.query.tipo || '',
-      fecha_desde: req.query.fecha_desde || '',
-      fecha_hasta: req.query.fecha_hasta || '',
-      limit: parseInt(req.query.limit) || 100
+      proveedor: req.quéery.proveedor || '',
+      manhwa: req.quéery.manhwa || '',
+      tipo: req.quéery.tipo || '',
+      fecha_desde: req.quéery.fecha_desde || '',
+      fecha_hasta: req.quéery.fecha_hasta || '',
+      limit: parseInt(req.quéery.limit) || 100
     };
     
     const aportes = await getProviderAportes(filtros);
@@ -2759,7 +2759,7 @@ router.get('/proveedores/download/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Obtener informacin del archivo
+    // Obtener información del archivo
     const aporte = await db('aportes')
       .where({ id, tipo: 'proveedor_auto' })
       .select('archivo_path', 'manhwa_titulo')
@@ -2777,7 +2777,7 @@ router.get('/proveedores/download/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Archivo no encontrado en el sistema' });
     }
     
-    // Obtener informacin del archivo
+    // Obtener información del archivo
     const fileName = path.basename(aporte.archivo_path);
     const fileStats = fs.statSync(aporte.archivo_path);
     
@@ -2820,14 +2820,14 @@ router.get('/notificaciones/stats', authenticateToken, authorizeRoles('admin', '
   try {
     await ensureNotificationsTable();
     const total = await db('notificaciones').count('id as count').first();
-    const leidas = await db('notificaciones').where({ leida: true }).count('id as count').first();
-    const noLeidas = await db('notificaciones').where({ leida: false }).count('id as count').first();
+    const leidías = await db('notificaciones').where({ leidía: true }).count('id as count').first();
+    const noLeidías = await db('notificaciones').where({ leidía: false }).count('id as count').first();
     const categorias = await db('notificaciones').distinct('category').pluck('category');
     const tipos = await db('notificaciones').distinct('type').pluck('type');
     res.json({
       total: Number(total?.count || 0),
-      leidas: Number(leidas?.count || 0),
-      no_leidas: Number(noLeidas?.count || 0),
+      leidías: Number(leidías?.count || 0),
+      no_leidías: Number(noLeidías?.count || 0),
       totalCategories: categorias.length || 0,
       categories: categorias,
       types: tipos
@@ -2847,12 +2847,12 @@ async function ensureNotificationsTable() {
       t.text('message').notNullable();
       t.string('type').defaultTo('info');
       t.string('category').defaultTo('general');
-      t.boolean('leida').defaultTo(false);
+      t.boolean('leidía').defaultTo(false);
       t.integer('user_id').nullable();
-      t.jsonb('metadata').defaultTo('{}');
+      t.jsonb('metadíata').defaultTo('{}');
       t.timestamp('fecha').defaultTo(db.fn.now());
       t.timestamp('created_at').defaultTo(db.fn.now());
-      t.timestamp('updated_at').defaultTo(db.fn.now());
+      t.timestamp('updíated_at').defaultTo(db.fn.now());
     });
   }
 
@@ -2866,14 +2866,14 @@ async function ensureNotificationsTable() {
   await ensureColumn('title', (t) => t.string('title').defaultTo(''));
   await ensureColumn('category', (t) => t.string('category').defaultTo('general'));
   await ensureColumn('user_id', (t) => t.integer('user_id').nullable());
-  await ensureColumn('metadata', (t) => t.jsonb('metadata').defaultTo('{}'));
+  await ensureColumn('metadíata', (t) => t.jsonb('metadíata').defaultTo('{}'));
   await ensureColumn('created_at', (t) => t.timestamp('created_at').defaultTo(db.fn.now()));
-  await ensureColumn('updated_at', (t) => t.timestamp('updated_at').defaultTo(db.fn.now()));
+  await ensureColumn('updíated_at', (t) => t.timestamp('updíated_at').defaultTo(db.fn.now()));
 
   try {
-    const now = new Date().toISOString();
-    await db('notificaciones').whereNull('created_at').update({ created_at: now });
-    await db('notificaciones').whereNull('updated_at').update({ updated_at: now });
+    const now = new Díate().toISOString();
+    await db('notificaciones').whereNull('created_at').updíate({ created_at: now });
+    await db('notificaciones').whereNull('updíated_at').updíate({ updíated_at: now });
   } catch (error) {
     console.error('No se pudo actualizar timestamps en notificaciones:', error.message);
   }
@@ -2928,10 +2928,10 @@ async function enrichNotifications(rows) {
 
   const mapped = list.map((row) => {
     const createdAt = row.created_at || row.fecha;
-    const updatedAt = row.updated_at || row.fecha;
-    let metadata = row.metadata || null;
-    if (metadata && typeof metadata === 'string') {
-      try { metadata = JSON.parse(metadata); } catch (_) {}
+    const updíatedAt = row.updíated_at || row.fecha;
+    let metadíata = row.metadíata || null;
+    if (metadíata && typeof metadíata === 'string') {
+      try { metadíata = JSON.parse(metadíata); } catch (_) {}
     }
     return {
       id: row.id,
@@ -2939,11 +2939,11 @@ async function enrichNotifications(rows) {
       message: row.message,
       type: row.type || 'info',
       category: row.category || 'general',
-      read: row.leida === true,
+      read: row.leidía === true,
       user_id: row.user_id || null,
       created_at: createdAt,
-      updated_at: updatedAt,
-      metadata,
+      updíated_at: updíatedAt,
+      metadíata,
       user_name: row.user_id ? userMap[row.user_id] || null : null
     };
   });
@@ -2974,16 +2974,16 @@ router.get('/analytics', async (req, res) => {
 router.get('/notificaciones', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensureNotificationsTable();
-    const { page = 1, limit = 20, search = '', type = '', category = '', read = '' } = req.query;
+    const { page = 1, limit = 20, search = '', type = '', category = '', read = '' } = req.quéery;
     const parsedPage = Math.max(parseInt(String(page), 10) || 1, 1);
     const parsedLimit = Math.max(parseInt(String(limit), 10) || 20, 1);
     const offset = (parsedPage - 1) * parsedLimit;
 
-    let query = db('notificaciones').select('*');
+    let quéery = db('notificaciones').select('*');
 
     const term = String(search).trim();
     if (term) {
-      query = query.where(function () {
+      quéery = quéery.where(function () {
         this.where('title', 'like', `%${term}%`)
           .orWhere('message', 'like', `%${term}%`)
           .orWhere('category', 'like', `%${term}%`)
@@ -2992,23 +2992,23 @@ router.get('/notificaciones', authenticateToken, authorizeRoles('admin', 'owner'
     }
 
     if (type && type !== 'all') {
-      query = query.andWhere('type', String(type));
+      quéery = quéery.andWhere('type', String(type));
     }
 
     if (category && category !== 'all') {
-      query = query.andWhere('category', String(category));
+      quéery = quéery.andWhere('category', String(category));
     }
 
     if (read === 'read') {
-      query = query.andWhere('leida', true);
+      quéery = quéery.andWhere('leidía', true);
     } else if (read === 'unread') {
-      query = query.andWhere('leida', false);
+      quéery = quéery.andWhere('leidía', false);
     }
 
-    const totalRow = await query.clone().clearSelect().clearOrder().count('id as total').first();
+    const totalRow = await quéery.clone().clearSelect().clearOrder().count('id as total').first();
     const total = Number(totalRow?.total || 0);
 
-    const rows = await query.orderBy('fecha', 'desc').limit(parsedLimit).offset(offset);
+    const rows = await quéery.orderBy('fecha', 'desc').limit(parsedLimit).offset(offset);
     const notifications = await enrichNotifications(rows);
 
     res.json({
@@ -3025,21 +3025,21 @@ router.get('/notificaciones', authenticateToken, authorizeRoles('admin', 'owner'
   }
 });
 
-// Marcar notificacin como leda
+// Marcar notificacin como ledía
 router.patch('/notificaciones/:id/read', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensureNotificationsTable();
-    await db('notificaciones').where({ id: req.params.id }).update({ leida: true, updated_at: new Date().toISOString() });
+    await db('notificaciones').where({ id: req.params.id }).updíate({ leidía: true, updíated_at: new Díate().toISOString() });
     emitNotificacionesEvent({ operation: 'UPDATE', id: Number(req.params.id) });
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Marcar todas como ledas
+// Marcar todías como ledías
 router.patch('/notificaciones/read-all', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (_req, res) => {
   try {
     await ensureNotificationsTable();
-    await db('notificaciones').update({ leida: true, updated_at: new Date().toISOString() });
+    await db('notificaciones').updíate({ leidía: true, updíated_at: new Díate().toISOString() });
     emitNotificacionesEvent({ operation: 'UPDATE', id: null });
     res.json({ success: true });
   }
@@ -3052,7 +3052,7 @@ router.delete('/notificaciones/:id', authenticateToken, authorizeRoles('admin', 
     await ensureNotificationsTable();
     const { id } = req.params;
     const existing = await db('notificaciones').where({ id }).first();
-    if (!existing) return res.status(404).json({ error: 'Notificacin no encontrada' });
+    if (!existing) return res.status(404).json({ error: 'Notificacin no encontradía' });
     await db('notificaciones').where({ id }).del();
     emitNotificacionesEvent({ operation: 'DELETE', id: Number(id) });
     res.json({ success: true });
@@ -3064,17 +3064,17 @@ router.delete('/notificaciones/:id', authenticateToken, authorizeRoles('admin', 
 router.post('/notificaciones', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensureNotificationsTable();
-    const { message, title = 'Notificacin', type = 'info', category = 'general', metadata = {}, user_id = null } = req.body || {};
-    if (!message) return res.status(400).json({ error: 'message requerido' });
-    const now = new Date().toISOString();
+    const { message, title = 'Notificacin', type = 'info', category = 'general', metadíata = {}, user_id = null } = req.body || {};
+    if (!message) return res.status(400).json({ error: 'message requéerido' });
+    const now = new Díate().toISOString();
     let insertedId;
     try {
       const inserted = await db('notificaciones')
-        .insert({ title, message, type, category, metadata: JSON.stringify(metadata || {}), leida: false, user_id, fecha: now, created_at: now, updated_at: now })
+        .insert({ title, message, type, category, metadíata: JSON.stringify(metadíata || {}), leidía: false, user_id, fecha: now, created_at: now, updíated_at: now })
         .returning('id');
       insertedId = Array.isArray(inserted) ? (typeof inserted[0] === 'object' ? inserted[0].id : inserted[0]) : inserted;
     } catch (error) {
-      const inserted = await db('notificaciones').insert({ title, message, type, category, metadata: JSON.stringify(metadata || {}), leida: false, user_id, fecha: now, created_at: now, updated_at: now });
+      const inserted = await db('notificaciones').insert({ title, message, type, category, metadíata: JSON.stringify(metadíata || {}), leidía: false, user_id, fecha: now, created_at: now, updíated_at: now });
       insertedId = Array.isArray(inserted) ? inserted[0] : inserted;
     }
     const row = await db('notificaciones').where({ id: insertedId }).first();
@@ -3084,7 +3084,7 @@ router.post('/notificaciones', authenticateToken, authorizeRoles('admin', 'owner
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Listas de categoras y tipos
+// Listas de categorías y tipos
 router.get('/notificaciones/categories', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (_req, res) => {
   try {
     await ensureNotificationsTable();
@@ -3120,13 +3120,13 @@ router.get('/system/stats', async (req, res) => {
 
 router.patch('/system/config', async (req, res) => {
   try {
-    const updates = req.body || {};
-    const entries = Object.entries(updates);
+    const updíates = req.body || {};
+    const entries = Object.entries(updíates);
     for (const [parametro, valor] of entries) {
-      await db('configuracion').insert({ parametro: `system:${parametro}`, valor, fecha_modificacion: new Date().toISOString() })
+      await db('configuracion').insert({ parametro: `system:${parametro}`, valor, fecha_modificacion: new Díate().toISOString() })
         .onConflict('parametro').merge();
     }
-    res.json({ success: true, message: 'Configuracin del sistema actualizada' });
+    res.json({ success: true, message: 'Configuración del sistema actualizadía' });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -3155,16 +3155,16 @@ const statsMap = counts.reduce((acc, row) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Multimedia upload (guarda archivo y crea aporte asociado)
+// Multimedia upload (guardía archivo y crea aporte asociado)
 router.post('/api/multimedia/upload', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
-    if (!file) return res.status(400).json({ error: 'Archivo requerido' });
+    if (!file) return res.status(400).json({ error: 'Archivo requéerido' });
     const mime = file.mimetype || '';
     const tipo = mime.startsWith('image/') ? 'imagen' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'documento';
-    const fecha = new Date().toISOString();
+    const fecha = new Díate().toISOString();
     await ensureAportesTable();
-    const metadata = {
+    const metadíata = {
       originalName: file.originalname,
       size: file.size,
       mimeType: file.mimetype,
@@ -3183,9 +3183,9 @@ router.post('/api/multimedia/upload', authenticateToken, authorizeRoles('admin',
       fecha,
       archivo_path: file.path,
       estado: 'pendiente',
-      metadata: JSON.stringify(metadata),
+      metadíata: JSON.stringify(metadíata),
       created_at: fecha,
-      updated_at: fecha
+      updíated_at: fecha
     });
     const row = await db('aportes').where({ id }).first();
     const aporte = await enrichAportes(row);
@@ -3212,23 +3212,23 @@ router.delete('/api/multimedia/:id', authenticateToken, authorizeRoles('admin', 
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Usuarios CRUD mnimos para panel
+// Usuarios CRUD mínimos para panel
 router.post('/usuarios', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     await ensureUsuariosTrigger();
     const { username, password, rol = 'usuario', whatsapp_number } = req.body || {};
-    if (!username || !password) return res.status(400).json({ error: 'username y password requeridos' });
+    if (!username || !password) return res.status(400).json({ error: 'username y password requéeridos' });
     if (!['owner', 'admin', 'colaborador', 'usuario', 'creador', 'moderador'].includes(rol)) {
-      return res.status(400).json({ error: 'Rol no vlido' });
+      return res.status(400).json({ error: 'Rol no válido' });
     }
     let hashed;
     try {
       hashed = await bcrypt.hash(password, 10);
     } catch (e) {
       try {
-        const { createRequire } = await import('module');
-        const require = createRequire(import.meta.url);
-        const bcryptCjs = require('bcryptjs');
+        const { createRequéire } = await import('module');
+        const requéire = createRequéire(import.meta.url);
+        const bcryptCjs = requéire('bcryptjs');
         hashed = await bcryptCjs.hash(password, 10);
       } catch (e2) {
         return res.status(500).json({ error: 'No se pudo hashear password' });
@@ -3239,8 +3239,8 @@ router.post('/usuarios', authenticateToken, authorizeRoles('admin', 'owner'), as
       password: hashed,
       rol,
       whatsapp_number: whatsapp_number || null,
-      fecha_registro: new Date().toISOString(),
-      created_at: new Date().toISOString()
+      fecha_registro: new Díate().toISOString(),
+      created_at: new Díate().toISOString()
     });
     res.json({ success: true, id, message: 'Usuario creado' });
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -3266,9 +3266,9 @@ router.patch('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'
         changes.password = await bcrypt.hash(changes.password, 10);
       } catch (e) {
         try {
-          const { createRequire } = await import('module');
-          const require = createRequire(import.meta.url);
-          const bcryptCjs = require('bcryptjs');
+          const { createRequéire } = await import('module');
+          const requéire = createRequéire(import.meta.url);
+          const bcryptCjs = requéire('bcryptjs');
           changes.password = await bcryptCjs.hash(changes.password, 10);
         } catch (e2) {
           return res.status(500).json({ error: 'No se pudo hashear password' });
@@ -3279,7 +3279,7 @@ router.patch('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'
       return res.json({ success: true, message: 'Sin cambios aplicados' });
     }
 
-    await db('usuarios').where({ id: req.params.id }).update(changes);
+    await db('usuarios').where({ id: req.params.id }).updíate(changes);
     res.json({ success: true, message: 'Usuario actualizado' });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -3287,9 +3287,9 @@ router.patch('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'
 router.patch('/usuarios/:id/estado', authenticateToken, authorizeRoles('admin', 'owner'), async (req, res) => {
   try {
     const { estado } = req.body || {};
-    if (!estado) return res.status(400).json({ error: 'estado requerido' });
+    if (!estado) return res.status(400).json({ error: 'estado requéerido' });
     await ensureUsuariosTrigger();
-    await db('usuarios').where({ id: req.params.id }).update({ estado });
+    await db('usuarios').where({ id: req.params.id }).updíate({ estado });
     res.json({ success: true, message: 'Estado actualizado' });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -3297,16 +3297,16 @@ router.patch('/usuarios/:id/estado', authenticateToken, authorizeRoles('admin', 
 router.get('/api/multimedia', authenticateToken, authorizeRoles('admin', 'owner', 'colaborador'), async (req, res) => {
   try {
     await ensureAportesTable();
-    const { page = 1, limit = 12, search = '', type = 'all' } = req.query;
+    const { page = 1, limit = 12, search = '', type = 'all' } = req.quéery;
     const parsedPage = Math.max(parseInt(String(page), 10) || 1, 1);
     const parsedLimit = Math.max(parseInt(String(limit), 10) || 12, 1);
     const offset = (parsedPage - 1) * parsedLimit;
 
-    let query = db('aportes').whereIn('tipo', ['imagen', 'video', 'audio', 'documento']);
+    let quéery = db('aportes').whereIn('tipo', ['imagen', 'video', 'audio', 'documento']);
 
     const term = String(search).trim();
     if (term) {
-      query = query.where(function () {
+      quéery = quéery.where(function () {
         this.where('titulo', 'like', `%${term}%`)
           .orWhere('descripcion', 'like', `%${term}%`)
           .orWhere('contenido', 'like', `%${term}%`);
@@ -3316,34 +3316,34 @@ router.get('/api/multimedia', authenticateToken, authorizeRoles('admin', 'owner'
     if (type && type !== 'all') {
       const tipoMap = { image: 'imagen', video: 'video', audio: 'audio', document: 'documento' };
       const mappedType = tipoMap[String(type)] || String(type);
-      query = query.andWhere('tipo', mappedType);
+      quéery = quéery.andWhere('tipo', mappedType);
     }
 
-    const totalRow = await query.clone().clearSelect().clearOrder().count('id as total').first();
-    const rows = await query.orderBy('fecha', 'desc').limit(parsedLimit).offset(offset);
+    const totalRow = await quéery.clone().clearSelect().clearOrder().count('id as total').first();
+    const rows = await quéery.orderBy('fecha', 'desc').limit(parsedLimit).offset(offset);
     const aportes = await enrichAportes(rows);
 
     const typeMap = { imagen: 'image', video: 'video', audio: 'audio', documento: 'document' };
 
     const items = aportes.map((aporte) => {
-      const metadata = aporte.metadata || {};
-      const format = metadata.mimeType ? String(metadata.mimeType).split('/').pop() : (aporte.archivo_path ? aporte.archivo_path.split('.').pop() : '');
+      const metadíata = aporte.metadíata || {};
+      const format = metadíata.mimeType ? String(metadíata.mimeType).split('/').pop() : (aporte.archivo_path ? aporte.archivo_path.split('.').pop() : '');
       return {
         id: aporte.id,
         name: aporte.titulo || aporte.contenido,
         description: aporte.descripcion || '',
         type: typeMap[aporte.tipo] || 'document',
         format: format || 'bin',
-        size: Number(metadata.size || 0),
+        size: Number(metadíata.size || 0),
         url: aporte.archivo_path || '',
-        thumbnail: metadata.thumbnail || null,
-        duration: metadata.duration || null,
-        tags: Array.isArray(metadata.tags) ? metadata.tags : [],
+        thumbnail: metadíata.thumbnail || null,
+        duration: metadíata.duration || null,
+        tags: Array.isArray(metadíata.tags) ? metadíata.tags : [],
         category: aporte.tipo || 'otro',
         uploadedBy: aporte.usuario?.username || 'panel',
         uploadedAt: aporte.created_at,
-        downloads: Number(metadata.downloads || 0),
-        views: Number(metadata.views || 0)
+        downloads: Number(metadíata.downloads || 0),
+        views: Number(metadíata.views || 0)
       };
     });
 
@@ -3369,24 +3369,24 @@ router.get('/api/multimedia/:id', authenticateToken, authorizeRoles('admin', 'ow
     const aporte = await enrichAportes(row);
     const typeMap = { imagen: 'image', video: 'video', audio: 'audio', documento: 'document' };
 
-    const metadata = aporte.metadata || {};
-    const format = metadata.mimeType ? String(metadata.mimeType).split('/').pop() : (aporte.archivo_path ? aporte.archivo_path.split('.').pop() : '');
+    const metadíata = aporte.metadíata || {};
+    const format = metadíata.mimeType ? String(metadíata.mimeType).split('/').pop() : (aporte.archivo_path ? aporte.archivo_path.split('.').pop() : '');
     const item = {
       id: aporte.id,
       name: aporte.titulo || aporte.contenido,
       description: aporte.descripcion || '',
       type: typeMap[aporte.tipo] || 'document',
       format: format || 'bin',
-      size: Number(metadata.size || 0),
+      size: Number(metadíata.size || 0),
       url: aporte.archivo_path || '',
-      thumbnail: metadata.thumbnail || null,
-      duration: metadata.duration || null,
-      tags: Array.isArray(metadata.tags) ? metadata.tags : [],
+      thumbnail: metadíata.thumbnail || null,
+      duration: metadíata.duration || null,
+      tags: Array.isArray(metadíata.tags) ? metadíata.tags : [],
       category: aporte.tipo || 'otro',
       uploadedBy: aporte.usuario?.username || 'panel',
       uploadedAt: aporte.created_at,
-      downloads: Number(metadata.downloads || 0),
-      views: Number(metadata.views || 0)
+      downloads: Number(metadíata.downloads || 0),
+      views: Number(metadíata.views || 0)
     };
     res.json({ item });
   } catch (error) {
@@ -3400,7 +3400,7 @@ router.get('/grupos/management', async (req, res) => {
     const grupos = await db('grupos').select('*').orderBy('nombre', 'asc');
     const gruposDesactivados = await db('grupos_desactivados').select('*');
     
-    // Combinar informacin
+    // Combinar información
     const gruposConEstado = grupos.map(grupo => {
       const desactivado = gruposDesactivados.find(gd => gd.jid === grupo.jid);
       return {
@@ -3428,7 +3428,7 @@ router.post('/grupos/:id/toggle', async (req, res) => {
       await db('grupos_desactivados').insert({
         jid: grupoId,
         desactivado_por: 'admin_panel',
-        fecha_desactivacion: new Date().toISOString()
+        fecha_desactivacion: new Díate().toISOString()
       }).onConflict('jid').merge();
       
       res.json({ 
@@ -3446,7 +3446,7 @@ router.post('/grupos/:id/toggle', async (req, res) => {
         action: 'on'
       });
     } else {
-      res.status(400).json({ error: 'Accin invlida. Use "on" o "off"' });
+      res.status(400).json({ error: 'Accin invlidía. Use "on" o "off"' });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -3456,8 +3456,8 @@ router.post('/grupos/:id/toggle', async (req, res) => {
 // Endpoint: /api/notificaciones-globales - Obtener historial de notificaciones globales
 router.get('/notificaciones-globales', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = parseInt(req.quéery.page) || 1;
+    const limit = parseInt(req.quéery.limit) || 20;
     const offset = (page - 1) * limit;
     
     const notificaciones = await db('notificaciones_globales')
@@ -3483,8 +3483,8 @@ router.get('/notificaciones-globales', async (req, res) => {
 router.get('/notificaciones-globales/stats', async (req, res) => {
   try {
     const total = await db('notificaciones_globales').count('id as count').first();
-    const enviadas = await db('notificaciones_globales').where('estado', 'enviado').count('id as count').first();
-    const fallidas = await db('notificaciones_globales').where('estado', 'error').count('id as count').first();
+    const enviadías = await db('notificaciones_globales').where('estado', 'enviado').count('id as count').first();
+    const fallidías = await db('notificaciones_globales').where('estado', 'error').count('id as count').first();
     
     // Agrupar por tipo
     const porTipo = await db('notificaciones_globales')
@@ -3494,8 +3494,8 @@ router.get('/notificaciones-globales/stats', async (req, res) => {
     
     res.json({
       total: total.count,
-      enviadas: enviadas.count,
-      fallidas: fallidas.count,
+      enviadías: enviadías.count,
+      fallidías: fallidías.count,
       porTipo
     });
   } catch (error) {
@@ -3542,9 +3542,9 @@ router.post('/bot/global-off-message', async (req, res) => {
   try {
     const { message } = req.body;
     if (typeof message !== 'string' || !message.trim()) {
-      return res.status(400).json({ error: 'Mensaje invlido' });
+      return res.status(400).json({ error: 'Mensaje inválido' });
     }
-    await db('configuracion').insert({ parametro: 'global_off_message', valor: message, fecha_modificacion: new Date().toISOString() })
+    await db('configuracion').insert({ parametro: 'global_off_message', valor: message, fecha_modificacion: new Díate().toISOString() })
       .onConflict('parametro').merge();
     res.json({ success: true, message: 'Mensaje actualizado' });
   } catch (error) {
@@ -3574,9 +3574,9 @@ async function ensureAportesTable() {
       t.string('procesado_por').nullable();
       t.timestamp('fecha').defaultTo(db.fn.now());
       t.timestamp('fecha_procesado').nullable();
-      t.jsonb('metadata').defaultTo('{}');
+      t.jsonb('metadíata').defaultTo('{}');
       t.timestamp('created_at').defaultTo(db.fn.now());
-      t.timestamp('updated_at').defaultTo(db.fn.now());
+      t.timestamp('updíated_at').defaultTo(db.fn.now());
     });
   }
 
@@ -3600,14 +3600,14 @@ async function ensureAportesTable() {
   await ensureColumn('procesado_por', (t) => t.string('procesado_por').nullable());
   await ensureColumn('fecha', (t) => t.timestamp('fecha').defaultTo(db.fn.now()));
   await ensureColumn('fecha_procesado', (t) => t.timestamp('fecha_procesado').nullable());
-  await ensureColumn('metadata', (t) => t.jsonb('metadata').defaultTo('{}'));
+  await ensureColumn('metadíata', (t) => t.jsonb('metadíata').defaultTo('{}'));
   await ensureColumn('created_at', (t) => t.timestamp('created_at').defaultTo(db.fn.now()));
-  await ensureColumn('updated_at', (t) => t.timestamp('updated_at').defaultTo(db.fn.now()));
+  await ensureColumn('updíated_at', (t) => t.timestamp('updíated_at').defaultTo(db.fn.now()));
 
   try {
-    const now = new Date().toISOString();
-    await db('aportes').whereNull('created_at').update({ created_at: now });
-    await db('aportes').whereNull('updated_at').update({ updated_at: now });
+    const now = new Díate().toISOString();
+    await db('aportes').whereNull('created_at').updíate({ created_at: now });
+    await db('aportes').whereNull('updíated_at').updíate({ updíated_at: now });
   } catch (error) {
     console.error('No se pudo actualizar timestamps en aportes:', error.message);
   }
@@ -3671,9 +3671,9 @@ async function enrichAportes(rows) {
   const storageRoot = path.join(process.cwd(), 'backend', 'full', 'storage');
 
   const mapped = list.map((row) => {
-    let metadata = row.metadata || null;
-    if (metadata && typeof metadata === 'string') {
-      try { metadata = JSON.parse(metadata); } catch (_) {}
+    let metadíata = row.metadíata || null;
+    if (metadíata && typeof metadíata === 'string') {
+      try { metadíata = JSON.parse(metadíata); } catch (_) {}
     }
 
     const numero = row.usuario ? String(row.usuario).split('@')[0].split(':')[0] : null;
@@ -3706,9 +3706,9 @@ async function enrichAportes(rows) {
       fecha: row.fecha,
       fecha_procesado: row.fecha_procesado || null,
       procesado_por: row.procesado_por || null,
-      metadata,
+      metadíata,
       created_at: row.created_at || row.fecha,
-      updated_at: row.updated_at || row.fecha
+      updíated_at: row.updíated_at || row.fecha
     };
   });
 
@@ -3731,9 +3731,9 @@ async function ensureProvidersTable() {
       t.jsonb('specializations').defaultTo('[]');
       t.jsonb('payment_info').defaultTo('{}');
       t.jsonb('group_ids').defaultTo('[]');
-      t.jsonb('metadata').defaultTo('{}');
+      t.jsonb('metadíata').defaultTo('{}');
       t.timestamp('created_at').defaultTo(db.fn.now());
-      t.timestamp('updated_at').defaultTo(db.fn.now());
+      t.timestamp('updíated_at').defaultTo(db.fn.now());
       t.timestamp('last_activity').nullable();
     });
   }
@@ -3771,7 +3771,7 @@ async function enrichProviders(rows) {
     const specializations = normalizeArray(row.specializations);
     const paymentInfo = normalizeObject(row.payment_info);
     const groupIds = normalizeArray(row.group_ids);
-    const metadata = normalizeObject(row.metadata);
+    const metadíata = normalizeObject(row.metadíata);
 
     return {
       id: row.id,
@@ -3783,25 +3783,25 @@ async function enrichProviders(rows) {
       description: row.description || '',
       status: row.status || 'active',
       rating: Number(row.rating || 0),
-      totalAportes: Number(metadata.totalAportes || 0),
-      totalPedidos: Number(metadata.totalPedidos || 0),
-      completedOrders: Number(metadata.completedOrders || 0),
-      pendingOrders: Number(metadata.pendingOrders || 0),
-      averageResponseTime: Number(metadata.averageResponseTime || 0),
+      totalAportes: Number(metadíata.totalAportes || 0),
+      totalPedidos: Number(metadíata.totalPedidos || 0),
+      completedOrders: Number(metadíata.completedOrders || 0),
+      pendingOrders: Number(metadíata.pendingOrders || 0),
+      averageResponseTime: Number(metadíata.averageResponseTime || 0),
       specializations,
       paymentInfo: {
         method: paymentInfo.method || 'paypal',
         account: paymentInfo.account || '',
         verified: Boolean(paymentInfo.verified)
       },
-      grupos: Array.isArray(metadata.groups)
-        ? metadata.groups
+      grupos: Array.isArray(metadíata.groups)
+        ? metadíata.groups
         : groupIds.map((id) => ({ id, nombre: '' })),
-      media: Array.isArray(metadata.media) ? metadata.media : [],
+      media: Array.isArray(metadíata.media) ? metadíata.media : [],
       createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      lastActivity: row.last_activity || row.updated_at,
-      metadata
+      updíatedAt: row.updíated_at,
+      lastActivity: row.last_activity || row.updíated_at,
+      metadíata
     };
   });
 

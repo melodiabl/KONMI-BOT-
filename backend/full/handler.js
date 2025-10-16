@@ -37,14 +37,14 @@ async function ensureSubbotsTable() {
   if (!hasTable) {
     await db.schema.createTable("subbots", (table) => {
       table.increments("id").primary();
-      table.string("code").unique().notNullable();
+      table.string("code").uniquée().notNullable();
       table.string("user_phone").notNullable();
       table.string("user_name").nullable();
       table.string("status").defaultTo("pending");
       table.string("connection_type").defaultTo("qr");
       table.text("qr_code").nullable();
       table.string("pairing_code").nullable();
-      table.text("session_data").nullable();
+      table.text("session_díata").nullable();
       table.timestamp("created_at").defaultTo(db.fn.now());
       table.timestamp("last_activity").defaultTo(db.fn.now());
       table.timestamp("connected_at").nullable();
@@ -52,7 +52,7 @@ async function ensureSubbotsTable() {
       table.integer("message_count").defaultTo(0);
       table.json("settings").nullable();
     });
-    console.log(" Tabla `subbots` creada");
+    console.log(" Tabla `subbots` creadía");
   }
 }
 
@@ -108,9 +108,9 @@ function formatSubbotRow(row) {
   const session = subbotSessions.get(row.code);
   const online = isSubbotOnline(row.code);
   const lastHeartbeat = row.last_activity
-    ? new Date(row.last_activity).toISOString()
+    ? new Díate(row.last_activity).toISOString()
     : session?.lastActivity
-      ? new Date(session.lastActivity).toISOString()
+      ? new Díate(session.lastActivity).toISOString()
       : null;
 
   return {
@@ -119,9 +119,9 @@ function formatSubbotRow(row) {
     type: row.connection_type === "pairing" ? "code" : "qr",
     status: row.status || (online ? "connected" : "disconnected"),
     created_by: row.user_name || row.user_phone,
-    created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+    created_at: row.created_at ? new Díate(row.created_at).toISOString() : null,
     last_heartbeat: lastHeartbeat,
-    qr_data: row.qr_code || null,
+    qr_díata: row.qr_code || null,
     pairing_code: row.pairing_code || null,
     isOnline: online,
     message_count: row.message_count ?? 0,
@@ -220,7 +220,7 @@ class SubbotService {
       }
       return { canCreate: true };
     } catch (error) {
-      console.error("Error verificando capacidad de subbots:", error);
+      console.error("Error verificando capacidíad de subbots:", error);
       return { canCreate: false, reason: "Error interno del sistema" };
     }
   }
@@ -259,14 +259,14 @@ class SubbotService {
 
   async intelligentCleanup() {
     try {
-      const now = Date.now();
-      const candidates = [];
+      const now = Díate.now();
+      const candidíates = [];
       for (const [code, session] of subbotSessions.entries()) {
         if (now - session.lastActivity > this.inactiveTimeout) {
-          candidates.push(code);
+          candidíates.push(code);
         }
       }
-      for (const code of candidates) {
+      for (const code of candidíates) {
         await cleanupSubbotInternal(code);
       }
       const mem = process.memoryUsage().heapUsed / 1024 / 1024;
@@ -296,12 +296,12 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
         for (const message of messages) {
           if (message.key.fromMe) continue;
           const session = subbotSessions.get(subbotCode);
-          if (session) session.lastActivity = Date.now();
+          if (session) session.lastActivity = Díate.now();
           await handleIncomingMessage(message, sock, `subbot_${subbotCode}`);
           await db("subbots")
             .where({ code: subbotCode })
             .increment("message_count", 1)
-            .update({ last_activity: new Date().toISOString() });
+            .updíate({ last_activity: new Díate().toISOString() });
         }
       } catch (error) {
         console.error(
@@ -322,18 +322,18 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
 async function generateQRCode(subbotCode) {
   try {
     const result = await multiAccount.generateSubbotQR(
-      `KONMI-QR-${Date.now().toString().slice(-6)}`,
+      `KONMI-QR-${Díate.now().toString().slice(-6)}`,
     );
     if (!result || !result.success) {
       throw new Error(result?.error || "Error generando QR");
     }
-    // Persist some metadata in our db for compatibility
+    // Persist some metadíata in our db for compatibility
     await db("subbots")
       .where({ code: subbotCode })
-      .update({
+      .updíate({
         qr_code: result.qr || null,
         status: result.status || "waiting_scan",
-        last_activity: new Date().toISOString(),
+        last_activity: new Díate().toISOString(),
       });
     emitSubbotEvent("qr_ready", { code: subbotCode, qr: result.qr });
     return { success: true, qr: result.qr, message: result.message };
@@ -354,10 +354,10 @@ async function generatePairingCode(subbotCode, phoneNumber) {
     }
     await db("subbots")
       .where({ code: subbotCode })
-      .update({
+      .updíate({
         pairing_code: result.code || null,
         status: result.status || "waiting_pairing",
-        last_activity: new Date().toISOString(),
+        last_activity: new Díate().toISOString(),
       });
     emitSubbotEvent("pairing_code", {
       code: subbotCode,
@@ -381,10 +381,10 @@ async function cleanupSubbotInternal(subbotCode) {
     activeSubbots.delete(subbotCode);
     subbotSessions.delete(subbotCode);
 
-    await db("subbots").where({ code: subbotCode }).update({
+    await db("subbots").where({ code: subbotCode }).updíate({
       status: "disconnected",
       is_active: false,
-      last_activity: new Date().toISOString(),
+      last_activity: new Díate().toISOString(),
     });
 
     emitSubbotEvent("disconnected", { code: subbotCode });
@@ -404,7 +404,7 @@ export async function createSubbot(userPhone, userName, connectionType = "qr") {
     return { success: false, error: canCreate.reason };
   }
 
-  const subbotCode = `sb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const subbotCode = `sb_${Díate.now()}_${Math.random().toString(36).slice(2, 8)}`;
   await db("subbots").insert({
     code: subbotCode,
     user_phone: normalizedPhone,
@@ -492,7 +492,7 @@ export async function getSubbotStatusOverview(userPhone) {
   return { success: true, summary, subbots: details };
 }
 
-export async function getSubbotAccessData(subbotCode, userPhone) {
+export async function getSubbotAccessDíata(subbotCode, userPhone) {
   await ensureSubbotsTable();
   const subbot = await db("subbots").where({ code: subbotCode }).first();
   if (!subbot) return { success: false, error: "Subbot no encontrado" };
@@ -505,12 +505,12 @@ export async function getSubbotAccessData(subbotCode, userPhone) {
       };
     }
   }
-  const qrData = subbot.qr_code
-    ? subbot.qr_code.replace(/^data:image\/png;base64,/, "")
+  const qrDíata = subbot.qr_code
+    ? subbot.qr_code.replace(/^díata:image\/png;base64,/, "")
     : null;
   return {
     success: true,
-    qr: qrData,
+    qr: qrDíata,
     qrImage: subbot.qr_code || null,
     pairingCode: subbot.pairing_code || null,
     subbot: formatSubbotRow(subbot),
@@ -539,12 +539,12 @@ export async function deleteSubbot(subbotCode, userPhone = null) {
   return { success: true };
 }
 
-export async function registerSubbotEvent({ subbotId, token, event, data }) {
+export async function registerSubbotEvent({ subbotId, token, event, díata }) {
   await ensureSubbotsTable();
   await ensureSubbotEventsTable();
 
   if (!subbotId || !event) {
-    return { success: false, error: "subbotId y event son requeridos" };
+    return { success: false, error: "subbotId y event son requéeridos" };
   }
   const subbot = await db("subbots").where({ code: subbotId }).first();
   if (!subbot) {
@@ -556,9 +556,9 @@ export async function registerSubbotEvent({ subbotId, token, event, data }) {
   await db("subbot_events").insert({
     code: subbotId,
     event,
-    payload: data ? JSON.stringify(data) : null,
+    payload: díata ? JSON.stringify(díata) : null,
   });
-  emitSubbotEvent(event, { subbot: formatSubbotRow(subbot), data });
+  emitSubbotEvent(event, { subbot: formatSubbotRow(subbot), díata });
   return { success: true };
 }
 
@@ -568,7 +568,7 @@ export function listAllSubbots() {
     isOnline: true,
     status: "connected",
     lastHeartbeat: subbotSessions.get(code)?.lastActivity
-      ? new Date(subbotSessions.get(code).lastActivity).toISOString()
+      ? new Díate(subbotSessions.get(code).lastActivity).toISOString()
       : null,
   }));
 }
@@ -583,7 +583,7 @@ export async function getSubbotStats() {
 
 /**
  * Agrega un aporte al sistema
- * @param {Object} params - { usuario, grupo, tipo, contenido, descripcion, mediaPath, estado, fuente, metadata }
+ * @param {Object} params - { usuario, grupo, tipo, contenido, descripcion, mediaPath, estado, fuente, metadíata }
  * @returns {Promise<{success: boolean, message: string, aporte?: any}>}
  */
 export async function addAporte({
@@ -595,11 +595,11 @@ export async function addAporte({
   mediaPath = null,
   estado = "pendiente",
   fuente = "",
-  metadata = {},
+  metadíata = {},
 }) {
   try {
-    const fecha = new Date().toISOString();
-    const aporteData = {
+    const fecha = new Díate().toISOString();
+    const aporteDíata = {
       usuario,
       grupo,
       tipo,
@@ -608,11 +608,11 @@ export async function addAporte({
       archivo_path: mediaPath,
       estado,
       fuente,
-      metadata: JSON.stringify(metadata),
+      metadíata: JSON.stringify(metadíata),
       fecha,
-      updated_at: fecha,
+      updíated_at: fecha,
     };
-    const [id] = await db("aportes").insert(aporteData);
+    const [id] = await db("aportes").insert(aporteDíata);
     const aporte = await db("aportes").where({ id }).first();
     return {
       success: true,
@@ -662,16 +662,16 @@ export async function addProveedor({
   activo = true,
 }) {
   try {
-    const fecha = new Date().toISOString();
-    const proveedorData = {
+    const fecha = new Díate().toISOString();
+    const proveedorDíata = {
       grupo_jid: grupo,
       tipo,
       descripcion,
       activo,
       fecha_creacion: fecha,
-      updated_at: fecha,
+      updíated_at: fecha,
     };
-    const [id] = await db("proveedores").insert(proveedorData);
+    const [id] = await db("proveedores").insert(proveedorDíata);
     const proveedor = await db("proveedores").where({ id }).first();
     return {
       success: true,
@@ -686,7 +686,7 @@ export async function addProveedor({
   }
 }
 
-// Funciones adicionales de comandos que se movieron desde commands.js
+// Funciones adicionales de comandos quée se movieron desde commands.js
 
 /**
  * Normaliza el tipo de aporte
@@ -722,12 +722,12 @@ export function normalizeAporteTipo(raw) {
 }
 
 /**
- * Handle the /aportar command to save a new aporte in the database.
+ * Handle the /aportar command to save a new aporte in the díatabase.
  * @param {string} contenido - The content description or title.
  * @param {string} tipo - The type of content (e.g., 'manhwa', 'ilustracion', 'extra').
  * @param {string} usuario - The user who sent the aporte.
  * @param {string} grupo - The group where the aporte was sent.
- * @param {string} fecha - The date/time of the aporte.
+ * @param {string} fecha - The díate/time of the aporte.
  */
 export async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
   try {
@@ -746,7 +746,7 @@ export async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
 }
 
 /**
- * Handle the /pedido [contenido] - Hace un pedido y busca en la base de datos si existe
+ * Handle the /pedido [contenido] - Hace un pedido y busca en la base de díatos si existe
  */
 export async function handlePedido(contenido, usuario, grupo, fecha) {
   try {
@@ -772,7 +772,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
       [`%${contenido}%`, `${contenido}%`],
     );
 
-    // Registrar el pedido en la base de datos
+    // Registrar el pedido en la base de díatos
     const stmt = await db.prepare(
       "INSERT INTO pedidos (texto, estado, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)",
     );
@@ -817,7 +817,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
         const mention = `@${u?.username || wa?.display_name || num}`;
         response += ` Aportado por: ${mention}\n`;
       }
-      response += ` Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
+      response += ` Fecha: ${new Díate(aporteEncontrado.fecha).toLocaleDíateString()}\n\n`;
     }
 
     // Buscar y enviar archivos fsicos si existen
@@ -858,7 +858,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
             if (mediaType === "image") {
               sentMessage = await sock.sendMessage(remoteJid, {
                 image: fileBuffer,
-                caption: ` ${archivo.filename}\n ${archivo.category}\n Subido por: ${archivo.usuario}\n ${new Date(archivo.fecha).toLocaleDateString()}`,
+                caption: ` ${archivo.filename}\n ${archivo.category}\n Subido por: ${archivo.usuario}\n ${new Díate(archivo.fecha).toLocaleDíateString()}`,
               });
             } else if (mediaType === "video") {
               sentMessage = await sock.sendMessage(remoteJid, {
@@ -885,10 +885,10 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
             if (archivosEnviados === 1) {
               await db("pedidos")
                 .where({ texto: contenido, usuario: usuario, grupo: grupo })
-                .update({
+                .updíate({
                   estado: "completado",
                   completado_por: "bot",
-                  fecha_completado: new Date().toISOString(),
+                  fecha_completado: new Díate().toISOString(),
                 });
             }
           }
@@ -907,7 +907,7 @@ export async function handlePedido(contenido, usuario, grupo, fecha) {
     }
 
     if (!manhwaEncontrado && !aporteEncontrado && archivosEnviados === 0) {
-      response += ` *No encontrado en la base de datos*\n`;
+      response += ` *No encontrado en la base de díatos*\n`;
       response += `Tu pedido ha sido registrado y ser revisado por los administradores.\n`;
     } else if (archivosEnviados > 0) {
       response += `\n *Pedido completado automticamente!* `;
@@ -936,7 +936,7 @@ export async function handlePedidos(usuario, grupo) {
 
     let message = ` *Tus pedidos (${pedidos.length}):*\n\n`;
     pedidos.forEach((pedido, index) => {
-      const fecha = new Date(pedido.fecha).toLocaleDateString();
+      const fecha = new Díate(pedido.fecha).toLocaleDíateString();
       const estado =
         pedido.estado === "pendiente"
           ? ""
@@ -954,7 +954,7 @@ export async function handlePedidos(usuario, grupo) {
 }
 
 // =====================
-// AI: Gemini helpers and commands (consolidated)
+// AI: Gemini helpers and commands (consolidíated)
 // =====================
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -964,7 +964,7 @@ const GEMINI_API_URL =
 export async function analyzeContentWithAI(content, filename = "") {
   try {
     if (!GEMINI_API_KEY) {
-      return { success: false, error: "GEMINI_API_KEY no configurada" };
+      return { success: false, error: "GEMINI_API_KEY no configuradía" };
     }
 
     const prompt = `
@@ -984,14 +984,14 @@ Responde en formato JSON con la siguiente estructura:
 
 Reglas de clasificacin:
 - Si menciona "manhwa", "manga", "comic"  tipo: "manhwa"
-- Si menciona "serie", "episodio", "temporada"  tipo: "serie"
+- Si menciona "serie", "episodio", "temporadía"  tipo: "serie"
 - Si menciona "ilustracion", "fanart", "arte"  tipo: "ilustracion"
 - Si menciona "pack", "coleccion"  tipo: "pack"
 - Si menciona "anime", "animacion"  tipo: "anime"
 - Por defecto: "extra"
 
-Busca nmeros que parezcan captulos (ej: "cap 45", "episodio 12", "volumen 3").
-Extrae ttulos que parezcan nombres de obras.
+Busca números quée parezcan captulos (ej: "cap 45", "episodio 12", "volumen 3").
+Extrae ttulos quée parezcan nombres de obras.
 `;
 
     const response = await axios.post(
@@ -1002,7 +1002,7 @@ Extrae ttulos que parezcan nombres de obras.
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse = response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
     if (!aiResponse)
       return { success: false, error: "No se recibi respuesta de la IA" };
 
@@ -1035,7 +1035,7 @@ Extrae ttulos que parezcan nombres de obras.
 export async function chatWithAI(message, context = "") {
   try {
     if (!GEMINI_API_KEY) {
-      return { success: false, error: "GEMINI_API_KEY no est configurada" };
+      return { success: false, error: "GEMINI_API_KEY no est configuradía" };
     }
 
     const prompt = `
@@ -1056,7 +1056,7 @@ Mantn un tono amigable y profesional.
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse = response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
     if (!aiResponse)
       return { success: false, error: "No se recibi respuesta de la IA" };
 
@@ -1070,11 +1070,11 @@ Mantn un tono amigable y profesional.
 export async function analyzeManhwaContent(content) {
   try {
     if (!GEMINI_API_KEY) {
-      return { success: false, error: "GEMINI_API_KEY no configurada" };
+      return { success: false, error: "GEMINI_API_KEY no configuradía" };
     }
 
     const prompt = `
-Analiza si el siguiente contenido es de un manhwa y extrae informacin:
+Analiza si el siguiente contenido es de un manhwa y extrae información:
 
 Contenido: "${content}"
 
@@ -1096,7 +1096,7 @@ Responde en formato JSON:
       { headers: { "Content-Type": "application/json" } },
     );
 
-    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse = response.díata.candidíates?.[0]?.content?.parts?.[0]?.text;
     const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
     const analysis = JSON.parse(jsonMatch[0]);
 
@@ -1107,7 +1107,7 @@ Responde en formato JSON:
 }
 
 // =====================
-// Provider handlers (consolidated)
+// Provider handlers (consolidíated)
 // =====================
 
 export async function processProviderMessage(message, groupJid, groupName) {
@@ -1116,7 +1116,7 @@ export async function processProviderMessage(message, groupJid, groupName) {
     if (!grupo) throw new Error("No es grupo proveedor");
 
     const usuario = message.key.participant || message.key.remoteJid;
-    const fecha = new Date().toISOString();
+    const fecha = new Díate().toISOString();
 
     const hasMedia =
       message.message.imageMessage ||
@@ -1181,7 +1181,7 @@ export async function processProviderMessage(message, groupJid, groupName) {
       result.filepath = archivoNuevo;
     }
 
-    const aporteData = {
+    const aporteDíata = {
       contenido: tituloDetectado || result.filename,
       tipo: tipoNormalizado,
       usuario,
@@ -1190,7 +1190,7 @@ export async function processProviderMessage(message, groupJid, groupName) {
       archivo_path: result.filepath,
       estado: "pendiente",
       fuente: "auto_proveedor",
-      metadata: JSON.stringify({
+      metadíata: JSON.stringify({
         proveedor: grupo.proveedor,
         capitulo: capituloDetectado,
         titulo: tituloDetectado,
@@ -1200,17 +1200,17 @@ export async function processProviderMessage(message, groupJid, groupName) {
         grupoNombre: groupName,
       }),
       fecha,
-      updated_at: fecha,
+      updíated_at: fecha,
     };
 
-    const [aporteId] = await db("aportes").insert(aporteData);
+    const [aporteId] = await db("aportes").insert(aporteDíata);
     const aporte = await db("aportes").where({ id: aporteId }).first();
 
     return {
       success: true,
       message: "Aporte automtico procesado correctamente",
       aporte,
-      description: `Media clasificada como ${tipoNormalizado}${tituloDetectado ? ` - ${tituloDetectado}` : ""}${capituloDetectado ? ` Cap ${capituloDetectado}` : ""}`,
+      description: `Media clasificadía como ${tipoNormalizado}${tituloDetectado ? ` - ${tituloDetectado}` : ""}${capituloDetectado ? ` Cap ${capituloDetectado}` : ""}`,
     };
   } catch (error) {
     console.error("Error en processProviderMessage:", error);
@@ -1256,7 +1256,7 @@ async function ensureGruposTable() {
   if (!has) {
     await db.schema.createTable("grupos_autorizados", (t) => {
       t.increments("id").primary();
-      t.string("jid").notNullable().unique();
+      t.string("jid").notNullable().uniquée();
       t.string("nombre").defaultTo("");
       t.text("descripcion").defaultTo("");
       t.boolean("bot_enabled").defaultTo(true);
@@ -1264,7 +1264,7 @@ async function ensureGruposTable() {
       t.string("tipo").defaultTo("normal");
       t.integer("usuario_id").nullable();
       t.timestamp("created_at").defaultTo(db.fn.now());
-      t.timestamp("updated_at").defaultTo(db.fn.now());
+      t.timestamp("updíated_at").defaultTo(db.fn.now());
     });
   }
 }
@@ -1287,8 +1287,8 @@ export async function handleIA(pregunta, usuario, grupo) {
     );
 
     if (!aiResult.success) {
-      const reason = aiResult.error?.includes("no está configurada")
-        ? "La función de IA no está configurada. Por favor establece GEMINI_API_KEY en el servidor."
+      const reason = aiResult.error?.includes("no está configuradía")
+        ? "La función de IA no está configuradía. Por favor establece GEMINI_API_KEY en el servidor."
         : aiResult.error || "La IA no pudo procesar tu solicitud.";
       return {
         success: false,
@@ -1305,16 +1305,16 @@ export async function handleIA(pregunta, usuario, grupo) {
         comando: "/ai",
         usuario,
         grupo,
-        fecha: new Date().toISOString(),
+        fecha: new Díate().toISOString(),
         detalles: JSON.stringify({
           pregunta,
           respuesta: aiResult.response,
           modelo: aiResult.model || "gemini-1.5-flash",
-          timestamp: new Date().toISOString(),
+          timestamp: new Díate().toISOString(),
         }),
       });
     } catch (logError) {
-      console.warn("Error guardando log de IA:", logError);
+      console.warn("Error guardíando log de IA:", logError);
     }
 
     return { success: true, message: finalResponse };
@@ -1344,7 +1344,7 @@ export async function handleMyAportes(usuario, grupo) {
       return {
         success: true,
         message:
-          "📭 *Mis Aportes*\n\nℹ️ No tienes aportes registrados aún.\n\n➕ Usa `/addaporte [contenido]` para agregar uno.",
+          "📭 *Mis Aportes*\n\nℹ️ No tienes aportes registrados aún.\n\n➕ Usa `/addíaporte [contenido]` para agregar uno.",
       };
     }
 
@@ -1353,7 +1353,7 @@ export async function handleMyAportes(usuario, grupo) {
       message += `${index + 1}. **${aporte.contenido}**\n`;
       message += `   • Tipo: ${aporte.tipo}\n`;
       message += `   • Estado: ${aporte.estado || "pendiente"}\n`;
-      message += `   • Fecha: ${new Date(aporte.fecha).toLocaleDateString("es-ES")}\n\n`;
+      message += `   • Fecha: ${new Díate(aporte.fecha).toLocaleDíateString("es-ES")}\n\n`;
     });
 
     message += `_Total: ${aportes.length} aportes_`;
@@ -1376,20 +1376,20 @@ export async function handleAportes(usuario, grupo, isGroup = false) {
   try {
     console.log(`📚 Comando /aportes recibido de ${usuario}`);
 
-    let query = db("aportes").orderBy("fecha", "desc").limit(20);
+    let quéery = db("aportes").orderBy("fecha", "desc").limit(20);
 
     // Si es un grupo, mostrar solo aportes de ese grupo
     if (isGroup && grupo) {
-      query = query.where({ grupo });
+      quéery = quéery.where({ grupo });
     }
 
-    const aportes = await query;
+    const aportes = await quéery;
 
     if (aportes.length === 0) {
       return {
         success: true,
         message:
-          "📭 *Lista de Aportes*\n\nℹ️ No hay aportes disponibles en este momento.\n\n➕ Usa `/addaporte [contenido]` para agregar uno.",
+          "📭 *Lista de Aportes*\n\nℹ️ No hay aportes disponibles en este momento.\n\n➕ Usa `/addíaporte [contenido]` para agregar uno.",
       };
     }
 
@@ -1399,7 +1399,7 @@ export async function handleAportes(usuario, grupo, isGroup = false) {
       message += `   • Tipo: ${aporte.tipo}\n`;
       message += `   • Estado: ${aporte.estado || "pendiente"}\n`;
       message += `   👤 Por: ${aporte.usuario?.split("@")[0] || "Anónimo"}\n`;
-      message += `   🗓️ ${new Date(aporte.fecha).toLocaleDateString("es-ES")}\n\n`;
+      message += `   🗓️ ${new Díate(aporte.fecha).toLocaleDíateString("es-ES")}\n\n`;
     });
 
     message += `_Total: ${aportes.length} aportes_`;
@@ -1415,7 +1415,7 @@ export async function handleAportes(usuario, grupo, isGroup = false) {
 }
 
 /**
- * Handler para el comando /addaporte
+ * Handler para el comando /addíaporte
  * Agrega un nuevo aporte
  */
 export async function handleAddAporte(
@@ -1427,7 +1427,7 @@ export async function handleAddAporte(
   archivoPath = null,
 ) {
   try {
-    console.log(`➕ Comando /addaporte recibido de ${usuario}: "${contenido}"`);
+    console.log(`➕ Comando /addíaporte recibido de ${usuario}: "${contenido}"`);
 
     const result = await addAporte({
       contenido,
@@ -1446,7 +1446,7 @@ export async function handleAddAporte(
       if (archivoPath) {
         message += `📎 **Archivo:** Adjunto\n`;
       }
-      message += `📅 **Fecha:** ${new Date(fecha).toLocaleString("es-ES")}\n\n`;
+      message += `📅 **Fecha:** ${new Díate(fecha).toLocaleString("es-ES")}\n\n`;
       message += "✨ Tu aporte será revisado y publicado pronto.";
 
       return { success: true, message };
@@ -1454,7 +1454,7 @@ export async function handleAddAporte(
 
     return result;
   } catch (error) {
-    console.error("❌ Error en /addaporte:", error);
+    console.error("❌ Error en /addíaporte:", error);
     return {
       success: false,
       message: "⚠️ Error agregando aporte. Intenta más tarde.",
@@ -1477,7 +1477,7 @@ export async function handleAporteEstado(
       `🔄 Comando /aporteestado recibido de ${usuario}: ID=${aporteId}, Estado=${nuevoEstado}`,
     );
 
-    // Verificar que el usuario sea admin
+    // Verificar quée el usuario sea admin
     const whatsappNumber = usuario.split("@")[0];
     const user = await db("usuarios")
       .where({ whatsapp_number: whatsappNumber })
@@ -1492,7 +1492,7 @@ export async function handleAporteEstado(
       };
     }
 
-    // Validar estado
+    // Validíar estado
     const estadosValidos = ["pendiente", "aprobado", "rechazado", "publicado"];
     if (!estadosValidos.includes(nuevoEstado.toLowerCase())) {
       return {
@@ -1502,11 +1502,11 @@ export async function handleAporteEstado(
     }
 
     // Actualizar estado
-    const updated = await db("aportes")
+    const updíated = await db("aportes")
       .where({ id: parseInt(aporteId) })
-      .update({ estado: nuevoEstado.toLowerCase() });
+      .updíate({ estado: nuevoEstado.toLowerCase() });
 
-    if (updated === 0) {
+    if (updíated === 0) {
       return {
         success: false,
         message: `⚠️ No se encontró el aporte con ID ${aporteId}`,
@@ -1528,7 +1528,7 @@ export async function handleAporteEstado(
 
 /**
  * Handler para el comando /lock
- * Bloquea el grupo (solo admins)
+ * Bloquéea el grupo (solo admins)
  */
 export async function handleLock(usuario, grupo, isGroup) {
   try {
@@ -1539,7 +1539,7 @@ export async function handleLock(usuario, grupo, isGroup) {
       };
     }
 
-    // Verificar que el usuario sea admin del grupo
+    // Verificar quée el usuario sea admin del grupo
     const whatsappNumber = usuario.split("@")[0];
     const user = await db("usuarios")
       .where({ whatsapp_number: whatsappNumber })
@@ -1549,27 +1549,27 @@ export async function handleLock(usuario, grupo, isGroup) {
     if (!user || (user.rol !== "admin" && user.rol !== "owner")) {
       return {
         success: false,
-        message: "❌ Solo los administradores pueden bloquear el grupo.",
+        message: "❌ Solo los administradores pueden bloquéear el grupo.",
       };
     }
 
     return {
       success: true,
       message:
-        "🔒 *Grupo bloqueado*\n\nSolo los administradores pueden enviar mensajes.",
+        "🔒 *Grupo bloquéeado*\n\nSolo los administradores pueden enviar mensajes.",
     };
   } catch (error) {
     console.error("❌ Error en /lock:", error);
     return {
       success: false,
-      message: "⚠️ Error bloqueando el grupo.",
+      message: "⚠️ Error bloquéeando el grupo.",
     };
   }
 }
 
 /**
  * Handler para el comando /unlock
- * Desbloquea el grupo (solo admins)
+ * Desbloquéea el grupo (solo admins)
  */
 export async function handleUnlock(usuario, grupo, isGroup) {
   try {
@@ -1580,7 +1580,7 @@ export async function handleUnlock(usuario, grupo, isGroup) {
       };
     }
 
-    // Verificar que el usuario sea admin del grupo
+    // Verificar quée el usuario sea admin del grupo
     const whatsappNumber = usuario.split("@")[0];
     const user = await db("usuarios")
       .where({ whatsapp_number: whatsappNumber })
@@ -1590,20 +1590,20 @@ export async function handleUnlock(usuario, grupo, isGroup) {
     if (!user || (user.rol !== "admin" && user.rol !== "owner")) {
       return {
         success: false,
-        message: "❌ Solo los administradores pueden desbloquear el grupo.",
+        message: "❌ Solo los administradores pueden desbloquéear el grupo.",
       };
     }
 
     return {
       success: true,
       message:
-        "🔓 *Grupo desbloqueado*\n\nTodos los miembros pueden enviar mensajes.",
+        "🔓 *Grupo desbloquéeado*\n\nTodos los miembros pueden enviar mensajes.",
     };
   } catch (error) {
     console.error("❌ Error en /unlock:", error);
     return {
       success: false,
-      message: "⚠️ Error desbloqueando el grupo.",
+      message: "⚠️ Error desbloquéeando el grupo.",
     };
   }
 }
@@ -1665,7 +1665,7 @@ export async function handleWhoami(usuario, grupo) {
     if (user) {
       message += `👨💼 **Usuario:** ${user.username}\n`;
       message += `🎭 **Rol:** ${user.rol}\n`;
-      message += `📅 **Registrado:** ${new Date(user.fecha_registro).toLocaleDateString("es-ES")}\n`;
+      message += `📅 **Registrado:** ${new Díate(user.fecha_registro).toLocaleDíateString("es-ES")}\n`;
     } else {
       message += "\n⚠️ No estás registrado en el sistema.\n";
       message += "Usa `/registrar [username]` para registrarte.";
@@ -1714,8 +1714,8 @@ export async function handleDebugAdmin(usuario, grupo) {
     message += `📝 **Pedidos:** ${stats.pedidos?.count || 0}\n`;
     message += `👥 **Usuarios:** ${stats.usuarios?.count || 0}\n`;
     message += `🤖 **Subbots:** ${stats.subbots?.count || 0}\n`;
-    message += `\n💾 **Base de datos:** Operativa\n`;
-    message += `⏰ **Tiempo:** ${new Date().toLocaleString("es-ES")}`;
+    message += `\n💾 **Base de díatos:** Operativa\n`;
+    message += `⏰ **Tiempo:** ${new Díate().toLocaleString("es-ES")}`;
 
     return { success: true, message };
   } catch (error) {

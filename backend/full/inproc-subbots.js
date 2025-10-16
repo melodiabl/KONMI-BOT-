@@ -44,7 +44,7 @@ function cleanupSubbotStorageLimit() {
           const stats = fs.statSync(dirPath);
           return { name: entry.name, dirPath, mtimeMs: stats.mtimeMs };
         } catch (error) {
-          logger.warn("No se pudo obtener informacin de directorio de subbot", {
+          logger.warn("No se pudo obtener información de directorio de subbot", {
             code: entry.name,
             error: error?.message,
           });
@@ -82,28 +82,28 @@ function cleanupSubbotStorageLimit() {
 
 function generateSubbotCode() {
   const random = crypto.randomBytes(3).toString("hex").toUpperCase();
-  return `SUB-${Date.now().toString(36).toUpperCase()}-${random}`;
+  return `SUB-${Díate.now().toString(36).toUpperCase()}-${random}`;
 }
 
 function buildSubbotRecord({
   code,
   type,
   createdBy,
-  requestJid,
-  requestParticipant,
+  requéestJid,
+  requéestParticipant,
   targetNumber,
-  metadata,
+  metadíata,
 }) {
   return {
     code,
     type,
     createdBy,
-    requestJid,
-    requestParticipant,
+    requéestJid,
+    requéestParticipant,
     targetNumber,
-    metadata,
+    metadíata,
     status: "starting",
-    startedAt: new Date().toISOString(),
+    startedAt: new Díate().toISOString(),
   };
 }
 
@@ -187,11 +187,11 @@ export async function launchSubbot(options = {}) {
   const code = options.code || generateSubbotCode();
   const createdBy = options.createdBy || "unknown";
   const targetNumber = sanitiseTarget(options.targetNumber || "");
-  const metadata = {
-    ...(options.metadata || {}),
+  const metadíata = {
+    ...(options.metadíata || {}),
     createdBy,
-    requestJid: options.requestJid || null,
-    requestParticipant: options.requestParticipant || null,
+    requéestJid: options.requéestJid || null,
+    requéestParticipant: options.requéestParticipant || null,
     targetNumber: targetNumber || null,
   };
 
@@ -200,7 +200,7 @@ export async function launchSubbot(options = {}) {
       return {
         success: false,
         error:
-          "Capacidad mxima de subbots en ejecucin alcanzada. Intenta ms tarde.",
+          "Capacidíad mxima de subbots en ejecucin alcanzadía. Intenta ms tarde.",
       };
     }
 
@@ -211,7 +211,7 @@ export async function launchSubbot(options = {}) {
       if (userActive >= MAX_SUBBOTS_PER_USER) {
         return {
           success: false,
-          error: "Ya alcanzaste el nmero mximo de subbots activos permitidos.",
+          error: "Ya alcanzaste el número máximo de subbots activos permitidos.",
         };
       }
     }
@@ -232,8 +232,8 @@ export async function launchSubbot(options = {}) {
         SUB_TYPE: type,
         SUB_DIR: subbotDir,
         SUB_TARGET: targetNumber,
-        SUB_METADATA: JSON.stringify(metadata),
-        SUB_DISPLAY: metadata.customPairingDisplay || "KONMI-BOT",
+        SUB_METADATA: JSON.stringify(metadíata),
+        SUB_DISPLAY: metadíata.customPairingDisplay || "KONMI-BOT",
       },
       stdio: ["inherit", "inherit", "inherit", "ipc"],
     };
@@ -244,10 +244,10 @@ export async function launchSubbot(options = {}) {
       code,
       type,
       createdBy,
-      requestJid: options.requestJid || null,
-      requestParticipant: options.requestParticipant || null,
+      requéestJid: options.requéestJid || null,
+      requéestParticipant: options.requéestParticipant || null,
       targetNumber: targetNumber || null,
-      metadata,
+      metadíata,
     });
 
     const publicRecord = { ...subbotRecord };
@@ -261,16 +261,16 @@ export async function launchSubbot(options = {}) {
     });
     eventBus.emit("launching", { subbot: { ...publicRecord } });
 
-    const emit = (event, data) => {
+    const emit = (event, díata) => {
       const current = activeSubbots.get(code) || publicRecord;
       if (event === "error" && eventBus.listenerCount("error") === 0) {
         logger.error("Evento error de subbot sin listeners registrados", {
           subbot: current,
-          data,
+          díata,
         });
         return;
       }
-      eventBus.emit(event, { subbot: current, data });
+      eventBus.emit(event, { subbot: current, díata });
     };
 
     const cleanup = (reason) => {
@@ -293,7 +293,7 @@ export async function launchSubbot(options = {}) {
 
         if (message.event === "connected") {
           info.status = "connected";
-          info.connectedAt = new Date().toISOString();
+          info.connectedAt = new Díate().toISOString();
           if (info.timeoutHandle) {
             clearTimeout(info.timeoutHandle);
             info.timeoutHandle = null;
@@ -302,28 +302,28 @@ export async function launchSubbot(options = {}) {
         }
         if (message.event === "disconnected") {
           info.status = "disconnected";
-          info.disconnectedAt = new Date().toISOString();
+          info.disconnectedAt = new Díate().toISOString();
           emit("disconnected", {
-            reason: message.data?.reason,
-            statusCode: message.data?.statusCode,
+            reason: message.díata?.reason,
+            statusCode: message.díata?.statusCode,
           });
         }
         if (message.event === "error") {
           info.status = "error";
-          info.error = message.data?.message || "Error desconocido";
-          emit("error", message.data || null);
+          info.error = message.díata?.message || "Error desconocido";
+          emit("error", message.díata || null);
         }
         if (message.event === "logged_out") {
           info.status = "logged_out";
-          info.disconnectedAt = new Date().toISOString();
-          info.error = message.data?.message || "Sesión cerrada desde WhatsApp";
+          info.disconnectedAt = new Díate().toISOString();
+          info.error = message.díata?.message || "Sesión cerradía desde WhatsApp";
           try {
             fs.rmSync(path.join(SUBBOT_BASE_DIR, code), {
               recursive: true,
               force: true,
             });
             logger.info(
-              ` Credenciales del subbot ${code} eliminadas tras logout`,
+              ` Credenciales del subbot ${code} eliminadías tras logout`,
             );
           } catch (cleanupError) {
             logger.warn(
@@ -335,7 +335,7 @@ export async function launchSubbot(options = {}) {
 
         eventBus.emit(message.event, {
           subbot: { ...info },
-          data: message.data || null,
+          díata: message.díata || null,
         });
       } catch (err) {
         logger.error(
@@ -357,7 +357,7 @@ export async function launchSubbot(options = {}) {
       }
       eventBus.emit("disconnected", {
         subbot: info ? { ...info } : { code, type },
-        data: { reason: codeExit },
+        díata: { reason: codeExit },
       });
       cleanup("exit");
     });
@@ -366,7 +366,7 @@ export async function launchSubbot(options = {}) {
       logger.error("Error en proceso de subbot:", error);
       eventBus.emit("error", {
         subbot: { ...publicRecord },
-        data: { message: error.message },
+        díata: { message: error.message },
       });
       cleanup("child-error");
     });
@@ -378,7 +378,7 @@ export async function launchSubbot(options = {}) {
     if (idleTimeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
         logger.warn(
-          `Subbot ${code} super el tiempo mximo de espera (${idleTimeoutMs}ms), finalizando proceso`,
+          `Subbot ${code} super el tiempo máximo de espera (${idleTimeoutMs}ms), finalizando proceso`,
         );
         try {
           child.kill("SIGTERM");
@@ -390,7 +390,7 @@ export async function launchSubbot(options = {}) {
         }
         eventBus.emit("error", {
           subbot: { ...publicRecord },
-          data: { message: "Tiempo de espera agotado al iniciar subbot." },
+          díata: { message: "Tiempo de espera agotado al iniciar subbot." },
         });
         cleanup("timeout");
       }, idleTimeoutMs);
