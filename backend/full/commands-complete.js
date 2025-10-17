@@ -12,6 +12,7 @@ import {
   isPremium,
   getOwnerName,
 } from "./global-config.js";
+import { listUserSubbots } from "./subbot-manager.js";
 // Consolidacion de comandos: reexportamos funciones de modulos especificos
 import {
   // Media
@@ -91,60 +92,74 @@ async function ensureGruposAutorizadosTable() {
  */
 async function handleBots(usuario) {
   try {
-    // Obtener el número de teléfono del usuario
-    const userNum = usuario.split("@")[0];
+    const userDigits = String(usuario || "")
+      .split("@")[0]
+      .split(":")[0]
+      .replace(/[^0-9]/g, "");
 
-    // Obtener todos los subbots con flag de conexión
-    const subs = await fetchSubbotListWithOnlineFlag();
+    const subbots = await listUserSubbots(userDigits);
 
-    // Filtrar por propietario (compatibilidad con distintos esquemas de tabla)
-    const mine = (subs || []).filter((s) => {
-      const createdBy = String(s.created_by || "").replace(/[^0-9]/g, "");
-      const ownerNumber = String(s.owner_number || "").replace(/[^0-9]/g, "");
-      const userPhone = String(s.user_phone || "").replace(/[^0-9]/g, "");
-      return (
-        (createdBy && createdBy === userNum) ||
-        (ownerNumber && ownerNumber === userNum) ||
-        (userPhone && userPhone === userNum)
-      );
-    });
-
-    if (!mine.length) {
+    if (!subbots || subbots.length === 0) {
       return {
         success: true,
         message:
-          "  *Mis SubBots*\n\n No tienes subbots creados.\n\n Usa `/qr` para generar un QR o `/code [número]` para obtener un Pairing Code.",
+          "  *Mis SubBots*\n\n No tienes subbots creados.\n\n Usa `/qr` para generar un QR o `/code [numero]` para obtener un Pairing Code.",
       };
     }
 
-    const now = Date.now();
-    let text = `  *Mis SubBots (${mine.length})*\n\n`;
-    for (let i = 0; i < mine.length; i++) {
-      const sb = mine[i];
-      const code = sb.code || sb.session_id || `subbot_${i + 1}`;
-      const type = (sb.type || sb.method || "qr").toUpperCase();
-      const status =
-        sb.status || sb.estado || (sb.isOnline ? "connected" : "disconnected");
-      const createdAtIso = sb.created_at || sb.createdAt || null;
-      const connectedAtIso = sb.connected_at || null;
-      const refTime = connectedAtIso || createdAtIso || sb.updated_at || null;
-      let uptime = "N/D";
-      if (refTime) {
-        const ms = now - new Date(refTime).getTime();
-        const h = Math.floor(ms / 3600000);
-        const m = Math.floor((ms % 3600000) / 60000);
-        uptime = `${h}h ${m}m`;
-      }
+    const formatDate = (value) => {
+      if (!value) return null;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      return date.toLocaleString("es-ES");
+    };
 
-      text += `${i + 1}. ${sb.isOnline ? "" : ""} *${code}*\n`;
-      text += `   Tipo: ${type}\n`;
-      text += `   Estado: ${status}\n`;
-      if (sb.bot_number) text += `   Número: +${sb.bot_number}\n`;
-      if (createdAtIso)
-        text += `   Creado: ${new Date(createdAtIso).toLocaleString("es-ES")}\n`;
-      if (sb.isOnline) text += `   Tiempo funcionando: ${uptime}\n`;
+    let text = `  *Mis SubBots (${subbots.length})*\n\n`;
+
+    subbots.forEach((sb, index) => {
+      const code = sb.code || sb.session_id || `subbot_${index + 1}`;
+      const type = (
+        sb.connection_type ||
+        sb.type ||
+        sb.method ||
+        sb.metadata?.type ||
+        "qr"
+      ).toUpperCase();
+      const isOnline =
+        sb.is_online ??
+        sb.isOnline ??
+        (sb.status || "").toLowerCase() === "connected";
+      const status = sb.status || (isOnline ? "connected" : "disconnected");
+      const displayName =
+        sb.metadata?.displayName || sb.metadata?.uiLabel || sb.user_name || null;
+      const botNumber =
+        sb.bot_number || sb.metadata?.botNumber || sb.metadata?.botPhone || null;
+      const targetNumber =
+        sb.target_number ||
+        sb.metadata?.targetNumber ||
+        sb.metadata?.targetPhone ||
+        null;
+      const createdAt = formatDate(sb.created_at || sb.metadata?.createdAt);
+      const lastActivity = formatDate(
+        sb.last_activity ||
+          sb.last_heartbeat ||
+          sb.updated_at ||
+          sb.metadata?.lastHeartbeat,
+      );
+      const messageCount = sb.message_count ?? sb.metadata?.messageCount;
+      const statusSuffix = isOnline ? " (online)" : "";
+
+      text += `${index + 1}. *${code}* (${type})\n`;
+      if (displayName) text += `   Alias: ${displayName}\n`;
+      text += `   Estado: ${status}${statusSuffix}\n`;
+      if (botNumber) text += `   Numero bot: +${botNumber}\n`;
+      if (targetNumber) text += `   Destino: +${targetNumber}\n`;
+      if (createdAt) text += `   Creado: ${createdAt}\n`;
+      if (lastActivity) text += `   Ultima actividad: ${lastActivity}\n`;
+      if (typeof messageCount === "number")
+        text += `   Mensajes enviados: ${messageCount}\n`;
       text += `\n`;
-    }
+    });
 
     text += " Acciones:\n";
     text += "   /delsubbot <codigo>  Eliminar subbot\n";
@@ -156,6 +171,7 @@ async function handleBots(usuario) {
     return { success: false, message: " Error al obtener subbots." };
   }
 }
+
 
 /** Determina si el usuario es el owner especfico (dinmico por ENV/global) o superadmin */
 function isSpecificOwner(usuario) {
@@ -2665,17 +2681,17 @@ function normalizeUserNumber(usuarioJid) {
 // Helper para obtener nombre de display limpio (sin mostrar LID)
 function getCleanDisplayName(participant, fallbackNumber) {
   if (!participant) return fallbackNumber;
-  
+
   // Prioridad 1: notify (nombre guardado en contactos)
   if (participant.notify) return participant.notify;
-  
+
   // Prioridad 2: name (nombre del perfil)
   if (participant.name) return participant.name;
-  
+
   // Prioridad 3: número limpio (sin LID)
   const cleanNumber = normalizeUserNumber(participant.id);
   if (cleanNumber) return cleanNumber;
-  
+
   // Fallback: número proporcionado
   return fallbackNumber;
 }
@@ -3610,6 +3626,7 @@ async function handleUnban(target, usuario, grupo) {
 export { handleHelp };
 export { handleIA };
 export { handleClasificar };
+export { handleBots };
 export { handleWhoami };
 export { handlePing };
 export { handleStatus };

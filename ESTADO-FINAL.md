@@ -307,7 +307,7 @@ case "/traducir":
     const translateArgs = messageText.substring(command.length).trim().split("|");
     const textToTranslate = translateArgs[0]?.trim();
     const targetLang = translateArgs[1]?.trim() || "es";
-    
+
     if (!textToTranslate) {
       await sock.sendMessage(remoteJid, {
         text: "ℹ️ Uso: /translate [texto] | [idioma]",

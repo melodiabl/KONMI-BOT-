@@ -9,13 +9,13 @@ async function testConnection() {
   try {
     console.log("1️⃣  Verificando socket...");
     const sock = getSocket();
-    
+
     if (!sock) {
       console.log("❌ No hay socket disponible");
       console.log("   El bot no está conectado o no se ha iniciado\n");
       return;
     }
-    
+
     console.log("✅ Socket disponible");
     console.log("   Tipo:", typeof sock);
     console.log("   Tiene ev:", !!sock.ev);
@@ -41,7 +41,7 @@ async function testConnection() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("📋 RESUMEN:");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    
+
     if (sock && sock.user && status.status === "connected") {
       console.log("✅ El bot está CONECTADO y listo para recibir mensajes");
       console.log("   Si no procesa comandos, verifica:");

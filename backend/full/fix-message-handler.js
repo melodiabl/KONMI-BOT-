@@ -28,12 +28,12 @@ for (let i = 0; i < lines.length; i++) {
     inMessageUpsert = true;
     console.log(`✅ Encontrado listener en línea ${i + 1}`);
   }
-  
+
   if (inMessageUpsert && lines[i].includes("let allow = !message.key.fromMe")) {
     allowLogicStart = i;
     console.log(`⚠️  Filtro 'allow' encontrado en línea ${i + 1}`);
   }
-  
+
   if (allowLogicStart > 0 && lines[i].includes("if (!allow) continue")) {
     allowLogicEnd = i;
     console.log(`⚠️  Bloqueo 'if (!allow)' en línea ${i + 1}\n`);
@@ -48,30 +48,30 @@ if (allowLogicStart > 0 && allowLogicEnd > 0) {
     console.log(`${i + 1}: ${lines[i]}`);
   }
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-  
+
   console.log("⚠️  PROBLEMA DETECTADO:");
   console.log("   El filtro 'allow' está bloqueando mensajes de otros usuarios");
   console.log("   Solo permite mensajes del owner cuando fromMe = true\n");
-  
+
   console.log("✅ SOLUCIÓN:");
   console.log("   El filtro debe permitir TODOS los mensajes que NO sean fromMe");
   console.log("   Los mensajes fromMe solo se permiten si son comandos del owner\n");
-  
+
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("2️⃣  VERIFICACIÓN DE LÓGICA");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-  
+
   console.log("Comportamiento actual:");
   console.log("  • fromMe = false → allow = true ✅ (mensajes de otros)");
   console.log("  • fromMe = true + comando + owner → allow = true ✅");
   console.log("  • fromMe = true + NO comando → allow = false ❌");
   console.log("  • fromMe = true + comando + NO owner → allow = false ❌\n");
-  
+
   console.log("Esto es CORRECTO si el bot está en el mismo número que el owner.");
   console.log("Pero puede causar problemas si:");
   console.log("  1. El bot está en un número diferente al owner");
   console.log("  2. Hay mensajes duplicados (fromMe y no fromMe)\n");
-  
+
 } else {
   console.log("❌ No se encontró la lógica del filtro 'allow'\n");
 }

@@ -181,7 +181,7 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
                 ''
               ).trim();
               const isCommand = txt.startsWith('/') || txt.startsWith('!') || txt.startsWith('.');
-              
+
               // Solo permitir si es un comando
               if (!isCommand) {
                 continue; // Ignorar respuestas del subbot

@@ -6,6 +6,7 @@ import db from './db.js';
 import { authenticateToken, authorizeRoles } from './auth.js';
 import { getQRCode, getQRCodeImage, getCurrentPairingCode as getPairingCode, getPairingTargetNumber as getPairingNumber, setAuthMethod, getConnectionStatus, getAvailableGroups, getSocket, clearWhatsAppSession } from './whatsapp.js';
 import { getProviderStats, getProviderAportes, chatWithAI } from './handler.js';
+import { createSubbotWithPairing, createSubbotWithQr, deleteUserSubbot } from './subbot-manager.js';
 import {
   handleBotCommandsStream,
   handleUsuariosStream,
@@ -38,6 +39,145 @@ const storage = multer.diskStorage({
   }
 });
 const upload = multer({ storage });
+
+const SUBBOT_SORT_KEYS = ['updated_at', 'created_at', 'fecha_creacion', 'last_activity', 'last_check', 'id'];
+
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value > 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (
+      [
+        'true',
+        'activo',
+        'active',
+        '1',
+        'yes',
+        'si',
+        'connected',
+        'conectado',
+        'on',
+        'online'
+      ].includes(normalized)
+    ) {
+      return true;
+    }
+    if (
+      [
+        'false',
+        'inactive',
+        'inactivo',
+        '0',
+        'no',
+        'off',
+        'offline',
+        'disconnected',
+        'desconectado',
+        'pending',
+        'waiting_scan',
+        'waiting_pairing',
+        'error',
+        'stopped'
+      ].includes(normalized)
+    ) {
+      return false;
+    }
+    return false;
+  }
+  return Boolean(value);
+};
+
+const parseMetadata = (metadataRaw) => {
+  if (!metadataRaw) return null;
+  if (typeof metadataRaw === 'object') return metadataRaw;
+  try {
+    return JSON.parse(metadataRaw);
+  } catch (_) {
+    return metadataRaw;
+  }
+};
+
+const normalizeSubbotRecord = (row = {}) => {
+  if (!row) return null;
+  const code = row.code || row.codigo || row.session_id || null;
+  const typeRaw = row.type || row.connection_type || row.method || row.tipo || 'qr';
+  const status = row.status || row.estado || 'pending';
+  const owner = row.owner_number || row.user_phone || row.created_by || row.usuario || null;
+  const target = row.target_number || row.numero || null;
+  const createdAt = row.created_at || row.fecha_creacion || null;
+  const updatedAt = row.updated_at || row.last_activity || row.last_check || null;
+  const metadata = parseMetadata(row.metadata || row.settings || row.meta || null);
+  const isActive = normalizeBoolean(row.is_active ?? row.activo ?? status);
+  const isOnline = normalizeBoolean(row.is_online ?? row.isOnline);
+
+  return {
+    id: row.id ?? null,
+    code,
+    codigo: code,
+    type: typeRaw,
+    tipo: typeRaw,
+    connection_type: row.connection_type || typeRaw,
+    status,
+    estado: status,
+    owner_number: owner,
+    usuario: owner,
+    request_jid: row.request_jid || null,
+    request_participant: row.request_participant || null,
+    target_number: target,
+    numero: target,
+    is_active: isActive,
+    activo: isActive,
+    is_online: isOnline,
+    isOnline,
+    created_at: createdAt,
+    fecha_creacion: createdAt,
+    updated_at: updatedAt,
+    last_activity: row.last_activity || updatedAt,
+    last_check: row.last_check || updatedAt,
+    qr_code: row.qr_code || row.qr_data || null,
+    qr_data: row.qr_data || row.qr_code || null,
+    pairing_code: row.pairing_code || row.pairingCode || null,
+    session_id: row.session_id || null,
+    message_count: row.message_count ?? row.mensajes ?? null,
+    metadata,
+    settings: metadata,
+    meta: metadata
+  };
+};
+
+const sortSubbotRows = (rows) => {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .slice()
+    .sort((a, b) => {
+      for (const key of SUBBOT_SORT_KEYS) {
+        if (!(key in a) && !(key in b)) continue;
+        const av = a[key];
+        const bv = b[key];
+        if (av == null && bv == null) continue;
+        if (key === 'id') {
+          return Number(bv || 0) - Number(av || 0);
+        }
+        const ad = av ? new Date(av).getTime() : 0;
+        const bd = bv ? new Date(bv).getTime() : 0;
+        if (ad === bd) continue;
+        return bd - ad;
+      }
+      return 0;
+    });
+};
+
+const digitsOnly = (value) => (value ? String(value).replace(/[^0-9]/g, '') : '');
+
+const resolveOwnerNumber = (usuario, authUser = {}) => {
+  const candidates = [usuario, authUser?.whatsapp_number, authUser?.phone, authUser?.username];
+  for (const candidate of candidates) {
+    const digits = digitsOnly(candidate);
+    if (digits) return digits;
+  }
+  return '';
+};
 
 // ===================
 // DASHBOARD ENDPOINTS
@@ -160,13 +300,14 @@ router.get('/dashboard/stats', async (req, res) => {
 // ===================
 
 // Get all subbots
-router.get('/subbots', authenticateToken, async (req, res) => {
+router.get('/subbots', authenticateToken, async (_req, res) => {
   try {
-    const subbots = await db('subbots')
-      .select('*')
-      .orderBy('fecha_creacion', 'desc');
+    const rows = await db('subbots').select('*');
+    const parsed = sortSubbotRows(rows)
+      .map((row) => normalizeSubbotRecord(row))
+      .filter(Boolean);
 
-    res.json(subbots);
+    res.json(parsed);
   } catch (error) {
     console.error('Error getting subbots:', error);
     res.status(500).json({ error: 'Error getting subbots' });
@@ -176,69 +317,62 @@ router.get('/subbots', authenticateToken, async (req, res) => {
 // Create QR subbot
 router.post('/subbots/qr', authenticateToken, async (req, res) => {
   try {
-    const { usuario } = req.body;
-
-    // Check subbot limit
-    const existingSubbots = await db('subbots')
-      .where('usuario', usuario)
-      .count('id as count')
-      .first();
-
-    if (existingSubbots.count >= 3) {
-      return res.status(400).json({ error: 'Lmite de sub-bots por usuario alcanzado' });
+    const { usuario } = req.body || {};
+    const ownerNumber = resolveOwnerNumber(usuario, req.user);
+    if (!ownerNumber) {
+      return res.status(400).json({ error: 'usuario requerido' });
     }
 
-    // Generate unique code
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { subbot, code } = await createSubbotWithQr({
+      ownerNumber,
+      displayName: 'KONMI-BOT',
+      requestJid: req.user?.username || null
+    });
 
-    // Create subbot record
-    const subbot = await db('subbots').insert({
-      codigo: code,
-      tipo: 'qr',
-      usuario,
-      estado: 'activo',
-      fecha_creacion: new Date().toISOString()
-    }).returning('*');
+    const normalized = normalizeSubbotRecord(subbot) || { code };
+    if (normalized && typeof normalized === 'object') {
+      normalized.code = normalized.code || code;
+      normalized.codigo = normalized.codigo || code;
+    }
 
-    res.json(subbot[0]);
+    res.json(normalized);
   } catch (error) {
     console.error('Error creating QR subbot:', error);
-    res.status(500).json({ error: 'Error creating QR subbot' });
+    res.status(500).json({ error: 'Error creating QR subbot', detail: error?.message });
   }
 });
 
 // Create CODE subbot
 router.post('/subbots/code', authenticateToken, async (req, res) => {
   try {
-    const { usuario, numero } = req.body;
-
-    // Check subbot limit
-    const existingSubbots = await db('subbots')
-      .where('usuario', usuario)
-      .count('id as count')
-      .first();
-
-    if (existingSubbots.count >= 3) {
-      return res.status(400).json({ error: 'Lmite de sub-bots por usuario alcanzado' });
+    const { usuario, numero } = req.body || {};
+    const ownerNumber = resolveOwnerNumber(usuario, req.user);
+    const targetNumber = digitsOnly(numero);
+    if (!ownerNumber) {
+      return res.status(400).json({ error: 'usuario requerido' });
+    }
+    if (!targetNumber) {
+      return res.status(400).json({ error: 'numero requerido' });
     }
 
-    // Generate unique code
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { subbot, code } = await createSubbotWithPairing({
+      ownerNumber,
+      targetNumber,
+      displayName: 'KONMI-BOT',
+      requestJid: req.user?.username || null,
+      requestParticipant: null
+    });
 
-    // Create subbot record
-    const subbot = await db('subbots').insert({
-      codigo: code,
-      tipo: 'code',
-      usuario,
-      numero,
-      estado: 'activo',
-      fecha_creacion: new Date().toISOString()
-    }).returning('*');
+    const normalized = normalizeSubbotRecord(subbot) || { code };
+    if (normalized && typeof normalized === 'object') {
+      normalized.code = normalized.code || code;
+      normalized.codigo = normalized.codigo || code;
+    }
 
-    res.json(subbot[0]);
+    res.json(normalized);
   } catch (error) {
     console.error('Error creating CODE subbot:', error);
-    res.status(500).json({ error: 'Error creating CODE subbot' });
+    res.status(500).json({ error: 'Error creating CODE subbot', detail: error?.message });
   }
 });
 
@@ -246,19 +380,25 @@ router.post('/subbots/code', authenticateToken, async (req, res) => {
 router.delete('/subbots/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-
-    const deleted = await db('subbots')
-      .where('id', id)
-      .del();
-
-    if (deleted === 0) {
+    const row = await db('subbots').where({ id }).first();
+    if (!row) {
       return res.status(404).json({ error: 'Subbot no encontrado' });
     }
 
+    const code = row.code || row.codigo || row.session_id;
+    const ownerNumberRaw = row.owner_number || row.user_phone || row.created_by || row.usuario || null;
+    const ownerNumber = ownerNumberRaw ? digitsOnly(ownerNumberRaw) || ownerNumberRaw : ownerNumberRaw;
+
+    if (!code || !ownerNumber) {
+      await db('subbots').where({ id }).del();
+      return res.json({ success: true, message: 'Subbot eliminado (registro sin datos de runtime)' });
+    }
+
+    await deleteUserSubbot(code, ownerNumber);
     res.json({ success: true, message: 'Subbot eliminado correctamente' });
   } catch (error) {
     console.error('Error deleting subbot:', error);
-    res.status(500).json({ error: 'Error deleting subbot' });
+    res.status(500).json({ error: 'Error deleting subbot', detail: error?.message });
   }
 });
 

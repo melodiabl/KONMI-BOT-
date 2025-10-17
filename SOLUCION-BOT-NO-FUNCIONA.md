@@ -12,7 +12,7 @@ node backend/full/fix-database.js
 
 **Resultado:**
 - ✅ Tabla `groups` creada
-- ✅ Tabla `users` creada  
+- ✅ Tabla `users` creada
 - ✅ Tabla `extra_content` creada
 - ✅ Todas las demás tablas verificadas
 

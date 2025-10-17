@@ -17,7 +17,7 @@ async function diagnosticar() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("1️⃣  ESTADO GLOBAL DEL BOT");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    
+
     try {
       const hasTable = await db.schema.hasTable("bot_global_state");
       if (!hasTable) {
@@ -34,7 +34,7 @@ async function diagnosticar() {
         const globalState = await db("bot_global_state").select("*").first();
         console.log("✅ Tabla 'bot_global_state' existe");
         console.log("   Estado actual:", JSON.stringify(globalState, null, 2));
-        
+
         if (!globalState) {
           console.log("⚠️  No hay registro en la tabla");
           console.log("   Insertando registro por defecto...");
@@ -58,18 +58,18 @@ async function diagnosticar() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("2️⃣  AUTENTICACIÓN DE WHATSAPP");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    
+
     const authPath = path.join(__dirname, "storage", "baileys_full");
     const credsPath = path.join(authPath, "creds.json");
-    
+
     if (fs.existsSync(credsPath)) {
       console.log("✅ Archivo creds.json existe");
       try {
         const creds = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-        const hasKeys = creds?.noiseKey?.public && 
-                       creds?.signedIdentityKey?.public && 
+        const hasKeys = creds?.noiseKey?.public &&
+                       creds?.signedIdentityKey?.public &&
                        creds?.signedPreKey?.keyPair?.public;
-        
+
         if (hasKeys) {
           console.log("✅ Credenciales válidas");
           console.log("   Número registrado:", creds.me?.id || "No disponible");
@@ -90,7 +90,7 @@ async function diagnosticar() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("3️⃣  GRUPOS REGISTRADOS");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    
+
     try {
       const hasGroupsTable = await db.schema.hasTable("groups");
       if (!hasGroupsTable) {
@@ -98,7 +98,7 @@ async function diagnosticar() {
       } else {
         const groups = await db("groups").select("*");
         console.log(`✅ ${groups.length} grupo(s) registrado(s):`);
-        
+
         for (const group of groups) {
           const isActive = group.is_active === 1 || group.is_active === true;
           const status = isActive ? "✅ ACTIVO" : "❌ INACTIVO";
@@ -114,7 +114,7 @@ async function diagnosticar() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("4️⃣  CONFIGURACIÓN DE OWNER");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    
+
     const ownerNumber = process.env.OWNER_WHATSAPP_NUMBER;
     if (ownerNumber) {
       console.log("✅ Owner configurado:", ownerNumber);
@@ -128,7 +128,7 @@ async function diagnosticar() {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("5️⃣  RESUMEN Y RECOMENDACIONES");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    
+
     console.log("📋 Checklist:");
     console.log("   [ ] Bot conectado a WhatsApp");
     console.log("   [ ] Bot activo globalmente");

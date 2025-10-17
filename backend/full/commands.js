@@ -1,6 +1,7 @@
 import db from './db.js';
 import { analyzeContentWithAI, chatWithAI, analyzeManhwaContent } from './handler.js';
 import { addAporte } from './handler.js';
+import fetch from './utils/fetch.js';
 
 /**
  * Handle the /aportar command to save a new aporte in the database.

@@ -55,7 +55,7 @@ global.sock = sock; // ✅ AGREGADO
 ```javascript
 // ANTES:
 if (!isOwner) {
-  await sock.sendMessage(remoteJid, 
+  await sock.sendMessage(remoteJid,
     { text: "❌ Solo el owner puede usar este comando" }
   );
   return;
