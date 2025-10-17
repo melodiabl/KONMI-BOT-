@@ -663,8 +663,11 @@ import {
   handleKick,
   handlePromote,
   handleDemote,
+  handleLock,
+  handleUnlock,
   // Permisos centralizados
   isOwnerOrAdmin,
+  isRealGroupAdmin,
 } from "./commands-complete.js";
 
 // Gestor multi-cuenta (subbots reales)
@@ -1000,12 +1003,16 @@ function isSpecificOwner(usuario) {
     // Definir el número de owner (fijo)
     const ownerNumber = "595974154768";
 
-    // Normalizar números para comparación (últimos 9 dígitos)
+    // PRIORIDAD 1: Comparar número completo primero
+    const isExactMatch = normalizedUser === ownerNumber;
+
+    // PRIORIDAD 2: Comparar últimos 9 dígitos (fallback)
     const userTail = normalizedUser.slice(-9);
     const ownerTail = ownerNumber.slice(-9);
+    const isTailMatch = userTail === ownerTail && userTail.length === 9;
 
-    // Verificar coincidencia (últimos 9 dígitos)
-    const isSpecific = userTail === ownerTail;
+    // Verificar coincidencia
+    const isSpecific = isExactMatch || isTailMatch;
 
     // Verificar si es super admin
     let isSuper = false;
@@ -1022,9 +1029,9 @@ function isSpecificOwner(usuario) {
     logger.pretty.banner("🛡️ Verificación de owner", "🔍");
     logger.pretty.kv("Usuario original", usuario || "N/A");
     logger.pretty.kv("Usuario normalizado", normalizedUser || "N/A");
-    logger.pretty.kv("Últimos 9 dígitos", userTail || "N/A");
     logger.pretty.kv("Número owner", ownerNumber);
-    logger.pretty.kv("Coincide owner", isSpecific ? "✅ SI" : "❌ NO");
+    logger.pretty.kv("Match exacto", isExactMatch ? "✅ SI" : "❌ NO");
+    logger.pretty.kv("Match últimos 9", isTailMatch ? "✅ SI" : "❌ NO");
     logger.pretty.kv("Es super admin", isSuper ? "✅ SI" : "❌ NO");
     logger.pretty.kv(
       "Resultado",
@@ -1035,8 +1042,11 @@ function isSpecificOwner(usuario) {
     logger.debug("Detalles de verificación:", {
       usuario,
       normalizedUser,
+      ownerNumber,
+      isExactMatch,
       userTail,
       ownerTail,
+      isTailMatch,
       isSpecific,
       isSuper,
       result,
@@ -1584,20 +1594,27 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     // Necesitamos obtener el número del bot, no del destinatario
     if (message.key.fromMe) {
       // El mensaje lo envió el bot (owner)
+      // SIEMPRE obtener el número del bot del socket primero
+      const botNum = getBotNumber(sock);
+      usuario = botNum || "595974154768"; // Fallback al owner conocido
+      
       if (isGroup) {
-        // En grupos: participant es el JID del bot
+        // En grupos: participant puede estar presente o no
         sender = message.key.participant;
         if (!sender) {
-          // Fallback: obtener el número del bot del socket
-          const botNum = getBotNumber(sock);
-          usuario = botNum || "595974154768"; // Fallback al owner conocido
+          // Si no hay participant, construir el JID del bot
+          sender = `${usuario}@s.whatsapp.net`;
         } else {
-          usuario = normalizeJidToNumber(sender);
+          // Si hay participant, verificar que sea consistente
+          const participantNum = normalizeJidToNumber(sender);
+          if (participantNum && participantNum !== usuario) {
+            // Si el participant es diferente al bot, usar el del bot
+            logger.pretty.line(`⚠️ Participant inconsistente en fromMe: ${participantNum} vs ${usuario}`);
+            sender = `${usuario}@s.whatsapp.net`;
+          }
         }
       } else {
-        // En privado: obtener el número del bot del socket
-        const botNum = getBotNumber(sock);
-        usuario = botNum || "595974154768"; // Fallback al owner conocido
+        // En privado: construir el JID del bot
         sender = `${usuario}@s.whatsapp.net`;
       }
     } else {
@@ -2519,42 +2536,6 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               text: "⚠️ Error cambiando estado. Intenta más tarde.",
             });
           }
-        }
-        break;
-
-      case "/lock":
-        try {
-          const { handleLock } = await import("./handler.js");
-          result = await handleLock(usuario, remoteJid, isGroup);
-          if (result?.message) {
-            await sock.sendMessage(remoteJid, { text: result.message });
-          } else {
-            await sock.sendMessage(remoteJid, { text: "🔒 Grupo bloqueado." });
-          }
-        } catch (error) {
-          logger.error("Error en lock:", error);
-          await sock.sendMessage(remoteJid, {
-            text: "⚠️ Error al bloquear el grupo.",
-          });
-        }
-        break;
-
-      case "/unlock":
-        try {
-          const { handleUnlock } = await import("./handler.js");
-          result = await handleUnlock(usuario, remoteJid, isGroup);
-          if (result?.message) {
-            await sock.sendMessage(remoteJid, { text: result.message });
-          } else {
-            await sock.sendMessage(remoteJid, {
-              text: "🔓 Grupo desbloqueado.",
-            });
-          }
-        } catch (error) {
-          logger.error("Error en unlock:", error);
-          await sock.sendMessage(remoteJid, {
-            text: "⚠️ Error al desbloquear el grupo.",
-          });
         }
         break;
 
@@ -3500,6 +3481,111 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         }
         break;
 
+      case "/debugme":
+        // Comando para ver exactamente qué número se está extrayendo
+        try {
+          const botNum = getBotNumber(sock);
+          const botJid = getBotJid(sock);
+          const fromMe = message.key.fromMe;
+          const participant = message.key.participant;
+          
+          let debugText = `🔍 *Debug extracción de usuario*\n\n`;
+          debugText += `📱 **Información del mensaje:**\n`;
+          debugText += `• fromMe: ${fromMe ? "✅ SÍ (mismo WhatsApp del bot)" : "❌ NO"}\n`;
+          debugText += `• remoteJid: ${remoteJid}\n`;
+          debugText += `• participant: ${participant || "N/A"}\n`;
+          debugText += `• isGroup: ${isGroup ? "✅ SÍ" : "❌ NO"}\n\n`;
+          
+          debugText += `🤖 **Información del bot:**\n`;
+          debugText += `• sock.user.id: ${sock.user.id}\n`;
+          debugText += `• getBotJid(): ${botJid}\n`;
+          debugText += `• getBotNumber(): ${botNum}\n\n`;
+          
+          debugText += `👤 **Usuario extraído:**\n`;
+          debugText += `• usuario: ${usuario}\n`;
+          debugText += `• sender: ${sender}\n\n`;
+          
+          debugText += `🔐 **Verificaciones:**\n`;
+          debugText += `• isSpecificOwner(${usuario}): ${isSpecificOwner(usuario) ? "✅ SÍ" : "❌ NO"}\n`;
+          debugText += `• isSuperAdmin(${usuario}): ${isSuperAdmin(usuario) ? "✅ SÍ" : "❌ NO"}\n`;
+          
+          if (isGroup) {
+            const isRealAdmin = await isRealGroupAdmin(usuario, remoteJid);
+            const hasAdminPerms = await isOwnerOrAdmin(usuario, remoteJid);
+            debugText += `• Admin REAL del grupo: ${isRealAdmin ? "✅ SÍ" : "❌ NO"}\n`;
+            debugText += `• isOwnerOrAdmin (permisos efectivos): ${hasAdminPerms ? "✅ SÍ" : "❌ NO"}\n`;
+          }
+          
+          debugText += `\n🕒 ${new Date().toLocaleString("es-ES")}`;
+          
+          await sock.sendMessage(remoteJid, {
+            text: debugText,
+            mentions: [usuario + "@s.whatsapp.net"],
+          });
+        } catch (error) {
+          logger.error("Error en /debugme:", error);
+          await sock.sendMessage(remoteJid, {
+            text: `⚠️ Error en debug: ${error.message}`,
+          });
+        }
+        break;
+
+      case "/testadmin":
+        // Comando simple para verificar si el usuario tiene permisos de admin
+        if (!isGroup) {
+          await sock.sendMessage(remoteJid, {
+            text: "ℹ️ Este comando solo funciona en grupos",
+          });
+        } else {
+          try {
+            const isRealAdmin = await isRealGroupAdmin(usuario, remoteJid);
+            const hasAdminPerms = await isOwnerOrAdmin(usuario, remoteJid);
+            const isOwnerCheck = isSpecificOwner(usuario);
+            const isSuperCheck = isSuperAdmin(usuario);
+            
+            let resultText = `🧪 *Test de permisos de administrador*\n\n`;
+            resultText += `👤 **Usuario:** ${usuario}\n`;
+            resultText += `📱 **JID:** ${usuario}@s.whatsapp.net\n\n`;
+            
+            resultText += `🏆 **Estado en el grupo:**\n`;
+            resultText += `• Admin REAL del grupo: ${isRealAdmin ? "✅ SÍ" : "❌ NO"}\n\n`;
+            
+            resultText += `🔐 **Verificaciones de permisos:**\n`;
+            resultText += `• isSpecificOwner: ${isOwnerCheck ? "✅ SÍ" : "❌ NO"}\n`;
+            resultText += `• isSuperAdmin: ${isSuperCheck ? "✅ SÍ" : "❌ NO"}\n`;
+            resultText += `• isOwnerOrAdmin: ${hasAdminPerms ? "✅ SÍ" : "❌ NO"}\n\n`;
+            
+            resultText += `📊 **Permisos efectivos:**\n`;
+            if (hasAdminPerms) {
+              if (isRealAdmin) {
+                resultText += `✅ Tienes permisos porque ERES admin del grupo\n`;
+              } else if (isOwnerCheck || isSuperCheck) {
+                resultText += `✅ Tienes permisos porque eres OWNER/SUPERADMIN\n`;
+                resultText += `⚠️ Pero NO eres admin real del grupo de WhatsApp\n`;
+              }
+              resultText += `\n🎯 Puedes usar: /kick, /promote, /demote\n`;
+              resultText += `⚠️ Para /lock y /unlock, el BOT debe ser admin del grupo\n`;
+            } else {
+              resultText += `❌ NO tienes permisos de administrador\n`;
+              resultText += `⚠️ No puedes usar comandos de moderación\n`;
+            }
+            
+            resultText += `\n👤 Solicitado por: @${usuario}\n`;
+            resultText += `🕒 ${new Date().toLocaleString("es-ES")}`;
+            
+            await sock.sendMessage(remoteJid, {
+              text: resultText,
+              mentions: [usuario + "@s.whatsapp.net"],
+            });
+          } catch (error) {
+            logger.error("Error en /testadmin:", error);
+            await sock.sendMessage(remoteJid, {
+              text: `⚠️ Error verificando permisos: ${error.message}`,
+            });
+          }
+        }
+        break;
+
       // COMANDOS DE ADMINISTRACION - FUNCIONALIDAD REAL
       case "/kick":
         if (!isGroup) {
@@ -3660,8 +3746,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           break;
         }
         try {
-          const { handleLock } = await import("./handler.js");
-          const resLock = await handleLock(usuario, remoteJid);
+          const resLock = await handleLock(usuario, remoteJid, isGroup);
           if (resLock?.message) {
             await sock.sendMessage(remoteJid, { text: resLock.message });
           } else if (resLock?.success === false && resLock?.message) {
@@ -3683,8 +3768,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           break;
         }
         try {
-          const { handleUnlock } = await import("./handler.js");
-          const resUnlock = await handleUnlock(usuario, remoteJid);
+          const resUnlock = await handleUnlock(usuario, remoteJid, isGroup);
           if (resUnlock?.message) {
             await sock.sendMessage(remoteJid, { text: resUnlock.message });
           } else if (resUnlock?.success === false && resUnlock?.message) {

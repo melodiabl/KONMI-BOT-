@@ -2393,15 +2393,9 @@ async function handleKick(target, usuario, grupo) {
       return participantNumber === numero;
     });
 
-    let displayName = target.replace("@", "");
-    let mentionJid = `${numero}@s.whatsapp.net`;
-
-    if (participant) {
-      const nombre =
-        participant.notify || participant.name || participant.id.split("@")[0];
-      displayName = nombre;
-      mentionJid = participant.id;
-    }
+    // Obtener nombre limpio (sin LID)
+    const displayName = getCleanDisplayName(participant, numero);
+    const mentionJid = participant ? participant.id : `${numero}@s.whatsapp.net`;
 
     // Registrar log con detalles
     const normalizedUsuario = normalizeUserNumber(usuario);
@@ -2471,17 +2465,9 @@ async function handlePromote(target, usuario, grupo) {
       return participantNumber === numero;
     });
 
-    let displayName = target.replace("@", "");
-    let mentionJid = `${numero}@s.whatsapp.net`;
-
-    if (updatedParticipant) {
-      const nombre =
-        updatedParticipant.notify ||
-        updatedParticipant.name ||
-        updatedParticipant.id.split("@")[0];
-      displayName = nombre;
-      mentionJid = updatedParticipant.id;
-    }
+    // Obtener nombre limpio (sin LID)
+    const displayName = getCleanDisplayName(updatedParticipant, numero);
+    const mentionJid = updatedParticipant ? updatedParticipant.id : `${numero}@s.whatsapp.net`;
 
     // Registrar log con detalles
     const normalizedUsuario = normalizeUserNumber(usuario);
@@ -2550,17 +2536,9 @@ async function handleDemote(target, usuario, grupo) {
       return participantNumber === numero;
     });
 
-    let displayName = target.replace("@", "");
-    let mentionJid = `${numero}@s.whatsapp.net`;
-
-    if (updatedParticipant) {
-      const nombre =
-        updatedParticipant.notify ||
-        updatedParticipant.name ||
-        updatedParticipant.id.split("@")[0];
-      displayName = nombre;
-      mentionJid = updatedParticipant.id;
-    }
+    // Obtener nombre limpio (sin LID)
+    const displayName = getCleanDisplayName(updatedParticipant, numero);
+    const mentionJid = updatedParticipant ? updatedParticipant.id : `${numero}@s.whatsapp.net`;
 
     // Registrar log con detalles
     const normalizedUsuario = normalizeUserNumber(usuario);
@@ -2594,25 +2572,16 @@ async function handleDemote(target, usuario, grupo) {
 /**
  * Verificar si un usuario es admin real del grupo usando metadata
  */
-async function isGroupAdmin(usuario, grupo) {
+/**
+ * Verificar si un usuario es admin REAL del grupo (sin considerar owner/superadmin)
+ * Útil para mostrar el estado real en comandos de debug
+ */
+async function isRealGroupAdmin(usuario, grupo) {
   try {
     const sock = getSocket();
     if (!sock || !grupo) return false;
 
-    // Normalizar nmeros para comparacin
     const userNumber = normalizeUserNumber(usuario);
-    const rawBotJid = sock.user && sock.user.id ? sock.user.id : "";
-    const botNumber = normalizeUserNumber(rawBotJid);
-
-    // Si el usuario es el mismo nmero que el bot, no considerarlo admin
-    // para evitar conflictos en la deteccin de permisos
-    if (userNumber && botNumber && userNumber === botNumber) {
-      console.log(
-        `[MOD][isGroupAdmin] usuario=bot (${userNumber}) => false (conflicto evitado)`,
-      );
-      return false;
-    }
-
     const targetJid = normalizeJid(
       usuario.includes("@") ? usuario : `${userNumber}@s.whatsapp.net`,
     );
@@ -2633,9 +2602,6 @@ async function isGroupAdmin(usuario, grupo) {
     });
 
     if (!participant) {
-      console.warn(
-        `[MOD][isGroupAdmin] No encontr participante target=${targetJid} group=${groupMetadata.subject || grupo} size=${participants.length}`,
-      );
       return false;
     }
 
@@ -2643,11 +2609,41 @@ async function isGroupAdmin(usuario, grupo) {
       participant.admin === "admin" ||
       participant.admin === "superadmin" ||
       participant.admin === true;
-    console.log(
-      `[MOD][isGroupAdmin] target=${targetJid} adminFlag=${participant.admin} => ${isAdmin}`,
-    );
 
     return isAdmin;
+  } catch (e) {
+    console.error("[MOD][isRealGroupAdmin] Error:", e);
+    return false;
+  }
+}
+
+/**
+ * Verificar si un usuario es admin del grupo (considera owner/superadmin + admin real)
+ * Usado para permisos de comandos
+ */
+async function isGroupAdmin(usuario, grupo) {
+  try {
+    const sock = getSocket();
+    if (!sock || !grupo) return false;
+
+    // Normalizar nmeros para comparacin
+    const userNumber = normalizeUserNumber(usuario);
+    const rawBotJid = sock.user && sock.user.id ? sock.user.id : "";
+    const botNumber = normalizeUserNumber(rawBotJid);
+
+    // PRIORIDAD 1: Verificar si es owner o superadmin PRIMERO
+    // El owner/superadmin SIEMPRE tiene permisos de admin, incluso si es el mismo número del bot
+    try {
+      if (isSpecificOwner(usuario) || isSuperAdmin(usuario)) {
+        console.log(
+          `[MOD][isGroupAdmin] usuario=${userNumber} es owner/superadmin => true (prioridad máxima)`,
+        );
+        return true;
+      }
+    } catch (_) {}
+
+    // PRIORIDAD 2: Verificar si es admin real del grupo
+    return await isRealGroupAdmin(usuario, grupo);
   } catch (e) {
     console.error("[MOD][isGroupAdmin] Error:", e);
     return false;
@@ -2664,6 +2660,24 @@ function normalizeUserNumber(usuarioJid) {
     }
   } catch (_) {}
   return usuarioJid.split("@")[0].split(":")[0];
+}
+
+// Helper para obtener nombre de display limpio (sin mostrar LID)
+function getCleanDisplayName(participant, fallbackNumber) {
+  if (!participant) return fallbackNumber;
+  
+  // Prioridad 1: notify (nombre guardado en contactos)
+  if (participant.notify) return participant.notify;
+  
+  // Prioridad 2: name (nombre del perfil)
+  if (participant.name) return participant.name;
+  
+  // Prioridad 3: número limpio (sin LID)
+  const cleanNumber = normalizeUserNumber(participant.id);
+  if (cleanNumber) return cleanNumber;
+  
+  // Fallback: número proporcionado
+  return fallbackNumber;
 }
 
 // Helper para saber si el bot es admin real del grupo
@@ -3685,6 +3699,7 @@ export { advertenciasActivas };
 // ===== DEBUG Y UTILIDADES =====
 export { handleDebugAdmin };
 export { isGroupAdmin };
+export { isRealGroupAdmin };
 export { isBotAdmin };
 export { isOwnerOrAdmin };
 export { isBotGloballyActive };
