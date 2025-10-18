@@ -80,7 +80,7 @@ async function parseJsonSafe(response) {
   try {
     return JSON.parse(text);
   } catch (error) {
-    throw new Error("Respuesta JSON invÃƒÆ’Ã†â€™Ã‚¡lida");
+    throw new Error("Respuesta JSON invalida");
   }
 }
 
@@ -104,7 +104,7 @@ async function generateAiImage(prompt) {
             meta: data.data,
           };
         }
-        throw new Error("Respuesta invÃƒÆ’Ã†â€™Ã‚¡lida");
+        throw new Error("Respuesta invalida");
       },
     },
     {
@@ -126,10 +126,10 @@ async function generateAiImage(prompt) {
       return await provider.exec();
     } catch (error) {
       errors.push(`${provider.name}: ${error?.message || error}`);
-      logger.warn?.(`[image] ${provider.name} fallÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³: ${error?.message || error}`);
+      logger.warn?.(`[image] ${provider.name} fallaron: ${error?.message || error}`);
     }
   }
-  throw new Error(errors.join(" | ") || "No se pudieron obtener imÃƒÆ’Ã†â€™Ã‚¡genes");
+  throw new Error(errors.join(" | ") || "No se pudieron obtener imagenes");
 }
 
 async function generateQrImage(dataString) {
@@ -148,7 +148,7 @@ async function generateQrImage(dataString) {
         if (data?.status && data?.data?.url) {
           return { imageUrl: data.data.url, provider: "Vreden" };
         }
-        throw new Error("Respuesta invÃƒÆ’Ã†â€™Ã‚¡lida");
+        throw new Error("Respuesta invalida");
       },
     },
     {
@@ -166,10 +166,10 @@ async function generateQrImage(dataString) {
       return await provider.exec();
     } catch (error) {
       errors.push(`${provider.name}: ${error?.message || error}`);
-      logger.warn?.(`[qr] ${provider.name} fallÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³: ${error?.message || error}`);
+      logger.warn?.(`[qr] ${provider.name} fallaron: ${error?.message || error}`);
     }
   }
-  throw new Error(errors.join(" | ") || "No se pudo generar un cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo QR");
+  throw new Error(errors.join(" | ") || "No se pudo generar un codigo QR");
 }
 
 const SHORT_URL_PROVIDERS = [
@@ -186,7 +186,7 @@ const SHORT_URL_PROVIDERS = [
       if (data?.status && data?.data?.shortUrl) {
         return { shortUrl: data.data.shortUrl, provider: "Vreden" };
       }
-      throw new Error("Respuesta invÃƒÆ’Ã†â€™Ã‚¡lida");
+      throw new Error("Respuesta invalida");
     },
   },
   {
@@ -202,7 +202,7 @@ const SHORT_URL_PROVIDERS = [
       if (data?.shorturl) {
         return { shortUrl: data.shorturl, provider: "is.gd" };
       }
-      throw new Error(data?.errormessage || "Respuesta invÃƒÆ’Ã†â€™Ã‚¡lida");
+      throw new Error(data?.errormessage || "Respuesta invalida");
     },
   },
   {
@@ -218,7 +218,7 @@ const SHORT_URL_PROVIDERS = [
       if (shortUrl.startsWith("http")) {
         return { shortUrl, provider: "TinyURL" };
       }
-      throw new Error("Respuesta invÃƒÆ’Ã†â€™Ã‚¡lida");
+      throw new Error("Respuesta invalida");
     },
   },
 ];
@@ -230,7 +230,7 @@ async function shortenUrl(targetUrl) {
       return await provider.exec(targetUrl);
     } catch (error) {
       errors.push(`${provider.name}: ${error?.message || error}`);
-      logger.warn?.(`[shorturl] ${provider.name} fallÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³: ${error?.message || error}`);
+      logger.warn?.(`[shorturl] ${provider.name} fallaron: ${error?.message || error}`);
     }
   }
   throw new Error(errors.join(" | ") || "No se pudo acortar la URL");
@@ -280,12 +280,12 @@ async function synthesizeVoice(text, character) {
       }
       const audioBuffer = Buffer.from(await response.arrayBuffer());
       if (!audioBuffer.length) {
-        throw new Error("Audio vacÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­o");
+        throw new Error("Audio vacio");
       }
       return { buffer: audioBuffer, voice };
     } catch (error) {
       errors.push(`${voice}: ${error?.message || error}`);
-      logger.warn?.(`[tts] ${voice} fallÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³: ${error?.message || error}`);
+      logger.warn?.(`[tts] ${voice} fallaron: ${error?.message || error}`);
     }
   }
   throw new Error(errors.join(" | ") || "No se pudo generar audio TTS");
@@ -298,7 +298,7 @@ async function handleQROrCodeRequest(method, ownerNumber) {
     const result = await generateSubbotQR(ownerNumber);
 
     if (!result || !result.code) {
-      return { message: "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error al crear el subbot" };
+      return { message: "Error al crear el subbot" };
     }
 
     const subbotCode = result.code;
@@ -308,7 +308,7 @@ async function handleQROrCodeRequest(method, ownerNumber) {
       let detach = null;
       const timeout = setTimeout(() => {
         if (detach) detach();
-        resolve({ message: "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â±ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Timeout esperando el cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo QR. Intenta nuevamente." });
+        resolve({ message: "Timeout esperando el codigo QR. Intenta nuevamente." });
       }, 30000); // 30 segundos
 
       import('./inproc-subbots.js').then(({ registerSubbotListeners }) => {
@@ -323,7 +323,9 @@ async function handleQROrCodeRequest(method, ownerNumber) {
                 if (detach) detach();
                 resolve({
                   image: data.qrImage,
-                  message: `ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo QR generado\n\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â± Escanea este cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo para vincular tu subbot\n\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo: ${subbotCode}`
+                  message: `Codigo QR generado\n\n
+                  Escanea este código para vincular tu subbot\n\n
+                  Codigo: ${subbotCode}`
                 });
               }
             }
@@ -331,12 +333,12 @@ async function handleQROrCodeRequest(method, ownerNumber) {
         ]);
       }).catch(err => {
         clearTimeout(timeout);
-        resolve({ message: `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error cargando listeners: ${err.message}` });
+        resolve({ message: `Error cargando listeners: ${err.message}` });
       });
     });
   } catch (error) {
     logger.error("Error al generar QR:", error);
-    return { message: `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error: ${error.message}` };
+    return { message: `Error: ${error.message}` };
   }
 }
 
@@ -346,7 +348,7 @@ async function handlePairingCode(phoneNumber) {
     const cleanNumber = String(phoneNumber).replace(/\D/g, '');
 
     if (!cleanNumber || cleanNumber.length < 10) {
-      return { message: "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºmero invÃƒÆ’Ã†â€™Ã‚¡lido. Debe tener al menos 10 dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­gitos." };
+      return { message: "Numero invalido. Debe tener al menos 10 dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­gitos." };
     }
 
     // Crear el subbot con pairing code
@@ -355,7 +357,7 @@ async function handlePairingCode(phoneNumber) {
     });
 
     if (!result || !result.code) {
-      return { message: "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error al crear el subbot" };
+      return { message: " Error al crear el subbot" };
     }
 
     const subbotCode = result.code;
@@ -365,7 +367,7 @@ async function handlePairingCode(phoneNumber) {
       let detach = null;
       const timeout = setTimeout(() => {
         if (detach) detach();
-        resolve({ message: "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â±ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Timeout esperando el cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo. Intenta nuevamente." });
+        resolve({ message: "Timeout esperando el código. Intenta nuevamente." });
       }, 30000); // 30 segundos
 
       import('./inproc-subbots.js').then(({ registerSubbotListeners }) => {
@@ -379,7 +381,16 @@ async function handlePairingCode(phoneNumber) {
                 clearTimeout(timeout);
                 if (detach) detach();
                 resolve({
-                  message: `ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo de vinculaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n generado\n\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¢ CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo: *${code}*\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â± NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºmero: +${cleanNumber}\n\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â² Instrucciones:\n1. Abre WhatsApp en el dispositivo con nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºmero +${cleanNumber}\n2. Ve a Dispositivos vinculados\n3. Toca "Vincular dispositivo"\n4. SelecciÃƒÂ³na "Vincular con nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºmero de telÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©fono"\n5. Ingresa el cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo: *${code}*\n\nÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â±ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â VÃƒÆ’Ã†â€™Ã‚¡lido por 10 minutos\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo subbot: ${subbotCode}`
+                  message: `Código de vinculación generado\n\n
+                  Código: *${code}*\n
+                  Número: +${cleanNumber}\n\n
+                  📱 Instrucciones:\n
+                  1. Abre WhatsApp en el dispositivo con número +${cleanNumber}\n
+                  2. Ve a Dispositivos vinculados\n3. Toca "Vincular dispositivo"\n
+                  4. SelecciÃƒÂ³na "Vincular con numero de telefono"\n
+                  5. Ingresa el código: *${code}*\n\n
+                  Valido por 10 minutos\n
+                  Código subbot: ${subbotCode}`
                 });
               }
             }
@@ -387,12 +398,12 @@ async function handlePairingCode(phoneNumber) {
         ]);
       }).catch(err => {
         clearTimeout(timeout);
-        resolve({ message: `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error cargando listeners: ${err.message}` });
+        resolve({ message: `Error cargando listeners: ${err.message}` });
       });
     });
   } catch (error) {
-    logger.error("Error al generar cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo:", error);
-    return { message: `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error: ${error.message}` };
+    logger.error("Error al generar código:", error);
+    return { message: `Error: ${error.message}` };
   }
 }
 
@@ -469,13 +480,13 @@ async function ensureBotGlobalStateTable() {
         t.boolean("is_on").notNullable().defaultTo(true);
         t.timestamps(true, true);
       });
-      logger.pretty.line("ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Tabla bot_global_state creada");
+      logger.pretty.line("Tabla bot_global_state creada");
     }
     // Asegurar una fila
     const row = await db("bot_global_state").first("id");
     if (!row) {
       await db("bot_global_state").insert({ is_on: true });
-      logger.pretty.line("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Estado global inicializado (is_on=true)");
+      logger.pretty.line("Estado global inicializado (is_on=true)");
     }
     botGlobalStateReady = true;
   } catch (error) {
@@ -547,7 +558,7 @@ async function ensureSubbotsTable() {
           t.jsonb("metadata");
         });
 
-        logger.info("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Tabla subbots creada exitosamente");
+        logger.info("Tabla subbots creada exitosamente");
       } else {
         // Verificar si faltan columnas
         let columns = [];
@@ -599,7 +610,7 @@ async function ensureSubbotsTable() {
                     t.string(col, 255).nullable();
                   });
                 }
-                logger.info(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Columna ${col} agregada`);
+                logger.info(`Columna ${col} agregada`);
               } catch (alterError) {
                 logger.warn(`No se pudo agregar ${col}:`, alterError.message);
                 throw alterError; // Forzar recreaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n de tabla
@@ -640,10 +651,10 @@ async function ensureSubbotsTable() {
             t.string("state", 20).notNullable().defaultTo("pending");
             t.timestamp("created_at").defaultTo(db.fn.now());
           });
-          logger.warn("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Tabla temporal subbots_temp creada");
+          logger.warn("Tabla temporal subbots_temp creada");
           return true;
         } catch (tempError) {
-          logger.error("Error crÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­tico al crear tabla temporal:", tempError);
+          logger.error("Error crítico al crear tabla temporal:", tempError);
           throw new Error("No se pudo crear tabla temporal");
         }
       }
@@ -741,7 +752,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
                     : {}),
                 });
               logger.pretty.line(
-                `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Subbot conectado (owner ${ownerNumber}) -> ${r.bot_number || "N/A"}`,
+                ` Subbot conectado (owner ${ownerNumber}) -> ${r.bot_number || "N/A"}`,
               );
             }
           } else {
@@ -756,7 +767,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
                     : {}),
                 });
               logger.pretty.line(
-                `ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Subbot desconectado (owner ${ownerNumber}) -> ${r.bot_number || "N/A"}`,
+                `Subbot desconectado (owner ${ownerNumber}) -> ${r.bot_number || "N/A"}`,
               );
             }
           }
@@ -803,7 +814,7 @@ export async function refreshSubbotConnectionStatus(ownerNumber) {
                         }
                       : {}),
                   });
-                  logger.pretty.line(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Subbot detectado en FS: ${dir}`);
+                  logger.pretty.line(`Subbot detectado en FS: ${dir}`);
                 }
               }
             } catch (fsError) {
@@ -845,10 +856,10 @@ async function initializeDatabase() {
     await ensureBotGlobalStateTable();
     await ensureSubbotsTable();
 
-    logger.info("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Base de datos inicializada correctamente");
+    logger.info("🪄 Base de datos inicializada correctamente");
     return true;
   } catch (error) {
-    logger.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error al inicializar la base de datos:", error);
+    logger.error("Error al inicializar la base de datos:", error);
     process.exit(1); // Salir con error si no se puede inicializar la base de datos
   }
 }
@@ -1027,7 +1038,7 @@ function clearAppCaches(reason = "manual") {
     if (global.notifiedUsers?.clear) global.notifiedUsers.clear();
   } catch (_) {}
   try {
-    logger.pretty.section("Mantenimiento de memoria", "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚Â§Ãƒâ€šÃ‚Â¼");
+    logger.pretty.section("Mantenimiento de memoria", "🧠");
   } catch (_) {}
   try {
     logger.pretty.kv("Motivo", reason);
@@ -1063,7 +1074,7 @@ async function diskCleanupOnce() {
         if (/^qr-\d+/.test(ent.name) && age > twoHours) {
           try {
             fs.rmSync(full, { recursive: true, force: true });
-            logger.info?.(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Limpieza: QR efÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­mero ${full}`);
+            logger.info?.(`Limpieza: QR  ${full}`);
           } catch (_) {}
           continue;
         }
@@ -1075,7 +1086,7 @@ async function diskCleanupOnce() {
             const row = await db("subbots").where({ id: botId }).first();
             if (!row) {
               fs.rmSync(full, { recursive: true, force: true });
-              logger.info?.(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Limpieza: auth huÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©rfano ${full}`);
+              logger.info?.(`Limpieza: auth  ${full}`);
             }
           } catch (_) {}
           continue;
@@ -1089,7 +1100,7 @@ async function diskCleanupOnce() {
               .first();
             if (!row || (row.state && row.state !== "connected")) {
               fs.rmSync(full, { recursive: true, force: true });
-              logger.info?.(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Limpieza: subbot antiguo/no vinculado ${full}`);
+              logger.info?.(`Limpieza: subbot antiguo/no vinculado ${full}`);
             }
           } catch (_) {}
           continue;
@@ -1115,7 +1126,7 @@ function scheduleResourceAutoMaintenance() {
           rss > 500 * 1024 * 1024 || processedMessageIds?.size > 5000;
         if (shouldClear) {
           logger.info?.(
-            `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚Â§Ãƒâ€šÃ‚Â  RAM alta: RSS=${bytesToMB(rss)} MB. Limpiando caches...`,
+            ` RAM alta: RSS=${bytesToMB(rss)} MB. Limpiando caches...`,
           );
           clearAppCaches("high_ram");
           if (global.gc) {
@@ -1163,7 +1174,7 @@ async function ensureGroupSettingsTable() {
         t.boolean("is_active").notNullable().defaultTo(true);
         t.timestamps(true, true);
       });
-      logger.pretty.line("ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Tabla group_settings creada");
+      logger.pretty.line("Tabla group_settings creada");
     }
     groupSettingsTableReady = true;
   } catch (error) {
@@ -1263,16 +1274,16 @@ function isSpecificOwner(usuario) {
     const result = isSuper || isSpecific;
 
     // Log detallado para depuraciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n
-    logger.pretty.banner("ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂºÃ‚¡ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â VerificaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n de owner", "ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â");
+    logger.pretty.banner("Verificación de owner");
     logger.pretty.kv("Usuario original", usuario || "N/A");
     logger.pretty.kv("Usuario normalizado", normalizedUser || "N/A");
     logger.pretty.kv("NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºmero owner", ownerNumber);
-    logger.pretty.kv("Match exacto", isExactMatch ? "ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ SI" : "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ NO");
-    logger.pretty.kv("Match ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimos 9", isTailMatch ? "ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ SI" : "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ NO");
-    logger.pretty.kv("Es super admin", isSuper ? "ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ SI" : "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ NO");
+    logger.pretty.kv("Match exacto", isExactMatch ? "🪄 SI ":"✅ NO");
+    logger.pretty.kv("Match ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimos 9", isTailMatch ? "🪄 SI":" ✅ NO");
+    logger.pretty.kv("Es super admin", isSuper ? "🪄 SI":" ✅ NO");
     logger.pretty.kv(
       "Resultado",
-      result ? "ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ACCESO PERMITIDO" : "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ ACCESO DENEGADO",
+      result ? "ACCESO PERMITIDO" : "ACCESO DENEGADO",
     );
 
     // Log adicional para depuraciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n
@@ -1313,7 +1324,7 @@ async function isBotActiveInGroup(groupId) {
     logger.pretty.kv("Registro", JSON.stringify(groupState));
 
     if (!groupState) {
-      logger.pretty.line("ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No hay registro para el grupo, asumiendo activo");
+      logger.pretty.line(" No hay registro para el grupo, asumiendo activo");
       return true;
     }
 
