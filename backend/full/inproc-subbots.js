@@ -200,7 +200,7 @@ export async function launchSubbot(options = {}) {
       return {
         success: false,
         error:
-          "Capacidad mxima de subbots en ejecucin alcanzada. Intenta ms tarde.",
+          "Capacidad máxima de subbots en ejecución alcanzada. Intenta más tarde.",
       };
     }
 
@@ -211,7 +211,7 @@ export async function launchSubbot(options = {}) {
       if (userActive >= MAX_SUBBOTS_PER_USER) {
         return {
           success: false,
-          error: "Ya alcanzaste el nmero mximo de subbots activos permitidos.",
+          error: "Ya alcanzaste el número máximo de subbots activos permitidos.",
         };
       }
     }
@@ -378,7 +378,7 @@ export async function launchSubbot(options = {}) {
     if (idleTimeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
         logger.warn(
-          `Subbot ${code} super el tiempo mximo de espera (${idleTimeoutMs}ms), finalizando proceso`,
+          `Subbot ${code} superó el tiempo máximo de espera (${idleTimeoutMs}ms), finalizando proceso`,
         );
         try {
           child.kill("SIGTERM");
