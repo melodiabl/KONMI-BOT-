@@ -1,5 +1,5 @@
 // api-providers.js
-// Utilidades para manejar mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltiples APIs con fallback automÃƒÆ’Ã†â€™Ã‚¡tico y formato unificado
+// Utilidades para manejar múltiples APIs con fallback automático y formato unificado
 
 import axios from 'axios'
 import logger from '../config/logger.js'
@@ -16,8 +16,8 @@ const http = axios.create({
 })
 
 /**
- * Lee una API key de env y sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³lo usa el proveedor si estÃƒÆ’Ã†â€™Ã‚¡ presente.
- * Retorna `headers` para la peticiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n o `null` si no hay key.
+ * Lee una API key de env y sólo usa el proveedor si está presente.
+ * Retorna `headers` para la petición o `null` si no hay key.
  */
 function headerIfEnv(varName, headerName, prefix = '') {
   const key = process.env[varName]
@@ -26,10 +26,10 @@ function headerIfEnv(varName, headerName, prefix = '') {
 }
 
 /**
- * Estructura estÃƒÆ’Ã†â€™Ã‚¡ndar de respuesta que todos los parsers deben respetar:
+ * Estructura estándar de respuesta que todos los parsers deben respetar:
  * {
  *   success: boolean,
- *   // campos opcionales segÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºn el tipo:
+ *   // campos opcionales según el tipo:
  *   video?, image?, music?, download?, quality?, filename?,
  *   title?, author?, description?, duration?, views?,
  *   type?, url?, caption?, results?,
@@ -376,7 +376,7 @@ export const API_PROVIDERS = {
     },
     {
       name: 'RandomFact',
-      // SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³lo usar si hay API key real
+      // Sólo usar si hay API key real
       headers: headerIfEnv('NINJAS_API_KEY', 'X-Api-Key') || undefined,
       url: () => 'https://api.api-ninjas.com/v1/facts?limit=1',
       parse: (data) => ({
@@ -427,15 +427,19 @@ export const API_PROVIDERS = {
 }
 
 /**
- * Realiza una peticiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n HTTP teniendo en cuenta mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©todo, body y headers del provider
+ * Realiza una petición HTTP teniendo en cuenta método, body y headers del provider
  */
 async function doRequest(provider, url, body) {
-  // Provider local (yt-search) como ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimo recurso
+  // Provider local (yt-search) como último recurso
   if (provider?.method === 'LOCAL__YTSEARCH') {
     try {
       const mod = await import('yt-search')
       const ytSearch = mod.default || mod
-      const r = await ytSearch(url) // aquÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ url es el query
+<<<<<<< HEAD
+      const r = await ytSearch(url) // aquí la url es el query
+=======
+      const r = await ytSearch(url) // aquí url es el query
+>>>>>>> c06b4ece5887b887078a86e7c9f8ff739c4f1877
       const list = Array.isArray(r?.videos) ? r.videos : []
       return {
         data: {
@@ -454,7 +458,7 @@ async function doRequest(provider, url, body) {
         status: 200
       }
     } catch (e) {
-      throw new Error('yt-search local fallÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³: ' + (e?.message || e))
+      throw new Error('yt-search local falló: ' + (e?.message || e))
     }
   }
 
@@ -470,9 +474,9 @@ async function doRequest(provider, url, body) {
 }
 
 /**
- * Intenta descargar desde mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltiples APIs con fallback automÃƒÆ’Ã†â€™Ã‚¡tico
+ * Intenta descargar desde múltiples APIs con fallback automático
  * @param {string} type - Tipo de API (tiktok, instagram, etc.)
- * @param {string|object} param - URL o parÃƒÆ’Ã†â€™Ã‚¡metro para la API
+ * @param {string|object} param - URL o parámetro para la API
  * @param {object} options - Opciones adicionales
  * @returns {Promise<object>} Resultado parseado + {provider}
  */
@@ -483,7 +487,7 @@ export async function downloadWithFallback(type, param, options = {}) {
   const errors = []
 
   for (const provider of providers) {
-    // Si el proveedor requiere una API key y no estÃƒÆ’Ã†â€™Ã‚¡, saltar
+    // Si el proveedor requiere una API key y no está, saltar
     if (provider.headers === null) continue
 
     try {
@@ -525,14 +529,22 @@ export async function downloadWithFallback(type, param, options = {}) {
       const parsed = data?.__local ? data : (provider.parse?.(data, extra) || { success: false })
 
       if (parsed && parsed.success) {
-        logger.info?.('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Descarga exitosa con ' + provider.name)
+<<<<<<< HEAD
+        logger.info?.('Descarga exitosa con ' + provider.name)
+=======
+        logger.info?.('✅ Descarga exitosa con ' + provider.name)
+>>>>>>> c06b4ece5887b887078a86e7c9f8ff739c4f1877
         return { ...parsed, provider: provider.name, httpStatus: status }
       }
 
       throw new Error('Respuesta no exitosa de la API (' + provider.name + ')')
     } catch (err) {
       const msg = provider.name + ': ' + (err?.message || 'Error desconocido')
-      logger.warn?.('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Fallo con ' + msg)
+<<<<<<< HEAD
+      logger.warn?.('Fallo con ' + msg)
+=======
+      logger.warn?.('⚠️ Fallo con ' + msg)
+>>>>>>> c06b4ece5887b887078a86e7c9f8ff739c4f1877
       errors.push(msg)
       continue
     }
@@ -541,7 +553,7 @@ export async function downloadWithFallback(type, param, options = {}) {
   throw new Error('Todos los proveedores fallaron:\n' + errors.join('\n'))
 }
 
-// ==== Wrappers especÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ficos por plataforma ====
+// ==== Wrappers específicos por plataforma ====
 export async function searchYouTubeMusic(query) {
   return downloadWithFallback('youtubeSearch', query)
 }

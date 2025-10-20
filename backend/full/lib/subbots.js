@@ -99,6 +99,9 @@ export async function cleanupSubbots() {
   await cleanOrphanSubbots();
 }
 
+// Reexportar stopSubbot para compatibilidad con consumidores existentes
+export { stopSubbot };
+
 export default {
   generateSubbotPairingCode,
   generateSubbotQR,

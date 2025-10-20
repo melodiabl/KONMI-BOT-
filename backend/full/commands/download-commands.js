@@ -46,6 +46,12 @@ export async function handleTikTokDownload(url, usuario) {
       video: result.video,
       caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.description || result.title || 'Sin descripción'}\n🎵 *Música:* ${result.music || 'N/A'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
+      info: {
+        title: result.title,
+        author: result.author,
+        description: result.description,
+        provider: result.provider,
+      },
     };
   } catch (error) {
     logger.error('Error en handleTikTokDownload:', error);
@@ -87,6 +93,12 @@ export async function handleInstagramDownload(url, usuario) {
       url: result.url,
       caption,
       mentions: [`${usuario}@s.whatsapp.net`],
+      info: {
+        title: result.caption,
+        author: result.author,
+        type: result.type,
+        provider: result.provider,
+      },
     };
   } catch (error) {
     logger.error('Error en handleInstagramDownload:', error);
@@ -124,6 +136,12 @@ export async function handleFacebookDownload(url, usuario) {
       video: result.video,
       caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'Sin título'}\n⏱️ *Duración:* ${result.duration || 'N/A'}\n👤 *Autor:* ${result.author || 'Desconocido'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
+      info: {
+        title: result.title,
+        author: result.author,
+        duration: result.duration,
+        provider: result.provider,
+      },
     };
   } catch (error) {
     logger.error('Error en handleFacebookDownload:', error);
@@ -164,6 +182,12 @@ export async function handleTwitterDownload(url, usuario) {
       image: result.image,
       caption,
       mentions: [`${usuario}@s.whatsapp.net`],
+      info: {
+        author: result.author,
+        type: result.type,
+        text: result.text,
+        provider: result.provider,
+      },
     };
   } catch (error) {
     logger.error('Error en handleTwitterDownload:', error);
@@ -201,6 +225,11 @@ export async function handlePinterestDownload(url, usuario) {
       image: result.image,
       caption: `📌 *Pinterest*\n\n📝 *Título:* ${result.title || 'Sin título'}\n📄 *Descripción:* ${result.description || 'Sin descripción'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
+      info: {
+        title: result.title,
+        description: result.description,
+        provider: result.provider,
+      },
     };
   } catch (error) {
     logger.error('Error en handlePinterestDownload:', error);
@@ -255,6 +284,7 @@ export async function handleMusicDownload(query, usuario) {
         duration: video.duration,
         views: video.views,
         quality: downloadResult.quality,
+        provider: downloadResult.provider,
       },
       caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${downloadResult.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${downloadResult.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
@@ -312,6 +342,7 @@ export async function handleVideoDownload(query, usuario) {
         duration: video.duration,
         views: video.views,
         quality: downloadResult.quality,
+        provider: downloadResult.provider,
       },
       caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${downloadResult.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${downloadResult.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
@@ -360,6 +391,7 @@ export async function handleSpotifySearch(query, usuario) {
         album: result.album,
         duration: `${duration}:${seconds}`,
         release_date: result.release_date,
+        provider: result.provider,
       },
       caption: `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n⏱️ *Duración:* ${duration}:${seconds}\n📅 *Lanzamiento:* ${result.release_date}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],

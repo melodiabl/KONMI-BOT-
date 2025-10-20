@@ -129,6 +129,22 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
 
   sock.ev.on('creds.update', saveCreds);
 
+  const readBotIdentity = () => {
+    const rawJid =
+      sock?.user?.id ||
+      sock?.user?.jid ||
+      state?.creds?.me?.id ||
+      state?.creds?.me?.jid ||
+      null;
+    const normalizedJid = typeof rawJid === 'string' ? rawJid : null;
+    const digits = normalizedJid ? normalizedJid.replace(/[^0-9]/g, '') : '';
+    return {
+      jid: normalizedJid,
+      number: digits ? `+${digits}` : null,
+      digits: digits || null
+    };
+  };
+
   const targetDigits = TARGET.replace(/[^0-9]/g, '');
   let customPairingForRequest = customPairingCode && customPairingCode.length === 8 ? customPairingCode : '';
   if (TYPE === 'code' && customPairingCode && customPairingCode.length !== 8) {
@@ -373,7 +389,16 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
       if (connection === 'open') {
         if (!connectedReported) {
           connectedReported = true;
-          process.send?.({ event: 'connected' });
+          const identity = readBotIdentity();
+          process.send?.({
+            event: 'connected',
+            data: {
+              jid: identity.jid,
+              number: identity.number,
+              digits: identity.digits,
+              displayName: SUBBOT_METADATA?.uiLabel || DISPLAY
+            }
+          });
         }
 
         if (timeoutTimer) {
