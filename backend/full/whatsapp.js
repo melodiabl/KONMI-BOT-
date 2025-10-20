@@ -560,14 +560,14 @@ async function loadBaileys() {
       jidNormalizedUser = baileys.jidNormalizedUser;
       areJidsSameUser = baileys.areJidsSameUser;
       makeWASocket = baileys.makeWASocket ?? baileys.default;
-      logger.info?.(`Baileys cargado desde mdulo: ${mod}`);
+      logger.info?.(`Baileys cargado desde módulo: ${mod}`);
       return true;
     } catch (e) {
       // probar siguiente candidato
     }
   }
   logger.warn?.(
-    "Baileys no disponible (temporalmente deshabilitado): no se pudo importar ningn mdulo candidato",
+    "Baileys no disponible (temporalmente deshabilitado): no se pudo importar ningún módulo candidato",
   );
   return false;
 }
@@ -6848,39 +6848,71 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               const track = data.data[0];
               const requesterLabel = usuario || "Usuario";
 
-              const initialText = renderPlayProgressMessage(
-                track,
-                requesterLabel,
-                0,
-                "Preparando descarga...",
-              );
+              // Mostrar informacion con barra de progreso REAL que se edita
+              let progressMsg = await sock.sendMessage(remoteJid, {
+                text:
+                  `🎵 *Música encontrada*\n\n` +
+                  `🎤 **Artista:** ${track.artist}\n` +
+                  `🎶 **Canción:** ${track.title}\n` +
+                  `💿 **Álbum:** ${track.album}\n` +
+                  `⏱️ **Duración:** ${track.duration}\n` +
+                  `🔗 **URL:** ${track.url}\n\n` +
+                  `⏬ **Descargando...** ⏳\n` +
+                  `▓▓▓▓▓▓▓▓▓▓ 0%\n\n` +
+                  `🙋 Solicitado por: ${usuario}`,
+              });
 
-              let progressKey = null;
-              try {
-                const sent = await sock.sendMessage(remoteJid, { text: initialText });
-                progressKey = sent?.key || null;
-              } catch (progressError) {
-                logger.warn("No se pudo enviar mensaje inicial de progreso en /play", {
-                  error: progressError?.message,
-                });
-              }
+              // Barra de progreso REAL que se actualiza dinamicamente
+              const progressSteps = [
+                {
+                  percent: 15,
+                  bar: "▓░░░░░░░░",
+                  status: "🔌 Conectando...",
+                  emoji: "⚡",
+                },
+                {
+                  percent: 30,
+                  bar: "▓▓▓░░░░░",
+                  status: "⬇️ Descargando...",
+                  emoji: "📥",
+                },
+                {
+                  percent: 50,
+                  bar: "▓▓▓▓▓░░░",
+                  status: "⚙️ Procesando...",
+                  emoji: "⚙️",
+                },
+                {
+                  percent: 75,
+                  bar: "▓▓▓▓▓▓▓░",
+                  status: "🔄 Convirtiendo...",
+                  emoji: "🔄",
+                },
+                {
+                  percent: 90,
+                  bar: "▓▓▓▓▓▓▓▓",
+                  status: "✨ Finalizando...",
+                  emoji: "✨",
+                },
+                { percent: 100, bar: "▓▓▓▓▓▓▓▓▓▓", status: "✅ ¡Completo!", emoji: "✅" },
+              ];
 
-              let updateQueue = Promise.resolve();
-              const queueUpdate = (percent, status) => {
-                const text = renderPlayProgressMessage(
-                  track,
-                  requesterLabel,
-                  percent,
-                  status,
-                );
-              const send = () =>
-                  progressKey
-                    ? sock.sendMessage(remoteJid, { text }, { edit: progressKey })
-                    : sock.sendMessage(remoteJid, { text });
-                updateQueue = updateQueue.then(() =>
-                  send().catch((err) => {
-                    logger.warn("No se pudo actualizar progreso de /play", {
-                      error: err?.message,
+              // Funcion para actualizar progreso en tiempo real
+              let currentStep = 0;
+              const updateProgress = async () => {
+                if (currentStep < progressSteps.length) {
+                  const step = progressSteps[currentStep];
+
+                  try {
+                    await sock.sendMessage(remoteJid, {
+                      text:
+                        `${step.emoji} *Descargando: ${track.title}*\n\n` +
+                        `🎤 ${track.artist}\n` +
+                        `💿 ${track.album}\n\n` +
+                        `📊 **Progreso:** ${step.percent}%\n` +
+                        `${step.bar} ${step.percent}%\n` +
+                        `${step.status}\n\n` +
+                        `🕒 ${new Date().toLocaleTimeString("es-ES")}`,
                     });
                     progressKey = null;
                   }),
