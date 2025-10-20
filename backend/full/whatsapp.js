@@ -276,6 +276,249 @@ function renderPlayProgressMessage(track, requester, percent, statusText) {
   ].join("\n");
 }
 
+function safeFileNameFromTitle(title, extension = "") {
+  const normalizedTitle = (title || "media")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9_\- ]+/g, " ")
+    .trim()
+    .replace(/\s+/g, "_")
+    .slice(0, 60);
+  const base = normalizedTitle || "media";
+  const ext = extension ? (extension.startsWith(".") ? extension : `.${extension}`) : "";
+  return `${base}${ext}`;
+}
+
+function formatCount(value) {
+  if (value === null || typeof value === "undefined") return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric.toLocaleString("es-ES");
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  return null;
+}
+
+function describeMediaDownloadProgress(kind, percent) {
+  const normalizedKind = kind === "audio" ? "audio" : kind === "image" || kind === "imagen" ? "imagen" : "video";
+  if (!Number.isFinite(percent)) {
+    return `Descargando ${normalizedKind}...`;
+  }
+  if (percent < 10) {
+    return `Conectando con el servidor de ${normalizedKind}...`;
+  }
+  if (percent < 45) {
+    return `Descargando ${normalizedKind}...`;
+  }
+  if (percent < 80) {
+    if (normalizedKind === "imagen") return "Procesando la imagen...";
+    if (normalizedKind === "audio") return "Procesando el audio...";
+    return "Procesando el video...";
+  }
+  if (percent < 100) {
+    if (normalizedKind === "imagen") return "Preparando la imagen para enviarla...";
+    if (normalizedKind === "audio") return "Preparando el audio para enviarlo...";
+    return "Preparando el video para enviarlo...";
+  }
+  if (normalizedKind === "imagen") return "¡Imagen lista!";
+  if (normalizedKind === "audio") return "¡Audio listo!";
+  return "¡Video listo!";
+}
+
+function renderGenericProgressMessage({ title, percent, statusText, details = [] }) {
+  const safePercent = Number.isFinite(percent)
+    ? Math.max(0, Math.min(100, Math.round(percent)))
+    : null;
+  const progressLine = safePercent !== null
+    ? `📊 ${buildProgressBar(safePercent)} ${safePercent}%`
+    : "⏳ Calculando progreso...";
+  const statusLine = statusText ? `\n${statusText}` : "";
+  const info = details.filter(Boolean);
+  const infoBlock = info.length ? `\n\n${info.join("\n")}` : "";
+  return `${title}\n\n${progressLine}${statusLine}${infoBlock}`;
+}
+
+function createProgressMessenger(sock, remoteJid, initialText, { contextLabel } = {}) {
+  let progressKey = null;
+  let queue = Promise.resolve();
+  const logContext = contextLabel ? ` ${contextLabel}` : "";
+
+  const sendText = async (text, initial = false) => {
+    try {
+      if (progressKey && !initial) {
+        await sock.sendMessage(remoteJid, { text }, { edit: progressKey });
+      } else {
+        const sent = await sock.sendMessage(remoteJid, { text });
+        if (initial || !progressKey) {
+          progressKey = sent?.key || null;
+        }
+      }
+    } catch (error) {
+      logger.warn(
+        `No se pudo ${initial ? "enviar" : "actualizar"} mensaje de progreso${logContext}`,
+        { error: error?.message },
+      );
+      if (!initial) {
+        progressKey = null;
+      }
+    }
+  };
+
+  if (initialText) {
+    queue = queue.then(() => sendText(initialText, true));
+  }
+
+  const queueUpdate = (text) => {
+    queue = queue
+      .then(() => sendText(text))
+      .catch((error) => {
+        logger.warn(`Fallo al procesar actualización de progreso${logContext}`, {
+          error: error?.message,
+        });
+      });
+    return queue;
+  };
+
+  const flush = async () => {
+    try {
+      await queue;
+    } catch (error) {
+      logger.warn(`Cola de progreso rechazada${logContext}`, { error: error?.message });
+    }
+  };
+
+  return { queueUpdate, flush };
+}
+
+async function sendMediaWithProgress({
+  sock,
+  remoteJid,
+  url,
+  type,
+  header,
+  detailLines = [],
+  mimetype,
+  caption,
+  mentions,
+  fileName,
+  extraMessageFields = {},
+  contextLabel,
+  timeoutMs = 60000,
+  getFailureMessage,
+}) {
+  if (!url) {
+    throw new Error("URL de descarga no válida");
+  }
+
+  const normalizedType = type === "audio" ? "audio" : type === "image" ? "imagen" : "video";
+  const details = detailLines.filter(Boolean);
+  const render = (percent, statusText) =>
+    renderGenericProgressMessage({
+      title: header,
+      percent,
+      statusText: statusText ?? describeMediaDownloadProgress(normalizedType, percent),
+      details,
+    });
+
+  const progress = createProgressMessenger(
+    sock,
+    remoteJid,
+    render(0, "Preparando descarga..."),
+    { contextLabel },
+  );
+
+  progress.queueUpdate(render(5, `Conectando con el servidor de ${normalizedType}...`));
+
+  let buffer;
+  let lastPercent = 5;
+  let notifiedUnknown = false;
+
+  try {
+    buffer = await downloadBufferWithProgress(url, {
+      timeoutMs,
+      onProgress: ({ percent }) => {
+        if (Number.isFinite(percent)) {
+          const rounded = Math.max(0, Math.min(100, Math.round(percent)));
+          if (rounded - lastPercent >= 4 || rounded >= 99) {
+            lastPercent = rounded;
+            progress.queueUpdate(
+              render(rounded, describeMediaDownloadProgress(normalizedType, rounded)),
+            );
+          }
+        } else if (!notifiedUnknown) {
+          notifiedUnknown = true;
+          progress.queueUpdate(render(null, `Descargando ${normalizedType}...`));
+        }
+      },
+    });
+  } catch (error) {
+    logger.error(`Error descargando ${normalizedType} (${contextLabel || "media"}):`, error);
+    progress.queueUpdate(render(lastPercent, "No se pudo completar la descarga."));
+    await progress.flush();
+    if (typeof getFailureMessage === "function") {
+      try {
+        const message = getFailureMessage(error, { stage: "download" });
+        if (message) {
+          await sock.sendMessage(remoteJid, message);
+        }
+      } catch (notifyError) {
+        logger.warn("No se pudo enviar mensaje de fallo de descarga", {
+          error: notifyError?.message,
+        });
+      }
+    }
+    return false;
+  }
+
+  progress.queueUpdate(render(100, "¡Descarga finalizada! Enviando archivo..."));
+  await progress.flush();
+
+  const messagePayload = {
+    caption,
+    mimetype,
+    mentions,
+    ...extraMessageFields,
+  };
+
+  if (fileName) {
+    messagePayload.fileName = fileName;
+  }
+
+  if (normalizedType === "audio") {
+    messagePayload.audio = buffer;
+    if (typeof messagePayload.ptt === "undefined") {
+      messagePayload.ptt = false;
+    }
+  } else if (normalizedType === "imagen") {
+    messagePayload.image = buffer;
+  } else {
+    messagePayload.video = buffer;
+  }
+
+  try {
+    await sock.sendMessage(remoteJid, messagePayload);
+    return true;
+  } catch (error) {
+    logger.error(`Error enviando ${normalizedType} (${contextLabel || "media"}):`, error);
+    if (typeof getFailureMessage === "function") {
+      try {
+        const message = getFailureMessage(error, { stage: "send" });
+        if (message) {
+          await sock.sendMessage(remoteJid, message);
+        }
+      } catch (notifyError) {
+        logger.warn("No se pudo enviar mensaje de fallo de envío", {
+          error: notifyError?.message,
+        });
+      }
+    }
+    return false;
+  }
+}
+
 const SHORT_URL_PROVIDERS = [
   {
     name: "Vreden",
@@ -4599,66 +4842,147 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/music":
       case "/musica":
         try {
-          const musicQuery = args.join(" ");
+          const musicQuery = args.join(" ").trim();
+          if (!musicQuery) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /music [canción]\nEjemplo: /music Despacito Luis Fonsi",
+            });
+            break;
+          }
+
           await sock.sendMessage(remoteJid, {
-            text: "🔎 Buscando música...",
+            text: "🔍 Consultando APIs de música...",
           });
 
-          const result = await handleMusicDownload(
-            musicQuery,
-            usuario.split("@")[0],
-          );
+          const result = await handleMusicDownload(musicQuery, usuario);
 
           if (result.success && result.audio) {
-            await sock.sendMessage(remoteJid, {
-              audio: { url: result.audio },
+            const viewsDetail = (() => {
+              if (!result.info?.views) return null;
+              const numericViews = Number(result.info.views);
+              const formatted = Number.isFinite(numericViews)
+                ? numericViews.toLocaleString("es-ES")
+                : result.info.views;
+              return `👁️ Vistas: ${formatted}`;
+            })();
+
+            const detailLines = [
+              result.info?.title ? `🎵 Título: ${result.info.title}` : null,
+              result.info?.author ? `👤 Canal: ${result.info.author}` : null,
+              result.info?.duration ? `⏱️ Duración: ${result.info.duration}` : null,
+              result.info?.quality ? `📶 Calidad: ${result.info.quality}` : null,
+              viewsDetail,
+              result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
+              `🙋 Solicitado por: @${usuario}`,
+            ];
+
+            const audioSent = await sendMediaWithProgress({
+              sock,
+              remoteJid,
+              url: result.audio,
+              type: "audio",
+              header: "🎧 *Música - Descarga en progreso*",
+              detailLines,
               mimetype: "audio/mpeg",
-              ptt: false,
+              mentions: result.mentions,
+              fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
+              contextLabel: "/music",
+              timeoutMs: 90000,
+              getFailureMessage: (_error, { stage }) => ({
+                text:
+                  `⚠️ *Música*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el audio automáticamente.` +
+                  (result.audio ? `\n🔗 Enlace directo:\n${result.audio}` : "") +
+                  "\n\n🔁 Intenta nuevamente más tarde.",
+              }),
             });
 
-            await sock.sendMessage(remoteJid, {
-              text: result.caption,
-              mentions: result.mentions,
-            });
+            if (audioSent && result.caption) {
+              await sock.sendMessage(remoteJid, {
+                text: result.caption,
+                mentions: result.mentions,
+              });
+            }
           } else {
             await sock.sendMessage(remoteJid, {
-              text: result.message || "⚠️  Error al buscar música.",
+              text: result.message || "⚠️  Error al buscar música.",
             });
           }
         } catch (error) {
           logger.error("Error en /music:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al buscar música. Intenta nuevamente.",
+            text: "⚠️  Error al buscar música. Intenta nuevamente.",
           });
         }
         break;
-
       case "/spotify":
       case "/spot":
         try {
-          const spotifyQuery = args.join(" ");
+          const spotifyQuery = args.join(" ").trim();
+          if (!spotifyQuery) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /spotify [canción]\nEjemplo: /spotify Shape of You",
+            });
+            break;
+          }
+
           await sock.sendMessage(remoteJid, {
-            text: "🔎 Buscando en Spotify...",
+            text: "🔍 Buscando en Spotify...",
           });
 
-          const result = await handleSpotifySearch(
-            spotifyQuery,
-            usuario.split("@")[0],
-          );
+          const result = await handleSpotifySearch(spotifyQuery, usuario);
 
           if (result.success) {
+            const baseDetailLines = [
+              result.info?.title ? `🎵 Título: ${result.info.title}` : null,
+              result.info?.artists ? `👤 Artistas: ${result.info.artists}` : null,
+              result.info?.album ? `💽 Álbum: ${result.info.album}` : null,
+              result.info?.duration ? `⏱️ Duración: ${result.info.duration}` : null,
+              result.info?.release_date ? `📅 Lanzamiento: ${result.info.release_date}` : null,
+              result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
+              `🙋 Solicitado por: @${usuario}`,
+            ];
+
             if (result.image) {
-              await sock.sendMessage(remoteJid, {
-                image: { url: result.image },
-                caption: `🎵 **${result.info.title}** - ${result.info.artists}`,
+              await sendMediaWithProgress({
+                sock,
+                remoteJid,
+                url: result.image,
+                type: "image",
+                header: "🖼️ *Spotify - Portada del álbum*",
+                detailLines: baseDetailLines,
+                mimetype: "image/jpeg",
+                mentions: result.mentions,
+                fileName: safeFileNameFromTitle(result.info?.title, ".jpg"),
+                contextLabel: "/spotify:image",
+                timeoutMs: 45000,
+                getFailureMessage: (_error, { stage }) => ({
+                  text:
+                    `⚠️ *Spotify*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} la portada automáticamente.` +
+                    (result.image ? `\n🔗 Enlace directo:\n${result.image}` : "") +
+                    "\n\n🔁 Intenta nuevamente más tarde.",
+                }),
               });
             }
 
             if (result.audio) {
-              await sock.sendMessage(remoteJid, {
-                audio: { url: result.audio },
+              await sendMediaWithProgress({
+                sock,
+                remoteJid,
+                url: result.audio,
+                type: "audio",
+                header: "🎧 *Spotify - Vista previa en progreso*",
+                detailLines: baseDetailLines,
                 mimetype: "audio/mpeg",
-                ptt: false,
+                mentions: result.mentions,
+                fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
+                contextLabel: "/spotify:audio",
+                timeoutMs: 70000,
+                getFailureMessage: (_error, { stage }) => ({
+                  text:
+                    `⚠️ *Spotify*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el audio automáticamente.` +
+                    (result.audio ? `\n🔗 Enlace directo:\n${result.audio}` : "") +
+                    "\n\n🔁 Intenta nuevamente más tarde.",
+                }),
               });
             }
 
@@ -4668,92 +4992,85 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: result.message || "⚠️  Error al buscar en Spotify.",
+              text: result.message || "⚠️  Error al buscar en Spotify.",
             });
           }
         } catch (error) {
           logger.error("Error en /spotify:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al buscar en Spotify. Intenta nuevamente.",
+            text: "⚠️  Error al buscar en Spotify. Intenta nuevamente.",
           });
         }
         break;
-
       case "/video":
       case "/youtube":
         try {
-          const videoQuery = args.join(" ");
+          const videoQuery = args.join(" ").trim();
+          if (!videoQuery) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /video [búsqueda]\nEjemplo: /video tutorial javascript",
+            });
+            break;
+          }
+
           await sock.sendMessage(remoteJid, {
-            text: "🔎 Buscando video...",
+            text: "🎬 Buscando video en YouTube...",
           });
 
-          const result = await handleVideoDownload(
-            videoQuery,
-            usuario.split("@")[0],
-          );
+          const result = await handleVideoDownload(videoQuery, usuario);
 
           if (result.success && result.video) {
-            await sock.sendMessage(remoteJid, {
-              video: { url: result.video },
+            const viewsDetail = (() => {
+              if (!result.info?.views) return null;
+              const numericViews = Number(result.info.views);
+              const formatted = Number.isFinite(numericViews)
+                ? numericViews.toLocaleString("es-ES")
+                : result.info.views;
+              return `👁️ Vistas: ${formatted}`;
+            })();
+
+            const detailLines = [
+              result.info?.title ? `🎬 Título: ${result.info.title}` : null,
+              result.info?.author ? `👤 Canal: ${result.info.author}` : null,
+              result.info?.duration ? `⏱️ Duración: ${result.info.duration}` : null,
+              result.info?.quality ? `📶 Calidad: ${result.info.quality}` : null,
+              viewsDetail,
+              result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
+              `🙋 Solicitado por: @${usuario}`,
+            ];
+
+            await sendMediaWithProgress({
+              sock,
+              remoteJid,
+              url: result.video,
+              type: "video",
+              header: "🎬 *Video - Descarga en progreso*",
+              detailLines,
               mimetype: "video/mp4",
               caption: result.caption,
               mentions: result.mentions,
+              fileName: safeFileNameFromTitle(result.info?.title, ".mp4"),
+              contextLabel: "/video",
+              timeoutMs: 120000,
+              getFailureMessage: (_error, { stage }) => ({
+                text:
+                  `⚠️ *Video*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el video automáticamente.` +
+                  (result.video ? `\n🔗 Enlace directo:\n${result.video}` : "") +
+                  "\n\n🔁 Intenta nuevamente más tarde.",
+              }),
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: result.message || "⚠️  Error al buscar video.",
+              text: result.message || "⚠️  Error al buscar video.",
             });
           }
         } catch (error) {
           logger.error("Error en /video:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al buscar video. Intenta nuevamente.",
+            text: "⚠️  Error al buscar video. Intenta nuevamente.",
           });
         }
         break;
-
-      case "/play":
-        try {
-          const playQuery = args.join(" ");
-          if (!playQuery) {
-            await sock.sendMessage(remoteJid, {
-              text: "ℹ️ Uso: /play [canción]\nEjemplo: /play Despacito",
-            });
-          } else {
-            await sock.sendMessage(remoteJid, {
-              text: "🔎 Buscando música...",
-            });
-
-            const result = await handleMusicDownload(
-              playQuery,
-              usuario.split("@")[0],
-            );
-
-            if (result.success && result.audio) {
-              await sock.sendMessage(remoteJid, {
-                audio: { url: result.audio },
-                mimetype: "audio/mpeg",
-                ptt: false,
-              });
-
-              await sock.sendMessage(remoteJid, {
-                text: result.caption,
-                mentions: result.mentions,
-              });
-            } else {
-              await sock.sendMessage(remoteJid, {
-                text: result.message || "⚠️  Error al buscar música.",
-              });
-            }
-          }
-        } catch (error) {
-          logger.error("Error en /play:", error);
-          await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al buscar música. Intenta nuevamente.",
-          });
-        }
-        break;
-
       case "/meme":
         try {
           await sock.sendMessage(remoteJid, { text: "🖼️ Generando meme..." });
@@ -5194,64 +5511,138 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/tiktok":
       case "/tt":
         try {
-          const tiktokUrl = args.join(" ");
+          const tiktokUrl = args.join(" ").trim();
+          if (!tiktokUrl) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /tiktok [URL]\nEjemplo: /tiktok https://www.tiktok.com/@user/video/123",
+            });
+            break;
+          }
+
           await sock.sendMessage(remoteJid, {
-            text: "📥 Descargando video de TikTok...",
+            text: "🔍 Consultando APIs de TikTok...",
           });
+
           const result = await handleTikTokDownload(
             tiktokUrl,
-            usuario.split("@")[0],
+            usuario,
           );
+
           if (result.success && result.video) {
-            await sock.sendMessage(remoteJid, {
-              video: { url: result.video },
+            const detailLines = [
+              result.info?.title ? `🎬 Título: ${result.info.title}` : null,
+              result.info?.author ? `👤 Autor: ${result.info.author}` : null,
+              result.info?.description ? `📝 Descripción: ${result.info.description}` : null,
+              result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
+              `🙋 Solicitado por: @${usuario}`,
+            ];
+
+            await sendMediaWithProgress({
+              sock,
+              remoteJid,
+              url: result.video,
+              type: "video",
+              header: "📹 *TikTok - Descarga en progreso*",
+              detailLines,
               mimetype: "video/mp4",
               caption: result.caption,
               mentions: result.mentions,
+              fileName: safeFileNameFromTitle(result.info?.title, ".mp4"),
+              contextLabel: "/tiktok",
+              timeoutMs: 90000,
+              getFailureMessage: (_error, { stage }) => ({
+                text:
+                  `⚠️ *TikTok*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el video automáticamente.` +
+                  (result.video ? `\n🔗 Enlace directo:\n${result.video}` : "") +
+                  "\n\n🔁 Intenta nuevamente más tarde.",
+              }),
             });
           } else {
             await sock.sendMessage(remoteJid, {
               text:
-                result.message || "⚠️  Error al descargar el video de TikTok.",
+                result.message || "⚠️  Error al descargar el video de TikTok.",
             });
           }
         } catch (error) {
           logger.error("Error en /tiktok:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al descargar el video de TikTok. Intenta nuevamente.",
+            text: "⚠️  Error al descargar el video de TikTok. Intenta nuevamente.",
           });
         }
         break;
-
       case "/instagram":
       case "/ig":
         try {
-          const igUrl = args.join(" ");
+          const igUrl = args.join(" ").trim();
+          if (!igUrl) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /instagram [URL]\nEjemplo: /instagram https://www.instagram.com/p/ABC123/",
+            });
+            break;
+          }
+
           await sock.sendMessage(remoteJid, {
-            text: "📥 Descargando contenido de Instagram...",
+            text: "🔍 Consultando APIs de Instagram...",
           });
+
           const result = await handleInstagramDownload(
             igUrl,
-            usuario.split("@")[0],
+            usuario,
           );
+
           if (result.success) {
-            if (result.type === "image" && result.image) {
-              await sock.sendMessage(remoteJid, {
-                image: { url: result.image || result.url },
+            const baseDetailLines = [
+              result.info?.author ? `👤 Autor: ${result.info.author}` : null,
+              result.info?.type ? `📄 Tipo: ${result.info.type}` : null,
+              result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
+              `🙋 Solicitado por: @${usuario}`,
+            ];
+
+            if (result.type === "image" && (result.image || result.url)) {
+              await sendMediaWithProgress({
+                sock,
+                remoteJid,
+                url: result.image || result.url,
+                type: "image",
+                header: "📸 *Instagram - Imagen en descarga*",
+                detailLines: baseDetailLines,
+                mimetype: "image/jpeg",
                 caption: result.caption,
                 mentions: result.mentions,
+                fileName: safeFileNameFromTitle(result.info?.title || result.info?.type, ".jpg"),
+                contextLabel: "/instagram:image",
+                timeoutMs: 60000,
+                getFailureMessage: (_error, { stage }) => ({
+                  text:
+                    `⚠️ *Instagram*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} la imagen automáticamente.` +
+                    ((result.image || result.url) ? `\n🔗 Enlace directo:\n${result.image || result.url}` : "") +
+                    "\n\n🔁 Intenta nuevamente más tarde.",
+                }),
               });
-            } else if (result.type === "video" && result.video) {
-              await sock.sendMessage(remoteJid, {
-                video: { url: result.video || result.url },
+            } else if (result.type === "video" && (result.video || result.url)) {
+              await sendMediaWithProgress({
+                sock,
+                remoteJid,
+                url: result.video || result.url,
+                type: "video",
+                header: "🎞️ *Instagram - Video en descarga*",
+                detailLines: baseDetailLines,
                 mimetype: "video/mp4",
                 caption: result.caption,
                 mentions: result.mentions,
+                fileName: safeFileNameFromTitle(result.info?.title || result.info?.type, ".mp4"),
+                contextLabel: "/instagram:video",
+                timeoutMs: 90000,
+                getFailureMessage: (_error, { stage }) => ({
+                  text:
+                    `⚠️ *Instagram*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el video automáticamente.` +
+                    ((result.video || result.url) ? `\n🔗 Enlace directo:\n${result.video || result.url}` : "") +
+                    "\n\n🔁 Intenta nuevamente más tarde.",
+                }),
               });
             } else {
               await sock.sendMessage(remoteJid, {
-                image: { url: result.url },
-                caption: result.caption,
+                text: result.caption || "⚠️  No se encontró contenido descargable.",
                 mentions: result.mentions,
               });
             }
@@ -5259,73 +5650,150 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             await sock.sendMessage(remoteJid, {
               text:
                 result.message ||
-                "⚠️  Error al descargar el contenido de Instagram.",
+                "⚠️  Error al descargar el contenido de Instagram.",
             });
           }
         } catch (error) {
           logger.error("Error en /instagram:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al descargar el contenido de Instagram. Intenta nuevamente.",
+            text: "⚠️  Error al descargar el contenido de Instagram. Intenta nuevamente.",
           });
         }
         break;
-
       case "/facebook":
       case "/fb":
         try {
-          const fbUrl = args.join(" ");
+          const fbUrl = args.join(" ").trim();
+          if (!fbUrl) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /facebook [URL]\nEjemplo: /facebook https://www.facebook.com/watch/?v=123456",
+            });
+            break;
+          }
+
           await sock.sendMessage(remoteJid, {
-            text: "📥 Descargando video de Facebook...",
+            text: "🔍 Consultando APIs de Facebook...",
           });
+
           const result = await handleFacebookDownload(
             fbUrl,
-            usuario.split("@")[0],
+            usuario,
           );
+
           if (result.success && result.video) {
-            await sock.sendMessage(remoteJid, {
-              video: { url: result.video },
+            const viewsDetail = formatCount(result.info?.views);
+            const detailLines = [
+              result.info?.title ? `🎬 Título: ${result.info.title}` : null,
+              result.info?.author ? `👤 Autor: ${result.info.author}` : null,
+              result.info?.duration ? `⏱️ Duración: ${result.info.duration}` : null,
+              viewsDetail ? `👁️ Vistas: ${viewsDetail}` : null,
+              result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
+              `🙋 Solicitado por: @${usuario}`,
+            ];
+
+            await sendMediaWithProgress({
+              sock,
+              remoteJid,
+              url: result.video,
+              type: "video",
+              header: "📺 *Facebook - Descarga en progreso*",
+              detailLines,
               mimetype: "video/mp4",
               caption: result.caption,
               mentions: result.mentions,
+              fileName: safeFileNameFromTitle(result.info?.title, ".mp4"),
+              contextLabel: "/facebook",
+              timeoutMs: 90000,
+              getFailureMessage: (_error, { stage }) => ({
+                text:
+                  `⚠️ *Facebook*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el video automáticamente.` +
+                  (result.video ? `\n🔗 Enlace directo:\n${result.video}` : "") +
+                  "\n\n🔁 Intenta nuevamente más tarde.",
+              }),
             });
           } else {
             await sock.sendMessage(remoteJid, {
               text:
-                result.message || "⚠️  Error al descargar el video de Facebook.",
+                result.message || "⚠️  Error al descargar el video de Facebook.",
             });
           }
         } catch (error) {
           logger.error("Error en /facebook:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al descargar el video de Facebook. Intenta nuevamente.",
+            text: "⚠️  Error al descargar el video de Facebook. Intenta nuevamente.",
           });
         }
         break;
-
       case "/twitter":
       case "/x":
         try {
-          const twitterUrl = args.join(" ");
+          const twitterUrl = args.join(" ").trim();
+          if (!twitterUrl) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /twitter [URL]\nEjemplo: /twitter https://twitter.com/user/status/123456",
+            });
+            break;
+          }
+
           await sock.sendMessage(remoteJid, {
-            text: "📥 Descargando contenido de Twitter/X...",
+            text: "🔍 Consultando APIs de Twitter/X...",
           });
+
           const result = await handleTwitterDownload(
             twitterUrl,
-            usuario.split("@")[0],
+            usuario,
           );
+
           if (result.success) {
+            const baseDetailLines = [
+              result.info?.author ? `👤 Autor: @${result.info.author}` : null,
+              result.info?.text ? `📝 Texto: ${result.info.text}` : null,
+              result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
+              result.info?.type ? `📄 Tipo: ${result.info.type}` : null,
+              `🙋 Solicitado por: @${usuario}`,
+            ];
+
             if (result.type === "video" && result.video) {
-              await sock.sendMessage(remoteJid, {
-                video: { url: result.video },
+              await sendMediaWithProgress({
+                sock,
+                remoteJid,
+                url: result.video,
+                type: "video",
+                header: "🐦 *Twitter/X - Video en descarga*",
+                detailLines: baseDetailLines,
                 mimetype: "video/mp4",
                 caption: result.caption,
                 mentions: result.mentions,
+                fileName: safeFileNameFromTitle(result.info?.title || result.info?.type, ".mp4"),
+                contextLabel: "/twitter:video",
+                timeoutMs: 90000,
+                getFailureMessage: (_error, { stage }) => ({
+                  text:
+                    `⚠️ *Twitter/X*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el video automáticamente.` +
+                    (result.video ? `\n🔗 Enlace directo:\n${result.video}` : "") +
+                    "\n\n🔁 Intenta nuevamente más tarde.",
+                }),
               });
             } else if (result.type === "image" && result.image) {
-              await sock.sendMessage(remoteJid, {
-                image: { url: result.image },
+              await sendMediaWithProgress({
+                sock,
+                remoteJid,
+                url: result.image,
+                type: "image",
+                header: "🐦 *Twitter/X - Imagen en descarga*",
+                detailLines: baseDetailLines,
+                mimetype: "image/jpeg",
                 caption: result.caption,
                 mentions: result.mentions,
+                fileName: safeFileNameFromTitle(result.info?.title || result.info?.type, ".jpg"),
+                contextLabel: "/twitter:image",
+                timeoutMs: 60000,
+                getFailureMessage: (_error, { stage }) => ({
+                  text:
+                    `⚠️ *Twitter/X*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} la imagen automáticamente.` +
+                    (result.image ? `\n🔗 Enlace directo:\n${result.image}` : "") +
+                    "\n\n🔁 Intenta nuevamente más tarde.",
+                }),
               });
             } else {
               await sock.sendMessage(remoteJid, {
@@ -5336,50 +5804,77 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } else {
             await sock.sendMessage(remoteJid, {
               text:
-                result.message ||
-                "⚠️  Error al descargar el contenido de Twitter/X.",
+                result.message || "⚠️  Error al descargar el contenido de Twitter/X.",
             });
           }
         } catch (error) {
           logger.error("Error en /twitter:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al descargar el contenido de Twitter/X. Intenta nuevamente.",
+            text: "⚠️  Error al descargar el contenido de Twitter/X. Intenta nuevamente.",
           });
         }
         break;
-
       case "/pinterest":
       case "/pin":
         try {
-          const pinterestUrl = args.join(" ");
+          const pinterestUrl = args.join(" ").trim();
+          if (!pinterestUrl) {
+            await sock.sendMessage(remoteJid, {
+              text: "ℹ️ Uso: /pinterest [URL]\nEjemplo: /pinterest https://www.pinterest.com/pin/123456789/",
+            });
+            break;
+          }
+
           await sock.sendMessage(remoteJid, {
-            text: "📥 Descargando de Pinterest...",
+            text: "🔍 Consultando APIs de Pinterest...",
           });
+
           const result = await handlePinterestDownload(
             pinterestUrl,
-            usuario.split("@")[0],
+            usuario,
           );
+
           if (result.success && result.image) {
-            await sock.sendMessage(remoteJid, {
-              image: { url: result.image },
+            const detailLines = [
+              result.info?.title ? `📌 Título: ${result.info.title}` : null,
+              result.info?.description ? `📝 Descripción: ${result.info.description}` : null,
+              result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
+              `🙋 Solicitado por: @${usuario}`,
+            ];
+
+            await sendMediaWithProgress({
+              sock,
+              remoteJid,
+              url: result.image,
+              type: "image",
+              header: "📌 *Pinterest - Imagen en descarga*",
+              detailLines,
+              mimetype: "image/jpeg",
               caption: result.caption,
               mentions: result.mentions,
+              fileName: safeFileNameFromTitle(result.info?.title, ".jpg"),
+              contextLabel: "/pinterest",
+              timeoutMs: 60000,
+              getFailureMessage: (_error, { stage }) => ({
+                text:
+                  `⚠️ *Pinterest*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} la imagen automáticamente.` +
+                  (result.image ? `\n🔗 Enlace directo:\n${result.image}` : "") +
+                  "\n\n🔁 Intenta nuevamente más tarde.",
+              }),
             });
           } else {
             await sock.sendMessage(remoteJid, {
               text:
-                result.message ||
-                "⚠️  Error al descargar la imagen de Pinterest.",
+                result.message || "⚠️  Error al descargar la imagen de Pinterest.",
             });
           }
         } catch (error) {
           logger.error("Error en /pinterest:", error);
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Error al descargar la imagen de Pinterest. Intenta nuevamente.",
+            text: "⚠️  Error al descargar la imagen de Pinterest. Intenta nuevamente.",
           });
         }
         break;
-
       // COMANDOS DE ARCHIVOS - IMPLEMENTACIN FUNCIONAL
       case "/archivos":
       case "/files":
@@ -6848,71 +7343,39 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               const track = data.data[0];
               const requesterLabel = usuario || "Usuario";
 
-              // Mostrar informacion con barra de progreso REAL que se edita
-              let progressMsg = await sock.sendMessage(remoteJid, {
-                text:
-                  `🎵 *Música encontrada*\n\n` +
-                  `🎤 **Artista:** ${track.artist}\n` +
-                  `🎶 **Canción:** ${track.title}\n` +
-                  `💿 **Álbum:** ${track.album}\n` +
-                  `⏱️ **Duración:** ${track.duration}\n` +
-                  `🔗 **URL:** ${track.url}\n\n` +
-                  `⏬ **Descargando...** ⏳\n` +
-                  `▓▓▓▓▓▓▓▓▓▓ 0%\n\n` +
-                  `🙋 Solicitado por: ${usuario}`,
-              });
+              const initialText = renderPlayProgressMessage(
+                track,
+                requesterLabel,
+                0,
+                "Preparando descarga...",
+              );
 
-              // Barra de progreso REAL que se actualiza dinamicamente
-              const progressSteps = [
-                {
-                  percent: 15,
-                  bar: "▓░░░░░░░░",
-                  status: "🔌 Conectando...",
-                  emoji: "⚡",
-                },
-                {
-                  percent: 30,
-                  bar: "▓▓▓░░░░░",
-                  status: "⬇️ Descargando...",
-                  emoji: "📥",
-                },
-                {
-                  percent: 50,
-                  bar: "▓▓▓▓▓░░░",
-                  status: "⚙️ Procesando...",
-                  emoji: "⚙️",
-                },
-                {
-                  percent: 75,
-                  bar: "▓▓▓▓▓▓▓░",
-                  status: "🔄 Convirtiendo...",
-                  emoji: "🔄",
-                },
-                {
-                  percent: 90,
-                  bar: "▓▓▓▓▓▓▓▓",
-                  status: "✨ Finalizando...",
-                  emoji: "✨",
-                },
-                { percent: 100, bar: "▓▓▓▓▓▓▓▓▓▓", status: "✅ ¡Completo!", emoji: "✅" },
-              ];
+              let progressKey = null;
+              try {
+                const sent = await sock.sendMessage(remoteJid, { text: initialText });
+                progressKey = sent?.key || null;
+              } catch (progressError) {
+                logger.warn("No se pudo enviar mensaje inicial de progreso en /play", {
+                  error: progressError?.message,
+                });
+              }
 
-              // Funcion para actualizar progreso en tiempo real
-              let currentStep = 0;
-              const updateProgress = async () => {
-                if (currentStep < progressSteps.length) {
-                  const step = progressSteps[currentStep];
-
-                  try {
-                    await sock.sendMessage(remoteJid, {
-                      text:
-                        `${step.emoji} *Descargando: ${track.title}*\n\n` +
-                        `🎤 ${track.artist}\n` +
-                        `💿 ${track.album}\n\n` +
-                        `📊 **Progreso:** ${step.percent}%\n` +
-                        `${step.bar} ${step.percent}%\n` +
-                        `${step.status}\n\n` +
-                        `🕒 ${new Date().toLocaleTimeString("es-ES")}`,
+              let updateQueue = Promise.resolve();
+              const queueUpdate = (percent, status) => {
+                const text = renderPlayProgressMessage(
+                  track,
+                  requesterLabel,
+                  percent,
+                  status,
+                );
+              const send = () =>
+                  progressKey
+                    ? sock.sendMessage(remoteJid, { text }, { edit: progressKey })
+                    : sock.sendMessage(remoteJid, { text });
+                updateQueue = updateQueue.then(() =>
+                  send().catch((err) => {
+                    logger.warn("No se pudo actualizar progreso de /play", {
+                      error: err?.message,
                     });
                     progressKey = null;
                   }),
