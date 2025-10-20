@@ -803,14 +803,14 @@ async function loadBaileys() {
       jidNormalizedUser = baileys.jidNormalizedUser;
       areJidsSameUser = baileys.areJidsSameUser;
       makeWASocket = baileys.makeWASocket ?? baileys.default;
-      logger.info?.(`Baileys cargado desde mdulo: ${mod}`);
+      logger.info?.(`Baileys cargado desde módulo: ${mod}`);
       return true;
     } catch (e) {
       // probar siguiente candidato
     }
   }
   logger.warn?.(
-    "Baileys no disponible (temporalmente deshabilitado): no se pudo importar ningn mdulo candidato",
+    "Baileys no disponible (temporalmente deshabilitado): no se pudo importar ningún módulo candidato",
   );
   return false;
 }
