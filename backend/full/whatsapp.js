@@ -1626,7 +1626,7 @@ async function getRuntimeInfoText() {
     typeof process.cpuUsage === "function" ? process.cpuUsage() : null;
   const cpuMs = cpu ? ((cpu.user + cpu.system) / 1000).toFixed(0) : "N/A";
   return (
-    `âšâ"¢Ã¯Â¸Â *Runtime Node.js*\n\n` +
+    `⚙️ *Runtime Node.js*\n\n` +
     `🟢 Node: ${process.version}\n` +
     `📦 Plataforma: ${process.platform}/${process.arch}\n` +
     `🧪 V8: ${process.versions?.v8 || "N/A"} · OpenSSL: ${process.versions?.openssl || "N/A"}\n` +
@@ -1677,7 +1677,7 @@ async function logAllMessages(
     // Metodo 4: Fallback con cache
     else {
       contactName = await getContactName(usuario);
-      logger.pretty.line(`ðŸ—â€Å¡ÃƒÆ'¯Â¸Â Usando cache/fallback: ${contactName}`);
+      logger.pretty.line(`🗒️ Usando cache/fallback: ${contactName}`);
     }
 
     // Obtener nombre real del grupo
@@ -1761,7 +1761,7 @@ async function logAllMessages(
       );
       logger.pretty.kv("Número local", split.local);
       logger.pretty.kv("Owner", isSpecificOwner(usuario) ? "SI" : "NO");
-      logger.pretty.section("Contenido", "ðŸ—â€Å¡ÃƒÆ'¯Â¸Â");
+      logger.pretty.section("Contenido", "🗒️");
       logger.pretty.kv("Tipo", isCommand ? "Comando" : "Mensaje");
       logger.pretty.kv("Contenido", contentType);
       logger.pretty.kv("Texto", displayText);
@@ -1778,7 +1778,7 @@ async function logAllMessages(
       );
       logger.pretty.kv("Número local", split.local);
       logger.pretty.kv("Owner", isSpecificOwner(usuario) ? "SI" : "NO");
-      logger.pretty.section("Contenido", "ðŸ—â€Å¡ÃƒÆ'¯Â¸Â");
+      logger.pretty.section("Contenido", "🗒️");
       logger.pretty.kv("Tipo", isCommand ? "Comando" : "Mensaje");
       logger.pretty.kv("Contenido", contentType);
       logger.pretty.kv("Texto", displayText);
@@ -1857,7 +1857,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
           const participantNum = normalizeJidToNumber(sender);
           if (participantNum && participantNum !== usuario) {
             // Si el participant es diferente al bot, usar el del bot
-            logger.pretty.line(`âšÂ Ã¯Â¸Â Participant inconsistente en fromMe: ${participantNum} vs ${usuario}`);
+            logger.pretty.line(`⚠️  Participant inconsistente en fromMe: ${participantNum} vs ${usuario}`);
             sender = `${usuario}@s.whatsapp.net`;
           }
         }
@@ -1871,7 +1871,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
         // En grupos: usar participant (quien envio el mensaje)
         sender = message.key.participant;
         if (!sender) {
-          logger.pretty.line("âšÂ Ã¯Â¸Â No se pudo obtener participant en grupo");
+          logger.pretty.line("⚠️  No se pudo obtener participant en grupo");
           return;
         }
         // Extraer numero normalizado del participant (soporta LID)
@@ -1889,7 +1889,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
 
     // Verificar que el mensaje no este vacio
     if (!messageText || messageText === "") {
-      logger.pretty.line("âšÂ Ã¯Â¸Â Mensaje vacío - no procesando");
+      logger.pretty.line("⚠️  Mensaje vacío - no procesando");
       return;
     }
 
@@ -1906,7 +1906,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     // Verificar que el comando tenga al menos una letra despues del prefijo
     const commandPart = messageText.substring(1);
     if (!commandPart || !/[a-zA-Z]/.test(commandPart)) {
-      logger.pretty.line(`âšÂ Ã¯Â¸Â Comando inválido - sin letras: "${messageText}"`);
+      logger.pretty.line(`⚠️  Comando inválido - sin letras: "${messageText}"`);
       return;
     }
 
@@ -1934,7 +1934,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     const isGloballyActive = await isBotGloballyActiveFromDB();
     const isOwner = isSpecificOwner(usuario);
 
-    logger.pretty.section("Verificación de estado", "â");
+    logger.pretty.section("Verificación de estado", "🔍");
     logger.pretty.kv("Bot activo globalmente", isGloballyActive);
     logger.pretty.kv("Es owner", isOwner);
     logger.pretty.kv("Comando", command);
@@ -1951,7 +1951,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
         logger.pretty.line("✅ Excepción global: /bot global on permitido");
         // Continuar al switch
       } else {
-        logger.pretty.line("⚠️  Bloqueado por estado global");
+        logger.pretty.line("⚠️ Bloqueado por estado global");
 
         const userKey = `global_notified_${usuario}`;
         if (!global.notifiedUsers) {
@@ -1967,7 +1967,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: "ðŸÅ¡Ã'« *Bot desactivado*\n\n⏳ El bot está temporalmente fuera de servicio.\n👑 Solo el owner puede reactivarlo.",
+              text: "🚫 *Bot desactivado*\n\n⏳ El bot está temporalmente fuera de servicio.\n👑 Solo el owner puede reactivarlo.",
             });
           }
         }
@@ -1988,7 +1988,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
           );
           // Continuar al switch
         } else {
-          logger.pretty.line("⚠️  Bloqueado por estado de grupo");
+          logger.pretty.line("⚠️ Bloqueado por estado de grupo");
 
           const userKey = `group_notified_${usuario}_${remoteJid}`;
           if (!global.notifiedUsers) {
@@ -1999,7 +1999,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
             global.notifiedUsers.add(userKey);
 
             await sock.sendMessage(remoteJid, {
-              text: "ðŸÅ¡Ã'« *Bot desactivado en este grupo*\n\nℹ️ El bot no está activo en este grupo.\n✅ Usa `/bot on` para reactivarlo",
+              text: "🚫 *Bot desactivado en este grupo*\n\nℹ️ El bot no está activo en este grupo.\n✅ Usa `/bot on` para reactivarlo",
             });
           }
           return;
@@ -2020,7 +2020,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
             remoteJid,
             {
               text: "🔒 *Comando de Subbot*\n\n" +
-                    "âšÂ Ã¯Â¸Â Por seguridad, este comando solo funciona en chat privado.\n\n" +
+                    "⚠️  Por seguridad, este comando solo funciona en chat privado.\n\n" +
                     "📱 *Instrucciones:*\n" +
                     "1. Abre un chat privado conmigo\n" +
                     "2. Envía el comando `/qr`\n" +
@@ -2067,7 +2067,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
             remoteJid,
             {
               text: "🔒 *Comando de Subbot*\n\n" +
-                    "âšÂ Ã¯Â¸Â Por seguridad, este comando solo funciona en chat privado.\n\n" +
+                    "⚠️  Por seguridad, este comando solo funciona en chat privado.\n\n" +
                     "📱 *Instrucciones:*\n" +
                     "1. Abre un chat privado conmigo\n" +
                     "2. Envía el comando `/code`\n" +
@@ -2195,7 +2195,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
         // Funcion de ayuda simplificada que funciona directamente
         const helpText = `
 ┌────────────────────────────┐
-â"â€Å¡ 🤖  KONMI BOT v2.5.0       â"â€Å¡
+│ 🤖  KONMI BOT v2.5.0       │
 └────────────────────────────┘
 
 • 🧪 Básicos
@@ -2204,13 +2204,13 @@ export async function handleMessage(message, customSock = null, prefix = "") {
 • 🤖 IA
   /ia [pregunta] · /ai [pregunta] · /clasificar
 
-• ðŸ—â€Å¡ÃƒÆ'¯Â¸Â Aportes
+• 🗒️ Aportes
   /aportes · /myaportes · /addaporte [texto] · /aporteestado [id] [estado]
 
 • 📝 Pedidos
   /pedidos · /pedido [texto]
 
-• ðŸ"Å¡ Manhwas
+• 📚 Manhwas
   /manhwas · /addmanhwa [título|género|desc] · /obtenermanhwa [nombre]
 
 • 📺 Series/TV
@@ -2229,11 +2229,11 @@ export async function handleMessage(message, customSock = null, prefix = "") {
 • 📁 Archivos
   /archivos · /misarchivos · /descargar [url] · /guardar
 
-• ðŸ›Â¡ÃƒÆ'¯Â¸Â Administración
+• 🛡️ Administración
   /kick @usuario · /promote @usuario · /demote @usuario
   /lock · /unlock · /tag [mensaje]
 
-• âšâ"¢Ã¯Â¸Â Bot
+• ⚙️ Bot
   /bot on · /bot off · /bot global on · /bot global off
 
 • 🤝 Subbots
@@ -2269,7 +2269,7 @@ ${new Date().toLocaleString("es-ES")}`;
             await sock.sendMessage(remoteJid, {
               text:
                 `╔═══════════════════════════════════╗\n` +
-                `â•'  âšÂ Ã¯Â¸Â LÍMITE DE SUBBOTS ALCANZADO   â•'\n` +
+                `║  ⚠️  LÍMITE DE SUBBOTS ALCANZADO   ║\n` +
                 `╚═══════════════════════════════════╝\n\n` +
                 `❌ **Has alcanzado el límite máximo**\n\n` +
                 `📊 ESTADO ACTUAL\n` +
@@ -2348,7 +2348,7 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
             await sock.sendMessage(remoteJid, {
               text: sentInDm
                 ? "📩 ✅ Te envié el código QR por privado."
-                : "âšÂ Ã¯Â¸Â No pude enviarte por privado. Enviando el QR en el grupo.",
+                : "⚠️  No pude enviarte por privado. Enviando el QR en el grupo.",
             });
             if (!sentInDm) {
               await sock.sendMessage(remoteJid, { image: res.png, caption });
@@ -2367,7 +2367,7 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
               `╔═══════════════════════════════════╗\n` +
               `║  ❌ ERROR AL CREAR SUBBOT         ║\n` +
               `╚═══════════════════════════════════╝\n\n` +
-              `âšÂ Ã¯Â¸Â **No se pudo generar el código QR**\n\n` +
+              `⚠️  **No se pudo generar el código QR**\n\n` +
               `📝 Detalles: ${error.message}\n\n` +
               `💡 **Intenta nuevamente en unos momentos**`,
           });
@@ -2398,7 +2398,7 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
             await sock.sendMessage(remoteJid, {
               text:
                 `╔═══════════════════════════════════╗\n` +
-                `â•'  âšÂ Ã¯Â¸Â LÍMITE DE SUBBOTS ALCANZADO   â•'\n` +
+                `║  ⚠️  LÍMITE DE SUBBOTS ALCANZADO   ║\n` +
                 `╚═══════════════════════════════════╝\n\n` +
                 `❌ **Has alcanzado el límite máximo**\n\n` +
                 `📊 ESTADO ACTUAL\n` +
@@ -2421,9 +2421,9 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
             await sock.sendMessage(remoteJid, {
               text:
                 `╔═══════════════════════════════════╗\n` +
-                `â•'  ❌ ERROR AL OBTENER NÃÅ¡MERO       â•'\n` +
+                `║  ❌ ERROR AL OBTENER NÚMERO       ║\n` +
                 `╚═══════════════════════════════════╝\n\n` +
-                `âšÂ Ã¯Â¸Â **No se pudo detectar tu número automáticamente**\n\n` +
+                `⚠️  **No se pudo detectar tu número automáticamente**\n\n` +
                 `📝 Tu número detectado: ${usuario}\n` +
                 `❌ El número debe tener al menos 10 dígitos\n\n` +
                 `💡 **SOLUCIÓN**\n` +
@@ -2496,10 +2496,10 @@ Cuando desconectes este subbot de WhatsApp, se eliminará automáticamente del s
 5️⃣ Ingresa este código:
 
    ╔═══════════════════╗
-   â•'  *${res.code}*  â•'
+   ║  *${res.code}*  ║
    ╚═══════════════════╝
 
-âšÂ Ã¯Â¸Â IMPORTANTE
+⚠️  IMPORTANTE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • El código es de un solo uso
 • Válido solo para: +${phoneNumber}
@@ -2537,7 +2537,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               `╔═══════════════════════════════════╗\n` +
               `║  ❌ ERROR AL CREAR SUBBOT         ║\n` +
               `╚═══════════════════════════════════╝\n\n` +
-              `âšÂ Ã¯Â¸Â **No se pudo generar el código de vinculación**\n\n` +
+              `⚠️  **No se pudo generar el código de vinculación**\n\n` +
               `📝 Detalles: ${error.message}\n\n` +
               `💡 **Intenta nuevamente en unos momentos**`,
           });
@@ -2561,7 +2561,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             "Error en /status|/info",
           );
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo información del sistema.",
+            text: "⚠️  Error obteniendo información del sistema.",
           });
         }
         break;
@@ -2577,7 +2577,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             "Error en /serverinfo|/hardware",
           );
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo información del servidor.",
+            text: "⚠️  Error obteniendo información del servidor.",
           });
         }
         break;
@@ -2592,7 +2592,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             "Error en /runtime",
           );
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo información de runtime.",
+            text: "⚠️  Error obteniendo información de runtime.",
           });
         }
         break;
@@ -2617,14 +2617,14 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               await sock.sendMessage(remoteJid, { text: res.message });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: `🤖 *IA — Respuesta:*\n\n❓ Pregunta: "${iaText}"\n\nâšÂ Ã¯Â¸Â Servicio de IA temporalmente no disponible. Intenta más tarde.`,
+                text: `🤖 *IA — Respuesta:*\n\n❓ Pregunta: "${iaText}"\n\n⚠️  Servicio de IA temporalmente no disponible. Intenta más tarde.`,
               });
             }
           }
         } catch (error) {
           logger.error("Error en /ia:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error en IA. Intenta nuevamente.",
+            text: "⚠️  Error en IA. Intenta nuevamente.",
           });
         }
         break;
@@ -2646,7 +2646,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /clasificar:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error en el clasificador de contenido.",
+            text: "⚠️  Error en el clasificador de contenido.",
           });
         }
         break;
@@ -2664,7 +2664,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /listclasificados:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al listar clasificados.",
+            text: "⚠️  Error al listar clasificados.",
           });
         }
         break;
@@ -2677,7 +2677,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en myaportes:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo tus aportes. Intenta más tarde.",
+            text: "⚠️  Error obteniendo tus aportes. Intenta más tarde.",
           });
         }
         break;
@@ -2700,7 +2700,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           // Crear respuesta de fallback
           result = {
             message:
-              "🗃️ *Lista de aportes*\n\nâšÂ Ã¯Â¸Â Error accediendo a la base de datos.\n\nâž• Usa `/addaporte [contenido]` para agregar un aporte.",
+              "🗃️ *Lista de aportes*\n\n⚠️  Error accediendo a la base de datos.\n\n➤ Usa `/addaporte [contenido]` para agregar un aporte.",
           };
         }
         break;
@@ -2752,7 +2752,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en addaporte:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error agregando aporte. Intenta más tarde.",
+            text: "⚠️  Error agregando aporte. Intenta más tarde.",
           });
         }
         break;
@@ -2781,7 +2781,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } catch (error) {
             logger.error("Error en aporteestado:", error);
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error cambiando estado. Intenta más tarde.",
+              text: "⚠️  Error cambiando estado. Intenta más tarde.",
             });
           }
         }
@@ -2806,7 +2806,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } catch (error) {
             logger.error("Error en pedido:", error);
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error registrando pedido. Intenta más tarde.",
+              text: "⚠️  Error registrando pedido. Intenta más tarde.",
             });
           }
         }
@@ -2819,7 +2819,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en pedidos:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo pedidos. Intenta más tarde.",
+            text: "⚠️  Error obteniendo pedidos. Intenta más tarde.",
           });
         }
         break;
@@ -2830,7 +2830,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           const manhwas = await db("manhwas").select("*").limit(10);
           if (manhwas.length === 0) {
             await sock.sendMessage(remoteJid, {
-              text: "*Lista de manhwas*\n\nℹ️ No hay manhwas registrados.\n\nâž• Usa `/addmanhwa` para agregar uno.",
+              text: "*Lista de manhwas*\n\nℹ️ No hay manhwas registrados.\n\n➤ Usa `/addmanhwa` para agregar uno.",
             });
           } else {
             let manhwaList = "¡ *Lista de manhwas*\n\n";
@@ -2844,7 +2844,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en manhwas:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo manhwas. Intenta más tarde.",
+            text: "⚠️  Error obteniendo manhwas. Intenta más tarde.",
           });
         }
         break;
@@ -2904,7 +2904,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error agregando manhwa:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error agregando manhwa. Intenta más tarde.",
+            text: "⚠️  Error agregando manhwa. Intenta más tarde.",
           });
         }
         break;
@@ -2927,13 +2927,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: `âšÂ Ã¯Â¸Â *Manhwa no encontrado*\n\n🔎 Búsqueda: "${searchTerm}"\n\nðŸ"Å¡ Usa \`/manhwas\` para ver la lista completa.`,
+                text: `⚠️  *Manhwa no encontrado*\n\n🔎 Búsqueda: "${searchTerm}"\n\n📚 Usa \`/manhwas\` para ver la lista completa.`,
               });
             }
           } catch (error) {
             logger.error("Error buscando manhwa:", error);
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error buscando manhwa. Intenta más tarde.",
+              text: "⚠️  Error buscando manhwa. Intenta más tarde.",
             });
           }
         }
@@ -2961,7 +2961,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en series:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo series. Intenta más tarde.",
+            text: "⚠️  Error obteniendo series. Intenta más tarde.",
           });
         }
         break;
@@ -3021,7 +3021,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error agregando serie:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error agregando serie. Intenta más tarde.",
+            text: "⚠️  Error agregando serie. Intenta más tarde.",
           });
         }
         break;
@@ -3045,7 +3045,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           }
         } catch (error) {
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo contenido extra.",
+            text: "⚠️  Error obteniendo contenido extra.",
           });
         }
         break;
@@ -3070,7 +3070,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           }
         } catch (error) {
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo ilustraciones.",
+            text: "⚠️  Error obteniendo ilustraciones.",
           });
         }
         break;
@@ -3103,7 +3103,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             }
           } catch (error) {
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error buscando contenido extra.",
+              text: "⚠️  Error buscando contenido extra.",
             });
           }
         }
@@ -3137,7 +3137,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             }
           } catch (error) {
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error buscando ilustraciones.",
+              text: "⚠️  Error buscando ilustraciones.",
             });
           }
         }
@@ -3171,7 +3171,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             }
           } catch (error) {
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error buscando packs.",
+              text: "⚠️  Error buscando packs.",
             });
           }
         }
@@ -3181,7 +3181,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/addgroup":
         if (!isSuperAdmin(usuario)) {
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Solo los superadmins pueden agregar grupos.",
+            text: "⚠️ Solo los superadmins pueden agregar grupos.",
           });
         } else if (args.length === 0) {
           await sock.sendMessage(remoteJid, {
@@ -3208,7 +3208,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } catch (error) {
             logger.error("Error agregando grupo:", error);
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error agregando el grupo. Puede que ya esté registrado.",
+              text: "⚠️  Error agregando el grupo. Puede que ya esté registrado.",
             });
           }
         }
@@ -3217,7 +3217,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/delgroup":
         if (!isSuperAdmin(usuario)) {
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Solo los superadmins pueden eliminar grupos.",
+            text: "⚠️ Solo los superadmins pueden eliminar grupos.",
           });
         } else {
           try {
@@ -3236,7 +3236,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } catch (error) {
             logger.error("Error eliminando grupo:", error);
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error eliminando el grupo.",
+              text: "⚠️  Error eliminando el grupo.",
             });
           }
         }
@@ -3287,7 +3287,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               logger.pretty.line("🧹 Notificaciones limpiadas");
             } catch (error) {
               await sock.sendMessage(remoteJid, {
-                text: "âšÂ Ã¯Â¸Â Error activando el bot globalmente: " + error.message,
+                text: "⚠️  Error activando el bot globalmente: " + error.message,
               });
               logger.error("Error activando bot:", error);
             }
@@ -3314,9 +3314,9 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               }
 
               await sock.sendMessage(remoteJid, {
-                text: "⚠️  *Bot desactivado globalmente*\n\n⏳ El bot no responderá a ningún comando excepto `/bot global on` del owner.\n\n👑 Solo tú puedes reactivarlo.",
+                text: "⚠️ *Bot desactivado globalmente*\n\n⏳ El bot no responderá a ningún comando excepto `/bot global on` del owner.\n\n👑 Solo tú puedes reactivarlo.",
               });
-              logger.info("⚠️  Bot desactivado globalmente por owner");
+              logger.info("⚠️ Bot desactivado globalmente por owner");
 
               logger.pretty.banner("Bot desactivado globalmente", "⚠️ ");
               logger.pretty.kv("Por", `${usuario} (Owner)`);
@@ -3325,7 +3325,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             } catch (error) {
               await sock.sendMessage(remoteJid, {
                 text:
-                  "âšÂ Ã¯Â¸Â Error desactivando el bot globalmente: " + error.message,
+                  "⚠️  Error desactivando el bot globalmente: " + error.message,
               });
               logger.error("Error desactivando bot:", error);
             }
@@ -3336,7 +3336,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           }
         } else if (args[0] === "global") {
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Solo el owner puede usar comandos globales",
+            text: "⚠️ Solo el owner puede usar comandos globales",
           });
         } else {
           if (args[0] === "on") {
@@ -3347,7 +3347,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                   const allowed = await isOwnerOrAdmin(usuario, remoteJid);
                   if (!allowed) {
                     await sock.sendMessage(remoteJid, {
-                      text: "⚠️  Solo owner o administradores del grupo pueden usar /bot on.",
+                      text: "⚠️ Solo owner o administradores del grupo pueden usar /bot on.",
                     });
                     break;
                   }
@@ -3377,7 +3377,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                     });
                   }
 
-                  logger.pretty.line(`ðŸ—â€Å¡ÃƒÆ'¯Â¸Â Grupo ${remoteJid} activado en BD`);
+                  logger.pretty.line(`🗒️ Grupo ${remoteJid} activado en BD`);
                 } catch (dbError) {
                   logger.error("Error BD bot on:", dbError);
                 }
@@ -3399,7 +3399,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             } catch (error) {
               logger.error("Error en bot on:", error);
               await sock.sendMessage(remoteJid, {
-                text: "âšÂ Ã¯Â¸Â Error activando el bot en grupo: " + error.message,
+                text: "⚠️  Error activando el bot en grupo: " + error.message,
               });
             }
           } else if (args[0] === "off") {
@@ -3411,7 +3411,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                   const allowed = await isOwnerOrAdmin(usuario, remoteJid);
                   if (!allowed) {
                     await sock.sendMessage(remoteJid, {
-                      text: "⚠️  Solo owner o administradores del grupo pueden usar /bot off.",
+                      text: "⚠️ Solo owner o administradores del grupo pueden usar /bot off.",
                     });
                     break;
                   }
@@ -3442,14 +3442,14 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                     });
                   }
 
-                  logger.pretty.line(`ðŸ—â€Å¡ÃƒÆ'¯Â¸Â Grupo ${remoteJid} desactivado en BD`);
+                  logger.pretty.line(`🗒️ Grupo ${remoteJid} desactivado en BD`);
                 } catch (dbError) {
                   logger.error("Error BD bot off:", dbError);
-                  logger.pretty.line("âšÂ Ã¯Â¸Â Error BD pero continuando...");
+                  logger.pretty.line("⚠️  Error BD pero continuando...");
                 }
 
                 await sock.sendMessage(remoteJid, {
-                  text: "⚠️  *Bot desactivado en este grupo*\n\n⏳ El bot no responderá a comandos en este grupo.\n✅ Usa `/bot on` para reactivarlo.",
+                  text: "⚠️ *Bot desactivado en este grupo*\n\n⏳ El bot no responderá a comandos en este grupo.\n✅ Usa `/bot on` para reactivarlo.",
                 });
 
                 logger.pretty.banner("Bot desactivado en grupo", "⚠️ ");
@@ -3465,7 +3465,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             } catch (error) {
               logger.error("Error en bot off:", error);
               await sock.sendMessage(remoteJid, {
-                text: "âšÂ Ã¯Â¸Â Error desactivando el bot en grupo: " + error.message,
+                text: "⚠️  Error desactivando el bot en grupo: " + error.message,
               });
             }
           } else {
@@ -3505,7 +3505,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (err) {
           logger.error("Error en /mynumber:", err);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo tu información de número.",
+            text: "⚠️  Error obteniendo tu información de número.",
           });
         }
         break;
@@ -3529,7 +3529,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             ` getBotJid(): ${getBotJid(sock)}\n` +
             ` getBotNumber(): ${botNumber}\n` +
             ` Usuario = Bot?: ${usuario === botNumber ? " Si" : " NO"}\n\n` +
-            `ðŸ›Â¡ÃƒÆ'¯Â¸Â **Verificaciones owner:**\n` +
+            `🛡️ **Verificaciones owner:**\n` +
             ` isSpecificOwner(${usuario}): ${isSpecificOwner(usuario)}\n` +
             ` isSuperAdmin(${usuario}): ${isSuperAdmin(usuario)}\n` +
             ` isOwner variable: ${isOwner}\n\n` +
@@ -3624,7 +3624,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               isUserAdmin = true; // El owner/superadmin siempre tiene permisos de admin
             }
 
-            let debugText = `ðŸ›Â¡ÃƒÆ'¯Â¸Â *Debug administradores (corregido)*\n\n`;
+            let debugText = `🛡️ *Debug administradores (corregido)*\n\n`;
             debugText += `👥 **Grupo:** ${groupMetadata.subject}\n`;
             debugText += `📌 **Participantes:** ${groupMetadata.participants.length}\n\n`;
 
@@ -3656,7 +3656,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 debugText += `${index + 1}. ${adminNumber} (${admin.admin})${isBot ? " 🤖 BOT" : ""}${isCurrentUser ? " 🫵 Tú" : ""}\n`;
               });
             } else {
-              debugText += `âšÂ Ã¯Â¸Â No se encontraron administradores\n`;
+              debugText += `⚠️  No se encontraron administradores\n`;
             }
 
             debugText += `\n🔎 **Debug info detallado:**\n`;
@@ -3693,7 +3693,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             debugText += `• Bot ${botJid.split("@")[0]}: ${botByNumber ? `Encontrado (${botByNumber.admin || "member"})` : "No encontrado"}\n`;
 
             if (usuario === botJid.split("@")[0]) {
-              debugText += `\nðŸÅ¡Ã'¨ **Problema crítico:**\n`;
+              debugText += `\n🚨 **Problema crítico:**\n`;
               debugText += `• El usuario y el bot tienen el mismo número\n`;
               debugText += `• Esto causa conflictos en la detección de permisos\n`;
               debugText += `• El bot no puede ser administrador de sí mismo\n`;
@@ -3773,7 +3773,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /debugme:", error);
           await sock.sendMessage(remoteJid, {
-            text: `âšÂ Ã¯Â¸Â Error en debug: ${error.message}`,
+            text: `⚠️  Error en debug: ${error.message}`,
           });
         }
         break;
@@ -3809,13 +3809,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 resultText += `✅ Tienes permisos porque ERES admin del grupo\n`;
               } else if (isOwnerCheck || isSuperCheck) {
                 resultText += `✅ Tienes permisos porque eres OWNER/SUPERADMIN\n`;
-                resultText += `âšÂ Ã¯Â¸Â Pero NO eres admin real del grupo de WhatsApp\n`;
+                resultText += `⚠️  Pero NO eres admin real del grupo de WhatsApp\n`;
               }
               resultText += `\n🎯 Puedes usar: /kick, /promote, /demote\n`;
-              resultText += `âšÂ Ã¯Â¸Â Para /lock y /unlock, el BOT debe ser admin del grupo\n`;
+              resultText += `⚠️  Para /lock y /unlock, el BOT debe ser admin del grupo\n`;
             } else {
               resultText += `❌ NO tienes permisos de administrador\n`;
-              resultText += `âšÂ Ã¯Â¸Â No puedes usar comandos de moderación\n`;
+              resultText += `⚠️  No puedes usar comandos de moderación\n`;
             }
 
             resultText += `\n👤 Solicitado por: @${usuario}\n`;
@@ -3828,7 +3828,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } catch (error) {
             logger.error("Error en /testadmin:", error);
             await sock.sendMessage(remoteJid, {
-              text: `âšÂ Ã¯Â¸Â Error verificando permisos: ${error.message}`,
+              text: `⚠️  Error verificando permisos: ${error.message}`,
             });
           }
         }
@@ -3881,7 +3881,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /kick:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error procesando expulsión.",
+            text: "⚠️  Error procesando expulsión.",
           });
         }
         break;
@@ -3931,7 +3931,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /promote:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error procesando promoción.",
+            text: "⚠️  Error procesando promoción.",
           });
         }
         break;
@@ -3981,7 +3981,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /demote:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error procesando degradación.",
+            text: "⚠️  Error procesando degradación.",
           });
         }
         break;
@@ -4003,7 +4003,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en lock:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error bloqueando el grupo.",
+            text: "⚠️  Error bloqueando el grupo.",
           });
         }
         break;
@@ -4025,7 +4025,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en unlock:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error desbloqueando el grupo.",
+            text: "⚠️  Error desbloqueando el grupo.",
           });
         }
         break;
@@ -4061,7 +4061,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
             if (!isUserAdmin && !isOwner) {
               await sock.sendMessage(remoteJid, {
-                text: "⚠️  Solo administradores pueden etiquetar a todos",
+                text: "⚠️ Solo administradores pueden etiquetar a todos",
               });
               break;
             }
@@ -4080,7 +4080,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } catch (error) {
             logger.error("Error en tag:", error);
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error etiquetando usuarios",
+              text: "⚠️  Error etiquetando usuarios",
             });
           }
         }
@@ -4141,7 +4141,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /logs:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al cargar registros. Intenta de nuevo.",
+            text: "⚠️  Error al cargar registros. Intenta de nuevo.",
           });
         }
         break;
@@ -4163,7 +4163,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /config:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al procesar configuración.",
+            text: "⚠️  Error al procesar configuración.",
           });
         }
         break;
@@ -4183,7 +4183,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /registrar:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al registrar usuario.",
+            text: "⚠️  Error al registrar usuario.",
           });
         }
         break;
@@ -4203,7 +4203,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /resetpaíss:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al resetear contraseña.",
+            text: "⚠️  Error al resetear contraseña.",
           });
         }
         break;
@@ -4221,7 +4221,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /miinfo:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al obtener información.",
+            text: "⚠️  Error al obtener información.",
           });
         }
         break;
@@ -4239,7 +4239,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /cleansession:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al limpiar sesión.",
+            text: "⚠️  Error al limpiar sesión.",
           });
         }
         break;
@@ -4266,7 +4266,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           }
         } else {
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Solo el owner puede actualizar el bot",
+            text: "⚠️ Solo el owner puede actualizar el bot",
           });
         }
         break;
@@ -4284,7 +4284,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error obteniendo estadisticas:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error obteniendo estadísticas del sistema",
+            text: "⚠️  Error obteniendo estadísticas del sistema",
           });
         }
         break;
@@ -4293,7 +4293,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/code_legacy":
         if (!isOwner) {
           await sock.sendMessage(remoteJid, {
-            text: "⚠️  Solo el owner puede generar pairing codes de subbots",
+            text: "⚠️ Solo el owner puede generar pairing codes de subbots",
           });
           break;
         }
@@ -4367,7 +4367,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                   `🧩 **Código:** ${event.subbot.code}\n` +
                   `📞 **Número:** ${phoneNumber}\n` +
                   `✅ **Estado:** Conectado\n` +
-                  `ðŸÅ¡Ã¢â€šÂ¬ ¡Listo para usar!\n\n` +
+                  `🚀 ¡Listo para usar!\n\n` +
                   `📋 Usa \`/bots\` para ver todos los subbots activos`,
               });
             }
@@ -4376,7 +4376,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           const handleError = async (event) => {
             await sock.sendMessage(remoteJid, {
               text:
-                `âšÂ Ã¯Â¸Â *Error en SubBot*\n\n` +
+                `⚠️  *Error en SubBot*\n\n` +
                 `🧩 **Código:** ${event.subbot.code}\n` +
                 `📞 **Número:** ${phoneNumber}\n` +
                 `🧯 **Error:** ${event.data.message}\n\n` +
@@ -4406,7 +4406,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
 
           if (!result.success) {
             await sock.sendMessage(remoteJid, {
-              text: `âšÂ Ã¯Â¸Â *Error creando SubBot*\n\n${result.error}\n\n🔁 Intenta nuevamente`,
+              text: `⚠️  *Error creando SubBot*\n\n${result.error}\n\n🔁 Intenta nuevamente`,
             });
           }
         } catch (error) {
@@ -4431,7 +4431,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               `📞 Número: ${usuario}\n` +
               `🆔 ID: ${usuario}@s.whatsapp.net\n` +
               `👑 Owner: ${isOwner ? "Sí" : "No"}\n` +
-              `ðŸ—â€Å¡ÃƒÆ'¯Â¸Â Contexto: ${isGroup ? "Grupo" : "Privado"}\n\n` +
+              `🗒️ Contexto: ${isGroup ? "Grupo" : "Privado"}\n\n` +
               `👤 Solicitado por: @${usuario}\n` +
               `🕒 Fecha: ${new Date().toLocaleString("es-ES")}`;
 
@@ -4447,7 +4447,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             `📞 Número: ${usuario}\n` +
             `🆔 ID: ${usuario}@s.whatsapp.net\n` +
             `👑 Owner: ${isOwner ? "Sí" : "No"}\n` +
-            `ðŸ—â€Å¡ÃƒÆ'¯Â¸Â Contexto: ${isGroup ? "Grupo" : "Privado"}\n\n` +
+            `🗒️ Contexto: ${isGroup ? "Grupo" : "Privado"}\n\n` +
             `👤 Solicitado por: @${usuario}\n` +
             `🕒 Fecha: ${new Date().toLocaleString("es-ES")}`;
 
@@ -4464,10 +4464,10 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           result = await handleDebugAdmin(usuario, remoteJid);
           if (!result || !result.message) {
             const debugInfo =
-              `ðŸ›Â¡ÃƒÆ'¯Â¸Â *Debug admin*\n\n` +
+              `🛡️ *Debug admin*\n\n` +
               `👤 Usuario: ${usuario}\n` +
               `👑 Es Owner: ${isOwner ? "Sí" : "NO"}\n` +
-              `ðŸ—â€Å¡ÃƒÆ'¯Â¸Â Contexto: ${isGroup ? "Grupo" : "Privado"}\n` +
+              `🗒️ Contexto: ${isGroup ? "Grupo" : "Privado"}\n` +
               `💬 Chat ID: ${remoteJid}\n` +
               `⏱️ Timestamp: ${new Date().toISOString()}\n` +
               `🤖 Bot Status: Funcionando\n` +
@@ -4478,10 +4478,10 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en debugadmin:", error);
           const debugInfo =
-            `ðŸ›Â¡ÃƒÆ'¯Â¸Â *Debug admin*\n\n` +
+            `🛡️ *Debug admin*\n\n` +
             `👤 Usuario: ${usuario}\n` +
             `👑 Es Owner: ${isOwner ? "Sí" : "NO"}\n` +
-            `ðŸ—â€Å¡ÃƒÆ'¯Â¸Â Contexto: ${isGroup ? "Grupo" : "Privado"}\n` +
+            `🗒️ Contexto: ${isGroup ? "Grupo" : "Privado"}\n` +
             `💬 Chat ID: ${remoteJid}\n` +
             `⏱️ Timestamp: ${new Date().toISOString()}\n` +
             `🤖 Bot Status: Funcionando\n` +
@@ -4518,13 +4518,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: result.message || "âšÂ Ã¯Â¸Â Error al buscar música.",
+              text: result.message || "⚠️  Error al buscar música.",
             });
           }
         } catch (error) {
           logger.error("Error en /music:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al buscar música. Intenta nuevamente.",
+            text: "⚠️  Error al buscar música. Intenta nuevamente.",
           });
         }
         break;
@@ -4564,13 +4564,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: result.message || "âšÂ Ã¯Â¸Â Error al buscar en Spotify.",
+              text: result.message || "⚠️  Error al buscar en Spotify.",
             });
           }
         } catch (error) {
           logger.error("Error en /spotify:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al buscar en Spotify. Intenta nuevamente.",
+            text: "⚠️  Error al buscar en Spotify. Intenta nuevamente.",
           });
         }
         break;
@@ -4597,13 +4597,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: result.message || "âšÂ Ã¯Â¸Â Error al buscar video.",
+              text: result.message || "⚠️  Error al buscar video.",
             });
           }
         } catch (error) {
           logger.error("Error en /video:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al buscar video. Intenta nuevamente.",
+            text: "⚠️  Error al buscar video. Intenta nuevamente.",
           });
         }
         break;
@@ -4638,14 +4638,14 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: result.message || "âšÂ Ã¯Â¸Â Error al buscar música.",
+                text: result.message || "⚠️  Error al buscar música.",
               });
             }
           }
         } catch (error) {
           logger.error("Error en /play:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al buscar música. Intenta nuevamente.",
+            text: "⚠️  Error al buscar música. Intenta nuevamente.",
           });
         }
         break;
@@ -4672,7 +4672,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } else {
             await sock.sendMessage(remoteJid, {
               text:
-                `âšÂ Ã¯Â¸Â *Generador de memes*\n\n` +
+                `⚠️  *Generador de memes*\n\n` +
                 `❌ No se pudo generar el meme en este momento.\n\n` +
                 `🔁 Intenta nuevamente en unos segundos.`,
             });
@@ -4681,7 +4681,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           logger.error("Error generando meme:", error);
           await sock.sendMessage(remoteJid, {
             text:
-              `âšÂ Ã¯Â¸Â *Generador de memes*\n\n` +
+              `⚠️  *Generador de memes*\n\n` +
               `❌ Error generando meme.\n\n` +
               `🔁 Intenta nuevamente más tarde.`,
           });
@@ -4722,7 +4722,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             } else {
               await sock.sendMessage(remoteJid, {
                 text:
-                  `âšÂ Ã¯Â¸Â *Generador de imágenes IA*\n\n` +
+                  `⚠️  *Generador de imágenes IA*\n\n` +
                   `❌ No se pudo generar la imagen: "${imagePrompt}"\n\n` +
                   `💡 Intenta con una descripción más simple o específica.`,
               });
@@ -4731,7 +4731,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             logger.error("Error generando imagen IA:", error);
             await sock.sendMessage(remoteJid, {
               text:
-                `âšÂ Ã¯Â¸Â *Generador de imágenes IA*\n\n` +
+                `⚠️  *Generador de imágenes IA*\n\n` +
                 `❌ Error generando imagen: "${imagePrompt}"\n\n` +
                 `🕘 El servicio puede estar ocupado, intenta más tarde.`,
             });
@@ -4743,14 +4743,14 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/chiste":
         const jokes = [
           "Por qué los programadores prefieren el modo oscuro? Porque la luz atrae a los bugs! 😄",
-          "Cuál es el colmo de un programador? Que su mujer le diga que tiene un bug y él le pregunte si es reproducible ðŸ˜â€Å¡",
+          "Cuál es el colmo de un programador? Que su mujer le diga que tiene un bug y él le pregunte si es reproducible 😊",
           "Por qué los programadores odian la naturaleza? Porque tiene demasiados bugs 🐛",
           "Un programador va al médico y le dice: 'Doctor, me duele cuando programo'. El médico le responde: 'Entonces no programes' 😆",
           "Qué le dice un bit a otro bit? Nos vemos en el bus! 😄",
         ];
         const randomJoke = jokes[Math.floor(Math.random() * jokes.length)];
         await sock.sendMessage(remoteJid, {
-          text: `ðŸ˜â€Å¡ *Chiste del Día*\n\n${randomJoke}`,
+          text: `😊 *Chiste del Día*\n\n${randomJoke}`,
         });
         break;
 
@@ -4782,7 +4782,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /translate:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al traducir. Intenta nuevamente.",
+            text: "⚠️  Error al traducir. Intenta nuevamente.",
           });
         }
         break;
@@ -4819,7 +4819,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                   text:
                     `🌦️ *Clima*\n\n` +
                     `📍 **Ubicación:** ${location.areaName[0].value}, ${location.country[0].value}\n\n` +
-                    `ðŸŒÂ¡ÃƒÆ'¯Â¸Â **Temperatura:** ${current.temp_C}°C\n` +
+                    `🌡️ **Temperatura:** ${current.temp_C}°C\n` +
                     `🥵 **Sensación térmica:** ${current.FeelsLikeC}°C\n` +
                     `☁️ **Condición:** ${current.weatherDesc[0].value}\n` +
                     `💧 **Humedad:** ${current.humidity}%\n` +
@@ -4843,7 +4843,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                   text:
                     `🌦️ *Clima*\n\n` +
                     `🏙️ **Ciudad:** ${data.name}, ${data.sys.country}\n\n` +
-                    `ðŸŒÂ¡ÃƒÆ'¯Â¸Â **Temperatura:** ${temp}°C\n` +
+                    `🌡️ **Temperatura:** ${temp}°C\n` +
                     `🥵 **Sensación térmica:** ${feelsLike}°C\n` +
                     `☁️ **Condición:** ${description}\n` +
                     `💧 **Humedad:** ${humidity}%\n` +
@@ -4857,7 +4857,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             logger.error("Error en clima:", error);
             await sock.sendMessage(remoteJid, {
               text:
-                `âšÂ Ã¯Â¸Â *Clima*\n\n` +
+                `⚠️  *Clima*\n\n` +
                 `❌ No se pudo obtener el clima para: "${city}"\n\n` +
                 `🔁 Intenta nuevamente más tarde.`,
             });
@@ -4942,12 +4942,12 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 translateData.responseData?.translatedText || data.text;
 
               await sock.sendMessage(remoteJid, {
-                text: `🔍 *Dato Curioso Real*\n\n💡 ${translatedFact}\n\nðŸ"Å¡ **Fuente:** Datos verificados\n🏷️ **Categoría:** Conocimiento general\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
+                text: `🔍 *Dato Curioso Real*\n\n💡 ${translatedFact}\n\n📚 **Fuente:** Datos verificados\n🏷️ **Categoría:** Conocimiento general\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
               });
             } catch (translateError) {
               // Si falla la traducción, usar el dato en inglés
               await sock.sendMessage(remoteJid, {
-                text: `🔍 *Dato Curioso Real*\n\n💡 ${data.text}\n\nðŸ"Å¡ **Fuente:** Datos verificados\n🌐 **Idioma:** Inglés\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
+                text: `🔍 *Dato Curioso Real*\n\n💡 ${data.text}\n\n📚 **Fuente:** Datos verificados\n🌐 **Idioma:** Inglés\n\n📝 Solicitado por: ${usuario}\n⏰ ${new Date().toLocaleString("es-ES")}`,
               });
             }
           } else {
@@ -5108,13 +5108,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } else {
             await sock.sendMessage(remoteJid, {
               text:
-                result.message || "âšÂ Ã¯Â¸Â Error al descargar el video de TikTok.",
+                result.message || "⚠️  Error al descargar el video de TikTok.",
             });
           }
         } catch (error) {
           logger.error("Error en /tiktok:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al descargar el video de TikTok. Intenta nuevamente.",
+            text: "⚠️  Error al descargar el video de TikTok. Intenta nuevamente.",
           });
         }
         break;
@@ -5155,13 +5155,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             await sock.sendMessage(remoteJid, {
               text:
                 result.message ||
-                "âšÂ Ã¯Â¸Â Error al descargar el contenido de Instagram.",
+                "⚠️  Error al descargar el contenido de Instagram.",
             });
           }
         } catch (error) {
           logger.error("Error en /instagram:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al descargar el contenido de Instagram. Intenta nuevamente.",
+            text: "⚠️  Error al descargar el contenido de Instagram. Intenta nuevamente.",
           });
         }
         break;
@@ -5187,13 +5187,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           } else {
             await sock.sendMessage(remoteJid, {
               text:
-                result.message || "âšÂ Ã¯Â¸Â Error al descargar el video de Facebook.",
+                result.message || "⚠️  Error al descargar el video de Facebook.",
             });
           }
         } catch (error) {
           logger.error("Error en /facebook:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al descargar el video de Facebook. Intenta nuevamente.",
+            text: "⚠️  Error al descargar el video de Facebook. Intenta nuevamente.",
           });
         }
         break;
@@ -5233,13 +5233,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             await sock.sendMessage(remoteJid, {
               text:
                 result.message ||
-                "âšÂ Ã¯Â¸Â Error al descargar el contenido de Twitter/X.",
+                "⚠️  Error al descargar el contenido de Twitter/X.",
             });
           }
         } catch (error) {
           logger.error("Error en /twitter:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al descargar el contenido de Twitter/X. Intenta nuevamente.",
+            text: "⚠️  Error al descargar el contenido de Twitter/X. Intenta nuevamente.",
           });
         }
         break;
@@ -5265,13 +5265,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             await sock.sendMessage(remoteJid, {
               text:
                 result.message ||
-                "âšÂ Ã¯Â¸Â Error al descargar la imagen de Pinterest.",
+                "⚠️  Error al descargar la imagen de Pinterest.",
             });
           }
         } catch (error) {
           logger.error("Error en /pinterest:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al descargar la imagen de Pinterest. Intenta nuevamente.",
+            text: "⚠️  Error al descargar la imagen de Pinterest. Intenta nuevamente.",
           });
         }
         break;
@@ -5317,7 +5317,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
         } catch (error) {
           logger.error("Error en /buscararchivo:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al buscar archivos.",
+            text: "⚠️  Error al buscar archivos.",
           });
         }
         break;
@@ -5376,19 +5376,19 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
               await sock.sendMessage(remoteJid, { text: res.message });
             } else {
               await sock.sendMessage(remoteJid, {
-                text: "âšÂ Ã¯Â¸Â No se pudo completar la descarga.",
+                text: "⚠️  No se pudo completar la descarga.",
               });
             }
           } catch (e) {
             logger.error("Error en /descargar:", e);
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â Error en la descarga. Intenta de nuevo.",
+              text: "⚠️  Error en la descarga. Intenta de nuevo.",
             });
           }
         } catch (error) {
           logger.error("Error en /descargar wrapper:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error interno en /descargar.",
+            text: "⚠️  Error interno en /descargar.",
           });
         }
         break;
@@ -5433,13 +5433,13 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             });
           } else {
             await sock.sendMessage(remoteJid, {
-              text: "âšÂ Ã¯Â¸Â No se pudo guardar el archivo.",
+              text: "⚠️  No se pudo guardar el archivo.",
             });
           }
         } catch (error) {
           logger.error("Error en /guardar:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al guardar el archivo. Intenta de nuevo.",
+            text: "⚠️  Error al guardar el archivo. Intenta de nuevo.",
           });
         }
         break;
@@ -5459,7 +5459,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           if (userSubbots.length >= 3) {
             await sock.sendMessage(remoteJid, {
               text:
-                `âšÂ Ã¯Â¸Â Has alcanzado el límite de 3 subbots conectados.\n` +
+                `⚠️  Has alcanzado el límite de 3 subbots conectados.\n` +
                 `Elimina uno con /delsubbot antes de crear uno nuevo.`,
             });
             break;
@@ -5512,7 +5512,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
 4️⃣ Seleccióna *Vincular con número de teléfono*
 5️⃣ Ingresa el código mostrado arriba
 
-âšÂ Ã¯Â¸Â *Importante:*
+⚠️  *Importante:*
 • El código es de un solo uso
 • No lo compartas con nadie
 • Si expira, genera uno nuevo con /serbot`;
@@ -5537,7 +5537,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
         } catch (error) {
           logger.error("Error en /serbot:", error);
           await sock.sendMessage(remoteJid, {
-            text: "âšÂ Ã¯Â¸Â Error al procesar el comando. Intenta de nuevo.",
+            text: "⚠️  Error al procesar el comando. Intenta de nuevo.",
           });
         }
         break;
@@ -5732,7 +5732,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           infoText += `📝 **Descripción:** ${subbot.descripcion || "Sin descripción"}\n`;
           infoText += `👤 **Creado por:** ${subbot.creado_por}\n`;
           infoText += `📅 **Fecha creación:** ${createdDate}\n`;
-          infoText += `⏰ **ÃÅ¡ltima actividad:** ${lastActivity}\n\n`;
+          infoText += `⏰ **Última actividad:** ${lastActivity}\n\n`;
 
           if (recentActivity.length > 0) {
             infoText += `📋 **Actividad Reciente:**\n`;
@@ -6955,7 +6955,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             `?? Cache nombres: ${nameCache.size}\n` +
             `?? Cache grupos: ${groupNameCache.size}\n\n` +
             `?? Owner: 595974154768 (Melodia)\n` +
-            `âšâ"¢Ã¯Â¸Â Engine: WhiskeySockets/Baileys\n` +
+            `⚙️ Engine: WhiskeySockets/Baileys\n` +
             `${globalStatus ? "✅ Funcionando correctamente" : "🔧 Modo mantenimiento"}\n\n` +
             `📝 Solicitado por: @${usuario}\n` +
             `? ${new Date().toLocaleString("es-ES")}`;
@@ -6991,19 +6991,19 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             `👤 Owner: 595974154768 (Melodía)\n\n` +
             `💻 *Sistema:*\n` +
             `🖥️ Plataforma: ${process.platform}\n` +
-            `âš¡ Node.js: ${process.version}\n` +
+            `⚡ Node.js: ${process.version}\n` +
             `🔧 Arquitectura: ${process.arch}\n` +
             `💾 Memoria: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB\n` +
             `⏱️ Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m\n\n` +
             `📊 *Estadísticas:*\n` +
-            `ðŸ"Å¡ Aportes registrados: ${totalAportes?.count || 0}\n` +
+            `📚 Aportes registrados: ${totalAportes?.count || 0}\n` +
             `📖 Manhwas en BD: ${totalManhwas?.count || 0}\n` +
             `👥 Nombres en cache: ${nameCache.size}\n` +
             `🏷️ Grupos en cache: ${groupNameCache.size}\n\n` +
             `🔄 *Estado:*\n` +
             `🌐 Global: ${globalStatus ? "✅ Activo" : "⛔ Desactivado"}\n` +
             `📡 Conexión: ${connectionStatus}\n` +
-            `âšâ"¢Ã¯Â¸Â Estado: ${globalStatus ? "Operativo" : "Mantenimiento"}\n\n` +
+            `⚙️ Estado: ${globalStatus ? "Operativo" : "Mantenimiento"}\n\n` +
             `📝 Solicitado por: @${usuario}\n` +
             `📅 Fecha: ${new Date().toLocaleDateString("es-ES")}\n` +
             `⏰ Hora: ${new Date().toLocaleTimeString("es-ES")}`;
@@ -7034,7 +7034,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           `🔍 **Verificación de Usuario:**\n` +
           `📱 Tu número: ${usuario}\n` +
           `🎯 Estado: ${ownerCheck ? "✅ OWNER VERIFICADO" : "👤 Usuario regular"}\n` +
-          `🔐 Permisos: ${isOwner ? "✅ Acceso total" : "âšÂ Ã¯Â¸Â Acceso limitado"}\n\n` +
+          `🔐 Permisos: ${isOwner ? "✅ Acceso total" : "⚠️  Acceso limitado"}\n\n` +
           `📝 Solicitado por: @${usuario}\n` +
           `? ${new Date().toLocaleString("es-ES")}`;
 
@@ -7062,7 +7062,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
           `? Funcion isSpecificOwner: ${debugOwner ? "SI" : "NO"}\n` +
           `? Funcion isSuperAdmin: ${superAdminCheck ? "SI" : "NO"}\n` +
           `🔍 Variable isOwner: ${isOwner ? "Sí" : "NO"}\n\n` +
-          `âšÂ Ã¯Â¸Â Si eres el owner (595974154768) y aparece NO, hay un problema de detección.`;
+          `⚠️  Si eres el owner (595974154768) y aparece NO, hay un problema de detección.`;
 
         await sock.sendMessage(remoteJid, { text: debugInfo });
         break;
@@ -7090,7 +7090,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
       } catch (error) {
         logger.error("Error enviando respuesta:", error);
         await sock.sendMessage(remoteJid, {
-          text: "âšÂ Ã¯Â¸Â Error enviando respuesta. Intenta nuevamente.",
+          text: "⚠️  Error enviando respuesta. Intenta nuevamente.",
         });
       }
     }
@@ -7244,7 +7244,7 @@ async function connectToWhatsApp(
                   resolve({ method: "pairing", phoneNumber: cleanedNumber });
                 } else {
                   logger.pretty.line(
-                    "âšÂ Ã¯Â¸Â Número inválido, usando QR por defecto",
+                    "⚠️  Número inválido, usando QR por defecto",
                   );
                   rl.close();
                   resolve({ method: "qr" });
@@ -7252,7 +7252,7 @@ async function connectToWhatsApp(
               },
             );
           } else {
-            logger.pretty.line("âšÂ Ã¯Â¸Â Opción inválida, usando QR por defecto");
+            logger.pretty.line("⚠️  Opción inválida, usando QR por defecto");
             rl.close();
             resolve({ method: "qr" });
           }
@@ -7293,7 +7293,7 @@ async function connectToWhatsApp(
       );
       if (!onlyDigits || onlyDigits.length < 7 || onlyDigits.length > 15) {
         logger.pretty.line(
-          "âšÂ Ã¯Â¸Â [PAIRING DEBUG] Número inválido para pairing (se requieren 7-15 dígitos).",
+          "⚠️  [PAIRING DEBUG] Número inválido para pairing (se requieren 7-15 dígitos).",
         );
       }
     }
@@ -7487,7 +7487,7 @@ async function connectToWhatsApp(
           }
           if (!pairingCode) {
             logger.pretty.line(
-              "âšÂ Ã¯Â¸Â No se pudo obtener pairing code tras reintentos",
+              "⚠️  No se pudo obtener pairing code tras reintentos",
             );
             return;
           }
@@ -7636,7 +7636,7 @@ async function connectToWhatsApp(
         connectionStatus = "disconnected";
         pairingRequestInProgress = false;
 
-        logger.pretty.banner("Conexión cerrada", "âšÂ Ã¯Â¸Â");
+        logger.pretty.banner("Conexión cerrada", "⚠️ ");
         logger.pretty.kv("Código de estado", statusCode ?? "n/a");
         logger.pretty.kv("Motivo", errorMsg);
         logger.pretty.kv("¿Debería reconectar?", shouldReconnect);
