@@ -163,14 +163,22 @@ export async function handlePairSubbot(sock, from, isGroup, msg, args) {
       },
       {
         event: 'connected',
-        handler: async () => {
+        handler: async (payload = {}) => {
+          const data = payload?.data || {};
+          const connectedNumber =
+            data.number || (data.digits ? `+${data.digits}` : null);
+
+          const lines = ['🟢 *SubBot conectado correctamente.*'];
+
+          if (connectedNumber) {
+            lines.push('', `🤖 *Bot vinculado:* ${connectedNumber}`);
+          }
+
+          lines.push('', "Consulta tus subbots con '/bots'.");
+
           await cleanup(
             {
-              text: [
-                '🟢 *SubBot conectado correctamente.*',
-                '',
-                "Consulta tus subbots con '/bots'."
-              ].join('\n')
+              text: lines.join('\n')
             },
             from,
             true
@@ -306,9 +314,21 @@ export async function handleQRSubbot(sock, from, isGroup, msg) {
       },
       {
         event: 'connected',
-        handler: async () => {
+        handler: async (payload = {}) => {
+          const data = payload?.data || {};
+          const connectedNumber =
+            data.number || (data.digits ? `+${data.digits}` : null);
+
+          const lines = ['🟢 *SubBot conectado correctamente por QR.*'];
+
+          if (connectedNumber) {
+            lines.push('', `🤖 *Bot vinculado:* ${connectedNumber}`);
+          }
+
+          lines.push('', `Consulta tus subbots con ${'`/bots`'}.`);
+
           await finalize({
-            text: `🟢 *SubBot conectado correctamente por QR.*\n\nConsulta tus subbots con ${'`/bots`'}.`
+            text: lines.join('\n')
           });
         }
       },

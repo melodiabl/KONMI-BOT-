@@ -435,7 +435,11 @@ async function doRequest(provider, url, body) {
     try {
       const mod = await import('yt-search')
       const ytSearch = mod.default || mod
+<<<<<<< HEAD
       const r = await ytSearch(url) // aquí la url es el query
+=======
+      const r = await ytSearch(url) // aquí url es el query
+>>>>>>> c06b4ece5887b887078a86e7c9f8ff739c4f1877
       const list = Array.isArray(r?.videos) ? r.videos : []
       return {
         data: {
@@ -525,14 +529,22 @@ export async function downloadWithFallback(type, param, options = {}) {
       const parsed = data?.__local ? data : (provider.parse?.(data, extra) || { success: false })
 
       if (parsed && parsed.success) {
+<<<<<<< HEAD
         logger.info?.('Descarga exitosa con ' + provider.name)
+=======
+        logger.info?.('✅ Descarga exitosa con ' + provider.name)
+>>>>>>> c06b4ece5887b887078a86e7c9f8ff739c4f1877
         return { ...parsed, provider: provider.name, httpStatus: status }
       }
 
       throw new Error('Respuesta no exitosa de la API (' + provider.name + ')')
     } catch (err) {
       const msg = provider.name + ': ' + (err?.message || 'Error desconocido')
+<<<<<<< HEAD
       logger.warn?.('Fallo con ' + msg)
+=======
+      logger.warn?.('⚠️ Fallo con ' + msg)
+>>>>>>> c06b4ece5887b887078a86e7c9f8ff739c4f1877
       errors.push(msg)
       continue
     }

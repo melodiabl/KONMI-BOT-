@@ -9,7 +9,7 @@ import {
   getConnectionStatus,
   getSocket,
 } from "./whatsapp.js";
-import { syncAllRuntimeStates } from "./subbot-manager.js";
+import { restoreActiveSubbots, syncAllRuntimeStates } from "./subbot-manager.js";
 import apiRouter from "./api.js";
 import {
   router as authRouter,
@@ -178,6 +178,17 @@ app.post(
       }
       await connectToWhatsApp(join(__dirname, "storage", "baileys_full"));
       try {
+        const restored = await restoreActiveSubbots();
+        if (restored > 0) {
+          console.log(` ♻️  Subbots reactivados tras reinicio: ${restored}`);
+        }
+      } catch (error) {
+        console.warn(
+          " No se pudieron reactivar los subbots guardados tras reinicio:",
+          error?.message || error,
+        );
+      }
+      try {
         await syncAllRuntimeStates();
         console.log(" Subbots sincronizados tras reiniciar el bot principal");
       } catch (error) {
@@ -277,6 +288,17 @@ async function start() {
 
   // 2) Conectar el bot (esto mostrar el men interactivo segn mtodo seleccionado)
   await connectToWhatsApp(join(__dirname, "storage", "baileys_full"));
+  try {
+    const restored = await restoreActiveSubbots();
+    if (restored > 0) {
+      console.log(` ♻️  Subbots reactivados automáticamente: ${restored}`);
+    }
+  } catch (error) {
+    console.warn(
+      " No se pudieron reactivar los subbots guardados:",
+      error?.message || error,
+    );
+  }
   try {
     await syncAllRuntimeStates();
     console.log(" Subbots sincronizados tras iniciar el bot principal");
