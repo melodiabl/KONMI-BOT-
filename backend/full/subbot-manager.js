@@ -508,10 +508,39 @@ export async function getSubbotByCode(code) {
   };
 }
 
-export async function attachRuntimeListeners(code, listeners = []) {
-  if (!code || !Array.isArray(listeners) || listeners.length === 0)
+export function attachRuntimeListeners(code, listeners = []) {
+  if (!code || !Array.isArray(listeners) || listeners.length === 0) {
     return () => {};
-  return registerSubbotListeners(code, listeners);
+  }
+
+  const scopedListeners = listeners
+    .map(({ event, handler }) => {
+      if (!event || typeof handler !== "function") return null;
+
+      const wrapped = async (payload = {}) => {
+        try {
+          const payloadCode =
+            payload?.subbot?.code || payload?.subbot?.sessionId || null;
+          if (payloadCode !== code) return;
+          await handler(payload);
+        } catch (error) {
+          logger.warn("Error en listener de subbot", {
+            code,
+            event,
+            error: error?.message,
+          });
+        }
+      };
+
+      return { event, handler: wrapped };
+    })
+    .filter(Boolean);
+
+  if (scopedListeners.length === 0) {
+    return () => {};
+  }
+
+  return registerSubbotListeners(code, scopedListeners);
 }
 
 export async function updateSubbotMetadata(code, patch = {}) {
@@ -641,11 +670,24 @@ async function ensureRuntimeSyncListeners() {
 
   wrap("connected", async (subbot, data) => {
     if (!subbot?.code) return;
+    const resolvedDigits =
+      data?.digits ||
+      (typeof data?.number === "string"
+        ? data.number.replace(/[^0-9]/g, "")
+        : null) ||
+      (typeof data?.jid === "string"
+        ? data.jid.replace(/[^0-9]/g, "")
+        : null) ||
+      subbot?.metadata?.targetNumber ||
+      null;
+
     await markSubbotConnected(subbot.code, {
-      botNumber: data?.jid || subbot?.metadata?.targetNumber || null,
-      metadata: {
-        lastConnectedAt: new Date().toISOString(),
-      },
+      botNumber: resolvedDigits,
+    });
+
+    await updateSubbotMetadata(subbot.code, {
+      connectedNumber: resolvedDigits,
+      lastConnectedAt: new Date().toISOString(),
     });
   });
 
