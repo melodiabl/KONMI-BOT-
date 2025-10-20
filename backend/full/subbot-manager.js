@@ -592,41 +592,44 @@ export async function markSubbotDisconnected(code, reason = null) {
   await ensureTable();
   await ensureRuntimeSyncListeners();
 
-  // Actualizar estado en BD antes de eliminar
+  const normalizedReason = String(reason || "").toLowerCase();
+  const isManualLogout = normalizedReason === "logged_out";
+
   await db("subbots")
     .where({ code })
     .update({
-      status: reason === "logged_out" ? "logged_out" : "disconnected",
+      status: isManualLogout ? "logged_out" : "disconnected",
       is_online: false,
-      is_active: false,
+      is_active: isManualLogout ? false : true,
       updated_at: db.fn.now(),
     });
 
-  logger.subbot.disconnected(code, reason || "unknown");
+  logger.subbot.disconnected(code, normalizedReason || "unknown");
 
-  // 🗑️ AUTO-LIMPIEZA: Eliminar carpeta y registro después de 5 segundos
-  setTimeout(async () => {
-    try {
-      // 1. Eliminar carpeta del subbot
-      const subbotPath = path.join(SUBBOTS_BASE_DIR, code);
-      if (fs.existsSync(subbotPath)) {
-        fs.rmSync(subbotPath, { recursive: true, force: true });
-        logger.info(`🗑️ [Auto-limpieza] Carpeta eliminada: ${subbotPath}`);
+  if (isManualLogout) {
+    // 🗑️ AUTO-LIMPIEZA: eliminar carpeta y registro solo cuando el usuario
+    // desconecta manualmente desde WhatsApp.
+    setTimeout(async () => {
+      try {
+        const subbotPath = path.join(SUBBOTS_BASE_DIR, code);
+        if (fs.existsSync(subbotPath)) {
+          fs.rmSync(subbotPath, { recursive: true, force: true });
+          logger.info(`🗑️ [Auto-limpieza] Carpeta eliminada: ${subbotPath}`);
+        }
+
+        const deleted = await db("subbots").where({ code }).del();
+        if (deleted > 0) {
+          logger.database.query("subbots", `Registro eliminado: ${code}`);
+        }
+
+        logger.subbot.cleaned(code);
+      } catch (error) {
+        logger.subbot.error(code, `Error en auto-limpieza: ${error.message}`);
       }
+    }, 5000);
+  }
 
-      // 2. Eliminar registro de base de datos
-      const deleted = await db("subbots").where({ code }).del();
-      if (deleted > 0) {
-        logger.database.query("subbots", `Registro eliminado: ${code}`);
-      }
-
-      logger.subbot.cleaned(code);
-    } catch (error) {
-      logger.subbot.error(code, `Error en auto-limpieza: ${error.message}`);
-    }
-  }, 5000); // Esperar 5 segundos antes de limpiar
-
-  return { success: true, code, reason };
+  return { success: true, code, reason: normalizedReason };
 }
 
 export function getActiveRuntimeSubbots() {
@@ -800,7 +803,6 @@ async function syncOwnerRuntimeState(ownerNumber) {
       .where({ id: row.id })
       .update({
         is_online: isOnline,
-        is_active: isOnline,
         status: isOnline ? "connected" : row.status,
         updated_at: db.fn.now(),
       });
@@ -821,11 +823,86 @@ export async function syncAllRuntimeStates() {
       .where({ id: row.id })
       .update({
         is_online: isOnline,
-        is_active: isOnline,
         status: isOnline ? "connected" : row.status,
         updated_at: db.fn.now(),
       });
   }
+}
+
+export async function restoreActiveSubbots() {
+  await ensureTable();
+  await ensureRuntimeSyncListeners();
+
+  const active = listActiveSubbots();
+  const activeCodes = new Set(active.map((entry) => entry.code));
+
+  const candidates = await db("subbots")
+    .whereNotIn("status", ["logged_out", "deleted"])
+    .where(function () {
+      this.where({ is_active: true }).orWhereIn("status", [
+        "connected",
+        "reconnecting",
+        "waiting_scan",
+        "waiting_pairing",
+      ]);
+    })
+    .orderBy("updated_at", "desc");
+
+  let restored = 0;
+  for (const row of candidates) {
+    if (!row?.code || activeCodes.has(row.code)) continue;
+
+    const authDir = row.auth_path || path.join(SUBBOTS_BASE_DIR, row.code, "auth");
+    if (!authDir || !fs.existsSync(authDir)) {
+      logger.warn(
+        "No se encontraron credenciales para restaurar subbot, omitiendo",
+        { code: row.code },
+      );
+      continue;
+    }
+
+    const ownerDigits = getPhoneDigits(row.owner_number);
+    const targetDigits = getPhoneDigits(row.target_number);
+    const launchResult = await launchSubbot({
+      code: row.code,
+      type: row.method === "code" ? "code" : "qr",
+      createdBy: ownerDigits || targetDigits || "unknown",
+      targetNumber: targetDigits || null,
+      metadata: {
+        ...buildDefaultMetadata(),
+        ...safeParseJson(row.metadata),
+        requestJid: row.request_jid || null,
+        requestParticipant: row.request_participant || null,
+        restoredAt: new Date().toISOString(),
+        restoredBy: "runtime_boot",
+      },
+    });
+
+    if (!launchResult.success) {
+      logger.warn("No se pudo restaurar subbot", {
+        code: row.code,
+        error: launchResult.error,
+      });
+      continue;
+    }
+
+    restored += 1;
+    activeCodes.add(row.code);
+
+    await db("subbots")
+      .where({ id: row.id })
+      .update({
+        status: "reconnecting",
+        is_active: true,
+        updated_at: db.fn.now(),
+      });
+  }
+
+  if (restored) {
+    logger.info(`♻️  Subbots restaurados tras reinicio: ${restored}`);
+  }
+
+  return restored;
 }
 
 export default {
@@ -840,6 +917,7 @@ export default {
   getActiveRuntimeSubbots,
   updateSubbotMetadata,
   syncAllRuntimeStates,
+  restoreActiveSubbots,
   cleanOrphanSubbots,
   isBotGloballyActive,
   isBotActiveInGroup,
@@ -852,4 +930,5 @@ export {
   isBotActiveInGroup,
   setSubbotGroupState,
   getSubbotGroupState,
+  restoreActiveSubbots,
 };

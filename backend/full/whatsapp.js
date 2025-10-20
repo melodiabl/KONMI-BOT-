@@ -172,6 +172,110 @@ async function generateQrImage(dataString) {
   throw new Error(errors.join(" | ") || "No se pudo generar un codigo QR");
 }
 
+function buildProgressBar(percent, segments = 10) {
+  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  const filled = Math.round((safePercent / 100) * segments);
+  const bar = `${"▓".repeat(filled)}${"░".repeat(Math.max(0, segments - filled))}`;
+  return `${bar}`;
+}
+
+function describePlayProgress(percent) {
+  if (!Number.isFinite(percent)) {
+    return "Calculando tamaño de la descarga...";
+  }
+  if (percent < 10) return "Conectando con el servidor de audio...";
+  if (percent < 45) return "Descargando la vista previa...";
+  if (percent < 80) return "Procesando y normalizando el audio...";
+  if (percent < 100) return "Preparando el archivo para enviarlo...";
+  return "¡Descarga finalizada!";
+}
+
+async function downloadBufferWithProgress(url, { timeoutMs = 20000, onProgress } = {}) {
+  const response = await fetchWithTimeout(url, {}, timeoutMs);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const totalHeader = response.headers?.get?.("content-length") || response.headers?.get?.("Content-Length");
+  const totalBytes = totalHeader ? parseInt(totalHeader, 10) : null;
+
+  if (!response.body || typeof response.body.on !== "function") {
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    if (typeof onProgress === "function") {
+      onProgress({
+        received: buffer.length,
+        total: totalBytes,
+        percent: totalBytes ? 100 : null,
+        done: true,
+      });
+    }
+    return buffer;
+  }
+
+  return await new Promise((resolve, reject) => {
+    const chunks = [];
+    let received = 0;
+
+    const notify = (done = false) => {
+      if (typeof onProgress !== "function") return;
+      const percent = totalBytes ? (received / totalBytes) * 100 : null;
+      onProgress({
+        received,
+        total: totalBytes,
+        percent,
+        done,
+      });
+    };
+
+    response.body.on("data", (chunk) => {
+      chunks.push(chunk);
+      received += chunk.length;
+      notify(false);
+    });
+
+    response.body.once("end", () => {
+      notify(true);
+      resolve(Buffer.concat(chunks));
+    });
+
+    response.body.once("error", (error) => {
+      reject(error);
+    });
+  });
+}
+
+function renderPlayProgressMessage(track, requester, percent, statusText) {
+  const safePercent = Number.isFinite(percent)
+    ? Math.max(0, Math.min(100, Math.round(percent)))
+    : null;
+  const description = statusText || describePlayProgress(safePercent ?? 0);
+  const progressLine = safePercent !== null
+    ? `📊 ${buildProgressBar(safePercent)} ${safePercent}%`
+    : "⏳ Calculando progreso...";
+
+  const artist = track.artist || "Artista desconocido";
+  const title = track.title || "Canción";
+  const album = track.album || "Álbum no disponible";
+  const duration = track.duration || "--:--";
+  const url = track.url || "Sin enlace";
+
+  return [
+    "🎵 *Música encontrada*",
+    "",
+    `🎤 *Artista:* ${artist}`,
+    `🎶 *Canción:* ${title}`,
+    `💿 *Álbum:* ${album}`,
+    `⏱️ *Duración:* ${duration}`,
+    `🔗 *URL:* ${url}`,
+    "",
+    `⏬ *Estado:* ${description}`,
+    progressLine,
+    "",
+    `🙋 Solicitado por: ${requester}`,
+  ].join("\n");
+}
+
 const SHORT_URL_PROVIDERS = [
   {
     name: "Vreden",
@@ -6733,13 +6837,16 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             });
 
             // Buscar msica con API
-            const response = await fetch(
+            const response = await fetchWithTimeout(
               `https://api.vreden.my.id/api/spotify/search?query=${encodeURIComponent(playQuery)}`,
+              {},
+              12000,
             );
-            const data = await response.json();
+            const data = await parseJsonSafe(response);
 
             if (data.status && data.data && data.data.length > 0) {
               const track = data.data[0];
+              const requesterLabel = usuario || "Usuario";
 
               // Mostrar informacion con barra de progreso REAL que se edita
               let progressMsg = await sock.sendMessage(remoteJid, {
@@ -6807,48 +6914,79 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                         `${step.status}\n\n` +
                         `🕒 ${new Date().toLocaleTimeString("es-ES")}`,
                     });
-
-                    currentStep++;
-
-                    // Continuar con el siguiente paíso
-                    if (currentStep < progressSteps.length) {
-                      setTimeout(updateProgress, 1000); // 1 segundo entre actualizaciones
-                    }
-                  } catch (err) {
-                    logger.error("Error actualizando progreso:", err);
-                    // Continuar con el siguiente paíso aunque haya error
-                    currentStep++;
-                    if (currentStep < progressSteps.length) {
-                      setTimeout(updateProgress, 1000);
-                    }
-                  }
-                }
+                    progressKey = null;
+                  }),
+                );
               };
 
-              // Iniciar la actualizacion de progreso
-              setTimeout(updateProgress, 1000);
+              queueUpdate(5, "Conectando con el servidor de audio...");
 
-              // Enviar audio despues del progreso
-              setTimeout(async () => {
+              let audioBuffer = null;
+              if (track.preview_url) {
+                let lastPercent = 0;
+                let notifiedUnknown = false;
                 try {
-                  if (track.preview_url) {
-                    await sock.sendMessage(remoteJid, {
-                      audio: { url: track.preview_url },
-                      mimetype: "audio/mpeg",
-                      caption: `🎵 *${track.title}*\n\n🎤 ${track.artist}\n💿 ${track.album}\n⏱️ ${track.duration}\n\n🙋 Solicitado por: ${usuario}\n📅 ${new Date().toLocaleString("es-ES")}`,
-                    });
-                  } else {
-                    await sock.sendMessage(remoteJid, {
-                      text: `🎵 *Música encontrada*\n\nℹ️ **Información completa disponible**\n\n🎧 **Escuchar en Spotify:**\n${track.url}\n\n⚠️ Preview de audio no disponible para esta canción.`,
-                    });
-                  }
-                } catch (audioError) {
-                  logger.error("Error enviando audio:", audioError);
+                  audioBuffer = await downloadBufferWithProgress(track.preview_url, {
+                    timeoutMs: 20000,
+                    onProgress: ({ percent }) => {
+                      if (Number.isFinite(percent)) {
+                        const rounded = Math.max(0, Math.min(100, Math.round(percent)));
+                        if (rounded - lastPercent >= 4 || rounded >= 99) {
+                          lastPercent = rounded;
+                          queueUpdate(rounded, describePlayProgress(rounded));
+                        }
+                      } else if (!notifiedUnknown) {
+                        notifiedUnknown = true;
+                        queueUpdate(null, "Descargando la vista previa...");
+                      }
+                    },
+                  });
+                } catch (downloadError) {
+                  logger.error("Error descargando vista previa de /play:", downloadError);
+                  queueUpdate(lastPercent, "No se pudo completar la descarga.");
+                  await updateQueue;
+                  throw downloadError;
+                }
+
+                queueUpdate(100, "¡Descarga finalizada!");
+                await updateQueue;
+
+                try {
+                  const fileName = `${(track.title || "preview")
+                    .replace(/[^A-Za-z0-9_\- ]/g, "_")
+                    .slice(0, 40)}.mp3`;
                   await sock.sendMessage(remoteJid, {
-                    text: `⚠️ *Play*\n\n❌ Error enviando audio\n\n🎧 **Escuchar en Spotify:**\n${track.url}`,
+                    audio: audioBuffer,
+                    mimetype: "audio/mpeg",
+                    ptt: false,
+                    fileName,
+                    caption: `🎵 *${track.title || "Vista previa"}*\n\n🎤 ${
+                      track.artist || "Artista desconocido"
+                    }\n💿 ${track.album || "Álbum no disponible"}\n⏱️ ${
+                      track.duration || "--:--"
+                    }\n\n🙋 Solicitado por: ${requesterLabel}\n📅 ${new Date().toLocaleString(
+                      "es-ES",
+                    )}`,
+                  });
+                } catch (audioError) {
+                  logger.error("Error enviando audio en /play:", audioError);
+                  await sock.sendMessage(remoteJid, {
+                    text: `⚠️ *Play*\n\n❌ Error enviando el audio.\n\n🎧 Escucha en Spotify:\n${
+                      track.url
+                    }`,
                   });
                 }
-              }, 7000); // 7 segundos despues de iniciar
+              } else {
+                queueUpdate(null, "No hay vista previa disponible, compartiendo enlace.");
+                await updateQueue;
+                await sock.sendMessage(remoteJid, {
+                  text: `🎵 *Música encontrada*\n\nℹ️ Información disponible\n\n🎶 ${
+                    track.title || "Sin título"
+                  }\n🎤 ${track.artist || "Artista desconocido"}\n💿 ${
+                    track.album || "Álbum no disponible"
+                  }\n⏱️ ${track.duration || "--:--"}\n🔗 ${track.url}\n\n⚠️ La canción no ofrece vista previa de audio.`,
+                });
+              }
             } else {
               await sock.sendMessage(remoteJid, {
                 text: `⚠️ *Play*\n\n❌ No se encontraron resultados para: "${playQuery}"\n\n🔁 Intenta con otros términos de búsqueda.`,
