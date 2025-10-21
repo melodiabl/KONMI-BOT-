@@ -7396,20 +7396,6 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
                   queueUpdate(lastPercent, "No se pudo completar la descarga.");
                   await updateQueue;
                   throw downloadError;
-                    currentStep++;
-
-                    // Continuar con el siguiente paso
-                    if (currentStep < progressSteps.length) {
-                      setTimeout(updateProgress, 1000); // 1 segundo entre actualizaciones
-                    }
-                  } catch (err) {
-                    logger.error("Error actualizando progreso:", err);
-                    // Continuar con el siguiente paso aunque haya error
-                    currentStep++;
-                    if (currentStep < progressSteps.length) {
-                      setTimeout(updateProgress, 1000);
-                    }
-                  }
                 }
 
                 queueUpdate(100, "¡Descarga finalizada!");

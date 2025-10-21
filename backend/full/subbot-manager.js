@@ -924,11 +924,3 @@ export default {
   setSubbotGroupState,
   getSubbotGroupState,
 };
-
-export {
-  isBotGloballyActive,
-  isBotActiveInGroup,
-  setSubbotGroupState,
-  getSubbotGroupState,
-  restoreActiveSubbots,
-};
