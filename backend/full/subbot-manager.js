@@ -722,7 +722,7 @@ async function ensureSubbotGroupStateTable() {
   }
 }
 
-async function isBotGloballyActive() {
+export async function isBotGloballyActive() {
   await ensureBotGlobalStateTableExists();
   try {
     const row = await db("bot_global_state")
@@ -742,7 +742,7 @@ async function isBotGloballyActive() {
   }
 }
 
-async function isBotActiveInGroup(subbotCode, groupJid) {
+export async function isBotActiveInGroup(subbotCode, groupJid) {
   if (!groupJid) return true;
   try {
     const globalOff = await db("grupos_desactivados")
@@ -765,7 +765,7 @@ async function isBotActiveInGroup(subbotCode, groupJid) {
   return true;
 }
 
-async function setSubbotGroupState(subbotCode, groupJid, isActive) {
+export async function setSubbotGroupState(subbotCode, groupJid, isActive) {
   if (!subbotCode || !groupJid) return;
   await ensureSubbotGroupStateTable();
   await db("subbot_group_state")
@@ -779,7 +779,7 @@ async function setSubbotGroupState(subbotCode, groupJid, isActive) {
     .merge({ is_active: !!isActive, updated_at: db.fn.now() });
 }
 
-async function getSubbotGroupState(subbotCode, groupJid) {
+export async function getSubbotGroupState(subbotCode, groupJid) {
   if (!subbotCode || !groupJid) return null;
   await ensureSubbotGroupStateTable();
   return db("subbot_group_state")
