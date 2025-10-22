@@ -1,3 +1,4 @@
+import './config.js';
 import db from './db.js';
 import axios from 'axios';
 import yts from 'yt-search';
@@ -567,12 +568,13 @@ async function handleAIEnhanced(pregunta, usuario, grupo, fecha) {
     if (!pregunta) {
       return { success: true, message: ' Usa: .ai <pregunta>' };
     }
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GENAI_API_KEY;
     if (!apiKey) return { success: false, message: ' Configura GEMINI_API_KEY' };
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const prompt = `Eres Melodia, una asistente de IA amigable y til en espaol. Responde de forma clara y concisa.\n\nPregunta del usuario: ${pregunta}`;
+    const modelName = (process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
+    const model = genAI.getGenerativeModel({ model: modelName });
+    const prompt = `Eres KONMI, una asistente de IA amigable y sabe lo todo en español. Responde de forma clara y concisa.\n\nPregunta del usuario: ${pregunta}`;
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
@@ -597,11 +599,12 @@ async function handleImage(prompt, usuario, grupo, fecha) {
 async function handleTranslate(text, targetLang, usuario, grupo, fecha) {
   try {
     if (!text || !targetLang) return { success: true, message: ' Usa: .translate <texto> <idioma>' };
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GENAI_API_KEY;
     if (!apiKey) return { success: false, message: ' Configura GEMINI_API_KEY' };
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const modelName = (process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
+    const model = genAI.getGenerativeModel({ model: modelName });
     const translatePrompt = `Traduce el siguiente texto al idioma ${targetLang}. Solo devuelve la traduccin:\n\nTexto: ${text}`;
     const result = await model.generateContent(translatePrompt);
     const translation = (await result.response).text();

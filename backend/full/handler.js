@@ -1,4 +1,5 @@
 // handler.js
+import './config.js';
 // Handler principal para logica de aportes, media, pedidos y proveedores
 
 import db from "./db.js";
@@ -979,13 +980,66 @@ export async function handlePedidos(usuario, grupo) {
 // AI: Gemini helpers and commands (consolidated)
 // =====================
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+// No cacheamos la API key a nivel de módulo. Algunos entrypoints cargan
+// dotenv más tarde; resolverla en tiempo de ejecución evita fallos.
+function resolveGeminiApiKey() {
+  return (
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GENAI_API_KEY ||
+    null
+  );
+}
+function resolveModelCandidates() {
+  const fromEnv = (process.env.GEMINI_MODEL || '').trim();
+  const base = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-001',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-pro',
+  ];
+  return fromEnv ? [fromEnv, ...base.filter((m) => m !== fromEnv)] : base;
+}
+
+const GEMINI_ENDPOINT_FACTORIES = [
+  (model) => `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent`,
+  (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+];
+
+async function generateWithGemini({ apiKey, prompt }) {
+  const models = resolveModelCandidates();
+  const headers = { 'Content-Type': 'application/json' };
+  const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }] };
+  let lastError = null;
+  for (const makeUrl of GEMINI_ENDPOINT_FACTORIES) {
+    for (const model of models) {
+      const url = makeUrl(model) + `?key=${apiKey}`;
+      try {
+        const response = await axios.post(url, body, { headers, timeout: 15000 });
+        const text = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return { text, model, endpoint: url.includes('/v1/') ? 'v1' : 'v1beta' };
+        lastError = new Error('Respuesta vacía de la IA');
+      } catch (err) {
+        const msg = err?.response?.data?.error?.message || err?.message || String(err);
+        const code = err?.response?.status;
+        if (msg?.toLowerCase?.().includes('not found') || msg?.toLowerCase?.().includes('not supported') || code === 404) {
+          lastError = new Error(`${msg}`);
+          continue;
+        }
+        lastError = new Error(`${msg}`);
+      }
+    }
+  }
+  throw lastError || new Error('No se pudo generar respuesta con Gemini');
+}
 
 export async function analyzeContentWithAI(content, filename = "") {
   try {
-    if (!GEMINI_API_KEY) {
+    const apiKey = resolveGeminiApiKey();
+    if (!apiKey) {
       return { success: false, error: "GEMINI_API_KEY no configurada" };
     }
 
@@ -1016,15 +1070,7 @@ Busca nmeros que parezcan captulos (ej: "cap 45", "episodio 12", "volumen 3").
 Extrae ttulos que parezcan nombres de obras.
 `;
 
-    const response = await axios.post(
-      `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
-      {
-        contents: [{ parts: [{ text: prompt }] }],
-      },
-      { headers: { "Content-Type": "application/json" } },
-    );
-
-    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const { text: aiResponse, model } = await generateWithGemini({ apiKey, prompt });
     if (!aiResponse)
       return { success: false, error: "No se recibi respuesta de la IA" };
 
@@ -1047,16 +1093,19 @@ Extrae ttulos que parezcan nombres de obras.
         confianza: analysis.confianza || 50,
         descripcion: analysis.descripcion || content,
       },
+      model,
     };
   } catch (error) {
-    console.error("Error en analyzeContentWithAI:", error);
-    return { success: false, error: error.message };
+    const detail = error?.response?.data?.error?.message || error?.message;
+    console.error("Error en analyzeContentWithAI:", detail);
+    return { success: false, error: detail };
   }
 }
 
 export async function chatWithAI(message, context = "") {
   try {
-    if (!GEMINI_API_KEY) {
+    const apiKey = resolveGeminiApiKey();
+    if (!apiKey) {
       return { success: false, error: "GEMINI_API_KEY no est configurada" };
     }
 
@@ -1070,28 +1119,22 @@ Responde de forma clara, concisa y til. Si la pregunta es sobre manhwas, series,
 Mantn un tono amigable y profesional.
 `;
 
-    const response = await axios.post(
-      `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
-      {
-        contents: [{ parts: [{ text: prompt }] }],
-      },
-      { headers: { "Content-Type": "application/json" } },
-    );
-
-    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const { text: aiResponse, model } = await generateWithGemini({ apiKey, prompt });
     if (!aiResponse)
       return { success: false, error: "No se recibi respuesta de la IA" };
 
-    return { success: true, response: aiResponse, model: "gemini-1.5-flash" };
+    return { success: true, response: aiResponse, model };
   } catch (error) {
-    console.error("Error en chatWithAI:", error);
-    return { success: false, error: error.message };
+    const detail = error?.response?.data?.error?.message || error?.message;
+    console.error("Error en chatWithAI:", detail);
+    return { success: false, error: detail };
   }
 }
 
 export async function analyzeManhwaContent(content) {
   try {
-    if (!GEMINI_API_KEY) {
+    const apiKey = resolveGeminiApiKey();
+    if (!apiKey) {
       return { success: false, error: "GEMINI_API_KEY no configurada" };
     }
 
@@ -1110,21 +1153,14 @@ Responde en formato JSON:
 }
 `;
 
-    const response = await axios.post(
-      `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
-      {
-        contents: [{ parts: [{ text: prompt }] }],
-      },
-      { headers: { "Content-Type": "application/json" } },
-    );
-
-    const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const { text: aiResponse, model } = await generateWithGemini({ apiKey, prompt });
     const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
     const analysis = JSON.parse(jsonMatch[0]);
 
-    return { success: true, analysis };
+    return { success: true, analysis, model };
   } catch (error) {
-    return { success: false, error: error.message };
+    const detail = error?.response?.data?.error?.message || error?.message;
+    return { success: false, error: detail };
   }
 }
 

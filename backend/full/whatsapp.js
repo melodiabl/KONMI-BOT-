@@ -1,3 +1,4 @@
+import './config.js';
 // Baileys se cargará dinámicamente para permitir forks modificados
 let baileys = null;
 let DisconnectReason,
@@ -4651,18 +4652,31 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/update":
         if (isOwner) {
           try {
+            const { performSelfUpdate } = await import('./scripts/self-update.mjs');
+            const result = await performSelfUpdate();
+            let lines = [];
+            lines.push('⬆️ *Actualizando bot*');
+            lines.push('');
+            lines.push('🤖 KONMI BOT v2.5.0');
+            if (result?.git?.inRepo) {
+              const pulled = result.git.pulled ? 'sí' : 'no';
+              lines.push(`🧬 Git: branch ${result.git.branch} — ${result.git.before} ➜ ${result.git.after} (pull=${pulled})`);
+            } else {
+              lines.push('🧬 Git: no repo (omitido)');
+            }
+            const depsStep = result?.steps?.find?.(s => s.step === 'deps');
+            lines.push(`📦 Dependencias: ${depsStep?.ok ? 'actualizadas' : 'falló'}`);
+            // Recargar subbots si es posible
             let info = null;
             try {
               const { reloadAllSubbots } = await import("./inproc-subbots.js");
               info = await reloadAllSubbots();
+              lines.push(`🔄 Subbots recargados: ${info.restarted}/${info.total}`);
             } catch (_) {}
-
-            const extra = info
-              ? `\n🔄 Subbots recargados: ${info.restarted}/${info.total}`
-              : "";
-            await sock.sendMessage(remoteJid, {
-              text: `⬆️ *Actualizando bot*\n\n🤖 KONMI BOT v2.5.0\n🔎 Verificando actualizaciones...${extra}\n\n✅ Bot actualizado correctamente\n🕒 ${new Date().toLocaleString("es-ES")}`,
-            });
+            lines.push('');
+            lines.push(`✅ Bot actualizado`);
+            lines.push(`🕒 ${new Date().toLocaleString('es-ES')}`);
+            await sock.sendMessage(remoteJid, { text: lines.join('\n') });
           } catch (e) {
             await sock.sendMessage(remoteJid, {
               text: `⬆️ *Actualizando bot*\n\n🤖 KONMI BOT v2.5.0\n🔎 Verificando actualizaciones...\n\n✅ Bot actualizado correctamente\n🕒 ${new Date().toLocaleString("es-ES")}`,

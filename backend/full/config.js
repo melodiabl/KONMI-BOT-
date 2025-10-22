@@ -1,8 +1,28 @@
 // WhatsApp Bot Panel - Unified Configuration
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables (prioriza backend/full/.env)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// Cargar EXCLUSIVAMENTE backend/full/.env con prioridad (override)
+try { dotenv.config({ path: join(__dirname, '.env'), override: true }); } catch {}
+// Unificar alias de clave para Gemini por compatibilidad
+if (!process.env.GEMINI_API_KEY) {
+  const alt = process.env.GOOGLE_API_KEY || process.env.GENAI_API_KEY;
+  if (alt) process.env.GEMINI_API_KEY = alt;
+}
+
+// Log de depuración opcional (no imprime secretos)
+try {
+  const lvl = (process.env.LOG_LEVEL || '').toLowerCase();
+  if (lvl === 'debug') {
+    const present = Boolean(process.env.GEMINI_API_KEY);
+    const masked = process.env.GEMINI_API_KEY ? (process.env.GEMINI_API_KEY.slice(0,6) + '...') : '(empty)';
+    console.log(`[env] backend/full/.env cargado. GEMINI_API_KEY presente=${present}. Valor=${masked}`);
+  }
+} catch {}
 
 const config = {
   // Server Configuration

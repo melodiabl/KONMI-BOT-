@@ -43,6 +43,17 @@ function headerIfEnv(varName, headerName, prefix = '') {
 export const API_PROVIDERS = {
   tiktok: [
     {
+      name: 'Vreden',
+      url: (url) => `https://api.vreden.my.id/api/tiktok?url=${encodeURIComponent(url)}`,
+      parse: (data) => ({
+        success: Boolean(data?.status),
+        video: data?.result?.video || data?.result?.download,
+        title: data?.result?.title,
+        author: data?.result?.author || data?.result?.username,
+        description: data?.result?.description
+      })
+    },
+    {
       name: 'TikWM',
       url: (url) => `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`,
       parse: (data) => ({
@@ -52,17 +63,6 @@ export const API_PROVIDERS = {
         title: data?.data?.title,
         author: data?.data?.author?.unique_id,
         description: data?.data?.title
-      })
-    },
-    {
-      name: 'Vreden',
-      url: (url) => `https://api.vreden.my.id/api/tiktok?url=${encodeURIComponent(url)}`,
-      parse: (data) => ({
-        success: Boolean(data?.status),
-        video: data?.result?.video || data?.result?.download,
-        title: data?.result?.title,
-        author: data?.result?.author || data?.result?.username,
-        description: data?.result?.description
       })
     },
     {
@@ -616,4 +616,3 @@ export default {
   getTrivia,
   getRandomMeme
 }
-

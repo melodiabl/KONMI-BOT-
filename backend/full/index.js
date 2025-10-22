@@ -1,3 +1,5 @@
+// Cargar variables de entorno lo antes posible
+import config from "./config.js";
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -19,7 +21,6 @@ import {
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import db from "./db.js";
-import config from "./config.js";
 import logger from "./config/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);

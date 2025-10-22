@@ -1,3 +1,4 @@
+import './config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 let cachedClient = null;
@@ -20,7 +21,7 @@ export function getGeminiClient() {
   return cachedClient;
 }
 
-export function getGeminiModel(model = 'gemini-1.5-flash') {
+export function getGeminiModel(model = (process.env.GEMINI_MODEL || 'gemini-2.5-flash')) {
   return getGeminiClient().getGenerativeModel({ model });
 }
 

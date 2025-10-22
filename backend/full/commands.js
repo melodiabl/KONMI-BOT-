@@ -1,3 +1,4 @@
+import './config.js';
 import db from './db.js';
 import { analyzeContentWithAI, chatWithAI, analyzeManhwaContent } from './handler.js';
 import { addAporte } from './handler.js';
