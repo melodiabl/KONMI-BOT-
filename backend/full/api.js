@@ -6,7 +6,7 @@ import db from './db.js';
 import { authenticateToken, authorizeRoles } from './auth.js';
 import { getQRCode, getQRCodeImage, getCurrentPairingCode as getPairingCode, getPairingTargetNumber as getPairingNumber, setAuthMethod, getConnectionStatus, getAvailableGroups, getSocket, clearWhatsAppSession } from './whatsapp.js';
 import { getProviderStats, getProviderAportes, chatWithAI } from './handler.js';
-import { createSubbotWithPairing, createSubbotWithQr, deleteUserSubbot } from './subbot-manager.js';
+import { createSubbotWithPairing, createSubbotWithQr, deleteUserSubbot, attachRuntimeListeners } from './subbot-manager.js';
 import {
   handleBotCommandsStream,
   handleUsuariosStream,
@@ -329,6 +329,48 @@ router.post('/subbots/qr', authenticateToken, async (req, res) => {
       requestJid: req.user?.username || null
     });
 
+    // Notificar por WhatsApp cuando el subbot se conecte (chat del owner)
+    try {
+      const sock = getSocket();
+      const remoteJid = ownerNumber ? `${ownerNumber}@s.whatsapp.net` : null;
+      if (sock && remoteJid && code) {
+        const detach = attachRuntimeListeners(code, [
+          {
+            event: 'connected',
+            handler: async () => {
+              try {
+                await sock.sendMessage(remoteJid, {
+                  text:
+                    `✅ SubBot conectado exitosamente\n\n` +
+                    `🧩 Código: ${code}\n` +
+                    `🚀 ¡Listo para usar!\n\n` +
+                    `Usa \`/bots\` para ver subbots activos`,
+                });
+              } finally {
+                // Detach listener después de notificar
+                try { detach?.(); } catch (_) {}
+              }
+            },
+          },
+          {
+            event: 'error',
+            handler: async (evt) => {
+              try {
+                await sock.sendMessage(remoteJid, {
+                  text:
+                    `⚠️ Error iniciando SubBot\n\n` +
+                    `🧩 Código: ${code}\n` +
+                    `🧯 Motivo: ${evt?.data?.message || 'desconocido'}`,
+                });
+              } finally {
+                try { detach?.(); } catch (_) {}
+              }
+            },
+          },
+        ]);
+      }
+    } catch (_) {}
+
     const normalized = normalizeSubbotRecord(subbot) || { code };
     if (normalized && typeof normalized === 'object') {
       normalized.code = normalized.code || code;
@@ -362,6 +404,48 @@ router.post('/subbots/code', authenticateToken, async (req, res) => {
       requestJid: req.user?.username || null,
       requestParticipant: null
     });
+
+    // Notificar por WhatsApp cuando el subbot se conecte (chat del owner)
+    try {
+      const sock = getSocket();
+      const remoteJid = ownerNumber ? `${ownerNumber}@s.whatsapp.net` : null;
+      if (sock && remoteJid && code) {
+        const detach = attachRuntimeListeners(code, [
+          {
+            event: 'connected',
+            handler: async () => {
+              try {
+                await sock.sendMessage(remoteJid, {
+                  text:
+                    `✅ SubBot conectado con Pairing Code\n\n` +
+                    `🧩 Código: ${code}\n` +
+                    `📞 Número: +${targetNumber}\n` +
+                    `🚀 ¡Listo para usar!`,
+                });
+              } finally {
+                try { detach?.(); } catch (_) {}
+              }
+            },
+          },
+          {
+            event: 'error',
+            handler: async (evt) => {
+              try {
+                await sock.sendMessage(remoteJid, {
+                  text:
+                    `⚠️ Error iniciando SubBot\n\n` +
+                    `🧩 Código: ${code}\n` +
+                    `📞 Número: +${targetNumber}\n` +
+                    `🧯 Motivo: ${evt?.data?.message || 'desconocido'}`,
+                });
+              } finally {
+                try { detach?.(); } catch (_) {}
+              }
+            },
+          },
+        ]);
+      }
+    } catch (_) {}
 
     const normalized = normalizeSubbotRecord(subbot) || { code };
     if (normalized && typeof normalized === 'object') {

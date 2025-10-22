@@ -2599,15 +2599,23 @@ async function isRealGroupAdmin(usuario, grupo) {
 
     const userNumber = normalizeUserNumber(usuario);
     const targetJid = normalizeJid(
-      usuario.includes("@") ? usuario : `${userNumber}@s.whatsapp.net`,
+      String(usuario || "").includes("@")
+        ? usuario
+        : `${userNumber}@s.whatsapp.net`,
     );
     const targetNumber = userNumber;
 
-    const groupMetadata = await sock.groupMetadata(grupo);
-    const participants = groupMetadata.participants || [];
+    const meta = await sock.groupMetadata(grupo);
+    const participants = Array.isArray(meta?.participants) ? meta.participants : [];
+
+    // Fallback: si hay owner en metadata, considerarlo admin
+    const ownerJid = meta?.owner ? normalizeJid(meta.owner) : null;
+    if (ownerJid && (ownerJid === targetJid || ownerJid.includes(targetNumber))) {
+      return true;
+    }
 
     const participant = participants.find((p) => {
-      const pid = p.id || "";
+      const pid = p?.id || "";
       const normalizedParticipant = normalizeJid(pid);
       const participantNumber = normalizeUserNumber(pid);
       return (
@@ -2617,18 +2625,21 @@ async function isRealGroupAdmin(usuario, grupo) {
       );
     });
 
-    if (!participant) {
-      return false;
-    }
+    if (!participant) return false;
 
+    // Compatibilidad: distintas formas de marcar admin en Baileys/WA
     const isAdmin =
       participant.admin === "admin" ||
       participant.admin === "superadmin" ||
-      participant.admin === true;
+      participant.admin === true ||
+      participant.isAdmin === true ||
+      participant.isSuperAdmin === true ||
+      participant?.roles?.includes?.("admin") ||
+      participant?.roles?.includes?.("superadmin");
 
-    return isAdmin;
+    return !!isAdmin;
   } catch (e) {
-    console.error("[MOD][isRealGroupAdmin] Error:", e);
+    console.error("[MOD][isRealGroupAdmin] Error:", e?.message || e);
     return false;
   }
 }

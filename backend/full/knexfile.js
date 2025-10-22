@@ -42,7 +42,8 @@ function makeConfig(env) {
   const base = {
     migrations: {
       directory: join(__dirname, 'migrations'),
-      loadExtensions: ['.js', '.cjs']
+      // Usamos solo archivos .cjs para evitar duplicados .js/.cjs
+      loadExtensions: ['.cjs']
     }
   };
 

@@ -12,7 +12,11 @@ import {
   onSubbotEvent,
 } from "./inproc-subbots.js";
 
-const SUBBOTS_BASE_DIR = path.join(process.cwd(), "storage", "subbots");
+// Anchor to backend directory to avoid depending on process.cwd()
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const SUBBOTS_BASE_DIR = path.join(__dirname, "storage", "subbots");
 let globalRuntimeSyncReady = false;
 let tableReady = false;
 
@@ -611,10 +615,13 @@ export async function markSubbotDisconnected(code, reason = null) {
     // desconecta manualmente desde WhatsApp.
     setTimeout(async () => {
       try {
-        const subbotPath = path.join(SUBBOTS_BASE_DIR, code);
-        if (fs.existsSync(subbotPath)) {
-          fs.rmSync(subbotPath, { recursive: true, force: true });
-          logger.info(`🗑️ [Auto-limpieza] Carpeta eliminada: ${subbotPath}`);
+        // Prefer the stored auth_path for precise cleanup
+        const row = await db("subbots").where({ code }).first();
+        const authPath = row?.auth_path || path.join(SUBBOTS_BASE_DIR, code, "auth");
+        const baseDir = path.resolve(authPath, "..");
+        if (fs.existsSync(baseDir)) {
+          fs.rmSync(baseDir, { recursive: true, force: true });
+          logger.info(`🗑️ [Auto-clean] Folder removed: ${baseDir}`);
         }
 
         const deleted = await db("subbots").where({ code }).del();
@@ -868,6 +875,7 @@ export async function restoreActiveSubbots() {
       type: row.method === "code" ? "code" : "qr",
       createdBy: ownerDigits || targetDigits || "unknown",
       targetNumber: targetDigits || null,
+      authDir: authDir,
       metadata: {
         ...buildDefaultMetadata(),
         ...safeParseJson(row.metadata),

@@ -416,7 +416,7 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const reasonMessage = lastDisconnect?.error?.output?.payload?.message || lastDisconnect?.error?.message;
         const messageLC = String(reasonMessage || '').toLowerCase();
-        const isLoggedOut = messageLC.includes('logged out') || messageLC.includes('logged off') || messageLC.includes('device removed');
+        const isLoggedOut = messageLC.includes('logged out') || messageLC.includes('logged off') || messageLC.includes('device removed') || statusCode === 401;
         console.log('Conexión cerrada con código:', statusCode, reasonMessage || 'sin mensaje');
 
         if (pairingDelivered && awaitingConnection && shouldRetry(statusCode)) {

@@ -669,7 +669,8 @@ async function handleQROrCodeRequest(method, ownerNumber) {
                 if (detach) detach();
                 resolve({
                   image: data.qrImage,
-                  message: `✅ Código QR generado\n\n📱 Escanea este código para vincular tu subbot\n\n🆔 Código: ${subbotCode}`
+                  message: `✅ Código QR generado\n\n📱 Escanea este código para vincular tu subbot\n\n🆔 Código: ${subbotCode}`,
+                  code: subbotCode
                 });
               }
             }
@@ -725,7 +726,8 @@ async function handlePairingCode(phoneNumber) {
                 clearTimeout(timeout);
                 if (detach) detach();
                 resolve({
-                  message: `✅ Código de vinculación generado\n\n🔢 Código: *${code}*\n📱 Número: +${cleanNumber}\n\n📲 Instrucciones:\n1. Abre WhatsApp en el dispositivo con número +${cleanNumber}\n2. Ve a Dispositivos vinculados\n3. Toca "Vincular dispositivo"\n4. Selecciona "Vincular con número de teléfono"\n5. Ingresa el código: *${code}*\n\n⏱️ Válido por 10 minutos\n🆔 Código subbot: ${subbotCode}`
+                  message: `✅ Código de vinculación generado\n\n🔢 Código: *${code}*\n📱 Número: +${cleanNumber}\n\n📲 Instrucciones:\n1. Abre WhatsApp en el dispositivo con número +${cleanNumber}\n2. Ve a Dispositivos vinculados\n3. Toca "Vincular dispositivo"\n4. Selecciona "Vincular con número de teléfono"\n5. Ingresa el código: *${code}*\n\n⏱️ Válido por 10 minutos\n🆔 Código subbot: ${subbotCode}`,
+                  code: subbotCode
                 });
               }
             }
@@ -1233,10 +1235,13 @@ import {
   handleLogsAdvanced,
   handleStats,
   handleExport,
+  handleBots,
   // Archivos
   handleDescargar,
   handleGuardar,
+  handleArchivos,
   handleMisArchivos,
+  handleEstadisticas,
   handleBuscarArchivo,
   handleYouTubeDownload,
   handleSticker,
@@ -2391,6 +2396,31 @@ export async function handleMessage(message, customSock = null, prefix = "") {
             { quoted: message },
           );
         }
+        // Listener de conexión para QR
+        if (qrResponse?.code) {
+          try {
+            const { registerSubbotListeners } = await import('./inproc-subbots.js');
+            const detach = registerSubbotListeners(qrResponse.code, [
+              {
+                event: 'connected',
+                handler: async () => {
+                  try {
+                    await sock.sendMessage(remoteJid, {
+                      text:
+                        `🤖 *SubBot conectado exitosamente*\n\n` +
+                        `🧩 **Código:** ${qrResponse.code}\n` +
+                        `✅ **Estado:** Conectado\n` +
+                        `🚀 ¡Listo para usar!\n\n` +
+                        `📋 Usa \`/bots\` para ver todos los subbots activos`,
+                    });
+                  } finally {
+                    try { detach?.(); } catch (_) {}
+                  }
+                },
+              },
+            ]);
+          } catch (_) {}
+        }
         break;
 
       case "/code":
@@ -2422,6 +2452,46 @@ export async function handleMessage(message, customSock = null, prefix = "") {
           { text: codeResponse.message },
           { quoted: message },
         );
+        // Si obtuvimos el código del subbot, adjuntar listeners para avisar al conectar
+        if (codeResponse?.code) {
+          try {
+            const { registerSubbotListeners } = await import('./inproc-subbots.js');
+            const detach = registerSubbotListeners(codeResponse.code, [
+              {
+                event: 'connected',
+                handler: async () => {
+                  try {
+                    await sock.sendMessage(remoteJid, {
+                      text:
+                        `🤖 *SubBot conectado exitosamente*\n\n` +
+                        `🧩 **Código:** ${codeResponse.code}\n` +
+                        `✅ **Estado:** Conectado\n` +
+                        `🚀 ¡Listo para usar!\n\n` +
+                        `📋 Usa \`/bots\` para ver todos los subbots activos`,
+                    });
+                  } finally {
+                    try { detach?.(); } catch (_) {}
+                  }
+                },
+              },
+              {
+                event: 'error',
+                handler: async (evt) => {
+                  try {
+                    await sock.sendMessage(remoteJid, {
+                      text:
+                        `⚠️ *Error en SubBot*\n\n` +
+                        `🧩 **Código:** ${codeResponse.code}\n` +
+                        `🧯 **Error:** ${evt?.data?.message || 'desconocido'}`,
+                    });
+                  } finally {
+                    try { detach?.(); } catch (_) {}
+                  }
+                },
+              }
+            ]);
+          } catch (_) {}
+        }
         break;
 
       case "/status":
@@ -7768,6 +7838,22 @@ async function connectToWhatsApp(
     } catch (_) {}
 
     const { state, saveCreds } = await useMultiFileAuthState(effectiveAuthPath);
+    // Cargar preferencia de método persistida (si existe)
+    try {
+      const cfgPath = path.join(path.resolve(effectiveAuthPath), 'auth-method.json');
+      if (fs.existsSync(cfgPath)) {
+        try {
+          const raw = fs.readFileSync(cfgPath, 'utf8');
+          const cfg = JSON.parse(raw || '{}');
+          if (!userSelectedMethod && (cfg.method === 'qr' || cfg.method === 'pairing')) {
+            userSelectedMethod = cfg.method;
+          }
+          if (!userSelectedPhone && typeof cfg.phoneNumber === 'string' && cfg.phoneNumber.replace(/\D/g, '')) {
+            userSelectedPhone = cfg.phoneNumber.replace(/\D/g, '');
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
     // Inicializar archivo de credenciales desde el inicio
     try {
       await saveCreds();
@@ -7778,7 +7864,7 @@ async function connectToWhatsApp(
     if (
       !usePairingCode &&
       !phoneNumber &&
-      !state.creds.registered &&
+      !(state?.creds?.registered || state?.creds?.me?.id) &&
       !userSelectedMethod
     ) {
       const rl = readline.createInterface({
@@ -7831,11 +7917,17 @@ async function connectToWhatsApp(
         });
       });
 
-      // Guardar la seleccin del usuario para reconexiones
+      // Guardar la selección del usuario para reconexiones
       userSelectedMethod = authConfig.method;
       if (authConfig.phoneNumber) {
         userSelectedPhone = authConfig.phoneNumber;
       }
+      // Persistir preferencia a disco para evitar prompts tras reinicios
+      try {
+        const cfgPath = path.join(path.resolve(effectiveAuthPath), 'auth-method.json');
+        const data = JSON.stringify({ method: userSelectedMethod, phoneNumber: userSelectedPhone || null }, null, 2);
+        fs.writeFileSync(cfgPath, data, 'utf8');
+      } catch (_) {}
 
       if (authConfig.method === "pairing") {
         usePairingCode = true;
@@ -7980,6 +8072,14 @@ async function connectToWhatsApp(
       } catch (_) {}
       try {
         await saveCreds();
+        // Si el socket registra sesión por primera vez, persistir método si no existía
+        try {
+          const cfgPath = path.join(path.resolve(effectiveAuthPath), 'auth-method.json');
+          if (userSelectedMethod && !fs.existsSync(cfgPath)) {
+            const data = JSON.stringify({ method: userSelectedMethod, phoneNumber: userSelectedPhone || null }, null, 2);
+            fs.writeFileSync(cfgPath, data, 'utf8');
+          }
+        } catch (_) {}
       } catch (e) {
         console.error(" Error guardando credenciales:", e.message);
       }
