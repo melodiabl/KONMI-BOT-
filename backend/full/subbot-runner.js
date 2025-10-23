@@ -484,12 +484,14 @@ async function start() {
     let attempt = 1;
     let customPairingCodeForAttempt = SANITIZED_CUSTOM_PAIRING.length === 8 ? SANITIZED_CUSTOM_PAIRING : '';
 
+    const CLEAN_AUTH_ON_START = /^(1|true|yes)$/i.test(process.env.SUBBOT_CLEAN_AUTH_ON_START || '');
     while (infiniteRetries || attempt <= MAX_RETRIES) {
       const result = await runAttempt({
         attempt,
         maxAttempts: infiniteRetries ? '' : MAX_RETRIES,
         authDir,
-        cleanupAuth: attempt === 1,
+        // No borres credenciales por defecto: solo si está habilitado explícitamente
+        cleanupAuth: attempt === 1 && CLEAN_AUTH_ON_START,
         customPairingCode: customPairingCodeForAttempt
       });
 

@@ -3,12 +3,13 @@
 
 import axios from 'axios'
 import logger from '../config/logger.js'
+import { getSpotifyAccessToken } from './spotify-auth.js'
 
 /**
  * Axios por defecto
  */
 const http = axios.create({
-  timeout: 30000,
+  timeout: 15000,
   headers: {
     'User-Agent': 'KonmiBot/2.x (+https://example.local)'
   },
@@ -158,6 +159,68 @@ export const API_PROVIDERS = {
 
   youtube: [
     {
+      name: 'Piped.video',
+      timeoutMs: 5000,
+      url: (videoUrl, options = {}) => {
+        try {
+          const u = new URL(videoUrl)
+          let vid = u.searchParams.get('v')
+          if (!vid && /youtu\.be$/i.test(u.hostname)) {
+            const p = u.pathname.split('/').filter(Boolean)
+            if (p[0]) vid = p[0]
+          }
+          if (!vid) {
+            const m = (videoUrl || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/)
+            vid = m ? m[1] : null
+          }
+          if (!vid) throw new Error('videoId no encontrado')
+          return { url: `https://piped.video/api/v1/streams/${vid}`, __yt_requested_type: options.type || 'video' }
+        } catch (e) { throw e }
+      },
+      parse: (data, extra) => {
+        const want = (extra && extra.__yt_requested_type) || 'video'
+        if (want === 'audio') {
+          const a = Array.isArray(data?.audioStreams) ? data.audioStreams : []
+          const best = a?.[0]?.url || null
+          return { success: Boolean(best), download: best, quality: a?.[0]?.quality }
+        }
+        const v = Array.isArray(data?.videoStreams) ? data.videoStreams : []
+        const bestVideo = v?.[0]?.url || data?.hls || null
+        return { success: Boolean(bestVideo), download: bestVideo, quality: v?.[0]?.quality }
+      }
+    },
+    {
+      name: 'Piped.mha.fi',
+      timeoutMs: 5000,
+      url: (videoUrl, options = {}) => {
+        try {
+          const u = new URL(videoUrl)
+          let vid = u.searchParams.get('v')
+          if (!vid && /youtu\.be$/i.test(u.hostname)) {
+            const p = u.pathname.split('/').filter(Boolean)
+            if (p[0]) vid = p[0]
+          }
+          if (!vid) {
+            const m = (videoUrl || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/)
+            vid = m ? m[1] : null
+          }
+          if (!vid) throw new Error('videoId no encontrado')
+          return { url: `https://piped.mha.fi/api/v1/streams/${vid}`, __yt_requested_type: options.type || 'video' }
+        } catch (e) { throw e }
+      },
+      parse: (data, extra) => {
+        const want = (extra && extra.__yt_requested_type) || 'video'
+        if (want === 'audio') {
+          const a = Array.isArray(data?.audioStreams) ? data.audioStreams : []
+          const best = a?.[0]?.url || null
+          return { success: Boolean(best), download: best, quality: a?.[0]?.quality }
+        }
+        const v = Array.isArray(data?.videoStreams) ? data.videoStreams : []
+        const bestVideo = v?.[0]?.url || data?.hls || null
+        return { success: Boolean(bestVideo), download: bestVideo, quality: v?.[0]?.quality }
+      }
+    },
+    {
       name: 'Vreden',
       url: (videoUrl, options = {}) => {
         const type = options.type || 'video'
@@ -175,6 +238,7 @@ export const API_PROVIDERS = {
     },
     {
       name: 'DownloaderBot',
+      timeoutMs: 3500,
       url: (videoUrl, options = {}) => {
         const type = options.type || 'video'
         return `https://downloaderbot.my.id/api/youtube/download?url=${encodeURIComponent(videoUrl)}&type=${type}`
@@ -185,10 +249,115 @@ export const API_PROVIDERS = {
         quality: data?.result?.quality,
         title: data?.result?.title
       })
+    },
+    {
+      name: 'yt-dlp (local)',
+      method: 'LOCAL__YTDLP_URL',
+      url: (videoUrl, options = {}) => ({ url: videoUrl, __ytdlpType: options.type || 'audio' }),
+      parse: (data) => data
+    },
+    // Fallback final local: ytdl-core (obtiene URL directa del mejor audio)
+    {
+      name: 'ytdl-core (local url)',
+      method: 'LOCAL__YTDL_URL',
+      url: (videoUrl, options = {}) => videoUrl,
+      parse: (data) => data
     }
   ],
 
   youtubeSearch: [
+    // yt-dlp local search (sin APIs de terceros)
+    {
+      name: 'yt-dlp (search local)',
+      method: 'LOCAL__YTDLP_SEARCH',
+      url: (query) => `ytsearch10:${query}`,
+      parse: (data) => data,
+    },
+    // Piped Search (instancias públicas)
+    {
+      name: 'Piped.video Search',
+      timeoutMs: 5000,
+      url: (query) => `https://piped.video/api/v1/search?q=${encodeURIComponent(query)}&region=US`,
+      parse: (data) => {
+        const items = Array.isArray(data) ? data : []
+        const vids = items.filter(i => (i?.type||'').toLowerCase()==='video')
+        if (!vids.length) return { success: false }
+        const map = vids.map(v=>({
+          title: v?.title,
+          url: v?.url?.startsWith('http') ? v.url : (v?.url ? `https://youtube.com${v.url}` : undefined),
+          videoId: v?.url?.includes('watch?v=') ? (v.url.split('v=')[1]||'').split('&')[0] : undefined,
+          duration: v?.duration,
+          views: v?.views,
+          author: v?.uploaderName || v?.uploader,
+          thumbnail: Array.isArray(v?.thumbnailUrl) ? v.thumbnailUrl[0] : v?.thumbnail,
+        }))
+        return { success: true, results: map }
+      }
+    },
+    {
+      name: 'Piped.mha.fi Search',
+      timeoutMs: 5000,
+      url: (query) => `https://piped.mha.fi/api/v1/search?q=${encodeURIComponent(query)}&region=US`,
+      parse: (data) => {
+        const items = Array.isArray(data) ? data : []
+        const vids = items.filter(i => (i?.type||'').toLowerCase()==='video')
+        if (!vids.length) return { success: false }
+        const map = vids.map(v=>({
+          title: v?.title,
+          url: v?.url?.startsWith('http') ? v.url : (v?.url ? `https://youtube.com${v.url}` : undefined),
+          videoId: v?.url?.includes('watch?v=') ? (v.url.split('v=')[1]||'').split('&')[0] : undefined,
+          duration: v?.duration,
+          views: v?.views,
+          author: v?.uploaderName || v?.uploader,
+          thumbnail: Array.isArray(v?.thumbnailUrl) ? v.thumbnailUrl[0] : v?.thumbnail,
+        }))
+        return { success: true, results: map }
+      }
+    },
+    {
+      name: 'Piped.kavin Search',
+      timeoutMs: 5000,
+      url: (query) => `https://pipedapi.kavin.rocks/api/v1/search?q=${encodeURIComponent(query)}&region=US`,
+      parse: (data) => {
+        const items = Array.isArray(data) ? data : []
+        const vids = items.filter(i => (i?.type||'').toLowerCase()==='video')
+        if (!vids.length) return { success: false }
+        const map = vids.map(v=>({
+          title: v?.title,
+          url: v?.url?.startsWith('http') ? v.url : (v?.url ? `https://youtube.com${v.url}` : undefined),
+          videoId: v?.url?.includes('watch?v=') ? (v.url.split('v=')[1]||'').split('&')[0] : undefined,
+          duration: v?.duration,
+          views: v?.views,
+          author: v?.uploaderName || v?.uploader,
+          thumbnail: Array.isArray(v?.thumbnailUrl) ? v.thumbnailUrl[0] : v?.thumbnail,
+        }))
+        return { success: true, results: map }
+      }
+    },
+    // Abhi API como respaldo
+    {
+      name: 'AbhiAPI',
+      timeoutMs: 6000,
+      url: (query) => `https://abhi-api.vercel.app/api/search/yts?text=${encodeURIComponent(query)}`,
+      parse: (data) => {
+        const r = data?.result
+        if (!r?.url) return { success: false }
+        return {
+          success: true,
+          results: [
+            {
+              title: r.title,
+              url: r.url,
+              videoId: (r.url || '').split('v=')[1] || undefined,
+              duration: r.duration,
+              views: r.views,
+              author: r.channel,
+              thumbnail: r.thumbnail,
+            },
+          ],
+        }
+      },
+    },
     {
       name: 'Vreden',
       url: (query) => `https://api.vreden.my.id/api/ytsearch?query=${encodeURIComponent(query)}`,
@@ -220,13 +389,6 @@ export const API_PROVIDERS = {
           thumbnail: v?.thumbnail
         }))
       })
-    },
-    // Fallback local sin depender de dominios externos (requiere: npm i yt-search)
-    {
-      name: 'yt-search (local)',
-      url: async (query) => ({ url: query, __localYT__: true }),
-      parse: (data) => data,
-      method: 'LOCAL__YTSEARCH'
     }
   ],
 
@@ -253,6 +415,52 @@ export const API_PROVIDERS = {
   ],
 
   spotify: [
+    // Proveedor oficial con Client Credentials
+    {
+      name: 'Spotify API',
+      // Dinámico: inyecta Bearer token
+      headers: async () => {
+        try {
+          const token = await getSpotifyAccessToken()
+          if (!token) return null
+          return { Authorization: `Bearer ${token}` }
+        } catch (e) {
+          // Propagar para que el fallback pruebe el siguiente proveedor
+          throw new Error(e?.message || 'spotify token error')
+        }
+      },
+      // Acepta texto o URL de track
+      url: async (query) => {
+        const q = String(query || '').trim()
+        // URL o URI -> extraer ID
+        const match = q.match(/(?:track\/(\w+)|spotify:track:(\w+))/i)
+        if (match && (match[1] || match[2])) {
+          const id = (match[1] || match[2])
+          return `https://api.spotify.com/v1/tracks/${id}`
+        }
+        // Búsqueda normal
+        const search = encodeURIComponent(q)
+        return `https://api.spotify.com/v1/search?type=track&limit=1&q=${search}`
+      },
+      parse: (data) => {
+        const track = data?.tracks?.items?.[0] || data // soporta /search y /tracks/{id}
+        if (!track?.name) return { success: false }
+        const artists = Array.isArray(track.artists) ? track.artists.map(a => a?.name).filter(Boolean).join(', ') : undefined
+        const album = track.album || {}
+        const cover = Array.isArray(album.images) && album.images.length ? album.images[0].url : undefined
+        return {
+          success: true,
+          title: track.name,
+          artists,
+          album: album?.name,
+          duration_ms: track.duration_ms,
+          release_date: album?.release_date,
+          cover_url: cover,
+          preview_url: track.preview_url || undefined,
+          url: track?.external_urls?.spotify
+        }
+      }
+    },
     {
       name: 'Vreden',
       url: (query) => `https://api.vreden.my.id/api/spotify/search?query=${encodeURIComponent(query)}`,
@@ -429,7 +637,7 @@ export const API_PROVIDERS = {
 /**
  * Realiza una petición HTTP teniendo en cuenta método, body y headers del provider
  */
-async function doRequest(provider, url, body) {
+async function doRequest(provider, url, body, extraCtx) {
   // Provider local (yt-search) como último recurso
   if (provider?.method === 'LOCAL__YTSEARCH') {
     try {
@@ -457,16 +665,180 @@ async function doRequest(provider, url, body) {
       throw new Error('yt-search local falló: ' + (e?.message || e))
     }
   }
+  // Proveedor local: ytdl-core para obtener URL directa
+  if (provider?.method === 'LOCAL__YTDL_URL') {
+    try {
+      const mod = await import('ytdl-core')
+      const ytdl = mod.default || mod
+      const info = await ytdl.getInfo(url)
+      let chosen
+      try {
+        chosen = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+      } catch (_) {
+        // fallback simple
+        const only = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)
+        chosen = only?.[0]
+      }
+      const direct = chosen?.url
+      return {
+        data: { __local: true, success: Boolean(direct), download: direct, quality: chosen?.audioBitrate },
+        status: 200,
+      }
+    } catch (e) {
+      throw new Error('ytdl-core url falló: ' + (e?.message || e))
+    }
+  }
+
+  // Proveedor local: yt-dlp-exec para obtener URL directa robusta
+  if (provider?.method === 'LOCAL__YTDLP_URL') {
+    try {
+      let ytdlp
+      try {
+        const execMod = await import('yt-dlp-exec')
+        ytdlp = execMod.default || execMod
+      } catch (_) {
+        ytdlp = null
+      }
+      const want = (extraCtx && (extraCtx.__ytdlpType || extraCtx.type)) || 'audio'
+      const opts = {
+        dumpSingleJson: true,
+        noWarnings: true,
+        preferFreeFormats: false,
+        // Elegir formatos progresivos para descarga directa
+        format: want === 'audio' ? 'bestaudio[ext=m4a]/bestaudio/best' : 'best[ext=mp4]/best',
+        retries: 1,
+        quiet: true,
+      }
+      let info
+      if (ytdlp) {
+        info = await ytdlp(url, opts)
+      } else {
+        const { spawn } = await import('child_process')
+        const commonArgs = [
+          '--dump-single-json',
+          '--no-warnings',
+          '--retries', '1',
+          '-f', opts.format,
+          url,
+        ]
+        const tryCmd = async (cmd, args) => new Promise((resolve, reject) => {
+          const p = spawn(cmd, args, { windowsHide: true })
+          let out = ''
+          let err = ''
+          p.stdout.on('data', (d) => out += d.toString())
+          p.stderr.on('data', (d) => err += d.toString())
+          p.on('error', (e) => reject(e))
+          p.on('close', (code) => {
+            if (code === 0) {
+              try { resolve(JSON.parse(out)) } catch (e) { reject(new Error('yt-dlp JSON parse fail')) }
+            } else reject(new Error(err || ('exit '+code)))
+          })
+        })
+
+        const binEnv = process.env.YTDLP_PATH || process.env.YTDLP_BIN || null
+        const candidates = []
+        if (binEnv) candidates.push(binEnv)
+        candidates.push('yt-dlp', 'yt')
+        let lastErr
+        for (const c of candidates) {
+          try { info = await tryCmd(c, commonArgs); lastErr = null; break } catch (e) { lastErr = e }
+        }
+        if (!info) {
+          const pyCandidates = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
+          for (const py of pyCandidates) {
+            try { info = await tryCmd(py, ['-m', 'yt_dlp', ...commonArgs]); lastErr = null; break } catch (e) { lastErr = e }
+          }
+        }
+        if (!info) throw lastErr || new Error('yt-dlp no disponible en PATH')
+      }
+      const pickFromFormats = (formats, predicate) => {
+        if (!Array.isArray(formats)) return null
+        const list = formats.filter(predicate)
+        if (!list.length) return null
+        return list.sort((a,b)=> (b.abr||b.tbr||0) - (a.abr||a.tbr||0))[0]
+      }
+      let chosenUrl = null
+      if (Array.isArray(info?.requested_downloads) && info.requested_downloads.length) {
+        chosenUrl = info.requested_downloads[0]?.url || null
+      }
+      if (!chosenUrl && Array.isArray(info?.requested_formats)) {
+        chosenUrl = info.requested_formats[0]?.url || null
+      }
+      if (!chosenUrl && info?.url) chosenUrl = info.url
+      if (!chosenUrl && Array.isArray(info?.formats)) {
+        if (want === 'audio') {
+          const f = pickFromFormats(info.formats, f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
+          chosenUrl = f?.url || null
+        } else {
+          const f = pickFromFormats(info.formats, f => (f.ext === 'mp4' || /mp4|m4v/i.test(f.ext)) && (f.vcodec && f.vcodec !== 'none'))
+          chosenUrl = f?.url || null
+        }
+      }
+      return { data: { __local: true, success: Boolean(chosenUrl), download: chosenUrl, title: info?.title, quality: info?.quality }, status: 200 }
+    } catch (e) {
+      throw new Error((e && e.stderr) ? String(e.stderr).slice(0,200) : (e?.message || e))
+    }
+  }
+
+  // Proveedor local: yt-dlp para búsqueda (ytsearchN:query)
+  if (provider?.method === 'LOCAL__YTDLP_SEARCH') {
+    try {
+      // url aquí es el término completo como "ytsearch10:query"
+      const execMod = await import('child_process')
+      const { spawn } = execMod
+      const args = ['-J', url]
+      const cmd = process.env.YTDLP_PATH || 'yt-dlp'
+      const p = spawn(cmd, args, { windowsHide: true })
+      let out = ''
+      let err = ''
+      await new Promise((resolve, reject) => {
+        p.stdout.on('data', (d) => (out += d.toString()))
+        p.stderr.on('data', (d) => (err += d.toString()))
+        p.on('error', (e) => reject(e))
+        p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(err || ('exit ' + code)))))
+      })
+      let json
+      try { json = JSON.parse(out) } catch (e) { throw new Error('yt-dlp search JSON inválido') }
+      const entries = Array.isArray(json?.entries) ? json.entries : []
+      const results = entries.map((v) => ({
+        title: v?.title,
+        url: v?.webpage_url || (v?.url && v.url.startsWith('http') ? v.url : undefined),
+        videoId: v?.id,
+        duration: v?.duration,
+        views: v?.view_count,
+        author: v?.uploader,
+        thumbnail: v?.thumbnail,
+      }))
+      return { data: { __local: true, success: results.length > 0, results }, status: 200 }
+    } catch (e) {
+      throw new Error('yt-dlp search falló: ' + (e?.message || e))
+    }
+  }
+
+  // Headers dinámicos: admitir función async para proveedores con OAuth
+  let dynHeaders = {}
+  try {
+    if (typeof provider?.headers === 'function') {
+      const h = await provider.headers()
+      if (h === null) throw new Error('headers-missing')
+      dynHeaders = h || {}
+    } else if (provider?.headers) {
+      dynHeaders = provider.headers
+    }
+  } catch (e) {
+    throw new Error('No se pudieron preparar headers: ' + (e?.message || e))
+  }
 
   if (provider?.method === 'POST') {
     return http.post(url, body, {
       headers: {
         'Content-Type': 'application/json',
-        ...(provider?.headers || {})
-      }
+        ...dynHeaders
+      },
+      timeout: provider?.timeoutMs || 10000,
     })
   }
-  return http.get(url, { headers: provider?.headers || {} })
+  return http.get(url, { headers: dynHeaders, timeout: provider?.timeoutMs || 10000 })
 }
 
 /**
@@ -477,8 +849,14 @@ async function doRequest(provider, url, body) {
  * @returns {Promise<object>} Resultado parseado + {provider}
  */
 export async function downloadWithFallback(type, param, options = {}) {
-  const providers = API_PROVIDERS[type]
+  let providers = API_PROVIDERS[type]
   if (!providers?.length) throw new Error('Tipo de API no soportado: ' + type)
+
+  // Política para YouTube: permitir deshabilitar providers locales (yt-dlp/ytdl-core/yt-search)
+  const ytRemoteOnly = String(process.env.YT_REMOTE_ONLY || 'false').toLowerCase() === 'true'
+  if (ytRemoteOnly && (type === 'youtube' || type === 'youtubeSearch')) {
+    providers = providers.filter(p => p.method !== 'LOCAL__YTDLP_URL' && p.method !== 'LOCAL__YTDL_URL' && p.method !== 'LOCAL__YTSEARCH')
+  }
 
   const errors = []
 
@@ -520,7 +898,7 @@ export async function downloadWithFallback(type, param, options = {}) {
         ? provider.body(param, options)
         : provider.body
 
-      const { data, status } = await doRequest(provider, url, body)
+      const { data, status } = await doRequest(provider, url, body, extra)
 
       const parsed = data?.__local ? data : (provider.parse?.(data, extra) || { success: false })
 

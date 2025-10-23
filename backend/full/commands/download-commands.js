@@ -248,36 +248,155 @@ export async function handleMusicDownload(query, usuario) {
     if (!query) {
       return {
         success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/music [nombre de la canción]`\n\n*Ejemplo:*\n`/music Despacito Luis Fonsi`',
+        message: '❌ *Uso incorrecto*\n\n*Formato:* `/music [nombre o URL]`\n\n*Ejemplos:*\n`/music tears sabrina carpenter`\n`/music https://www.youtube.com/watch?v=dQw4w9WgXcQ`',
       };
     }
 
-    // Buscar en YouTube
-    const searchResult = await searchYouTubeMusic(query);
+    const input = String(query).trim();
+    const isUrl = /^(https?:\/\/)/i.test(input);
+    const isYouTube = /(?:youtube\.com|youtu\.be)/i.test(input);
+    const isSpotify = /open\.spotify\.com\/track\//i.test(input);
 
-    if (!searchResult.success || searchResult.results.length === 0) {
+    if (isUrl && isYouTube) {
+      const downloadResult = await downloadYouTube(input, 'audio');
+      if (!downloadResult.success || !downloadResult.download) {
+        return { success: false, message: '⚠️ Error al descargar el audio del enlace.' };
+      }
+      const title = downloadResult.title || 'Audio de YouTube';
+      // Portada a partir del ID de YouTube
+      let cover = null;
+      try {
+        const urlObj = new URL(input);
+        let vid = urlObj.searchParams.get('v');
+        if (!vid && /youtu\.be$/i.test(urlObj.hostname)) {
+          const p = urlObj.pathname.split('/').filter(Boolean);
+          if (p[0]) vid = p[0];
+        }
+        if (!vid) {
+          const m = input.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/);
+          vid = m ? m[1] : null;
+        }
+        if (vid) cover = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
+      } catch (_) {}
+      return {
+        success: true,
+        type: 'audio',
+        audio: downloadResult.download,
+        image: cover,
+        info: {
+          title,
+          author: downloadResult.author || 'Desconocido',
+          duration: downloadResult.duration,
+          views: downloadResult.views,
+          quality: downloadResult.quality,
+          provider: downloadResult.provider,
+          cover_url: cover,
+        },
+        caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${title}\n📶 *Calidad:* ${downloadResult.quality || 'N/A'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${downloadResult.provider}`,
+        mentions: [`${usuario}@s.whatsapp.net`],
+      };
+    }
+
+    if (isUrl && isSpotify) {
+      const sp = await searchSpotify(input);
+      if (sp?.success && (sp.download || sp.preview_url)) {
+        return {
+          success: true,
+          type: 'audio',
+          audio: sp.download || sp.preview_url,
+          image: sp.cover_url || null,
+          info: {
+            title: sp.title,
+            artists: sp.artists,
+            album: sp.album,
+            duration: sp.duration_ms,
+            release_date: sp.release_date,
+            provider: sp.provider,
+            cover_url: sp.cover_url || null,
+          },
+          caption: `🎶 *Spotify*\n\n📌 *Título:* ${sp.title}\n👤 *Artista:* ${sp.artists}\n💽 *Álbum:* ${sp.album}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${sp.provider}`,
+          mentions: [`${usuario}@s.whatsapp.net`],
+        };
+      }
+      const yt = await searchYouTubeMusic(input);
+      if (yt?.success && yt.results?.length) {
+        const video = yt.results[0];
+        const dl = await downloadYouTube(video.url, 'audio');
+        if (dl?.success && dl.download) {
+          // Portada del resultado de YouTube
+          let cover = video.thumbnail || null;
+          if (!cover) {
+            try {
+              const urlObj = new URL(video.url);
+              let vid = urlObj.searchParams.get('v');
+              if (!vid && /youtu\.be$/i.test(urlObj.hostname)) {
+                const p = urlObj.pathname.split('/').filter(Boolean);
+                if (p[0]) vid = p[0];
+              }
+              if (!vid) {
+                const m = (video.url || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/);
+                vid = m ? m[1] : null;
+              }
+              if (vid) cover = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
+            } catch (_) {}
+          }
+          return {
+            success: true,
+            type: 'audio',
+            audio: dl.download,
+            image: cover,
+            info: {
+              title: video.title,
+              author: video.author,
+              duration: video.duration,
+              views: video.views,
+              quality: dl.quality,
+              provider: dl.provider,
+              cover_url: cover,
+            },
+            caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n📶 *Calidad:* ${dl.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${dl.provider}`,
+            mentions: [`${usuario}@s.whatsapp.net`],
+          };
+        }
+      }
+      return { success: false, message: '⚠️ No se pudo resolver el enlace de Spotify.' };
+    }
+
+    // Texto (título + artista) => buscar en YouTube y descargar
+    const searchResult = await searchYouTubeMusic(input);
+    if (!searchResult.success || !Array.isArray(searchResult.results) || searchResult.results.length === 0) {
       return {
         success: false,
-        message: `🔎 *Búsqueda de música*\n\n😕 No se encontraron resultados para: "${query}"\n\n💡 Intenta con otro nombre o artista.`,
+        message: `🔎 *Búsqueda de música*\n\n😕 No se encontraron resultados para: "${input}"\n\n💡 Sugerencia: incluye el artista. Ej.:\n   /play tears sabrina carpenter`,
       };
     }
-
     const video = searchResult.results[0];
-
-    // Descargar el audio
     const downloadResult = await downloadYouTube(video.url, 'audio');
-
     if (!downloadResult.success || !downloadResult.download) {
-      return {
-        success: false,
-        message: '⚠️ Error al descargar el audio. Intenta con otra canción.',
-      };
+      return { success: false, message: '⚠️ Error al descargar el audio. Intenta con otra canción.' };
     }
-
+    // Portada del resultado de YouTube
+    let cover = video.thumbnail || null;
+    if (!cover) {
+      try {
+        const urlObj = new URL(video.url);
+        let vid = urlObj.searchParams.get('v');
+        if (!vid && /youtu\.be$/i.test(urlObj.hostname)) {
+          const p = urlObj.pathname.split('/').filter(Boolean);
+          if (p[0]) vid = p[0];
+        }
+        if (!vid) {
+          const m = (video.url || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/);
+          vid = m ? m[1] : null;
+        }
+        if (vid) cover = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
+      } catch (_) {}
+    }
     return {
       success: true,
       type: 'audio',
       audio: downloadResult.download,
+      image: cover,
       info: {
         title: video.title,
         author: video.author,
@@ -285,6 +404,7 @@ export async function handleMusicDownload(query, usuario) {
         views: video.views,
         quality: downloadResult.quality,
         provider: downloadResult.provider,
+        cover_url: cover,
       },
       caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${downloadResult.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${downloadResult.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
@@ -310,41 +430,81 @@ export async function handleVideoDownload(query, usuario) {
       };
     }
 
-    // Buscar en YouTube
-    const searchResult = await searchYouTubeMusic(query);
+    const input = String(query).trim();
+    const isUrl = /^(https?:\/\/)/i.test(input);
+    const isYouTube = /(?:youtube\.com|youtu\.be)/i.test(input);
 
-    if (!searchResult.success || searchResult.results.length === 0) {
+    const computeCover = (u) => {
+      try {
+        const urlObj = new URL(u);
+        let vid = urlObj.searchParams.get('v');
+        if (!vid && /youtu\.be$/i.test(urlObj.hostname)) {
+          const p = urlObj.pathname.split('/').filter(Boolean);
+          if (p[0]) vid = p[0];
+        }
+        if (!vid) {
+          const m = u.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/);
+          vid = m ? m[1] : null;
+        }
+        return vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : null;
+      } catch (_) { return null; }
+    };
+
+    // Ruta 1: URL directa de YouTube
+    if (isUrl && isYouTube) {
+      const dl = await downloadYouTube(input, 'video');
+      if (!dl?.success || !dl.download) {
+        return { success: false, message: '⚠️ Error al descargar el video del enlace.' };
+      }
+      const cover = computeCover(input);
       return {
-        success: false,
-        message: `🔎 *Búsqueda de video*\n\n😕 No se encontraron resultados para: "${query}"\n\n💡 Intenta con otra búsqueda.`,
+        success: true,
+        type: 'video',
+        video: dl.download,
+        image: cover,
+        info: {
+          title: dl.title || 'Video',
+          author: dl.author,
+          duration: dl.duration,
+          views: dl.views,
+          quality: dl.quality,
+          provider: dl.provider,
+          cover_url: cover,
+        },
+        caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${dl.title || 'Video'}\n📶 *Calidad:* ${dl.quality || 'N/A'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${dl.provider}`,
+        mentions: [`${usuario}@s.whatsapp.net`],
       };
     }
 
+    // Ruta 2: Texto => buscar en YouTube y descargar
+    const searchResult = await searchYouTubeMusic(input);
+    if (!searchResult.success || !Array.isArray(searchResult.results) || searchResult.results.length === 0) {
+      return {
+        success: false,
+        message: `🔎 *Búsqueda de video*\n\n😕 No se encontraron resultados para: "${input}"\n\n💡 Intenta con otra búsqueda.`,
+      };
+    }
     const video = searchResult.results[0];
-
-    // Descargar el video
-    const downloadResult = await downloadYouTube(video.url, 'video');
-
-    if (!downloadResult.success || !downloadResult.download) {
-      return {
-        success: false,
-        message: '⚠️ Error al descargar el video. Intenta con otra búsqueda.',
-      };
+    const dl = await downloadYouTube(video.url, 'video');
+    if (!dl?.success || !dl.download) {
+      return { success: false, message: '⚠️ Error al descargar el video. Intenta con otra búsqueda.' };
     }
-
+    const cover = video.thumbnail || computeCover(video.url || '') || null;
     return {
       success: true,
       type: 'video',
-      video: downloadResult.download,
+      video: dl.download,
+      image: cover,
       info: {
         title: video.title,
         author: video.author,
         duration: video.duration,
         views: video.views,
-        quality: downloadResult.quality,
-        provider: downloadResult.provider,
+        quality: dl.quality,
+        provider: dl.provider,
+        cover_url: cover,
       },
-      caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${downloadResult.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${downloadResult.provider}`,
+      caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${dl.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${dl.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
     };
   } catch (error) {
@@ -368,7 +528,7 @@ export async function handleSpotifySearch(query, usuario) {
       };
     }
 
-    const result = await searchSpotify(query);
+  const result = await searchSpotify(query);
 
     if (!result.success) {
       return {
@@ -379,12 +539,29 @@ export async function handleSpotifySearch(query, usuario) {
 
     const duration = Math.floor(result.duration_ms / 60000);
     const seconds = String(Math.floor((result.duration_ms % 60000) / 1000)).padStart(2, '0');
+    const linkLine = result.url ? `\n🔗 Escuchar: ${result.url}` : '';
+
+    // Intentar conseguir audio: preview de Spotify o fallback a YouTube
+    let audioUrl = result.download || result.preview_url || null;
+    if (!audioUrl && result.title) {
+      try {
+        const ytQuery = `${result.title} ${result.artists || ''}`.trim();
+        const yt = await searchYouTubeMusic(ytQuery);
+        if (yt?.success && Array.isArray(yt.results) && yt.results.length) {
+          const top = yt.results[0];
+          const dl = await downloadYouTube(top.url, 'audio');
+          if (dl?.success && dl.download) {
+            audioUrl = dl.download;
+          }
+        }
+      } catch (_) {}
+    }
 
     return {
       success: true,
       type: 'spotify',
       image: result.cover_url,
-      audio: result.download || result.preview_url,
+      audio: audioUrl,
       info: {
         title: result.title,
         artists: result.artists,
@@ -392,8 +569,9 @@ export async function handleSpotifySearch(query, usuario) {
         duration: `${duration}:${seconds}`,
         release_date: result.release_date,
         provider: result.provider,
+        url: result.url || undefined,
       },
-      caption: `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n⏱️ *Duración:* ${duration}:${seconds}\n📅 *Lanzamiento:* ${result.release_date}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
+      caption: `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n⏱️ *Duración:* ${duration}:${seconds}\n📅 *Lanzamiento:* ${result.release_date}${linkLine}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
     };
   } catch (error) {

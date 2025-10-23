@@ -169,30 +169,39 @@ async function handleListClasificados(usuario, grupo, fecha) {
   try {
     console.log(` Comando /listclasificados recibido de ${usuario}`);
 
-    // Obtener aportes automticos clasificados
-    const aportes = await db('aportes')
-      .where({ tipo: 'proveedor_auto' })
-      .select('manhwa_titulo', 'contenido_tipo', 'proveedor', 'fecha', 'contenido')
-      .orderBy('fecha', 'desc')
-      .limit(20);
+  // Obtener aportes automáticos clasificados
+  // Estructura real usada por el pipeline: columna 'fuente' = 'auto_proveedor'
+  // y los datos adicionales (proveedor, titulo, capitulo) guardados en 'metadata' (JSON)
+  const rows = await db('aportes')
+    .where({ fuente: 'auto_proveedor' })
+    .select('id', 'contenido', 'tipo', 'fecha', 'metadata')
+    .orderBy('fecha', 'desc')
+    .limit(20);
 
-    if (aportes.length === 0) {
+    if (rows.length === 0) {
       return {
         success: true,
-        message: ` *Lista de Clasificaciones:*\n\n No hay contenido clasificado an.\n\n_El bot clasificar automticamente cuando lleguen archivos a grupos proveedores._`
+        message: ` *Lista de Clasificaciones:*\n\n No hay contenido clasificado aún.\n\n_El bot clasificará automáticamente cuando lleguen archivos a grupos proveedores._`
       };
     }
 
-    let response = ` *ltimas 20 Clasificaciones del Bot:*\n\n`;
+  let response = ` *Últimas 20 Clasificaciones del Bot:*\n\n`;
 
-    aportes.forEach((aporte, index) => {
-      const fechaCorta = new Date(aporte.fecha).toLocaleDateString('es-ES');
-      response += `${index + 1}.  *${aporte.manhwa_titulo}*\n`;
-      response += `    ${aporte.contenido_tipo} |  ${aporte.proveedor}\n`;
-      response += `    ${fechaCorta}\n\n`;
-    });
+  rows.forEach((row, index) => {
+    let meta = {};
+    try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) { meta = {}; }
+    const titulo = meta.titulo || row.contenido || 'Sin título';
+    const tipo = row.tipo || meta.tipo || 'extra';
+    const proveedor = meta.proveedor || 'desconocido';
+    const fechaCorta = row.fecha ? new Date(row.fecha).toLocaleDateString('es-ES') : '';
 
-    response += `_Total clasificado automticamente por IA_`;
+    response += `${index + 1}.  *${titulo}*\n`;
+    response += `    ${tipo} |  ${proveedor}\n`;
+    if (fechaCorta) response += `    ${fechaCorta}\n`;
+    response += `\n`;
+  });
+
+  response += `_Total clasificado automáticamente por IA_`;
 
     return { success: true, message: response };
 

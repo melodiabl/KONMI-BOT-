@@ -15,6 +15,9 @@ import fs from "fs";
 import readline from "readline";
 import db from "./db.js";
 import logger from "./config/logger.js";
+import { downloadWithSpotdl } from "./utils/spotdl-wrapper.js";
+import { join } from "path";
+import { promises as fsp } from "fs";
 import os from "os";
 import {
   generateSubbotPairingCode,
@@ -179,6 +182,10 @@ function buildProgressBar(percent, segments = 10) {
   return `${bar}`;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function describePlayProgress(percent) {
   if (!Number.isFinite(percent)) {
     return "Calculando tamaño de la descarga...";
@@ -341,7 +348,7 @@ function renderGenericProgressMessage({ title, percent, statusText, details = []
   return `${title}\n\n${progressLine}${statusLine}${infoBlock}`;
 }
 
-function createProgressMessenger(sock, remoteJid, initialText, { contextLabel } = {}) {
+function createProgressMessenger(sock, remoteJid, initialText, { contextLabel, initialMessageExtra } = {}) {
   let progressKey = null;
   let queue = Promise.resolve();
   const logContext = contextLabel ? ` ${contextLabel}` : "";
@@ -351,7 +358,11 @@ function createProgressMessenger(sock, remoteJid, initialText, { contextLabel } 
       if (progressKey && !initial) {
         await sock.sendMessage(remoteJid, { text }, { edit: progressKey });
       } else {
-        const sent = await sock.sendMessage(remoteJid, { text });
+        const payload = { text };
+        if (initial && initialMessageExtra && typeof initialMessageExtra === 'object') {
+          Object.assign(payload, initialMessageExtra);
+        }
+        const sent = await sock.sendMessage(remoteJid, payload);
         if (initial || !progressKey) {
           progressKey = sent?.key || null;
         }
@@ -408,6 +419,8 @@ async function sendMediaWithProgress({
   contextLabel,
   timeoutMs = 60000,
   getFailureMessage,
+  showProgress = true,
+  quoted,
 }) {
   if (!url) {
     throw new Error("URL de descarga no válida");
@@ -423,14 +436,20 @@ async function sendMediaWithProgress({
       details,
     });
 
-  const progress = createProgressMessenger(
-    sock,
-    remoteJid,
-    render(0, "Preparando descarga..."),
-    { contextLabel },
-  );
+  const progress = showProgress
+    ? createProgressMessenger(
+        sock,
+        remoteJid,
+        render(0, "Preparando descarga..."),
+        { contextLabel },
+      )
+    : { queueUpdate: async () => {}, flush: async () => {} };
 
-  progress.queueUpdate(render(5, `Conectando con el servidor de ${normalizedType}...`));
+  if (showProgress) {
+    progress.queueUpdate(
+      render(5, `Conectando con el servidor de ${normalizedType}...`),
+    );
+  }
 
   let buffer;
   let lastPercent = 5;
@@ -439,20 +458,27 @@ async function sendMediaWithProgress({
   try {
     buffer = await downloadBufferWithProgress(url, {
       timeoutMs,
-      onProgress: ({ percent }) => {
-        if (Number.isFinite(percent)) {
-          const rounded = Math.max(0, Math.min(100, Math.round(percent)));
-          if (rounded - lastPercent >= 4 || rounded >= 99) {
-            lastPercent = rounded;
-            progress.queueUpdate(
-              render(rounded, describeMediaDownloadProgress(normalizedType, rounded)),
-            );
+      onProgress: showProgress
+        ? ({ percent }) => {
+            if (Number.isFinite(percent)) {
+              const rounded = Math.max(0, Math.min(100, Math.round(percent)));
+              if (rounded - lastPercent >= 4 || rounded >= 99) {
+                lastPercent = rounded;
+                progress.queueUpdate(
+                  render(
+                    rounded,
+                    describeMediaDownloadProgress(normalizedType, rounded),
+                  ),
+                );
+              }
+            } else if (!notifiedUnknown) {
+              notifiedUnknown = true;
+              progress.queueUpdate(
+                render(null, `Descargando ${normalizedType}...`),
+              );
+            }
           }
-        } else if (!notifiedUnknown) {
-          notifiedUnknown = true;
-          progress.queueUpdate(render(null, `Descargando ${normalizedType}...`));
-        }
-      },
+        : undefined,
     });
   } catch (error) {
     logger.error(`Error descargando ${normalizedType} (${contextLabel || "media"}):`, error);
@@ -473,8 +499,12 @@ async function sendMediaWithProgress({
     return false;
   }
 
-  progress.queueUpdate(render(100, "¡Descarga finalizada! Enviando archivo..."));
-  await progress.flush();
+  if (showProgress) {
+    progress.queueUpdate(
+      render(100, "¡Descarga finalizada! Enviando archivo..."),
+    );
+    await progress.flush();
+  }
 
   const messagePayload = {
     caption,
@@ -499,7 +529,11 @@ async function sendMediaWithProgress({
   }
 
   try {
-    await sock.sendMessage(remoteJid, messagePayload);
+    if (quoted) {
+      await sock.sendMessage(remoteJid, messagePayload, { quoted });
+    } else {
+      await sock.sendMessage(remoteJid, messagePayload);
+    }
     return true;
   } catch (error) {
     logger.error(`Error enviando ${normalizedType} (${contextLabel || "media"}):`, error);
@@ -4652,31 +4686,67 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/update":
         if (isOwner) {
           try {
+            const header = '⬆️ Actualizando bot';
+            let details = [ '🤖 KONMI BOT v2.5.0' ];
+            const render = (percent, statusText) => renderGenericProgressMessage({
+              title: header,
+              percent,
+              statusText,
+              details,
+            });
+
+            const progress = createProgressMessenger(
+              sock,
+              remoteJid,
+              render(2, 'Preparando actualización...'),
+              { contextLabel: 'update' },
+            );
+
+            // Paso 1: Git
+            progress.queueUpdate(render(10, 'Verificando repositorio git...'));
             const { performSelfUpdate } = await import('./scripts/self-update.mjs');
-            const result = await performSelfUpdate();
-            let lines = [];
-            lines.push('⬆️ *Actualizando bot*');
-            lines.push('');
-            lines.push('🤖 KONMI BOT v2.5.0');
-            if (result?.git?.inRepo) {
-              const pulled = result.git.pulled ? 'sí' : 'no';
-              lines.push(`🧬 Git: branch ${result.git.branch} — ${result.git.before} ➜ ${result.git.after} (pull=${pulled})`);
-            } else {
-              lines.push('🧬 Git: no repo (omitido)');
+            let result = null;
+            try {
+              result = await performSelfUpdate();
+              if (result?.git?.inRepo) {
+                const pulled = result.git.pulled ? 'sí' : 'no';
+                details.push(`🧬 Git: ${result.git.branch} — ${result.git.before} ➜ ${result.git.after} (pull=${pulled})`);
+              } else {
+                details.push('🧬 Git: no repo (omitido)');
+              }
+              progress.queueUpdate(render(50, 'Dependencias (npm ci)...'));
+              const depsStep = result?.steps?.find?.(s => s.step === 'deps');
+              details.push(`📦 Dependencias: ${depsStep?.ok ? 'actualizadas' : 'falló'}`);
+            } catch (e1) {
+              details.push(`🧬 Git: error (${e1?.message || 'desconocido'})`);
             }
-            const depsStep = result?.steps?.find?.(s => s.step === 'deps');
-            lines.push(`📦 Dependencias: ${depsStep?.ok ? 'actualizadas' : 'falló'}`);
-            // Recargar subbots si es posible
-            let info = null;
+
+            // Paso 2: Subbots
+            progress.queueUpdate(render(80, 'Recargando subbots...'));
             try {
               const { reloadAllSubbots } = await import("./inproc-subbots.js");
-              info = await reloadAllSubbots();
-              lines.push(`🔄 Subbots recargados: ${info.restarted}/${info.total}`);
-            } catch (_) {}
-            lines.push('');
-            lines.push(`✅ Bot actualizado`);
-            lines.push(`🕒 ${new Date().toLocaleString('es-ES')}`);
-            await sock.sendMessage(remoteJid, { text: lines.join('\n') });
+              const info = await reloadAllSubbots();
+              if (info && typeof info.restarted !== 'undefined') {
+                details.push(`🔄 Subbots: ${info.restarted}/${info.total} reiniciados`);
+              }
+            } catch (_) {
+              details.push('🔄 Subbots: omitido');
+            }
+
+            // Paso Final
+            progress.queueUpdate(render(100, 'Finalizando...'));
+            await progress.flush();
+
+            await sock.sendMessage(remoteJid, {
+              text: [
+                header,
+                '',
+                ...details,
+                '',
+                '✅ Bot actualizado',
+                `🕒 ${new Date().toLocaleString('es-ES')}`,
+              ].join('\n'),
+            });
           } catch (e) {
             await sock.sendMessage(remoteJid, {
               text: `⬆️ *Actualizando bot*\n\n🤖 KONMI BOT v2.5.0\n🔎 Verificando actualizaciones...\n\n✅ Bot actualizado correctamente\n🕒 ${new Date().toLocaleString("es-ES")}`,
@@ -4921,10 +4991,6 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             break;
           }
 
-          await sock.sendMessage(remoteJid, {
-            text: "🔍 Consultando APIs de música...",
-          });
-
           const result = await handleMusicDownload(musicQuery, usuario);
 
           if (result.success && result.audio) {
@@ -4945,33 +5011,90 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               viewsDetail,
               result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
               `🙋 Solicitado por: @${usuario}`,
-            ];
+            ].filter(Boolean);
 
-            const audioSent = await sendMediaWithProgress({
+            const cover = result.image || null;
+            const render = (p) => {
+              const percent = Math.max(0, Math.min(100, Math.round(Number.isFinite(p) ? p : 0)));
+              const bar = `📊 ${buildProgressBar(percent)} ${percent}%`;
+              const details = detailLines.join("\n");
+              return `🎧 *Música*\n\n${bar}\n\n${details}`;
+            };
+
+            const usePreview = String(process.env.PROGRESS_PREVIEW || 'true').toLowerCase() === 'true';
+            const initExtra = cover && usePreview
+              ? {
+                  contextInfo: {
+                    externalAdReply: {
+                      title: result.info?.title || 'Música',
+                      body: result.info?.author || 'YouTube',
+                      thumbnailUrl: cover,
+                      mediaType: 1,
+                      previewType: 0,
+                      renderLargerThumbnail: true,
+                    },
+                  },
+                }
+              : {};
+
+            const progress = createProgressMessenger(
               sock,
               remoteJid,
-              url: result.audio,
-              type: "audio",
-              header: "🎧 *Música - Descarga en progreso*",
-              detailLines,
-              mimetype: "audio/mpeg",
-              mentions: result.mentions,
-              fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
-              contextLabel: "/music",
-              timeoutMs: 90000,
-              getFailureMessage: (_error, { stage }) => ({
-                text:
-                  `⚠️ *Música*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el audio automáticamente.` +
-                  (result.audio ? `\n🔗 Enlace directo:\n${result.audio}` : "") +
-                  "\n\n🔁 Intenta nuevamente más tarde.",
-              }),
-            });
+              render(5),
+              { contextLabel: "/music:flow", initialMessageExtra: initExtra },
+            );
 
-            if (audioSent && result.caption) {
-              await sock.sendMessage(remoteJid, {
-                text: result.caption,
-                mentions: result.mentions,
-              });
+            const fastSend = String(process.env.MEDIA_FAST_SEND || 'true').toLowerCase() === 'true';
+            if (fastSend && typeof result.audio === 'string' && result.audio.startsWith('http')) {
+              const steps = [20, 45, 70, 100];
+              for (const s of steps) {
+                await sleep(200);
+                progress.queueUpdate(render(s));
+              }
+              await progress.flush();
+              await sock.sendMessage(
+                remoteJid,
+                {
+                  audio: { url: result.audio },
+                  mimetype: "audio/mpeg",
+                  ptt: false,
+                  fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
+                  mentions: result.mentions,
+                },
+                { quoted: message },
+              );
+            } else {
+              let lastPercent = 5;
+              let audioBuffer = null;
+              try {
+                audioBuffer = await downloadBufferWithProgress(result.audio, {
+                  timeoutMs: 90000,
+                  onProgress: ({ percent }) => {
+                    if (!Number.isFinite(percent)) return;
+                    const rounded = Math.max(0, Math.min(100, Math.round(percent)));
+                    if (rounded - lastPercent >= 4 || rounded >= 99) {
+                      lastPercent = rounded;
+                      progress.queueUpdate(render(rounded));
+                    }
+                  },
+                });
+                progress.queueUpdate(render(100));
+                await progress.flush();
+              } catch {}
+
+              if (audioBuffer) {
+                await sock.sendMessage(
+                  remoteJid,
+                  {
+                    audio: audioBuffer,
+                    mimetype: "audio/mpeg",
+                    ptt: false,
+                    fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
+                    mentions: result.mentions,
+                  },
+                  { quoted: message },
+                );
+              }
             }
           } else {
             await sock.sendMessage(remoteJid, {
@@ -4996,9 +5119,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             break;
           }
 
-          await sock.sendMessage(remoteJid, {
-            text: "🔍 Buscando en Spotify...",
-          });
+          // Buscar pista en Spotify y procesar
 
           const result = await handleSpotifySearch(spotifyQuery, usuario);
 
@@ -5013,58 +5134,171 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               `🙋 Solicitado por: @${usuario}`,
             ];
 
-            if (result.image) {
-              await sendMediaWithProgress({
-                sock,
-                remoteJid,
-                url: result.image,
-                type: "image",
-                header: "🖼️ *Spotify - Portada del álbum*",
-                detailLines: baseDetailLines,
-                mimetype: "image/jpeg",
-                mentions: result.mentions,
-                fileName: safeFileNameFromTitle(result.info?.title, ".jpg"),
-                contextLabel: "/spotify:image",
-                timeoutMs: 45000,
-                getFailureMessage: (_error, { stage }) => ({
-                  text:
-                    `⚠️ *Spotify*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} la portada automáticamente.` +
-                    (result.image ? `\n🔗 Enlace directo:\n${result.image}` : "") +
-                    "\n\n🔁 Intenta nuevamente más tarde.",
-                }),
-              });
-            }
+            // Mensaje de texto con preview (editable) y luego audio
+            // Preparar enlace para escuchar (preferir link oficial acortado)
+            let trackUrl = result.info?.url || null;
+            try {
+              if (!trackUrl && spotifyQuery) {
+                const q = encodeURIComponent(spotifyQuery);
+                trackUrl = `https://open.spotify.com/search/${q}`;
+              }
+              if (trackUrl) {
+                const { shortUrl } = await shortenUrl(trackUrl);
+                trackUrl = shortUrl || trackUrl;
+              }
+            } catch {}
 
-            if (result.audio) {
-              await sendMediaWithProgress({
-                sock,
-                remoteJid,
-                url: result.audio,
-                type: "audio",
-                header: "🎧 *Spotify - Vista previa en progreso*",
-                detailLines: baseDetailLines,
-                mimetype: "audio/mpeg",
-                mentions: result.mentions,
-                fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
-                contextLabel: "/spotify:audio",
-                timeoutMs: 70000,
-                getFailureMessage: (_error, { stage }) => ({
-                  text:
-                    `⚠️ *Spotify*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el audio automáticamente.` +
-                    (result.audio ? `\n🔗 Enlace directo:\n${result.audio}` : "") +
-                    "\n\n🔁 Intenta nuevamente más tarde.",
-                }),
-              });
-            }
+            const cover = result.image || null;
+            const render = (p) => {
+              const percent = Math.max(0, Math.min(100, Math.round(Number.isFinite(p) ? p : 0)));
+              const bar = `📊 ${buildProgressBar(percent)} ${percent}%`;
+              const lines = baseDetailLines.filter(Boolean);
+              if (trackUrl) lines.push(`🔗 Escuchar: ${trackUrl}`);
+              const details = lines.join("\n");
+              return `🎶 *Spotify*\n\n${bar}\n\n${details}`;
+            };
 
-            await sock.sendMessage(remoteJid, {
-              text: result.caption,
-              mentions: result.mentions,
-            });
+            const usePreview = String(process.env.PROGRESS_PREVIEW || 'true').toLowerCase() === 'true';
+            const initExtra = cover && usePreview
+              ? {
+                  contextInfo: {
+                    externalAdReply: {
+                      title: result.info?.title || 'Spotify',
+                      body: result.info?.artists || '',
+                      thumbnailUrl: cover,
+                      mediaType: 1,
+                      previewType: 0,
+                      renderLargerThumbnail: true,
+                      sourceUrl: trackUrl || result.info?.url || 'https://open.spotify.com',
+                    },
+                  },
+                }
+              : {};
+
+            const progress = createProgressMessenger(
+              sock,
+              remoteJid,
+              render(5),
+              { contextLabel: "/spotify:flow", initialMessageExtra: initExtra },
+            );
+
+            const allowAudio = String(process.env.SPOTIFY_SEND_AUDIO || 'false').toLowerCase() === 'true';
+            const fastSend = String(process.env.MEDIA_FAST_SEND || 'true').toLowerCase() === 'true';
+            const hasSpotdl = Boolean(process.env.SPOTDL_PATH);
+            if (allowAudio) {
+              // Preferir spotdl local si está disponible y tenemos URL o query
+              if (hasSpotdl) {
+                try {
+                  // Construir query preferida: usar URL oficial si existe
+                  const trackUrl = result.info?.url || null;
+                  const query = trackUrl || `${result.info?.title || ''} ${result.info?.artists || ''}`.trim();
+                  const outDir = join(__dirname, 'storage', 'downloads', 'spotdl');
+
+                  let lastP = 0;
+                  const onProgress = ({ percent }) => {
+                    const p = Math.max(0, Math.min(100, Math.round(percent)));
+                    if (p - lastP >= 3 || p >= 99) {
+                      lastP = p;
+                      progress.queueUpdate(render(p));
+                    }
+                  };
+
+                  const dl = await downloadWithSpotdl({ queryOrUrl: query, outDir, onProgress });
+                  progress.queueUpdate(render(100));
+                  await progress.flush();
+
+                  const buf = await fsp.readFile(dl.filePath);
+                  await sock.sendMessage(
+                    remoteJid,
+                    {
+                      audio: buf,
+                      mimetype: "audio/mpeg",
+                      ptt: false,
+                      fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
+                      mentions: result.mentions,
+                    },
+                    { quoted: message },
+                  );
+                  return;
+                } catch (e) {
+                  logger.warn("spotdl fallo, usando proveedores remotos", { error: e?.message });
+                }
+              }
+
+              if (result.audio) {
+                if (fastSend && typeof result.audio === 'string' && result.audio.startsWith('http')) {
+                  const steps = [20, 45, 70, 100];
+                  for (const s of steps) {
+                    await sleep(180);
+                    progress.queueUpdate(render(s));
+                  }
+                  await progress.flush();
+                  try {
+                    await sock.sendMessage(
+                      remoteJid,
+                      {
+                        audio: { url: result.audio },
+                        mimetype: "audio/mpeg",
+                        ptt: false,
+                        fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
+                        mentions: result.mentions,
+                      },
+                      { quoted: message },
+                    );
+                  } catch (sendErr) {
+                    logger.error("Error enviando audio de Spotify:", sendErr);
+                  }
+                } else {
+                  let lastPercent = 5;
+                  let audioBuffer = null;
+                  try {
+                    audioBuffer = await downloadBufferWithProgress(result.audio, {
+                      timeoutMs: 70000,
+                      onProgress: ({ percent }) => {
+                        if (!Number.isFinite(percent)) return;
+                        const rounded = Math.max(0, Math.min(100, Math.round(percent)));
+                        if (rounded - lastPercent >= 4 || rounded >= 99) {
+                          lastPercent = rounded;
+                          progress.queueUpdate(render(rounded));
+                        }
+                      },
+                    });
+                    progress.queueUpdate(render(100));
+                    await progress.flush();
+                  } catch (e) {
+                    logger.error("Error descargando preview/audio de Spotify:", e);
+                  }
+
+                  if (audioBuffer) {
+                    try {
+                      await sock.sendMessage(
+                        remoteJid,
+                        {
+                          audio: audioBuffer,
+                          mimetype: "audio/mpeg",
+                          ptt: false,
+                          fileName: safeFileNameFromTitle(result.info?.title, ".mp3"),
+                          mentions: result.mentions,
+                        },
+                        { quoted: message },
+                      );
+                    } catch (sendErr) {
+                      logger.error("Error enviando audio de Spotify:", sendErr);
+                    }
+                  }
+                }
+              } else {
+                // Sin URL directa: no podemos usar remoto; ya intentamos spotdl
+                await progress.flush();
+                await sock.sendMessage(remoteJid, { text: "⚠️ No se pudo obtener audio para este track." });
+              }
+            }
+            // Fin del flujo principal de Spotify
           } else {
             await sock.sendMessage(remoteJid, {
               text: result.message || "⚠️  Error al buscar en Spotify.",
             });
+            // Sin progreso adicional en caso de fallo
           }
         } catch (error) {
           logger.error("Error en /spotify:", error);
@@ -5083,10 +5317,6 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             });
             break;
           }
-
-          await sock.sendMessage(remoteJid, {
-            text: "🎬 Buscando video en YouTube...",
-          });
 
           const result = await handleVideoDownload(videoQuery, usuario);
 
@@ -5108,28 +5338,68 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               viewsDetail,
               result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
               `🙋 Solicitado por: @${usuario}`,
-            ];
+            ].filter(Boolean);
 
-            await sendMediaWithProgress({
+            const cover = result.image || computeCover(result.info?.url || '') || null;
+            const render = (p) => {
+              const percent = Math.max(0, Math.min(100, Math.round(Number.isFinite(p) ? p : 0)));
+              const bar = `📊 ${buildProgressBar(percent)} ${percent}%`;
+              const details = detailLines.join("\n");
+              return `🎬 *Video*\n\n${bar}\n\n${details}`;
+            };
+            const initExtra = cover
+              ? {
+                  contextInfo: {
+                    externalAdReply: {
+                      title: result.info?.title || 'Video',
+                      body: result.info?.author || 'YouTube',
+                      thumbnailUrl: cover,
+                      mediaType: 1,
+                      previewType: 0,
+                      renderLargerThumbnail: true,
+                    },
+                  },
+                }
+              : {};
+
+            const progress = createProgressMessenger(
               sock,
               remoteJid,
-              url: result.video,
-              type: "video",
-              header: "🎬 *Video - Descarga en progreso*",
-              detailLines,
-              mimetype: "video/mp4",
-              caption: result.caption,
-              mentions: result.mentions,
-              fileName: safeFileNameFromTitle(result.info?.title, ".mp4"),
-              contextLabel: "/video",
-              timeoutMs: 120000,
-              getFailureMessage: (_error, { stage }) => ({
-                text:
-                  `⚠️ *Video*\n\n❌ No se pudo ${stage === "send" ? "enviar" : "descargar"} el video automáticamente.` +
-                  (result.video ? `\n🔗 Enlace directo:\n${result.video}` : "") +
-                  "\n\n🔁 Intenta nuevamente más tarde.",
-              }),
-            });
+              render(5),
+              { contextLabel: "/video:flow", initialMessageExtra: initExtra },
+            );
+
+            let lastPercent = 5;
+            let videoBuffer = null;
+            try {
+              videoBuffer = await downloadBufferWithProgress(result.video, {
+                timeoutMs: 120000,
+                onProgress: ({ percent }) => {
+                  if (!Number.isFinite(percent)) return;
+                  const rounded = Math.max(0, Math.min(100, Math.round(percent)));
+                  if (rounded - lastPercent >= 4 || rounded >= 99) {
+                    lastPercent = rounded;
+                    progress.queueUpdate(render(rounded));
+                  }
+                },
+              });
+              progress.queueUpdate(render(100));
+              await progress.flush();
+            } catch {}
+
+            if (videoBuffer) {
+              await sock.sendMessage(
+                remoteJid,
+                {
+                  video: videoBuffer,
+                  mimetype: "video/mp4",
+                  caption: result.caption,
+                  mentions: result.mentions,
+                  fileName: safeFileNameFromTitle(result.info?.title, ".mp4"),
+                },
+                { quoted: message },
+              );
+            }
           } else {
             await sock.sendMessage(remoteJid, {
               text: result.message || "⚠️  Error al buscar video.",
@@ -7397,6 +7667,48 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             text: "ℹ️ Uso: /play [canción]\nEjemplo: /play Despacito Luis Fonsi",
           });
         } else {
+          // Aceptar tanto texto (nombre + artista) como URL directa
+          const isUrl = /^(https?:\/\/)/i.test(playQuery);
+          if (isUrl) {
+            try {
+              const { handleMusicDownload } = await import('./commands/download-commands.js');
+              const result = await handleMusicDownload(playQuery, usuario);
+              if (!result?.success || !result.audio) {
+                await sock.sendMessage(remoteJid, { text: result?.message || '⚠️ No se pudo procesar el enlace.' });
+                break;
+              }
+              const details = [
+                result?.info?.title || 'Música',
+                (result?.info?.author || result?.info?.artists) && `👤 ${result?.info?.author || result?.info?.artists}`,
+              ].filter(Boolean);
+              // Enviar portada si existe
+              if (result.image) {
+                try {
+                  await sock.sendMessage(remoteJid, { image: { url: result.image }, caption: details[0] || 'Música' });
+                } catch (_) {}
+              }
+
+              await sendMediaWithProgress({
+                sock,
+                remoteJid,
+                url: result.audio,
+                type: 'audio',
+                header: '🎵 Descargando música',
+                detailLines: details,
+                mimetype: 'audio/mpeg',
+                caption: result.caption,
+                mentions: result.mentions,
+                contextLabel: 'play',
+                timeoutMs: 60000,
+                getFailureMessage: () => ({ text: '⚠️ *Play*\n\n❌ Error enviando el audio.' }),
+              });
+              break;
+            } catch (e) {
+              logger.error('Error procesando URL en /play:', e);
+              await sock.sendMessage(remoteJid, { text: '⚠️ *Play*\n\n❌ Error procesando el enlace.' });
+              break;
+            }
+          }
           try {
             await sock.sendMessage(remoteJid, {
               text: "🎵 Buscando música... ⏳",

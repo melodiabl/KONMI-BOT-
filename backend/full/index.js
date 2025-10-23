@@ -22,6 +22,10 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import db from "./db.js";
 import logger from "./config/logger.js";
+import fs from "fs";
+import { spawnSync } from "child_process";
+import ffmpegStatic from "ffmpeg-static";
+import fluentFfmpeg from "fluent-ffmpeg";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -73,6 +77,101 @@ app.get(
     res.json({ qr: null, qrImage: null, status });
   },
 );
+
+// ===== Arranque: diagnóstico de binarios externos (yt-dlp / ffmpeg) =====
+function checkCommand(cmd, args = ["--version"], friendly = cmd) {
+  try {
+    const res = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+    if (res.error) return { ok: false, error: res.error.message };
+    if (res.status !== 0) return { ok: false, error: (res.stderr || `exit ${res.status}`) };
+    return { ok: true, output: (res.stdout || "").trim() };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+function diagnosticsExternalBinaries() {
+  try {
+    const ytdlpPath = process.env.YTDLP_PATH && fs.existsSync(process.env.YTDLP_PATH)
+      ? process.env.YTDLP_PATH
+      : null;
+
+    let ytdlp = { ok: false, how: "" };
+    if (ytdlpPath) {
+      const r = checkCommand(ytdlpPath, ["--version"], "yt-dlp");
+      ytdlp = r.ok ? { ok: true, how: `bin:${ytdlpPath}`, version: r.output } : { ok: false, how: `bin:${ytdlpPath}`, error: r.error };
+    }
+    if (!ytdlp.ok) {
+      let r = checkCommand("yt-dlp", ["--version"], "yt-dlp");
+      if (r.ok) ytdlp = { ok: true, how: "yt-dlp", version: r.output };
+      else {
+        // Intentar python -m yt_dlp
+        const pyCmds = process.platform === "win32" ? ["py", "python"] : ["python3", "python"];
+        for (const py of pyCmds) {
+          r = checkCommand(py, ["-m", "yt_dlp", "--version"], "python -m yt_dlp");
+          if (r.ok) { ytdlp = { ok: true, how: `${py} -m yt_dlp`, version: r.output }; break; }
+        }
+        if (!ytdlp.ok) ytdlp = { ok: false, how: "not found", error: r.error };
+      }
+    }
+
+    // ffmpeg detection: PATH -> FFMPEG_PATH -> ffmpeg-static
+    let ffmpeg = checkCommand("ffmpeg", ["-version"], "ffmpeg");
+    const ffmpegPathEnv = process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)
+      ? process.env.FFMPEG_PATH
+      : null;
+    if (!ffmpeg.ok && ffmpegPathEnv) {
+      const r = checkCommand(ffmpegPathEnv, ["-version"], "ffmpeg(env)");
+      if (r.ok) {
+        ffmpeg = { ok: true, output: r.output, how: `env:${ffmpegPathEnv}` };
+        try { fluentFfmpeg.setFfmpegPath(ffmpegPathEnv); } catch {}
+      }
+    }
+    if (!ffmpeg.ok && ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+      const r = checkCommand(ffmpegStatic, ["-version"], "ffmpeg(static)");
+      if (r.ok) {
+        ffmpeg = { ok: true, output: r.output, how: `static:${ffmpegStatic}` };
+        try { fluentFfmpeg.setFfmpegPath(ffmpegStatic); } catch {}
+      }
+    }
+
+    if (ytdlp.ok) {
+      logger.info?.(`[diag] yt-dlp OK (${ytdlp.how}) v${ytdlp.version}`);
+    } else {
+      logger.warn?.(`[diag] yt-dlp NO DISPONIBLE (${ytdlp.how}). Para mejores descargas, instala yt-dlp o define YTDLP_PATH. Error: ${ytdlp.error || ""}`);
+    }
+    if (ffmpeg.ok) {
+      const first = (ffmpeg.output || "").split(/\r?\n/)[0];
+      logger.info?.(`[diag] ffmpeg OK ${first}${ffmpeg.how ? ` (${ffmpeg.how})` : ""}`);
+    } else {
+      logger.warn?.(`[diag] ffmpeg NO DISPONIBLE. Instala ffmpeg para mayor compatibilidad. Error: ${ffmpeg.error || ""}`);
+    }
+
+    // spotdl / instaloader / gallery-dl
+    const extras = [
+      { name: 'spotdl', env: process.env.SPOTDL_PATH },
+      { name: 'instaloader', env: process.env.INSTALOADER_PATH },
+      { name: 'gallery-dl', env: process.env.GALLERYDL_PATH },
+    ];
+    for (const x of extras) {
+      let ok = false, how = '', msg = '';
+      if (x.env && fs.existsSync(x.env)) {
+        const r = checkCommand(x.env, ['--version'], x.name);
+        ok = r.ok; how = `env:${x.env}`; msg = r.output || r.error || '';
+      }
+      if (!ok) {
+        const r2 = checkCommand(x.name, ['--version'], x.name);
+        ok = r2.ok; how = ok ? x.name : 'not found'; msg = r2.output || r2.error || '';
+      }
+      if (ok) logger.info?.(`[diag] ${x.name} OK ${msg}${how ? ` (${how})` : ''}`);
+      else logger.warn?.(`[diag] ${x.name} NO DISPONIBLE. Error: ${msg}`);
+    }
+  } catch (e) {
+    logger.warn?.(`[diag] Error ejecutando diagnóstico externos: ${e?.message || e}`);
+  }
+}
+
+diagnosticsExternalBinaries();
 
 app.get(
   "/api/bot/qr",
