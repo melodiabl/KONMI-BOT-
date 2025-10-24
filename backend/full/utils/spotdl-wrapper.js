@@ -6,11 +6,18 @@ function ensureDir(dir) {
   try { fs.mkdirSync(dir, { recursive: true }) } catch {}
 }
 
-function pickLatestFile(dir) {
+function pickLatestFile(dir, allowedExts = []) {
   const files = fs.readdirSync(dir)
   let latest = null
   let latestMtime = 0
+  const filter = (f) => {
+    if (!allowedExts.length) return true
+    const ext = (f.split('.').pop() || '').toLowerCase()
+    return allowedExts.includes(ext)
+  }
   for (const f of files) {
+    if (f.endsWith('.part') || f.endsWith('.tmp')) continue
+    if (!filter(f)) continue
     const full = path.join(dir, f)
     try {
       const st = fs.statSync(full)
@@ -85,14 +92,21 @@ export async function downloadWithSpotdl({
     })
   })
 
-  // Pick latest created file in outDir
-  const filePath = pickLatestFile(outDir)
+  // Pick latest mp3 created file in outDir
+  const filePath = pickLatestFile(outDir, ['mp3'])
   if (!filePath) {
     throw new Error('No se encontró ningún archivo generado por spotdl')
+  }
+  try {
+    const st = fs.statSync(filePath)
+    if (!st.isFile() || st.size < 20 * 1024) {
+      throw new Error('Archivo spotdl inválido o tamaño muy pequeño')
+    }
+  } catch (e) {
+    throw new Error('Archivo spotdl inválido')
   }
 
   return { success: true, filePath }
 }
 
 export default { downloadWithSpotdl }
-

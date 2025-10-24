@@ -1,7 +1,8 @@
 function renderBar(percent, length = 20) {
   const total = Math.max(4, length);
-  const filled = Math.round((Math.max(0, Math.min(100, percent)) / 100) * total);
-  const bar = '='.repeat(filled).padEnd(total, '-');
+  const pct = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  const filled = Math.round((pct / 100) * total);
+  const bar = '▓'.repeat(filled).padEnd(total, '░');
   return bar;
 }
 
@@ -18,7 +19,7 @@ export function createProgressNotifier({
   quoted = null,
   title = 'Procesando',
   icon = '',
-  barLength = 22
+  barLength = 20
 } = {}) {
   if (typeof resolveSocket !== 'function' || !chatId) {
     const noop = async () => {};

@@ -158,6 +158,20 @@ export const API_PROVIDERS = {
   ],
 
   youtube: [
+    // Preferir proveedores locales primero (sin depender de APIs externas)
+    {
+      name: 'yt-dlp (local)',
+      method: 'LOCAL__YTDLP_URL',
+      url: (videoUrl, options = {}) => ({ url: videoUrl, __ytdlpType: options.type || 'audio' }),
+      parse: (data) => data
+    },
+    // Fallback final local: ytdl-core (obtiene URL directa del mejor audio)
+    {
+      name: 'ytdl-core (local url)',
+      method: 'LOCAL__YTDL_URL',
+      url: (videoUrl, options = {}) => videoUrl,
+      parse: (data) => data
+    },
     {
       name: 'Piped.video',
       timeoutMs: 5000,
@@ -250,19 +264,6 @@ export const API_PROVIDERS = {
         title: data?.result?.title
       })
     },
-    {
-      name: 'yt-dlp (local)',
-      method: 'LOCAL__YTDLP_URL',
-      url: (videoUrl, options = {}) => ({ url: videoUrl, __ytdlpType: options.type || 'audio' }),
-      parse: (data) => data
-    },
-    // Fallback final local: ytdl-core (obtiene URL directa del mejor audio)
-    {
-      name: 'ytdl-core (local url)',
-      method: 'LOCAL__YTDL_URL',
-      url: (videoUrl, options = {}) => videoUrl,
-      parse: (data) => data
-    }
   ],
 
   youtubeSearch: [
@@ -456,6 +457,7 @@ export const API_PROVIDERS = {
           duration_ms: track.duration_ms,
           release_date: album?.release_date,
           cover_url: cover,
+          popularity: typeof track.popularity === 'number' ? track.popularity : undefined,
           preview_url: track.preview_url || undefined,
           url: track?.external_urls?.spotify
         }
@@ -851,6 +853,12 @@ async function doRequest(provider, url, body, extraCtx) {
 export async function downloadWithFallback(type, param, options = {}) {
   let providers = API_PROVIDERS[type]
   if (!providers?.length) throw new Error('Tipo de API no soportado: ' + type)
+
+  // Forzar modo local si MEDIA_LOCAL_ONLY=true: usar solo providers con method LOCAL__*
+  const localOnly = String(process.env.MEDIA_LOCAL_ONLY || 'false').toLowerCase() === 'true'
+  if (localOnly) {
+    providers = providers.filter(p => typeof p?.method === 'string' && p.method.startsWith('LOCAL__'))
+  }
 
   // Política para YouTube: permitir deshabilitar providers locales (yt-dlp/ytdl-core/yt-search)
   const ytRemoteOnly = String(process.env.YT_REMOTE_ONLY || 'false').toLowerCase() === 'true'
