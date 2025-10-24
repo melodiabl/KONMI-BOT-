@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
@@ -52,7 +52,35 @@ export async function downloadWithSpotdl({
   // Query/URL al final
   args.push(queryOrUrl)
 
-  const child = spawn(spotdlPath, args, { windowsHide: true })
+  // Resolver binario de spotdl de forma adaptativa
+  let cmd = spotdlPath
+  let preArgs = []
+  const tryDetect = () => {
+    try {
+      if (process.env.SPOTDL_PATH && fs.existsSync(process.env.SPOTDL_PATH)) {
+        const r = spawnSync(process.env.SPOTDL_PATH, ['--version'], { encoding: 'utf8', windowsHide: true })
+        if (!r.error && r.status === 0) return { c: process.env.SPOTDL_PATH, p: [] }
+      }
+    } catch {}
+    try {
+      const r = spawnSync('spotdl', ['--version'], { encoding: 'utf8', windowsHide: true })
+      if (!r.error && r.status === 0) return { c: 'spotdl', p: [] }
+    } catch {}
+    const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
+    for (const py of pyCands) {
+      try {
+        const r = spawnSync(py, ['-m', 'spotdl', '--version'], { encoding: 'utf8', windowsHide: true })
+        if (!r.error && r.status === 0) return { c: py, p: ['-m', 'spotdl'] }
+      } catch {}
+    }
+    return null
+  }
+  if (!spotdlPath || spotdlPath === 'spotdl') {
+    const found = tryDetect()
+    if (found) { cmd = found.c; preArgs = found.p }
+  }
+
+  const child = spawn(cmd, [...preArgs, ...args], { windowsHide: true })
 
   let lastPercent = 0
   const percentRe = /(\d{1,3})%/g

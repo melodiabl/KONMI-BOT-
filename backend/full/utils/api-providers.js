@@ -788,19 +788,39 @@ async function doRequest(provider, url, body, extraCtx) {
       // url aquí es el término completo como "ytsearch10:query"
       const execMod = await import('child_process')
       const { spawn } = execMod
-      const args = ['-J', url]
-      const cmd = process.env.YTDLP_PATH || 'yt-dlp'
-      const p = spawn(cmd, args, { windowsHide: true })
-      let out = ''
-      let err = ''
-      await new Promise((resolve, reject) => {
-        p.stdout.on('data', (d) => (out += d.toString()))
-        p.stderr.on('data', (d) => (err += d.toString()))
-        p.on('error', (e) => reject(e))
-        p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(err || ('exit ' + code)))))
+      const baseArgs = ['-J', url]
+      const runOnce = (cmd, extra = []) => new Promise((resolve, reject) => {
+        try {
+          const p = spawn(cmd, [...extra, ...baseArgs], { windowsHide: true })
+          let out = ''
+          let err = ''
+          p.stdout.on('data', (d) => (out += d.toString()))
+          p.stderr.on('data', (d) => (err += d.toString()))
+          p.on('error', (e) => reject(e))
+          p.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(err || ('exit ' + code)))))
+        } catch (e) { reject(e) }
       })
+
+      const candidates = []
+      if (process.env.YTDLP_PATH) candidates.push({ cmd: process.env.YTDLP_PATH, extra: [] })
+      if (process.env.YTDLP_BIN) candidates.push({ cmd: process.env.YTDLP_BIN, extra: [] })
+      candidates.push({ cmd: 'yt-dlp', extra: [] }, { cmd: 'yt', extra: [] })
+      const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
+
+      let output = null
+      let lastErr = null
+      for (const c of candidates) {
+        try { output = await runOnce(c.cmd, c.extra); lastErr = null; break } catch (e) { lastErr = e }
+      }
+      if (output == null) {
+        for (const py of pyCands) {
+          try { output = await runOnce(py, ['-m', 'yt_dlp']); lastErr = null; break } catch (e) { lastErr = e }
+        }
+      }
+      if (output == null) throw lastErr || new Error('yt-dlp no disponible en PATH')
+
       let json
-      try { json = JSON.parse(out) } catch (e) { throw new Error('yt-dlp search JSON inválido') }
+      try { json = JSON.parse(output) } catch (e) { throw new Error('yt-dlp search JSON inválido') }
       const entries = Array.isArray(json?.entries) ? json.entries : []
       const results = entries.map((v) => ({
         title: v?.title,

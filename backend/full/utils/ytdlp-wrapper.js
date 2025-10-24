@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
@@ -31,6 +31,34 @@ function getYtDlpPath() {
   return process.env.YTDLP_PATH || process.env.YT_DLP_PATH || 'yt-dlp'
 }
 
+function resolveYtDlpCommand() {
+  try {
+    const envPath = process.env.YTDLP_PATH || process.env.YT_DLP_PATH
+    if (envPath && fs.existsSync(envPath)) {
+      const r = spawnSync(envPath, ['--version'], { encoding: 'utf8', windowsHide: true })
+      if (!r.error && r.status === 0) return { cmd: envPath, pre: [] }
+    }
+  } catch {}
+
+  const candidates = ['yt-dlp', 'yt']
+  for (const c of candidates) {
+    try {
+      const r = spawnSync(c, ['--version'], { encoding: 'utf8', windowsHide: true })
+      if (!r.error && r.status === 0) return { cmd: c, pre: [] }
+    } catch {}
+  }
+
+  const pyCandidates = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
+  for (const py of pyCandidates) {
+    try {
+      const r = spawnSync(py, ['-m', 'yt_dlp', '--version'], { encoding: 'utf8', windowsHide: true })
+      if (!r.error && r.status === 0) return { cmd: py, pre: ['-m', 'yt_dlp'] }
+    } catch {}
+  }
+
+  return null
+}
+
 /**
  * Download media with yt-dlp. Defaults to extracting audio to mp3.
  * @param {Object} opts
@@ -58,7 +86,16 @@ export async function downloadWithYtDlp({
 
   ensureDir(outDir)
 
-  const bin = ytDlpPath || getYtDlpPath()
+  let bin = ytDlpPath || getYtDlpPath()
+  let preArgs = []
+  if (!ytDlpPath) {
+    const resolved = resolveYtDlpCommand()
+    if (!resolved) {
+      throw new Error('yt-dlp no disponible. Instala yt-dlp o agrega a PATH.')
+    }
+    bin = resolved.cmd
+    preArgs = resolved.pre || []
+  }
   const args = []
 
   // Avoid full playlists unless explicitly desired
@@ -94,7 +131,7 @@ export async function downloadWithYtDlp({
   // yt-dlp prints progress on stderr by default. We'll parse percent like `  12.3% `
   args.push(url)
 
-  const child = spawn(bin, args, { windowsHide: true })
+  const child = spawn(bin, [...preArgs, ...args], { windowsHide: true })
 
   let lastPercent = 0
   let stderr = ''
