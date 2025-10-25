@@ -532,7 +532,9 @@ async function downloadAndSendLocal({
     `📌 Título: ${metaTitle || 'N/A'}`,
     `👤 Artista/Canal: ${metaArtist || 'N/A'}`,
     `⏱️ Duración: ${metaDuration || 'N/A'}`,
-    metaPopularity != null ? `🔊 Popularidad (Spotify): ${metaPopularity}/100` : `👁️ Vistas: ${metaViews != null ? Number(metaViews).toLocaleString('es-ES') : 'N/A'}`,
+    metaPopularity != null && isSpotify
+      ? `▶️ Reproducciones (Spotify): ${Number(metaPopularity).toLocaleString('es-ES')}`
+      : `👁️ Vistas: ${metaViews != null ? Number(metaViews).toLocaleString('es-ES') : 'N/A'}`,
     `📡 Fuente: ${isUrl ? (isSpotify ? 'Spotify 🎧' : isYouTube ? 'YouTube ▶️' : 'Enlace') : 'Búsqueda'}`,
     isUrl ? `🔗 URL: ${input}` : null,
     `🙋 Solicitado por: @${String(usuario).split('@')[0]}`,
@@ -819,6 +821,7 @@ async function sendMediaWithProgress({
   getFailureMessage,
   showProgress = true,
   quoted,
+  preview, // { title?, body?, thumbnailUrl? }
 }) {
   if (!url) {
     throw new Error("URL de descarga no válida");
@@ -842,7 +845,26 @@ async function sendMediaWithProgress({
         sock,
         remoteJid,
         render(0, "Preparando descarga..."),
-        { contextLabel },
+        {
+          contextLabel,
+          initialMessageExtra:
+            preview && preview.thumbnailUrl
+              ? {
+                  contextInfo: {
+                    externalAdReply: {
+                      title: preview.title || header || 'Descarga',
+                      body:
+                        preview.body ||
+                        (detailLines && detailLines[0] ? String(detailLines[0]).replace(/^\W+\s*/, '') : ''),
+                      thumbnailUrl: preview.thumbnailUrl,
+                      mediaType: 1,
+                      previewType: 0,
+                      renderLargerThumbnail: true,
+                    },
+                  },
+                }
+              : undefined,
+        },
       )
     : { queueUpdate: async () => {}, flush: async () => {} };
 
@@ -6439,6 +6461,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 mentions: result.mentions,
                 fileName: safeFileNameFromTitle(result.info?.title || result.info?.type, ".jpg"),
                 contextLabel: "/instagram:image",
+                preview: { title: result.info?.title || 'Instagram', body: result.info?.author || 'Instagram', thumbnailUrl: result.image || result.url },
                 timeoutMs: 60000,
                 getFailureMessage: (_error, { stage }) => ({
                   text:
@@ -6460,6 +6483,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 mentions: result.mentions,
                 fileName: safeFileNameFromTitle(result.info?.title || result.info?.type, ".mp4"),
                 contextLabel: "/instagram:video",
+                preview: { title: result.info?.title || 'Instagram', body: result.info?.author || 'Instagram', thumbnailUrl: result.image || undefined },
                 timeoutMs: 90000,
                 getFailureMessage: (_error, { stage }) => ({
                   text:
@@ -6529,6 +6553,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               mentions: result.mentions,
               fileName: safeFileNameFromTitle(result.info?.title, ".mp4"),
               contextLabel: "/facebook",
+              preview: { title: result.info?.title || 'Facebook', body: result.info?.author || 'Facebook' },
               timeoutMs: 90000,
               getFailureMessage: (_error, { stage }) => ({
                 text:
@@ -6590,6 +6615,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 mentions: result.mentions,
                 fileName: safeFileNameFromTitle(result.info?.title || result.info?.type, ".mp4"),
                 contextLabel: "/twitter:video",
+                preview: { title: result.info?.title || 'Twitter', body: result.info?.author ? '@'+result.info.author : 'Twitter', thumbnailUrl: result.image || undefined },
                 timeoutMs: 90000,
                 getFailureMessage: (_error, { stage }) => ({
                   text:
@@ -6611,6 +6637,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
                 mentions: result.mentions,
                 fileName: safeFileNameFromTitle(result.info?.title || result.info?.type, ".jpg"),
                 contextLabel: "/twitter:image",
+                preview: { title: result.info?.title || 'Twitter', body: result.info?.author ? '@'+result.info.author : 'Twitter', thumbnailUrl: result.image },
                 timeoutMs: 60000,
                 getFailureMessage: (_error, { stage }) => ({
                   text:
@@ -6676,6 +6703,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               mentions: result.mentions,
               fileName: safeFileNameFromTitle(result.info?.title, ".jpg"),
               contextLabel: "/pinterest",
+              preview: { title: result.info?.title || 'Pinterest', body: 'Pinterest', thumbnailUrl: result.image },
               timeoutMs: 60000,
               getFailureMessage: (_error, { stage }) => ({
                 text:
