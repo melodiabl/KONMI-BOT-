@@ -49,6 +49,7 @@ export const API_PROVIDERS = {
       parse: (data) => ({
         success: Boolean(data?.status),
         video: data?.result?.video || data?.result?.download,
+        thumbnail: data?.result?.thumbnail || data?.result?.cover || data?.result?.image,
         title: data?.result?.title,
         author: data?.result?.author || data?.result?.username,
         description: data?.result?.description
@@ -60,6 +61,7 @@ export const API_PROVIDERS = {
       parse: (data) => ({
         success: data?.code === 0,
         video: data?.data?.play,
+        thumbnail: data?.data?.cover || data?.data?.origin_cover || data?.data?.dynamic_cover,
         music: data?.data?.music,
         title: data?.data?.title,
         author: data?.data?.author?.unique_id,
@@ -72,6 +74,7 @@ export const API_PROVIDERS = {
       parse: (data) => ({
         success: data?.status === 'success',
         video: data?.result?.video,
+        thumbnail: data?.result?.thumbnail || data?.result?.cover,
         title: data?.result?.title,
         author: data?.result?.author,
         description: data?.result?.desc
@@ -113,6 +116,7 @@ export const API_PROVIDERS = {
       parse: (data) => ({
         success: Boolean(data?.status),
         video: data?.result?.video || data?.result?.download || data?.result?.url,
+        thumbnail: data?.result?.thumbnail || data?.result?.thumb || data?.result?.image,
         title: data?.result?.title || data?.result?.description,
         duration: data?.result?.duration,
         author: data?.result?.author
@@ -124,6 +128,7 @@ export const API_PROVIDERS = {
       parse: (data) => ({
         success: data?.status === 'success',
         video: data?.result?.video,
+        thumbnail: data?.result?.thumbnail || data?.result?.thumb,
         title: data?.result?.title,
         duration: data?.result?.duration
       })

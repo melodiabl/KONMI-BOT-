@@ -20,6 +20,7 @@ import { downloadWithYtDlp } from "./utils/ytdlp-wrapper.js";
 import { join } from "path";
 import { promises as fsp } from "fs";
 import os from "os";
+import { mediaLimiter } from "./utils/concurrency.js";
 import {
   generateSubbotPairingCode,
   generateSubbotQR,
@@ -172,12 +173,19 @@ async function generateQrImage(dataString) {
   throw new Error(errors.join(" | ") || "No se pudo generar un codigo QR");
 }
 
-function buildProgressBar(percent, segments = 20) {
-  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
-  const filled = Math.round((safePercent / 100) * segments);
-  const bar = `${"▓".repeat(filled)}${"░".repeat(Math.max(0, segments - filled))}`;
-  return `${bar}`;
+// Barra de progreso única (estilo 'blocks')
+function buildProgressBar(percent, segments = 15) {
+  const p = Math.max(0, Math.min(100, Number(percent) || 0));
+  const f = Math.round((p / 100) * segments);
+  return '█'.repeat(f) + '░'.repeat(Math.max(0, segments - f));
 }
+
+// Spinner animado para progreso
+const SPINNER_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
+// Velocidad medio-alta por defecto (ajustable por env)
+const SPINNER_INTERVAL_MS = Number(process.env.PROGRESS_SPINNER_INTERVAL_MS || 150)
+const EDIT_COOLDOWN_MS = Number(process.env.PROGRESS_EDIT_COOLDOWN_MS || 150)
+const PROGRESS_LOW_OVERHEAD = String(process.env.PROGRESS_LOW_OVERHEAD || 'false').toLowerCase() === 'true'
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -349,12 +357,12 @@ function computeYouTubeCover(u) {
   } catch (_) { return null; }
 }
 
-function renderGenericProgressMessage({ title, percent, statusText, details = [] }) {
+function renderGenericProgressMessage({ title, percent, statusText, details = [], spinner }) {
   const safePercent = Number.isFinite(percent)
     ? Math.max(0, Math.min(100, Math.round(percent)))
     : null;
   const progressLine = safePercent !== null
-    ? `📊 ${buildProgressBar(safePercent)} ${safePercent}%`
+    ? `📊 ${(spinner || '').trim()} ${buildProgressBar(safePercent)} ${safePercent}%`.replace(/^📊\s\s/, '📊 ')
     : "⏳ Calculando progreso...";
   const statusLine = statusText ? `\n${statusText}` : "";
   const info = details.filter(Boolean);
@@ -368,59 +376,38 @@ function ensureMentionJid(usuario) {
   return `${id}@s.whatsapp.net`;
 }
 
-// Registro global de mensajes de progreso por chat + contexto
-const __progressRegistry = new Map(); // key => { key, lastAt }
+  // Registro global de mensajes de progreso (throttle por invocación)
+  const __progressRegistry = new Map(); // key => { key, lastAt }
 
-function createProgressMessenger(sock, remoteJid, initialText, { contextLabel, initialMessageExtra } = {}) {
+  function createProgressMessenger(sock, remoteJid, initialText, { contextLabel, initialMessageExtra } = {}) {
   let progressKey = null;
   let queue = Promise.resolve();
   const logContext = contextLabel ? ` ${contextLabel}` : "";
-  // Forzar UN SOLO mensaje por chat (ignoramos el contexto)
-  const regKey = `${remoteJid}:__single`;
+    // Mensaje por invocación: clave única por chat + contexto + instancia
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+    const regKey = `${remoteJid}:${contextLabel || 'default'}:${unique}`;
 
   const sendText = async (text, initial = false) => {
     try {
-      // Cooldown por chat/contexto (700ms)
+      // Cooldown por chat/contexto (configurable)
       const now = Date.now();
       const last = __progressRegistry.get(regKey);
-      if (!initial && last && now - (last.lastAt || 0) < 700) return;
+      if (!initial && last && now - (last.lastAt || 0) < EDIT_COOLDOWN_MS) return;
 
       if (progressKey && !initial) {
-        // Intentar edición (mecanismo 1)
+        // Edición mínima y estable: solo texto + edit (NO reenviar portada en cada update)
         try {
-          const edited = await sock.sendMessage(remoteJid, { text }, { edit: progressKey });
+          const edited = await sock.sendMessage(remoteJid, { text, edit: progressKey });
           if (edited?.key) progressKey = edited.key;
           __progressRegistry.set(regKey, { key: progressKey, lastAt: now });
-          return;
         } catch {}
-        // Intentar edición (mecanismo 2)
-        try {
-          const edited2 = await sock.sendMessage(remoteJid, { text, edit: progressKey });
-          if (edited2?.key) progressKey = edited2.key;
-          __progressRegistry.set(regKey, { key: progressKey, lastAt: now });
-          return;
-        } catch {}
-        // No crear nuevos mensajes: mantener 1 único y omitir esta actualización
         return;
       }
-      const payload = { text };
-      if (initial && initialMessageExtra && typeof initialMessageExtra === 'object') {
-        Object.assign(payload, initialMessageExtra);
-      }
-      // No crear nuevos mensajes en actualizaciones sin clave
+      // Enviar inicial con portada (si existe); sin fallback de borrado
+      const payload = initialMessageExtra && typeof initialMessageExtra === 'object'
+        ? { text, ...initialMessageExtra }
+        : { text };
       if (!initial && !progressKey) return;
-      // Si ya existe uno para este contexto, reusarlo editándolo
-      if (initial) {
-        const prev = __progressRegistry.get(regKey);
-        if (prev?.key) {
-          try {
-            const editedInit = await sock.sendMessage(remoteJid, { ...payload, edit: prev.key });
-            progressKey = editedInit?.key || prev.key;
-            __progressRegistry.set(regKey, { key: progressKey, lastAt: now });
-            return;
-          } catch {}
-        }
-      }
       const sent = await sock.sendMessage(remoteJid, payload);
       if (initial || !progressKey) {
         progressKey = sent?.key || null;
@@ -432,6 +419,46 @@ function createProgressMessenger(sock, remoteJid, initialText, { contextLabel, i
         { error: error?.message },
       );
       // No limpiar la clave: evita crear mensajes nuevos en siguientes updates
+    }
+  };
+
+  // Edición forzada con contextInfo (para adjuntar portada al final)
+  const sendWithContext = async (text, contextInfo) => {
+    try {
+      // Asegurar que el texto cambie (algunos clientes ignoran ediciones idénticas)
+      const zws = "\u200B";
+      const finalText = String(text || "");
+      const editedText = finalText.endsWith(zws) ? finalText : finalText + zws;
+
+      if (progressKey) {
+        // Intento 1: adjuntar portada completa
+        let edited = await sock.sendMessage(
+          remoteJid,
+          contextInfo ? { text: editedText, contextInfo, edit: progressKey } : { text: editedText, edit: progressKey }
+        );
+        if (!edited?.key && contextInfo?.externalAdReply) {
+          // Intento 2: portada mínima (solo thumbnail) para compatibilidad
+          const e = contextInfo.externalAdReply;
+          const minimalCtx = {
+            externalAdReply: {
+              thumbnail: e.thumbnail,
+              thumbnailUrl: e.thumbnailUrl,
+              mediaType: 1,
+              previewType: 0,
+              renderLargerThumbnail: true,
+            }
+          };
+          edited = await sock.sendMessage(remoteJid, { text: editedText, contextInfo: minimalCtx, edit: progressKey });
+        }
+        if (edited?.key) progressKey = edited.key;
+        __progressRegistry.set(regKey, { key: progressKey, lastAt: Date.now() });
+        return;
+      }
+      const sent = await sock.sendMessage(remoteJid, contextInfo ? { text: editedText, contextInfo } : { text: editedText });
+      if (sent?.key) progressKey = sent.key;
+      __progressRegistry.set(regKey, { key: progressKey, lastAt: Date.now() });
+    } catch (error) {
+      logger.warn(`No se pudo adjuntar portada${logContext}`, { error: error?.message });
     }
   };
 
@@ -450,6 +477,15 @@ function createProgressMessenger(sock, remoteJid, initialText, { contextLabel, i
     return queue;
   };
 
+  const queueUpdateWithContext = (text, contextInfo) => {
+    queue = queue
+      .then(() => sendWithContext(text, contextInfo))
+      .catch((error) => {
+        logger.warn(`Fallo al adjuntar portada${logContext}`, { error: error?.message });
+      });
+    return queue;
+  };
+
   const flush = async () => {
     try {
       await queue;
@@ -458,7 +494,7 @@ function createProgressMessenger(sock, remoteJid, initialText, { contextLabel, i
     }
   };
 
-  return { queueUpdate, flush };
+  return { queueUpdate, queueUpdateWithContext, flush };
 }
 
 // Unificador local: descarga con spotdl o yt-dlp y envía (audio/video) con barra
@@ -470,6 +506,7 @@ async function downloadAndSendLocal({
   usuario,
   context = '/media',
   preferSpotdl = false,
+  quoted,
 }) {
   const isUrl = /^(https?:\/\/)/i.test(input);
   const isSpotify = /open\.spotify\.com\/track\//i.test(input);
@@ -526,42 +563,59 @@ async function downloadAndSendLocal({
 
   if (!coverUrl && isYouTube) coverUrl = computeYouTubeCover(input);
 
+  const metricsLine = isSpotify
+    ? (typeof metaPopularity === 'number'
+        ? `🎧 Reproducciones (Spotify): ~${metaPopularity}%`
+        : `🎧 Reproducciones (Spotify): N/A`)
+    : (metaViews != null
+        ? `👁️ Vistas: ${Number(metaViews).toLocaleString('es-ES')}`
+        : null);
+
   const staticLines = [
     isAudio ? '🎧 Música' : '🎬 Video',
     '',
     `📌 Título: ${metaTitle || 'N/A'}`,
     `👤 Artista/Canal: ${metaArtist || 'N/A'}`,
     `⏱️ Duración: ${metaDuration || 'N/A'}`,
-    metaPopularity != null && isSpotify
-      ? `▶️ Reproducciones (Spotify): ${Number(metaPopularity).toLocaleString('es-ES')}`
-      : `👁️ Vistas: ${metaViews != null ? Number(metaViews).toLocaleString('es-ES') : 'N/A'}`,
+    metricsLine,
     `📡 Fuente: ${isUrl ? (isSpotify ? 'Spotify 🎧' : isYouTube ? 'YouTube ▶️' : 'Enlace') : 'Búsqueda'}`,
     isUrl ? `🔗 URL: ${input}` : null,
     `🙋 Solicitado por: @${String(usuario).split('@')[0]}`,
   ].filter(Boolean);
 
+  // Intentar obtener bytes de la portada para mayor persistencia en ediciones
+  let coverThumb = null;
+  if (coverUrl) {
+    try {
+      const resp = await fetchWithTimeout(coverUrl, {}, 8000);
+      const ab = await resp.arrayBuffer();
+      if (ab && ab.byteLength && ab.byteLength <= 800_000) {
+        coverThumb = Buffer.from(ab);
+      }
+    } catch {}
+  }
+
   const initialPayload = {
     contextLabel: context,
-    initialMessageExtra: coverUrl
-      ? {
-          contextInfo: {
-            externalAdReply: {
-              title: metaTitle || (isAudio ? 'Música' : 'Video'),
-              body: metaArtist || (isYouTube ? 'YouTube' : isSpotify ? 'Spotify' : ''),
-              thumbnailUrl: coverUrl,
-              mediaType: 1,
-              previewType: 0,
-              renderLargerThumbnail: true,
-            },
-          },
-        }
-      : {},
+    // Sin portada al inicio para evitar glitches al editar
+    initialMessageExtra: undefined,
   };
 
+  let spinnerIndex = 0;
+  let currentPercent = 0;
+  let targetPercent = 0;
+  const smoothStep = () => {
+    if (!Number.isFinite(targetPercent)) return;
+    if (currentPercent < targetPercent) {
+      const delta = targetPercent - currentPercent;
+      currentPercent += delta >= 10 ? 3 : 1; // acelera cuando falta mucho, suaviza al final
+      if (currentPercent > targetPercent) currentPercent = targetPercent;
+    }
+  }
   const render = (p) => {
     const percent = Number.isFinite(p) ? Math.max(0, Math.min(100, Math.round(p))) : 0;
-    // ÚNICA línea variable: la barra
-    return [...staticLines, '', `📊 ${buildProgressBar(percent)} ${percent}%`].join('\n');
+    const spinner = SPINNER_FRAMES[spinnerIndex];
+    return [...staticLines, '', `📊 ${spinner} ${buildProgressBar(percent)} ${percent}%`].join('\n');
   };
 
   const progress = createProgressMessenger(
@@ -572,16 +626,45 @@ async function downloadAndSendLocal({
   );
 
   let filePath = null;
+  let spinnerTimer = null;
+  // Concurrency control: allow multiple downloads but cap total active
+  let releaseLimiter = null;
   try {
-    // Throttle de progreso (cada 10%)
+    releaseLimiter = await mediaLimiter.acquire();
+    // Throttle de progreso (más suave, cada ~3% o 10% si PROGRESS_LOW_OVERHEAD)
     let last = 0;
     const onProgress = ({ percent }) => {
       const p = Math.max(0, Math.min(100, Math.round(percent || 0)));
-      if (p - last >= 10 || p >= 99) { last = p; progress.queueUpdate(render(p)); }
+      targetPercent = p;
+      const step = PROGRESS_LOW_OVERHEAD ? 10 : 3;
+      if (p - last >= step || p >= 99) { last = p; progress.queueUpdate(render(p)); }
+    };
+    if (!PROGRESS_LOW_OVERHEAD) {
+      spinnerTimer = setInterval(() => {
+        try {
+          spinnerIndex = (spinnerIndex + 1) % SPINNER_FRAMES.length;
+          smoothStep();
+          progress.queueUpdate(render(currentPercent));
+        } catch {}
+      }, SPINNER_INTERVAL_MS);
+    }
+
+    // Configurar almacenamiento temporal para no llenar disco
+    const TMP_ROOT = path.join(os.tmpdir(), 'konmi-bot-media');
+    const useTemp = String(process.env.MEDIA_TEMP_MODE || 'true').toLowerCase() !== 'false';
+    const tempDirs = [];
+    const makeTempOutDir = (tag) => {
+      const dir = path.join(TMP_ROOT, `${tag}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
+      try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+      tempDirs.push(dir);
+      return dir;
+    };
+    const isUnderTmp = (p) => {
+      try { const rp = path.resolve(p); const rr = path.resolve(TMP_ROOT); return rp === rr || rp.startsWith(rr + path.sep); } catch { return false }
     };
 
     if (isAudio && (preferSpotdl || isSpotify || (!isUrl && process.env.SPOTDL_PATH))) {
-      const outDir = join(__dirname, 'storage', 'downloads', 'spotdl');
+      const outDir = useTemp ? makeTempOutDir('spotdl') : join(__dirname, 'storage', 'downloads', 'spotdl');
       try {
         const dl = await downloadWithSpotdl({ queryOrUrl: input, outDir, onProgress });
         filePath = dl.filePath;
@@ -594,13 +677,13 @@ async function downloadAndSendLocal({
         }
       } catch (e) {
         // Fallback a YouTube si SpotDL falla
-        const yOut = join(__dirname, 'storage', 'downloads', 'ytdlp');
+        const yOut = useTemp ? makeTempOutDir('ytdlp') : join(__dirname, 'storage', 'downloads', 'ytdlp');
         const urlOrSearch = isUrl ? input : `ytsearch1:${input}`;
         const dl2 = await downloadWithYtDlp({ url: urlOrSearch, outDir: yOut, audioOnly: true, onProgress });
         filePath = dl2.filePath;
       }
     } else {
-      const outDir = join(__dirname, 'storage', 'downloads', 'ytdlp');
+      const outDir = useTemp ? makeTempOutDir('ytdlp') : join(__dirname, 'storage', 'downloads', 'ytdlp');
       const urlOrSearch = isUrl ? input : `ytsearch1:${input}`;
       const dl = await downloadWithYtDlp({ url: urlOrSearch, outDir, audioOnly: isAudio, onProgress });
       filePath = dl.filePath;
@@ -609,24 +692,88 @@ async function downloadAndSendLocal({
     logger.error('Descarga local falló:', e);
     progress.queueUpdate(render(null, '❌ No se pudo descargar.'));
     await progress.flush();
+    try { if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
+    // Intentar limpiar directorios temporales creados
+    try {
+      const base = path.join(os.tmpdir(), 'konmi-bot-media');
+      if (fs.existsSync(base)) {
+        // Best-effort; no eliminar si no existe
+      }
+    } catch {}
     return false;
+  } finally {
+    try { if (releaseLimiter) releaseLimiter() } catch {}
   }
 
   // Enviar por ruta local
   try {
     const base = path.basename(filePath);
     const ext = (base.split('.').pop() || '').toLowerCase();
-    progress.queueUpdate(render(100, 'Enviando archivo…'));
+    // Suavizar transición hasta 100% antes de enviar
+    try {
+      targetPercent = 100;
+      while (currentPercent < 100) {
+        smoothStep();
+        progress.queueUpdate(render(currentPercent));
+        await sleep(Math.max(SPINNER_INTERVAL_MS, EDIT_COOLDOWN_MS));
+      }
+    } catch {}
+    // Adjuntar la portada justo al final (mensaje ya estático)
+    if (coverUrl) {
+      const finalCtx = {
+        externalAdReply: {
+          title: metaTitle || (isAudio ? 'Música' : 'Video'),
+          body: metaArtist || (isYouTube ? 'YouTube' : isSpotify ? 'Spotify' : ''),
+          thumbnailUrl: coverUrl,
+          thumbnail: coverThumb || undefined,
+          mediaType: 1,
+          previewType: 0,
+          sourceUrl: (/^https?:\/\//i.test(input) ? input : undefined),
+          showAdAttribution: false,
+          renderLargerThumbnail: true,
+        }
+      };
+      progress.queueUpdateWithContext(render(100), finalCtx);
+    } else {
+      progress.queueUpdate(render(100));
+    }
     await progress.flush();
 
     const mentions = [ ensureMentionJid(usuario) ].filter(Boolean);
+    // Leer a Buffer para evitar fallos de envío con rutas locales
+    const data = await fsp.readFile(filePath);
     if (isAudio) {
-      const mime = ext === 'mp3' ? 'audio/mpeg' : ext === 'm4a' ? 'audio/mp4' : ext === 'ogg' || ext === 'opus' ? 'audio/ogg' : ext === 'wav' ? 'audio/wav' : ext === 'webm' ? 'audio/webm' : 'audio/mpeg';
-      await sock.sendMessage(remoteJid, { audio: { url: filePath }, mimetype: mime, ptt: false, fileName: base, mentions }, { quoted: undefined });
+      const mime = ext === 'mp3' ? 'audio/mpeg'
+        : ext === 'm4a' ? 'audio/mp4'
+        : (ext === 'ogg' || ext === 'opus') ? 'audio/ogg'
+        : ext === 'wav' ? 'audio/wav'
+        : ext === 'webm' ? 'audio/webm'
+        : 'audio/mpeg';
+      await sock.sendMessage(
+        remoteJid,
+        { audio: data, mimetype: mime, ptt: false, fileName: base, mentions },
+        { quoted }
+      );
     } else {
-      const mime = ext === 'mp4' ? 'video/mp4' : ext === 'webm' ? 'video/webm' : 'video/mp4';
-      await sock.sendMessage(remoteJid, { video: { url: filePath }, mimetype: mime, fileName: base, mentions }, { quoted: undefined });
+      const mime = ext === 'mp4' ? 'video/mp4'
+        : ext === 'webm' ? 'video/webm'
+        : 'video/mp4';
+      await sock.sendMessage(
+        remoteJid,
+        { video: data, mimetype: mime, fileName: base, mentions },
+        { quoted }
+      );
     }
+    try { clearInterval(spinnerTimer); } catch {}
+    // Limpiar archivo y carpeta temporal si corresponde
+    try {
+      const tmpRoot = path.join(os.tmpdir(), 'konmi-bot-media');
+      const under = (() => { try { const rp = path.resolve(filePath); const rr = path.resolve(tmpRoot); return rp === rr || rp.startsWith(rr + path.sep); } catch { return false }})();
+      if (under) {
+        try { fs.unlinkSync(filePath); } catch {}
+        try { const dir = path.dirname(filePath); fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+      }
+    } catch {}
     return true;
   } catch (sendErr) {
     logger.error('Envío de media falló:', sendErr);
@@ -634,10 +781,30 @@ async function downloadAndSendLocal({
       // Fallback documento
       const base = path.basename(filePath);
       await sock.sendMessage(remoteJid, { document: { url: filePath }, fileName: base, mimetype: isAudio ? 'audio/mpeg' : 'application/octet-stream' });
+      // Cleanup temporal
+      try {
+        const tmpRoot = path.join(os.tmpdir(), 'konmi-bot-media');
+        const under = (() => { try { const rp = path.resolve(filePath); const rr = path.resolve(tmpRoot); return rp === rr || rp.startsWith(rr + path.sep); } catch { return false }})();
+        if (under) {
+          try { fs.unlinkSync(filePath); } catch {}
+          try { const dir = path.dirname(filePath); fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+        }
+      } catch {}
+      try { if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
       return true;
     } catch (e2) {
       progress.queueUpdate(render(null, '❌ Error al enviar.'));
       await progress.flush();
+      try { if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
+      // Cleanup temporal si existe
+      try {
+        const tmpRoot = path.join(os.tmpdir(), 'konmi-bot-media');
+        const under = (() => { try { const rp = path.resolve(filePath); const rr = path.resolve(tmpRoot); return rp === rr || rp.startsWith(rr + path.sep); } catch { return false }})();
+        if (under) {
+          try { fs.unlinkSync(filePath); } catch {}
+          try { const dir = path.dirname(filePath); fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+        }
+      } catch {}
       return false;
     }
   }
@@ -728,20 +895,8 @@ async function handleUnifiedAudioDownload({ sock, remoteJid, message, args, usua
       details: baseDetails,
     });
 
-  const initExtra = cover
-    ? {
-        contextInfo: {
-          externalAdReply: {
-            title: metaTitle || 'Música',
-            body: metaArtist || source,
-            thumbnailUrl: cover,
-            mediaType: 1,
-            previewType: 0,
-            renderLargerThumbnail: true,
-          },
-        },
-      }
-    : {};
+  // Iniciar sin portada; la adjuntamos al final
+  const initExtra = undefined;
 
   const progress = createProgressMessenger(
     sock,
@@ -791,6 +946,26 @@ async function handleUnifiedAudioDownload({ sock, remoteJid, message, args, usua
     const base = path.basename(filePath);
     const ext = (base.split('.').pop() || '').toLowerCase();
     const fileName = safeFileNameFromTitle(metaTitle || base.replace(/\.[^.]+$/, ''), `.${ext}`);
+    // Adjuntar portada al final y dejar estático
+    try {
+      if (cover) {
+        const finalCtx = {
+          externalAdReply: {
+            title: metaTitle || 'Música',
+            body: metaArtist || source,
+            thumbnailUrl: cover,
+            mediaType: 1,
+            previewType: 0,
+            sourceUrl: (isUrl ? target : undefined),
+            showAdAttribution: false,
+            renderLargerThumbnail: true,
+          }
+        };
+        progress.queueUpdateWithContext(render(100), finalCtx);
+      } else {
+        progress.queueUpdate(render(100));
+      }
+    } catch {}
     await progress.flush();
     await sock.sendMessage(
       remoteJid,
@@ -829,63 +1004,81 @@ async function sendMediaWithProgress({
 
   const normalizedType = type === "audio" ? "audio" : type === "image" ? "imagen" : "video";
   const details = detailLines.filter(Boolean);
+  // Spinner fluido con interpolación de barra
+  let spinnerIndexNet = 0;
+  let currentPercentNet = 0;
+  let targetPercentNet = 0;
+  const smoothStepNet = () => {
+    if (!Number.isFinite(targetPercentNet)) return;
+    if (currentPercentNet < targetPercentNet) {
+      const delta = targetPercentNet - currentPercentNet;
+      currentPercentNet += delta >= 10 ? 3 : 1;
+      if (currentPercentNet > targetPercentNet) currentPercentNet = targetPercentNet;
+    }
+  };
   const render = (percent, statusText) => {
-    // Mantener todo estático salvo la barra. Si no se da statusText, usar uno genérico.
     const fixedStatus = statusText ?? (Number.isFinite(percent) && percent < 100 ? 'Descargando…' : 'Preparando…');
     return renderGenericProgressMessage({
       title: header,
       percent,
       statusText: fixedStatus,
       details,
+      spinner: SPINNER_FRAMES[spinnerIndexNet],
     });
   };
+
+  // Preparar portada para mayor estabilidad (cargar thumbnail en bytes si es posible)
+  let previewThumb = undefined;
+  if (preview?.thumbnailUrl) {
+    try {
+      const resp = await fetchWithTimeout(preview.thumbnailUrl, {}, 8000);
+      const ab = await resp.arrayBuffer();
+      if (ab && ab.byteLength && ab.byteLength <= 800_000) previewThumb = Buffer.from(ab);
+    } catch {}
+  }
 
   const progress = showProgress
     ? createProgressMessenger(
         sock,
         remoteJid,
         render(0, "Preparando descarga..."),
-        {
-          contextLabel,
-          initialMessageExtra:
-            preview && preview.thumbnailUrl
-              ? {
-                  contextInfo: {
-                    externalAdReply: {
-                      title: preview.title || header || 'Descarga',
-                      body:
-                        preview.body ||
-                        (detailLines && detailLines[0] ? String(detailLines[0]).replace(/^\W+\s*/, '') : ''),
-                      thumbnailUrl: preview.thumbnailUrl,
-                      mediaType: 1,
-                      previewType: 0,
-                      renderLargerThumbnail: true,
-                    },
-                  },
-                }
-              : undefined,
-        },
+        { contextLabel }
       )
     : { queueUpdate: async () => {}, flush: async () => {} };
 
+  let spinnerTimerNet = null;
   if (showProgress) {
     progress.queueUpdate(
       render(5, `Conectando con el servidor de ${normalizedType}...`),
     );
+    if (!PROGRESS_LOW_OVERHEAD) {
+      spinnerTimerNet = setInterval(() => {
+        try {
+          spinnerIndexNet = (spinnerIndexNet + 1) % SPINNER_FRAMES.length;
+          smoothStepNet();
+          progress.queueUpdate(render(currentPercentNet));
+        } catch {}
+      }, SPINNER_INTERVAL_MS);
+    }
   }
 
   let buffer;
   let lastPercent = 5;
   let notifiedUnknown = false;
 
+  // Concurrency control for network/media jobs
+  let releaseLimiterNet = null;
   try {
+    releaseLimiterNet = await mediaLimiter.acquire();
     buffer = await downloadBufferWithProgress(url, {
       timeoutMs,
       onProgress: showProgress
         ? ({ percent }) => {
             if (Number.isFinite(percent)) {
               const rounded = Math.max(0, Math.min(100, Math.round(percent)));
-              if (rounded - lastPercent >= 10 || rounded >= 99) {
+              targetPercentNet = rounded;
+              const stepNet = PROGRESS_LOW_OVERHEAD ? 10 : 3;
+              if (rounded - lastPercent >= stepNet || rounded >= 99) {
                 lastPercent = rounded;
                 progress.queueUpdate(render(rounded));
               }
@@ -902,6 +1095,7 @@ async function sendMediaWithProgress({
     logger.error(`Error descargando ${normalizedType} (${contextLabel || "media"}):`, error);
     progress.queueUpdate(render(lastPercent, "No se pudo completar la descarga."));
     await progress.flush();
+    try { if (spinnerTimerNet) clearInterval(spinnerTimerNet); } catch {}
     if (typeof getFailureMessage === "function") {
       try {
         const message = getFailureMessage(error, { stage: "download" });
@@ -915,13 +1109,32 @@ async function sendMediaWithProgress({
       }
     }
     return false;
+  } finally {
+    try { if (releaseLimiterNet) releaseLimiterNet() } catch {}
   }
 
   if (showProgress) {
-    progress.queueUpdate(
-      render(100, "¡Descarga finalizada! Enviando archivo..."),
-    );
+    const finalCtx = preview && (preview.thumbnailUrl || previewThumb)
+      ? {
+          externalAdReply: {
+            title: preview.title || header || 'Descarga',
+            body: preview.body || (detailLines && detailLines[0] ? String(detailLines[0]).replace(/^\W+\s*/, '') : ''),
+            thumbnailUrl: preview.thumbnailUrl,
+            thumbnail: previewThumb,
+            mediaType: 1,
+            previewType: 0,
+            renderLargerThumbnail: true,
+          },
+        }
+      : undefined;
+
+    if (finalCtx && typeof progress.queueUpdateWithContext === 'function') {
+      progress.queueUpdateWithContext(render(100, "¡Descarga finalizada! Enviando archivo..."), finalCtx);
+    } else {
+      progress.queueUpdate(render(100, "¡Descarga finalizada! Enviando archivo..."));
+    }
     await progress.flush();
+    try { if (spinnerTimerNet) clearInterval(spinnerTimerNet); } catch {}
   }
 
   const messagePayload = {
@@ -5395,202 +5608,18 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
       case "/dl":
       case "/descargar": {
         try {
-          const query = args.join(" ").trim();
-          if (!query) {
+          const input = args.join(" ").trim();
+          if (!input) {
             await sock.sendMessage(remoteJid, { text: "ℹ️ Uso: /dl [URL o nombre]\nEjemplos:\n/dl https://youtu.be/dQw4w9WgXcQ\n/dl tears sabrina carpenter" });
             break;
           }
-
-          const isUrl = /^(https?:\/\/)/i.test(query);
-          let target = query;
-          let metaTitle = null;
-          let metaArtist = null;
-          let metaDuration = null;
-
-          let isSpotify = isUrl && /spotify\.com/i.test(target);
-          let isYouTube = isUrl && /(youtube\.com|youtu\.be)/i.test(target);
-          let isSoundCloud = isUrl && /soundcloud\.com/i.test(target);
-          let source = isSpotify ? 'Spotify 🎧' : isYouTube ? 'YouTube ▶️' : (isSoundCloud ? 'SoundCloud ☁️' : (isUrl ? 'Genérico' : 'Búsqueda'));
-
-          const detailLines = [
-            `📡 Fuente: ${source}`,
-            isUrl ? `🔗 URL: ${target}` : null,
-            `🙋 Solicitado por: @${usuario}`,
-          ].filter(Boolean);
-
-          const render = (p, statusText) => {
-            const lines = [...detailLines];
-            if (metaTitle) lines.splice(1, 0, `🎧 Título: ${metaTitle}`);
-            if (metaArtist) lines.splice(2, 0, `👤 Artista: ${metaArtist}`);
-            if (metaDuration) lines.push(`⏱️ Duración: ${metaDuration}`);
-            return renderGenericProgressMessage({
-              title: '🎶 Descargando multimedia...',
-              percent: Number.isFinite(p) ? p : null,
-              statusText: statusText || (Number.isFinite(p) ? 'Descargando...' : 'Preparando...'),
-              details: lines,
-            });
-          };
-
-          const progress = createProgressMessenger(
-            sock,
-            remoteJid,
-            render(0, isUrl ? 'Inicializando...' : 'Buscando...'),
-            { contextLabel: "/dl:flow" },
-          );
-
-          // Resolver texto (búsqueda) a URL preferida
-          if (!isUrl) {
-            try {
-              const { searchSpotify, searchYouTubeMusic } = await import('./utils/api-providers.js');
-              // Preferencia: si encuentra track de Spotify con URL, usar spotdl
-              let sp = null;
-              try { sp = await searchSpotify(query); } catch {}
-              if (sp?.success && (sp.url || sp.download || sp.preview_url)) {
-                metaTitle = sp.title || null;
-                metaArtist = sp.artists || null;
-                if (sp.duration_ms) {
-                  const mins = Math.floor(sp.duration_ms / 60000);
-                  const secs = String(Math.floor((sp.duration_ms % 60000) / 1000)).padStart(2, '0');
-                  metaDuration = `${mins}:${secs}`;
-                }
-                if (sp.url) {
-                  target = sp.url;
-                  isSpotify = true; isYouTube = false; isSoundCloud = false;
-                  source = 'Spotify 🎧';
-                } else if (sp.download || sp.preview_url) {
-                  // Use direct audio if available (fallback)
-                  target = sp.download || sp.preview_url;
-                  isSpotify = false; isYouTube = false; isSoundCloud = false;
-                  source = 'Directo (Spotify preview)';
-                }
-              } else {
-                // YouTube search fallback
-                const yt = await searchYouTubeMusic(query);
-                if (yt?.success && Array.isArray(yt.results) && yt.results.length) {
-                  const top = yt.results[0];
-                  target = top.url;
-                  metaTitle = top.title || null;
-                  metaArtist = top.author || null;
-                  metaDuration = top.duration || null;
-                  isYouTube = true; isSpotify = false; isSoundCloud = false;
-                  source = 'YouTube ▶️';
-                }
-              }
-            } catch (e) {
-              logger.warn('Fallo búsqueda para /dl', { error: e?.message });
-            }
-            if (!target || target === query) {
-              progress.queueUpdate(render(null, `❌ No se encontraron resultados.`));
-              await progress.flush();
-              break;
-            }
-          }
-
-          let filePath = null;
-          if (isSpotify) {
-            const outDir = join(__dirname, 'storage', 'downloads', 'spotdl');
-            let lastP = 0;
-            const onProgress = ({ percent }) => {
-              const p = Math.max(0, Math.min(100, Math.round(percent || 0)));
-              if (p - lastP >= 3 || p >= 99) {
-                lastP = p;
-                progress.queueUpdate(render(p, 'Descargando (spotdl)...'));
-              }
-            };
-            try {
-              const dl = await downloadWithSpotdl({ queryOrUrl: target, outDir, onProgress });
-              filePath = dl.filePath;
-              progress.queueUpdate(render(100, 'Etiquetando...'));
-            } catch (e) {
-              // Fallback YouTube via yt-dlp usando búsqueda por título/autor
-              try {
-                const { searchSpotify, searchYouTubeMusic } = await import('./utils/api-providers.js');
-                let q = [metaTitle, metaArtist].filter(Boolean).join(' ');
-                if (!q) {
-                  try { const sp = await searchSpotify(target); if (sp?.success) { metaTitle = sp.title || metaTitle; metaArtist = sp.artists || metaArtist; if (sp.duration_ms){ const m=Math.floor(sp.duration_ms/60000); const s=String(Math.floor((sp.duration_ms%60000)/1000)).padStart(2,'0'); metaDuration=`${m}:${s}`; } q = [sp.title, sp.artists].filter(Boolean).join(' ');} } catch {}
-                }
-                if (!q) q = 'spotify track';
-                progress.queueUpdate(render(10, 'Cambiando a YouTube (yt-dlp)...'));
-                const yt = await searchYouTubeMusic(q);
-                if (!yt?.success || !yt.results?.length) throw new Error('No hay resultados en YouTube');
-                const top = yt.results[0];
-                const out2 = join(__dirname, 'storage', 'downloads', 'ytdlp');
-                  let lastY=10; const onY = ({ percent }) => { const p=Math.max(0,Math.min(100,Math.round(percent||0))); if(p-lastY>=10||p>=99){ lastY=p; progress.queueUpdate(render(p, 'Descargando (yt-dlp)...')); } };
-                const dl2 = await downloadWithYtDlp({ url: top.url, outDir: out2, audioOnly: true, onProgress: onY });
-                filePath = dl2.filePath; source = 'YouTube ▶️';
-                if (!metaTitle) { metaTitle = top.title || null; }
-                if (!metaArtist) { metaArtist = top.author || null; }
-                progress.queueUpdate(render(100, 'Convirtiendo/etiquetando...'));
-              } catch (fallbackErr) {
-                progress.queueUpdate(render(0, '❌ No se pudo descargar.'));
-                await progress.flush();
-                break;
-              }
-            }
-          } else if (/^https?:\/\//i.test(target)) {
-            const outDir = join(__dirname, 'storage', 'downloads', 'ytdlp');
-            let lastP = 0;
-            const onProgress = ({ percent, speed, total }) => {
-              const p = Math.max(0, Math.min(100, Math.round(percent || 0)));
-              if (p - lastP >= 3 || p >= 99) {
-                lastP = p;
-                const status = speed || total ? `Descargando...${speed ? ` (${speed}/s)` : ''}` : 'Descargando...';
-                progress.queueUpdate(render(p, status));
-              }
-            };
-            try {
-              const dl = await downloadWithYtDlp({ url: target, outDir, audioOnly: true, onProgress });
-              filePath = dl.filePath;
-              progress.queueUpdate(render(100, 'Convirtiendo/etiquetando...'));
-            } catch (e) {
-              progress.queueUpdate(render(0, '❌ No se pudo descargar.'));
-              await progress.flush();
-              break;
-            }
-          } else {
-            progress.queueUpdate(render(null, '❌ No se pudo resolver el destino de la descarga.'));
-            await progress.flush();
-            break;
-          }
-
-          try {
-            const buf = await fsp.readFile(filePath);
-            const base = path.basename(filePath);
-            const ext = (base.split('.').pop() || '').toLowerCase();
-            const isAudioExt = ['mp3','m4a','aac','opus','ogg','wav','flac','webm'].includes(ext);
-            const isVideoExt = ['mp4','mkv','webm','mov','avi'].includes(ext);
-            const baseTitle = metaTitle || base.replace(/\.[^.]+$/, '');
-            const fileName = safeFileNameFromTitle(baseTitle, `.${ext}`);
-
-            progress.queueUpdate(render(100, 'Listo. Enviando archivo...'));
-            await progress.flush();
-
-            if (isAudioExt) {
-              const mimetype = ext === 'mp3' ? 'audio/mpeg' : ext === 'm4a' ? 'audio/mp4' : ext === 'ogg' ? 'audio/ogg' : ext === 'opus' ? 'audio/ogg' : 'audio/mpeg';
-              await sock.sendMessage(
-                remoteJid,
-                { audio: buf, mimetype, ptt: false, fileName, caption: `✅ Descarga completada\n\n📡 ${source}\n🎶 ${metaTitle || base}\n👤 ${metaArtist || ''}\n📂 ${base}` },
-                { quoted: message },
-              );
-            } else if (isVideoExt) {
-              const mimetype = ext === 'mp4' ? 'video/mp4' : 'video/mp4';
-              await sock.sendMessage(
-                remoteJid,
-                { video: buf, mimetype, fileName, caption: `✅ Descarga completada\n\n📡 ${source}\n🎬 ${metaTitle || base}\n👤 ${metaArtist || ''}\n📂 ${base}` },
-                { quoted: message },
-              );
-            } else {
-              await sock.sendMessage(remoteJid, { document: buf, fileName: base, mimetype: 'application/octet-stream', caption: '✅ Descarga completada' }, { quoted: message });
-            }
-          } catch (sendErr) {
-            logger.error('Error enviando archivo en /dl:', sendErr);
-            progress.queueUpdate(render(100, '❌ Error al enviar el archivo.'));
-            await progress.flush();
-          }
+          // Unificar con helper que asegura 1 solo mensaje (ediciones), portada y barra
+          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/dl', preferSpotdl: true, quoted: message });
         } catch (error) {
           logger.error('Error en /dl:', error);
-          progress.queueUpdate(render(0, '❌ Error durante la descarga.'));
-          await progress.flush();
+          const pm = createProgressMessenger(sock, remoteJid, '🎶 Descarga\n\n⏳ Preparando...', { contextLabel: '/dl:error' });
+          pm.queueUpdate('❌ Error durante la descarga.');
+          await pm.flush();
         }
         break;
       }
@@ -5601,7 +5630,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             await sock.sendMessage(remoteJid, { text: "ℹ️ Uso: /music [URL o nombre]\nEjemplos:\n/music https://youtu.be/dQw4w9WgXcQ\n/music despacito luis fonsi" });
             break;
           }
-          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/music' });
+          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/music', quoted: message });
         } catch (e) {
           logger.error("Error en /music:", e);
           const pm = createProgressMessenger(sock, remoteJid, '🎧 *Música*\\n\\n⏳ Preparando...', { contextLabel: '/music:error' });
@@ -5616,7 +5645,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             await sock.sendMessage(remoteJid, { text: "ℹ️ Uso: /musica [URL o nombre]\nEjemplos:\n/musica despacito luis fonsi" });
             break;
           }
-          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/musica' });
+          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/musica', quoted: message });
         } catch (e) {
           logger.error("Error en /musica:", e);
           const pm = createProgressMessenger(sock, remoteJid, '🎧 *Música*\\n\\n⏳ Preparando...', { contextLabel: '/music:error' });
@@ -5778,7 +5807,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             await sock.sendMessage(remoteJid, { text: "ℹ️ Uso: /spotify [canción]\nEjemplo: /spotify Shape of You" });
             break;
           }
-          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/spotify', preferSpotdl: true });
+          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/spotify', preferSpotdl: true, quoted: message });
           break;
         } catch (error) {
           logger.error("Error en /spotify:", error);
@@ -5912,7 +5941,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
             break;
           }
           // Unificar envío con helper (barra + envío por ruta local, mergeado a MP4)
-          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'video', usuario, context: '/video' });
+          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'video', usuario, context: '/video', quoted: message });
         } catch (error) {
           logger.error("Error en /video:", error);
           await sock.sendMessage(remoteJid, { text: "⚠️  Error al buscar/enviar video." });
@@ -6381,7 +6410,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               result.info?.provider ? `🔧 Proveedor: ${result.info.provider}` : null,
               `🙋 Solicitado por: @${usuario}`,
             ];
-
+            // Obtener portada si es posible (thumbnail)
+            let tkThumb = undefined;
+            try {
+              const apis = await import('./utils/api-providers.js');
+              const probe = await apis.downloadTikTok(tiktokUrl);
+              if (probe?.success) tkThumb = probe.thumbnail || undefined;
+            } catch {}
             await sendMediaWithProgress({
               sock,
               remoteJid,
@@ -6394,6 +6429,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               mentions: result.mentions,
               fileName: safeFileNameFromTitle(result.info?.title, ".mp4"),
               contextLabel: "/tiktok",
+              preview: { title: result.info?.title || 'TikTok', body: result.info?.author || 'TikTok', thumbnailUrl: tkThumb },
               timeoutMs: 90000,
               getFailureMessage: (_error, { stage }) => ({
                 text:
@@ -6534,6 +6570,13 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               `🙋 Solicitado por: @${usuario}`,
             ];
 
+            // Obtener portada si es posible (thumbnail)
+            let fbThumb = undefined;
+            try {
+              const apis = await import('./utils/api-providers.js');
+              const probe = await apis.downloadFacebook(fbUrl);
+              if (probe?.success) fbThumb = probe.thumbnail || undefined;
+            } catch {}
             await sendMediaWithProgress({
               sock,
               remoteJid,
@@ -6546,7 +6589,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
               mentions: result.mentions,
               fileName: safeFileNameFromTitle(result.info?.title, ".mp4"),
               contextLabel: "/facebook",
-              preview: { title: result.info?.title || 'Facebook', body: result.info?.author || 'Facebook' },
+              preview: { title: result.info?.title || 'Facebook', body: result.info?.author || 'Facebook', thumbnailUrl: fbThumb },
               timeoutMs: 90000,
               getFailureMessage: (_error, { stage }) => ({
                 text:
@@ -8169,7 +8212,7 @@ Ejemplo: /descargar https://sitio/archivo.pdf archivo.pdf manhwa`,
             await sock.sendMessage(remoteJid, { text: "ℹ️ Uso: /play [canción]\nEjemplo: /play Despacito Luis Fonsi" });
             break;
           }
-          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/play' });
+          await downloadAndSendLocal({ sock, remoteJid, input, kind: 'audio', usuario, context: '/play', quoted: message });
         } catch (e) {
           logger.error("Error en /play:", e);
         }

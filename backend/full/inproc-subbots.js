@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 // Anchor to backend directory so it doesn't depend on process.cwd()
 const SUBBOT_BASE_DIR = path.resolve(__dirname, "storage", "subbots");
 
+const SUBBOTS_ENABLED = String(process.env.SUBBOTS_ENABLED ?? "true").toLowerCase() !== "false";
 const MAX_ACTIVE_SUBBOTS = parseInt(process.env.MAX_ACTIVE_SUBBOTS ?? "10", 10);
 const MAX_SUBBOTS_PER_USER = parseInt(
   process.env.MAX_SUBBOTS_PER_USER ?? "10",
@@ -197,6 +198,9 @@ export async function launchSubbot(options = {}) {
   };
 
   try {
+    if (!SUBBOTS_ENABLED) {
+      return { success: false, error: "Subbots deshabilitados por configuración (SUBBOTS_ENABLED=false)." };
+    }
     if (MAX_ACTIVE_SUBBOTS > 0 && activeSubbots.size >= MAX_ACTIVE_SUBBOTS) {
       return {
         success: false,

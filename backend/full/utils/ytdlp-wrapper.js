@@ -90,13 +90,26 @@ export async function downloadWithYtDlp({
 
   let bin = ytDlpPath || getYtDlpPath()
   let preArgs = []
+  let useModule = false
   if (!ytDlpPath) {
     const resolved = resolveYtDlpCommand()
     if (!resolved) {
-      throw new Error('yt-dlp no disponible. Instala yt-dlp o agrega a PATH.')
+      // Fallback a módulo yt-dlp-exec si el binario no está disponible
+      try {
+        const mod = await import('yt-dlp-exec')
+        const ytdlp = mod?.default || mod
+        if (ytdlp && typeof ytdlp.raw === 'function') {
+          useModule = true
+        } else {
+          throw new Error('yt-dlp-exec no expone raw')
+        }
+      } catch (e) {
+        throw new Error('yt-dlp no disponible. Instala yt-dlp o agrega a PATH.')
+      }
+    } else {
+      bin = resolved.cmd
+      preArgs = resolved.pre || []
     }
-    bin = resolved.cmd
-    preArgs = resolved.pre || []
   }
   const args = []
 
@@ -147,7 +160,15 @@ export async function downloadWithYtDlp({
   // yt-dlp prints progress on stderr by default. We'll parse percent like `  12.3% `
   args.push(url)
 
-  const child = spawn(bin, [...preArgs, ...args], { windowsHide: true })
+  let child
+  if (useModule) {
+    const mod = await import('yt-dlp-exec')
+    const ytdlp = mod?.default || mod
+    // yt-dlp-exec.raw acepta lista de argumentos y retorna ChildProcess
+    child = ytdlp.raw([...preArgs, ...args], { shell: false })
+  } else {
+    child = spawn(bin, [...preArgs, ...args], { windowsHide: true })
+  }
 
   let lastPercent = 0
   let stderr = ''
@@ -157,6 +178,7 @@ export async function downloadWithYtDlp({
   const percentRe = /(\d{1,3}(?:\.\d)?)%/g
   const speedRe = /at\s+([^\s]+)\/(?:s|S)/
   const totalRe = /of\s+([^\s]+)/
+  const etaRe = /ETA\s+([0-9:]+)/i
 
   const parseLine = (line) => {
     if (typeof onProgress !== 'function') return
@@ -166,6 +188,7 @@ export async function downloadWithYtDlp({
         const p = Math.max(0, Math.min(100, parseFloat(percentMatch[1])))
         const speedMatch = line.match(speedRe)
         const totalMatch = line.match(totalRe)
+        const etaMatch = line.match(etaRe)
         if (p > lastPercent || p >= 100) {
           lastPercent = p
           onProgress({
@@ -173,6 +196,7 @@ export async function downloadWithYtDlp({
             status: line.includes('[download]') ? 'download' : undefined,
             total: totalMatch ? totalMatch[1] : undefined,
             speed: speedMatch ? speedMatch[1] : undefined,
+            eta: etaMatch ? etaMatch[1] : undefined,
           })
         }
       }
