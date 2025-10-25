@@ -2806,7 +2806,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
       // Comandos de subbots
       case "/qr":
       case "/subqr":
-        // REDIRIGIR A PRIVADO SI ES EN GRUPO
+        // Redirigir a privado si es en grupo para mayor seguridad
         if (isGroup) {
           await sock.sendMessage(
             remoteJid,
@@ -2824,14 +2824,7 @@ export async function handleMessage(message, customSock = null, prefix = "") {
           return;
         }
 
-        if (!isOwner) {
-          await sock.sendMessage(
-            remoteJid,
-            { text: "❌ Solo el owner puede usar este comando" },
-            { quoted: message },
-          );
-          return;
-        }
+        // Generar código QR para el usuario
         const qrResponse = await handleQROrCodeRequest("qr", usuario);
         if (qrResponse.image) {
           await sock.sendMessage(
