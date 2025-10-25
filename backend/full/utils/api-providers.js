@@ -711,16 +711,39 @@ async function doRequest(provider, url, body, extraCtx) {
         retries: 1,
         quiet: true,
       }
+      try {
+        const fsMod = await import('fs')
+        const fs = fsMod.default || fsMod
+        const cookieFile = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
+        if (cookieFile && (fs.existsSync?.(cookieFile) || fs.default?.existsSync?.(cookieFile))) {
+          opts.cookies = cookieFile
+        } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
+          opts.addHeader = [ `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}` ]
+        }
+      } catch {}
       let info
       if (ytdlp) {
         info = await ytdlp(url, opts)
       } else {
         const { spawn } = await import('child_process')
+        // Construir argumentos de cookies de forma síncrona
+        const cookieArgs = []
+        try {
+          const fsMod = await import('fs')
+          const fs = fsMod.default || fsMod
+          const p = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
+          if (p && (fs.existsSync?.(p) || fs.default?.existsSync?.(p))) {
+            cookieArgs.push('--cookies', p)
+          } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
+            cookieArgs.push('--add-header', `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`)
+          }
+        } catch {}
         const commonArgs = [
           '--dump-single-json',
           '--no-warnings',
           '--retries', '1',
           '-f', opts.format,
+          ...cookieArgs,
           url,
         ]
         const tryCmd = async (cmd, args) => new Promise((resolve, reject) => {

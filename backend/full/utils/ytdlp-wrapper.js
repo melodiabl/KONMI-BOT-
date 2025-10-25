@@ -80,6 +80,8 @@ export async function downloadWithYtDlp({
   ytDlpPath,
   ffmpegPath,
   outputTemplate,
+  cookies, // ruta a cookies.txt (opcional)
+  cookiesHeader, // cadena 'name=value; ...' (opcional)
 } = {}) {
   if (!url) throw new Error('URL requerida para yt-dlp')
   if (!outDir) throw new Error('outDir requerido para yt-dlp')
@@ -125,6 +127,17 @@ export async function downloadWithYtDlp({
   }
   if (ffmpegLoc) {
     args.push('--ffmpeg-location', ffmpegLoc)
+  }
+
+  // Cookies: archivo preferido; si no, header Cookie desde env
+  let cookieFile = cookies || process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
+  if (cookieFile && fs.existsSync(cookieFile)) {
+    args.push('--cookies', cookieFile)
+  } else {
+    const raw = cookiesHeader || process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES
+    if (raw) {
+      args.push('--add-header', `Cookie: ${raw}`)
+    }
   }
 
   const template = outputTemplate || path.join(outDir, '%(title)s.%(ext)s')
