@@ -75,7 +75,14 @@ export async function downloadWithSpotdl({
     }
     return null
   }
-  if (!spotdlPath || spotdlPath === 'spotdl') {
+  const works = (c, extra=[]) => {
+    try {
+      const r = spawnSync(c, [...extra, '--version'], { encoding: 'utf8', windowsHide: true })
+      return !r.error && r.status === 0
+    } catch { return false }
+  }
+  // Si SPOTDL_PATH no está definido o es 'spotdl', o si no funciona, detectar automáticamente
+  if (!spotdlPath || spotdlPath === 'spotdl' || !works(cmd, preArgs)) {
     const found = tryDetect()
     if (found) { cmd = found.c; preArgs = found.p }
   }

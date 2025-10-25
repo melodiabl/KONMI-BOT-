@@ -163,6 +163,15 @@ function diagnosticsExternalBinaries() {
         const r2 = checkCommand(x.name, ['--version'], x.name);
         ok = r2.ok; how = ok ? x.name : 'not found'; msg = r2.output || r2.error || '';
       }
+      if (!ok) {
+        // Intentar como módulo Python
+        const py = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'];
+        const mod = x.name === 'gallery-dl' ? 'gallery_dl' : x.name;
+        for (const p of py) {
+          const r3 = checkCommand(p, ['-m', mod, '--version'], `${p} -m ${mod}`);
+          if (r3.ok) { ok = true; how = `${p} -m ${mod}`; msg = r3.output || ''; break; }
+        }
+      }
       if (ok) logger.info?.(`[diag] ${x.name} OK ${msg}${how ? ` (${how})` : ''}`);
       else logger.warn?.(`[diag] ${x.name} NO DISPONIBLE. Error: ${msg}`);
     }

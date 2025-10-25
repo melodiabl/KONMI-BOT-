@@ -114,6 +114,9 @@ export async function downloadWithYtDlp({
 
   // Detectar ffmpeg automáticamente si no se pasó
   let ffmpegLoc = ffmpegPath
+  if (!ffmpegLoc && process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
+    ffmpegLoc = process.env.FFMPEG_PATH
+  }
   if (!ffmpegLoc) {
     try {
       const mod = await import('ffmpeg-static')
