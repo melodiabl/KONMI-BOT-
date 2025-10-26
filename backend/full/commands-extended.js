@@ -71,8 +71,18 @@ function resolveCookiesArgs() {
     // Try local file next to this module (backend/full)
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const localPath = path.join(__dirname, 'all_cookies.txt');
-    if (fs.existsSync(localPath)) return ['--cookies', localPath];
+    const candidates = [
+      path.join(__dirname, 'all_cookies.txt'),
+      '/home/admin/all_cookies.txt',
+      '/home/admin/KONMI-BOT-/backend/full/all_cookies.txt',
+      // tolerar typo común sin "s"
+      path.join(__dirname, 'all_cookie.txt'),
+      '/home/admin/all_cookie.txt',
+      '/home/admin/KONMI-BOT-/backend/full/all_cookie.txt',
+    ];
+    for (const p of candidates) {
+      try { if (fs.existsSync(p)) return ['--cookies', p]; } catch {}
+    }
     // Last resort: if raw cookie header is set, add it
     const header = YT_COOKIES_RAW && normalizeCookieString(YT_COOKIES_RAW);
     if (header) return ['--add-header', `Cookie: ${header}`];
@@ -88,6 +98,23 @@ function buildYtDlpCommonArgs() {
   if (YTDLP_USER_AGENT) args.push('--user-agent', YTDLP_USER_AGENT);
   const exArgs = buildExtractorArgs();
   if (exArgs) args.push('--extractor-args', exArgs);
+  // Anti-detección / ritmo (opt-in via env)
+  const sleepInt = process.env.YTDLP_SLEEP_INTERVAL && String(process.env.YTDLP_SLEEP_INTERVAL).trim();
+  const sleepMax = process.env.YTDLP_SLEEP_MAX && String(process.env.YTDLP_SLEEP_MAX).trim();
+  if (sleepInt) {
+    args.push('--sleep-interval', String(sleepInt));
+    if (sleepMax) args.push('--max-sleep-interval', String(sleepMax));
+  }
+  const rate = process.env.YTDLP_RATE_LIMIT && String(process.env.YTDLP_RATE_LIMIT).trim();
+  if (rate) args.push('--limit-rate', rate);
+  const conc = process.env.YTDLP_CONCURRENT_FRAGMENTS && String(process.env.YTDLP_CONCURRENT_FRAGMENTS).trim();
+  if (conc) args.push('--concurrent-fragments', String(conc));
+  const ref = process.env.YTDLP_REFERER && String(process.env.YTDLP_REFERER).trim();
+  if (ref) args.push('--referer', ref);
+  const chunk = process.env.YTDLP_HTTP_CHUNK_SIZE && String(process.env.YTDLP_HTTP_CHUNK_SIZE).trim();
+  if (chunk) args.push('--http-chunk-size', chunk);
+  const cacheDir = process.env.YTDLP_CACHE_DIR && String(process.env.YTDLP_CACHE_DIR).trim();
+  if (cacheDir) args.push('--cache-dir', cacheDir);
   return args;
 }
 

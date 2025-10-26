@@ -728,6 +728,13 @@ async function doRequest(provider, url, body, extraCtx) {
         quiet: true,
         userAgent: YTDLP_USER_AGENT,
         extractorArgs: buildExtractorArgs(),
+        // Anti-detección / ritmo (opcional en ytdlp-exec)
+        sleepInterval: process.env.YTDLP_SLEEP_INTERVAL && String(process.env.YTDLP_SLEEP_INTERVAL).trim(),
+        maxSleepInterval: process.env.YTDLP_SLEEP_MAX && String(process.env.YTDLP_SLEEP_MAX).trim(),
+        limitRate: process.env.YTDLP_RATE_LIMIT && String(process.env.YTDLP_RATE_LIMIT).trim(),
+        concurrentFragments: process.env.YTDLP_CONCURRENT_FRAGMENTS && String(process.env.YTDLP_CONCURRENT_FRAGMENTS).trim(),
+        referer: process.env.YTDLP_REFERER && String(process.env.YTDLP_REFERER).trim(),
+        httpChunkSize: process.env.YTDLP_HTTP_CHUNK_SIZE && String(process.env.YTDLP_HTTP_CHUNK_SIZE).trim(),
       }
       try {
         const fsMod = await import('fs')
@@ -749,9 +756,21 @@ async function doRequest(provider, url, body, extraCtx) {
         try {
           const fsMod = await import('fs')
           const fs = fsMod.default || fsMod
-          const p = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-          if (p && (fs.existsSync?.(p) || fs.default?.existsSync?.(p))) {
-            cookieArgs.push('--cookies', p)
+          const envP = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
+          const candidates = [
+            envP,
+            '/home/admin/all_cookies.txt',
+            '/home/admin/KONMI-BOT-/backend/full/all_cookies.txt',
+            // tolerar typo común
+            '/home/admin/all_cookie.txt',
+            '/home/admin/KONMI-BOT-/backend/full/all_cookie.txt',
+          ].filter(Boolean)
+          let picked = null
+          for (const p of candidates) {
+            try { if (p && (fs.existsSync?.(p) || fs.default?.existsSync?.(p))) { picked = p; break } } catch {}
+          }
+          if (picked) {
+            cookieArgs.push('--cookies', picked)
           } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
             cookieArgs.push('--add-header', `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`)
           }
@@ -763,6 +782,13 @@ async function doRequest(provider, url, body, extraCtx) {
           '-f', opts.format,
           '--user-agent', YTDLP_USER_AGENT,
           '--extractor-args', buildExtractorArgs(),
+          // Anti-detección / ritmo
+          ...(process.env.YTDLP_SLEEP_INTERVAL ? ['--sleep-interval', String(process.env.YTDLP_SLEEP_INTERVAL)] : []),
+          ...(process.env.YTDLP_SLEEP_MAX ? ['--max-sleep-interval', String(process.env.YTDLP_SLEEP_MAX)] : []),
+          ...(process.env.YTDLP_RATE_LIMIT ? ['--limit-rate', String(process.env.YTDLP_RATE_LIMIT)] : []),
+          ...(process.env.YTDLP_CONCURRENT_FRAGMENTS ? ['--concurrent-fragments', String(process.env.YTDLP_CONCURRENT_FRAGMENTS)] : []),
+          ...(process.env.YTDLP_REFERER ? ['--referer', String(process.env.YTDLP_REFERER)] : []),
+          ...(process.env.YTDLP_HTTP_CHUNK_SIZE ? ['--http-chunk-size', String(process.env.YTDLP_HTTP_CHUNK_SIZE)] : []),
           ...cookieArgs,
           url,
         ]

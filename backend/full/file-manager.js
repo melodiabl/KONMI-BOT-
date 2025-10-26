@@ -9,6 +9,10 @@ import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// User-Agent para descargas directas (evitar cabecera vacía de Node)
+const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const DOWNLOAD_USER_AGENT = process.env.DOWNLOAD_USER_AGENT || process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA;
+
 // Directorio base para almacenar archivos descargados
 const DOWNLOADS_DIR = path.join(__dirname, 'storage', 'downloads');
 const MEDIA_DIR = path.join(__dirname, 'storage', 'media');
@@ -75,7 +79,23 @@ async function downloadFile(url, filename, category, usuario) {
 
       const protocol = url.startsWith('https://') ? https : http;
 
-      const request = protocol.get(url, (response) => {
+      const u = new URL(url);
+      const options = {
+        protocol: u.protocol,
+        hostname: u.hostname,
+        port: u.port || (u.protocol === 'https:' ? 443 : 80),
+        path: u.pathname + (u.search || ''),
+        headers: {
+          'User-Agent': DOWNLOAD_USER_AGENT,
+          'Accept': '*/*',
+          'Accept-Language': process.env.DOWNLOAD_ACCEPT_LANGUAGE || 'es-ES,es;q=0.9,en;q=0.8',
+          'Referer': process.env.DOWNLOAD_REFERER || 'https://www.youtube.com/',
+          // Evitar compresión rara en algunos proxys
+          'Accept-Encoding': 'identity'
+        }
+      };
+
+      const request = protocol.get(options, (response) => {
         // Verificar cdigo de respuesta
         if (response.statusCode !== 200) {
           reject(new Error(`Error HTTP: ${response.statusCode}`));

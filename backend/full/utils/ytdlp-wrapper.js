@@ -144,13 +144,30 @@ export async function downloadWithYtDlp({
 
   // Cookies: archivo preferido; si no, header Cookie desde env
   let cookieFile = cookies || process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-  if (cookieFile && fs.existsSync(cookieFile)) {
-    args.push('--cookies', cookieFile)
-  } else {
+  const candidates = []
+  if (cookieFile) candidates.push(cookieFile)
+  try {
+    // Local project candidates and common VPS absolute paths
+    const __dirname = process.cwd()
+    candidates.push(
+      // local repo paths
+      require('path').join(__dirname, 'backend', 'full', 'all_cookies.txt'),
+      require('path').join(__dirname, 'backend', 'full', 'all_cookie.txt'),
+      // common VPS locations
+      '/home/admin/all_cookies.txt',
+      '/home/admin/all_cookie.txt',
+      '/home/admin/KONMI-BOT-/backend/full/all_cookies.txt',
+      '/home/admin/KONMI-BOT-/backend/full/all_cookie.txt',
+    )
+  } catch {}
+  let foundCookie = null
+  for (const p of candidates) {
+    try { if (p && fs.existsSync(p)) { foundCookie = p; break } } catch {}
+  }
+  if (foundCookie) args.push('--cookies', foundCookie)
+  else {
     const raw = cookiesHeader || process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES
-    if (raw) {
-      args.push('--add-header', `Cookie: ${raw}`)
-    }
+    if (raw) args.push('--add-header', `Cookie: ${raw}`)
   }
 
   // User-Agent and extractor-args for better YouTube reliability
@@ -165,6 +182,24 @@ export async function downloadWithYtDlp({
   }
   if (ua) args.push('--user-agent', ua)
   if (extractorArgs) args.push('--extractor-args', extractorArgs)
+
+  // Anti-detección / ritmo (opt-in via env)
+  const sleepInt = process.env.YTDLP_SLEEP_INTERVAL && String(process.env.YTDLP_SLEEP_INTERVAL).trim()
+  const sleepMax = process.env.YTDLP_SLEEP_MAX && String(process.env.YTDLP_SLEEP_MAX).trim()
+  if (sleepInt) {
+    args.push('--sleep-interval', String(sleepInt))
+    if (sleepMax) args.push('--max-sleep-interval', String(sleepMax))
+  }
+  const rate = process.env.YTDLP_RATE_LIMIT && String(process.env.YTDLP_RATE_LIMIT).trim()
+  if (rate) args.push('--limit-rate', rate)
+  const conc = process.env.YTDLP_CONCURRENT_FRAGMENTS && String(process.env.YTDLP_CONCURRENT_FRAGMENTS).trim()
+  if (conc) args.push('--concurrent-fragments', String(conc))
+  const ref = process.env.YTDLP_REFERER && String(process.env.YTDLP_REFERER).trim()
+  if (ref) args.push('--referer', ref)
+  const chunk = process.env.YTDLP_HTTP_CHUNK_SIZE && String(process.env.YTDLP_HTTP_CHUNK_SIZE).trim()
+  if (chunk) args.push('--http-chunk-size', chunk)
+  const cacheDir = process.env.YTDLP_CACHE_DIR && String(process.env.YTDLP_CACHE_DIR).trim()
+  if (cacheDir) args.push('--cache-dir', cacheDir)
 
   const template = outputTemplate || path.join(outDir, '%(title)s.%(ext)s')
   args.push('-o', template)
