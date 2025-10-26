@@ -153,6 +153,19 @@ export async function downloadWithYtDlp({
     }
   }
 
+  // User-Agent and extractor-args for better YouTube reliability
+  const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  const ua = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA
+  const baseExtractor = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=web,android'
+  const poToken = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || ''
+  let extractorArgs = baseExtractor
+  if (poToken) {
+    const sep = extractorArgs.includes(',') || extractorArgs.includes(':') ? ',' : ''
+    extractorArgs = `${extractorArgs}${sep}youtube:po_token=android.gvs+${poToken}`
+  }
+  if (ua) args.push('--user-agent', ua)
+  if (extractorArgs) args.push('--extractor-args', extractorArgs)
+
   const template = outputTemplate || path.join(outDir, '%(title)s.%(ext)s')
   args.push('-o', template)
 

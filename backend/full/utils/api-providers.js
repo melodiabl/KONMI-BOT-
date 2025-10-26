@@ -16,6 +16,17 @@ const http = axios.create({
   validateStatus: (s) => s >= 200 && s < 500
 })
 
+// yt-dlp tuning variables for YouTube reliability on VPS
+const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+const YTDLP_USER_AGENT = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA
+const YTDLP_EXTRACTOR_ARGS_BASE = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=web,android'
+const YTDLP_PO_TOKEN = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || ''
+const buildExtractorArgs = () => {
+  if (!YTDLP_PO_TOKEN) return YTDLP_EXTRACTOR_ARGS_BASE
+  const sep = YTDLP_EXTRACTOR_ARGS_BASE.includes(',') || YTDLP_EXTRACTOR_ARGS_BASE.includes(':') ? ',' : ''
+  return `${YTDLP_EXTRACTOR_ARGS_BASE}${sep}youtube:po_token=android.gvs+${YTDLP_PO_TOKEN}`
+}
+
 /**
  * Lee una API key de env y sólo usa el proveedor si está presente.
  * Retorna `headers` para la petición o `null` si no hay key.
@@ -715,6 +726,8 @@ async function doRequest(provider, url, body, extraCtx) {
         format: want === 'audio' ? 'bestaudio[ext=m4a]/bestaudio/best' : 'best[ext=mp4]/best',
         retries: 1,
         quiet: true,
+        userAgent: YTDLP_USER_AGENT,
+        extractorArgs: buildExtractorArgs(),
       }
       try {
         const fsMod = await import('fs')
@@ -748,6 +761,8 @@ async function doRequest(provider, url, body, extraCtx) {
           '--no-warnings',
           '--retries', '1',
           '-f', opts.format,
+          '--user-agent', YTDLP_USER_AGENT,
+          '--extractor-args', buildExtractorArgs(),
           ...cookieArgs,
           url,
         ]

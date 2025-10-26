@@ -6,6 +6,7 @@ import ytdl from 'ytdl-core';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { PassThrough } from 'stream';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
@@ -44,6 +45,51 @@ function sanitizeFilename(value) {
 const YT_API_KEY = process.env.YT_API_KEY || process.env.YOUTUBE_API_KEY;
 const YT_COOKIES_FILE = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE;
 const YT_COOKIES_RAW = process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES;
+
+// yt-dlp tuning for YouTube under current site changes
+const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const DEFAULT_ANDROID_UA = 'com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip';
+const YTDLP_USER_AGENT = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA;
+const YTDLP_EXTRACTOR_ARGS_BASE = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=web,android';
+const YTDLP_PO_TOKEN = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || '';
+
+function buildExtractorArgs() {
+  let args = YTDLP_EXTRACTOR_ARGS_BASE;
+  if (YTDLP_PO_TOKEN) {
+    // Append PO token for android client when provided
+    const sep = args.includes(',') || args.includes(':') ? ',' : '';
+    args = `${args}${sep}youtube:po_token=android.gvs+${YTDLP_PO_TOKEN}`;
+  }
+  return args;
+}
+
+function resolveCookiesArgs() {
+  try {
+    // Priority: explicit env file -> local file -> cookie header
+    const envFile = YT_COOKIES_FILE;
+    if (envFile && fs.existsSync(envFile)) return ['--cookies', envFile];
+    // Try local file next to this module (backend/full)
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const localPath = path.join(__dirname, 'all_cookies.txt');
+    if (fs.existsSync(localPath)) return ['--cookies', localPath];
+    // Last resort: if raw cookie header is set, add it
+    const header = YT_COOKIES_RAW && normalizeCookieString(YT_COOKIES_RAW);
+    if (header) return ['--add-header', `Cookie: ${header}`];
+  } catch {}
+  return [];
+}
+
+function buildYtDlpCommonArgs() {
+  const args = [];
+  // Cookies
+  args.push(...resolveCookiesArgs());
+  // UA and extractor-args
+  if (YTDLP_USER_AGENT) args.push('--user-agent', YTDLP_USER_AGENT);
+  const exArgs = buildExtractorArgs();
+  if (exArgs) args.push('--extractor-args', exArgs);
+  return args;
+}
 
 function parseCookiesFromFile(filePath) {
   try {
@@ -219,7 +265,7 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
     let ytQuery = query.startsWith('http') ? query : `ytsearch1:${query}`;
     const infoArgs = [
       ytQuery,
-      '--cookies', '/home/admin/all_cookies.txt',
+      ...buildYtDlpCommonArgs(),
       '--print', '%(title)s|%(uploader)s|%(duration_string)s|%(view_count)s|%(webpage_url)s|%(thumbnail)s|%(description)s|%(upload_date)s',
       '--no-warnings',
       '--quiet'
@@ -254,7 +300,7 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
       '--audio-format', 'mp3',
       '--audio-quality', '0',
       '--no-playlist',
-      '--cookies', '/home/admin/all_cookies.txt',
+      ...buildYtDlpCommonArgs(),
       '-o', outputTemplate,
       '--progress',
       '--newline',
@@ -374,7 +420,7 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
     let ytQuery = query.startsWith('http') ? query : `ytsearch1:${query}`;
     const infoArgs = [
       ytQuery,
-      '--cookies', '/home/admin/all_cookies.txt',
+      ...buildYtDlpCommonArgs(),
       '--print', '%(title)s|%(uploader)s|%(duration_string)s|%(view_count)s|%(webpage_url)s|%(thumbnail)s|%(description)s|%(upload_date)s|%(width)s|%(height)s',
       '--no-warnings',
       '--quiet'
@@ -408,7 +454,7 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
       ytQuery,
       '-f', 'best[height<=720]/best', // Preferir 720p o menos para WhatsApp
       '--no-playlist',
-      '--cookies', '/home/admin/all_cookies.txt',
+      ...buildYtDlpCommonArgs(),
       '-o', outputTemplate,
       '--progress',
       '--newline',
