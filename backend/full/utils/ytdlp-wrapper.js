@@ -1,6 +1,10 @@
 import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 function ensureDir(dir) {
   try { fs.mkdirSync(dir, { recursive: true }) } catch {}
@@ -57,6 +61,66 @@ function resolveYtDlpCommand() {
   }
 
   return null
+}
+
+function parseCookiesFromFile(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8')
+    const lines = content.split(/\r?\n/)
+    const pairs = []
+    for (const rawLine of lines) {
+      const line = rawLine.trim()
+      if (!line || line.startsWith('#')) continue
+      const parts = line.split('\t')
+      if (parts.length >= 7) {
+        const name = parts[5]
+        const value = parts[6]
+        if (name) pairs.push(`${name}=${value}`)
+        continue
+      }
+      const eqIndex = line.indexOf('=')
+      if (eqIndex > 0) {
+        const name = line.slice(0, eqIndex).trim()
+        const value = line.slice(eqIndex + 1).trim()
+        if (name) pairs.push(`${name}=${value}`)
+      }
+    }
+    return pairs.length ? pairs.join('; ') : null
+  } catch {
+    return null
+  }
+}
+
+function normalizeCookieHeader(raw) {
+  if (!raw) return null
+  const tokens = String(raw)
+    .split(/;|\n|\r/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+  return tokens.length ? tokens.join('; ') : null
+}
+
+function resolveCookiesArgsFromEnv() {
+  const args = []
+  try {
+    const envFile = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
+    if (envFile && fs.existsSync(envFile)) return ['--cookies', envFile]
+
+    // Try local defaults under backend/full
+    const candidates = [
+      path.join(__dirname, '..', 'all_cookies.txt'),
+      path.join(__dirname, '..', 'all_cookie.txt'),
+      path.join(process.cwd(), 'backend', 'full', 'all_cookies.txt'),
+      path.join(process.cwd(), 'backend', 'full', 'all_cookie.txt'),
+    ]
+    for (const p of candidates) {
+      try { if (fs.existsSync(p)) return ['--cookies', p] } catch {}
+    }
+
+    const header = normalizeCookieHeader(process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES)
+    if (header) return ['--add-header', `Cookie: ${header}`]
+  } catch {}
+  return args
 }
 
 function hasCommand(cmd, args = ['--version']) {
@@ -128,6 +192,9 @@ export async function downloadWithYtDlp({
 
   // Avoid full playlists unless explicitly desired
   args.push('--no-playlist')
+
+  // Cookies from env or local defaults
+  try { args.push(...resolveCookiesArgsFromEnv()) } catch {}
 
   // Prefer mp3 audio when audioOnly
   if (format) {
