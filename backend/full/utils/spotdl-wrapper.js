@@ -102,7 +102,27 @@ export async function downloadWithSpotdl({
     if (found) { cmd = found.c; preArgs = found.p }
   }
 
-  const child = spawn(cmd, [...preArgs, ...args], { windowsHide: true })
+  // Map Spotify credentials from our env to what spotdl expects (spotipy)
+  const childEnv = { ...process.env }
+  try {
+    if (!childEnv.SPOTIPY_CLIENT_ID && process.env.SPOTIFY_CLIENT_ID) {
+      childEnv.SPOTIPY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID
+    }
+    if (!childEnv.SPOTIPY_CLIENT_SECRET && process.env.SPOTIFY_CLIENT_SECRET) {
+      childEnv.SPOTIPY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET
+    }
+  } catch {}
+  // Optional flags
+  try {
+    const threads = process.env.SPOTDL_THREADS && String(process.env.SPOTDL_THREADS).trim()
+    if (threads) args.push('--threads', threads)
+  } catch {}
+  try {
+    const wantUserAuth = String(process.env.SPOTDL_USER_AUTH || '').toLowerCase() === 'true'
+    if (wantUserAuth) args.push('--user-auth')
+  } catch {}
+
+  const child = spawn(cmd, [...preArgs, ...args], { windowsHide: true, env: childEnv })
 
   let lastPercent = 0
   const percentRe = /(\d{1,3})%/g
