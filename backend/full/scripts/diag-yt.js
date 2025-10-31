@@ -49,31 +49,42 @@ async function main(){
   const hasCookies = Array.isArray(cargs) && cargs.length > 0
   let extractor = process.env.YTDLP_EXTRACTOR_ARGS || ''
   if (hasCookies) {
-    if (!extractor || /player_client=android/i.test(extractor)) extractor = 'youtube:player_client=web_safari,lang=en,gl=US'
+    if (!extractor || /player_client=android/i.test(extractor)) extractor = 'youtube:player_client=web_safari'
   } else {
-    if (!extractor) extractor = 'youtube:player_client=android,lang=en,gl=US'
+    if (!extractor) extractor = 'youtube:player_client=android'
   }
-  const args = [
+  const buildArgs = (extra=[]) => [
     '--ignore-config',
-    ...cargs,
+    ...extra,
     '--user-agent', (process.env.YTDLP_USER_AGENT || (hasCookies
       ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15'
       : 'com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip')),
     '--extractor-args', extractor,
-    '-J', 'ytsearch1:tears'
+    '--flat-playlist',
+    '-J', 'ytsearch10:tears'
   ]
-  const run = det.via === 'python'
-    ? tryRun(det.cmd, ['-m', 'yt_dlp', ...args])
-    : tryRun(det.cmd, args)
-  if (run.error || run.status !== 0){
-    fail('yt-dlp search falló:\n' + (run.stderr || run.stdout))
-    return
+  const run1 = det.via === 'python'
+    ? tryRun(det.cmd, ['-m', 'yt_dlp', ...buildArgs(cargs)])
+    : tryRun(det.cmd, buildArgs(cargs))
+  let n = 0
+  if (!run1.error && run1.status === 0) {
+    try { const j = JSON.parse(run1.stdout||'{}'); n = Array.isArray(j.entries) ? j.entries.length : 0 } catch {}
   }
-  try {
-    const j = JSON.parse(run.stdout||'{}')
-    const n = Array.isArray(j.entries) ? j.entries.length : 0
-    log('yt-dlp search OK. entries =', n)
-  } catch(e){ fail('JSON inválido en salida de yt-dlp') }
+  log('yt-dlp search (cookies) entries =', n)
+  if (n === 0) {
+    // Retry no-cookies with web extractor
+    const noCookies = (arr)=>{
+      const out=[]; for (let i=0;i<arr.length;i++){ const a=arr[i]; if(a==='--cookies'||a==='--add-header'){i++;continue} if(a==='--cookies-from-browser'){continue} if(a==='--extractor-args'){i++; out.push('--extractor-args','youtube:player_client=web_safari'); continue} out.push(a)} if(!out.includes('--extractor-args')) out.push('--extractor-args','youtube:player_client=web_safari'); return out }
+    const args2 = noCookies(buildArgs([]))
+    const run2 = det.via === 'python'
+      ? tryRun(det.cmd, ['-m','yt_dlp', ...args2])
+      : tryRun(det.cmd, args2)
+    if (!run2.error && run2.status === 0) {
+      try { const j2 = JSON.parse(run2.stdout||'{}'); const n2 = Array.isArray(j2.entries) ? j2.entries.length : 0; log('yt-dlp search (no-cookies) entries =', n2) } catch { fail('JSON inválido en salida (no-cookies)') }
+    } else {
+      fail('yt-dlp search (no-cookies) falló:\n' + (run2.stderr || run2.stdout))
+    }
+  }
 }
 
 main().catch(e=>{ fail(e?.message||e) })

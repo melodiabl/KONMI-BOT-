@@ -244,9 +244,9 @@ export async function downloadWithYtDlp({
   const envExtractor = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || ''
   let baseExtractor = envExtractor
   if (cookiesPresent) {
-    if (!baseExtractor || /player_client=android/i.test(baseExtractor)) baseExtractor = 'youtube:player_client=web_safari,lang=en,gl=US'
+    if (!baseExtractor || /player_client=android/i.test(baseExtractor)) baseExtractor = 'youtube:player_client=web_safari'
   } else {
-    if (!baseExtractor) baseExtractor = 'youtube:player_client=android,lang=en,gl=US'
+    if (!baseExtractor) baseExtractor = 'youtube:player_client=android'
   }
   const poToken = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || ''
   let extractorArgs = baseExtractor

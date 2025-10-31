@@ -20,14 +20,12 @@ const http = axios.create({
 // yt-dlp tuning variables for YouTube reliability on VPS
 const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 const YTDLP_USER_AGENT = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA
-const YTDLP_EXTRACTOR_ARGS_BASE = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=android,lang=en,gl=US'
+const YTDLP_EXTRACTOR_ARGS_BASE = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=android'
 const YTDLP_PO_TOKEN = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || ''
 const buildExtractorArgs = () => {
   let base = YTDLP_EXTRACTOR_ARGS_BASE || ''
   // Asegurar defaults útiles si no están presentes
   if (!/player_client=/.test(base)) base = base ? `${base},youtube:player_client=android` : 'youtube:player_client=android'
-  if (!/lang=/.test(base)) base = `${base},youtube:lang=en`
-  if (!/gl=/.test(base)) base = `${base},youtube:gl=US`
   if (!YTDLP_PO_TOKEN) return base
   const sep = base.includes(',') || base.includes(':') ? ',' : ''
   return `${base}${sep}youtube:po_token=android.gvs+${YTDLP_PO_TOKEN}`
@@ -736,8 +734,8 @@ async function doRequest(provider, url, body, extraCtx) {
       const __hasCookies = Array.isArray(__cookieArgs) && __cookieArgs.length > 0
       const __envExt = process.env.YTDLP_EXTRACTOR_ARGS || ''
       const __dynExtractor = __hasCookies
-        ? (!__envExt || /player_client=android/i.test(__envExt) ? 'youtube:player_client=web_safari,lang=en,gl=US' : __envExt)
-        : (__envExt || 'youtube:player_client=android,lang=en,gl=US')
+        ? (!__envExt || /player_client=android/i.test(__envExt) ? 'youtube:player_client=web_safari' : __envExt)
+        : (__envExt || 'youtube:player_client=android')
       const opts = {
         dumpSingleJson: true,
         noWarnings: true,
@@ -899,8 +897,8 @@ async function doRequest(provider, url, body, extraCtx) {
         const cookiesPresent = commonArgs.some((v) => v === '--cookies' || v === '--add-header' || v === '--cookies-from-browser')
         const envExtSearch = process.env.YTDLP_EXTRACTOR_ARGS || ''
         const dynExtractor = cookiesPresent
-          ? (!envExtSearch || /player_client=android/i.test(envExtSearch) ? 'youtube:player_client=web_safari,lang=en,gl=US' : envExtSearch)
-          : (envExtSearch || 'youtube:player_client=android,lang=en,gl=US')
+          ? (!envExtSearch || /player_client=android/i.test(envExtSearch) ? 'youtube:player_client=web_safari' : envExtSearch)
+          : (envExtSearch || 'youtube:player_client=android')
       if (dynExtractor) commonArgs.push('--extractor-args', dynExtractor)
       // Opcionales de red
       try {
@@ -915,10 +913,9 @@ async function doRequest(provider, url, body, extraCtx) {
         if (cfg && (fs.existsSync?.(cfg) || fs.default?.existsSync?.(cfg))) commonArgs.push('--config-location', cfg)
       } catch {}
 
-      const baseArgs = [...commonArgs, '-J', url]
-      const runOnce = (cmd, extra = []) => new Promise((resolve, reject) => {
+      const runOnce = (cmd, args, extra = []) => new Promise((resolve, reject) => {
         try {
-          const p = spawn(cmd, [...extra, ...baseArgs], { windowsHide: true })
+          const p = spawn(cmd, [...extra, ...args], { windowsHide: true })
           let out = ''
           let err = ''
           p.stdout.on('data', (d) => (out += d.toString()))
@@ -928,58 +925,81 @@ async function doRequest(provider, url, body, extraCtx) {
         } catch (e) { reject(e) }
       })
 
-      const candidates = []
-      if (process.env.YTDLP_PATH) candidates.push({ cmd: process.env.YTDLP_PATH, extra: [] })
-      if (process.env.YTDLP_BIN) candidates.push({ cmd: process.env.YTDLP_BIN, extra: [] })
-      // Windows: considerar binario local incluido en el repo
-      try {
-        if (process.platform === 'win32') {
-          const localExe = path.join(process.cwd(), 'backend', 'full', 'bin', 'yt-dlp.exe')
-          if (fs.existsSync?.(localExe) || fs.default?.existsSync?.(localExe)) {
-            candidates.push({ cmd: localExe, extra: [] })
+      const buildArgs = (args) => [...args, '--flat-playlist', '-J', url]
+      const selectCandidates = () => {
+        const list = []
+        if (process.env.YTDLP_PATH) list.push({ cmd: process.env.YTDLP_PATH, extra: [] })
+        if (process.env.YTDLP_BIN) list.push({ cmd: process.env.YTDLP_BIN, extra: [] })
+        try {
+          if (process.platform === 'win32') {
+            const localExe = path.join(process.cwd(), 'backend', 'full', 'bin', 'yt-dlp.exe')
+            if (fs.existsSync?.(localExe) || fs.default?.existsSync?.(localExe)) list.push({ cmd: localExe, extra: [] })
           }
-        }
-      } catch {}
-      candidates.push({ cmd: 'yt-dlp', extra: [] }, { cmd: 'yt', extra: [] })
+        } catch {}
+        list.push({ cmd: 'yt-dlp', extra: [] }, { cmd: 'yt', extra: [] })
+        return list
+      }
       const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
 
-      let output = null
-      let lastErr = null
-      for (const c of candidates) {
-        try { output = await runOnce(c.cmd, c.extra); lastErr = null; break } catch (e) { lastErr = e }
-      }
-      if (output == null) {
-        for (const py of pyCands) {
-          try { output = await runOnce(py, ['-m', 'yt_dlp']); lastErr = null; break } catch (e) { lastErr = e }
+      async function runSearch(args) {
+        const baseArgs = buildArgs(args)
+        let output = null
+        let lastErr = null
+        for (const c of selectCandidates()) {
+          try { output = await runOnce(c.cmd, baseArgs, c.extra); lastErr = null; break } catch (e) { lastErr = e }
         }
+        if (output == null) {
+          for (const py of pyCands) {
+            try { output = await runOnce(py, buildArgs(['-m','yt_dlp', ...args])); lastErr = null; break } catch (e) { lastErr = e }
+          }
+        }
+        if (output == null) throw lastErr || new Error('yt-dlp no disponible en PATH')
+        let json
+        try { json = JSON.parse(output) } catch (e) { throw new Error('yt-dlp search JSON inválido') }
+        const entries = Array.isArray(json?.entries) ? json.entries : []
+        const mapped = entries.map((v) => {
+          let url = v?.webpage_url || (v?.url && v.url.startsWith?.('http') ? v.url : undefined)
+          if (!url && v?.id) url = `https://www.youtube.com/watch?v=${v.id}`
+          return {
+            title: v?.title,
+            url,
+            videoId: v?.id,
+            duration: v?.duration,
+            views: v?.view_count,
+            author: v?.uploader,
+            thumbnail: v?.thumbnail,
+          }
+        })
+        const results = mapped.filter((r) => {
+          if (!r?.url) return false
+          const u = String(r.url)
+          const isWatch = /youtube\.com\/watch\?/.test(u) && /[?&]v=/.test(u)
+          const isShort = /youtube\.com\/shorts\//.test(u) || /youtu\.be\//.test(u)
+          const isPlaylistOnly = /youtube\.com\/(playlist|channel|@)/.test(u) && !isWatch && !isShort
+          return (isWatch || isShort) && !isPlaylistOnly
+        })
+        return results
       }
-      if (output == null) throw lastErr || new Error('yt-dlp no disponible en PATH')
 
-      let json
-      try { json = JSON.parse(output) } catch (e) { throw new Error('yt-dlp search JSON inválido') }
-      const entries = Array.isArray(json?.entries) ? json.entries : []
-      // Mapear y filtrar para evitar playlist/canal
-      const mapped = entries.map((v) => {
-        const url = v?.webpage_url || (v?.url && v.url.startsWith?.('http') ? v.url : undefined)
-        return {
-          title: v?.title,
-          url,
-          videoId: v?.id,
-          duration: v?.duration,
-          views: v?.view_count,
-          author: v?.uploader,
-          thumbnail: v?.thumbnail,
-        }
-      })
-      const results = mapped.filter((r) => {
-        if (!r?.url) return false
-        const u = String(r.url)
-        // aceptar sólo URLs de video
-        const isWatch = /youtube\.com\/watch\?/.test(u) && /[?&]v=/.test(u)
-        const isShort = /youtube\.com\/shorts\//.test(u) || /youtu\.be\//.test(u)
-        const isPlaylistOnly = /youtube\.com\/(playlist|channel|@)/.test(u) && !isWatch && !isShort
-        return (isWatch || isShort) && !isPlaylistOnly
-      })
+      // 1) Intento con cookies/UA/extractor calculados
+      let results = await runSearch(commonArgs)
+      // 2) Si no hay resultados, reintentar sin cookies y con extractor web
+      if (!results.length) {
+        const stripped = (() => {
+          const out = []
+          for (let i=0; i<commonArgs.length; i++) {
+            const a = commonArgs[i]
+            if (a === '--cookies' || a === '--add-header') { i++; continue }
+            if (a === '--cookies-from-browser') { continue }
+            if (a === '--extractor-args') { i++; out.push('--extractor-args', 'youtube:player_client=web,lang=en,gl=US'); continue }
+            out.push(a)
+          }
+          // Si no había extractor-args, añadir uno web explícito
+          if (!out.includes('--extractor-args')) out.push('--extractor-args', 'youtube:player_client=web,lang=en,gl=US')
+          return out
+        })()
+        try { results = await runSearch(stripped) } catch {}
+      }
       return { data: { __local: true, success: results.length > 0, results }, status: 200 }
     } catch (e) {
       throw new Error('yt-dlp search falló: ' + (e?.message || e))
