@@ -3101,6 +3101,57 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     }
 
     switch (command) {
+      // Comando de actualización y reinicio (owner/superadmin)
+      case "/update": {
+        try {
+          const isOwnerOrSuper = isSpecificOwner(usuario) || (() => { try { return isSuperAdmin(usuario) } catch { return false } })();
+          if (!isOwnerOrSuper) {
+            await sock.sendMessage(remoteJid, { text: "⛔ Solo el owner puede ejecutar /update" }, { quoted: message });
+            break;
+          }
+
+          await sock.sendMessage(remoteJid, { text: "🔄 Iniciando actualización y reinicio...\n\n• Deteniendo subbots\n• Actualizando (git/npm) si aplica\n• Reiniciando proceso" }, { quoted: message });
+
+          // 1) Detener subbots en ejecución (mejor apagado)
+          try {
+            const mod = await import('./inproc-subbots.js');
+            const actives = (mod.listActiveSubbots && mod.listActiveSubbots()) || [];
+            for (const sb of actives) {
+              try { await mod.stopSubbot(sb.code) } catch {}
+            }
+          } catch (_) {}
+
+          // 2) Intentar self-update (git pull + npm ci) si el script está disponible
+          try {
+            const { performSelfUpdate } = await import('./scripts/self-update.mjs');
+            const res = await performSelfUpdate().catch((err) => ({ success: false, error: err?.message }));
+            if (res && res.success) {
+              const pulled = res?.git?.pulled ? `\n• Git: ${res.git.before} → ${res.git.after}` : '\n• Git: sin cambios';
+              await sock.sendMessage(remoteJid, { text: `✅ Self-update completo${pulled}\n• Dependencias: ${res.steps?.find?.(s=>s.step==='deps')?.ok ? 'OK' : 'fallo'}` });
+            } else {
+              await sock.sendMessage(remoteJid, { text: `⚠️ No se pudo completar self-update: ${res?.error || 'indeterminado'}\nContinuando con reinicio...` });
+            }
+          } catch (e) {
+            await sock.sendMessage(remoteJid, { text: `ℹ️ Self-update no disponible (${e?.message || 'sin script'})\nContinuando con reinicio...` });
+          }
+
+          // 3) Reiniciar proceso: spawn nueva instancia y salir
+          try {
+            const { spawn } = await import('child_process');
+            const node = process.argv[0];
+            const args = process.argv.slice(1);
+            const child = spawn(node, args, { detached: true, stdio: 'ignore' });
+            try { child.unref() } catch {}
+            await sock.sendMessage(remoteJid, { text: "♻️ Reiniciando proceso..." });
+          } catch (e) {
+            await sock.sendMessage(remoteJid, { text: `⚠️ Falló el reinicio automático (${e?.message}).\nCierra y vuelve a iniciar manualmente.` });
+          }
+          try { setTimeout(() => { try { process.exit(0) } catch {} }, 500); } catch {}
+        } catch (error) {
+          await sock.sendMessage(remoteJid, { text: `❌ Error en /update: ${error?.message || error}` }, { quoted: message });
+        }
+        break;
+      }
       // Comandos de subbots
       case "/qr":
       case "/subqr":
