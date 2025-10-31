@@ -694,7 +694,10 @@ async function downloadAndSendLocal({
       }
     } else {
       const outDir = useTemp ? makeTempOutDir('ytdlp') : join(__dirname, 'storage', 'downloads', 'ytdlp');
-      const urlOrSearch = isUrl ? input : `ytsearch1:${input}`;
+      // Usar URL resuelta (target) si la búsqueda devolvió un enlace válido; si no, fallback a ytsearch1:input
+      const urlOrSearch = isUrl
+        ? input
+        : ((target && target !== input && /^https?:\/\//i.test(target)) ? target : `ytsearch1:${input}`);
       const dl = await downloadWithYtDlp({ url: urlOrSearch, outDir, audioOnly: isAudio, onProgress });
       filePath = dl.filePath;
     }
