@@ -27,6 +27,99 @@ import { spawnSync } from "child_process";
 import ffmpegStatic from "ffmpeg-static";
 import fluentFfmpeg from "fluent-ffmpeg";
 
+// Auto-detect and persist YouTube cookies file into backend/full/.env
+function findCookiesFile() {
+  try {
+    // 1) If already set and exists, respect it
+    const envHints = [
+      process.env.YOUTUBE_COOKIES_FILE,
+      process.env.YT_COOKIES_FILE,
+    ].filter(Boolean);
+    for (const hint of envHints) {
+      try { if (hint && fs.existsSync(hint)) return hint; } catch {}
+    }
+
+    // 2) Common candidates
+    const candidates = [];
+    // Local project paths
+    candidates.push(join(__dirname, 'all_cookies.txt'));
+    candidates.push(join(__dirname, 'all_cookie.txt'));
+    candidates.push(join(process.cwd(), 'backend', 'full', 'all_cookies.txt'));
+    candidates.push(join(process.cwd(), 'backend', 'full', 'all_cookie.txt'));
+    candidates.push(join(process.cwd(), 'all_cookies.txt'));
+    candidates.push(join(process.cwd(), 'cookies.txt'));
+    // Windows APPDATA
+    try {
+      const appData = process.env.APPDATA;
+      if (appData) {
+        candidates.push(join(appData, 'yt-dlp', 'cookies.txt'));
+      }
+    } catch {}
+    // Linux/Mac typical config dir
+    try {
+      const home = process.env.HOME || process.env.USERPROFILE;
+      if (home) {
+        candidates.push(join(home, '.config', 'yt-dlp', 'cookies.txt'));
+        candidates.push(join(home, '.config', 'yt-dlp', 'cookies'));
+      }
+    } catch {}
+
+    for (const p of candidates) {
+      try { if (p && fs.existsSync(p)) return p; } catch {}
+    }
+  } catch {}
+  return null;
+}
+
+function looksLikeCookies(filePath) {
+  try {
+    const data = fs.readFileSync(filePath, 'utf8');
+    const head = (data || '').split(/\r?\n/).slice(0, 5).join('\n');
+    if (!head) return false;
+    if (head.includes('\t')) return true; // Netscape format (TAB separated)
+    if (/^[A-Za-z0-9_\-]+=.+/m.test(head)) return true; // name=value lines
+  } catch {}
+  return false;
+}
+
+function persistEnvVar(key, value) {
+  try {
+    const envPath = join(__dirname, '.env');
+    let content = '';
+    try { content = fs.readFileSync(envPath, 'utf8'); } catch {}
+    const line = `${key}=${value}`;
+    if (!content) {
+      fs.writeFileSync(envPath, line + '\n', 'utf8');
+      return true;
+    }
+    const re = new RegExp(`^${key}=.*$`, 'm');
+    if (re.test(content)) {
+      content = content.replace(re, line);
+    } else {
+      content = content.trimEnd() + '\n' + line + '\n';
+    }
+    fs.writeFileSync(envPath, content, 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function ensureCookiesConfigured() {
+  try {
+    if (process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE || process.env.YOUTUBE_COOKIES) {
+      return; // already configured
+    }
+    const found = findCookiesFile();
+    if (found && looksLikeCookies(found)) {
+      process.env.YOUTUBE_COOKIES_FILE = found;
+      process.env.YT_COOKIES_FILE = found;
+      persistEnvVar('YOUTUBE_COOKIES_FILE', found);
+      persistEnvVar('YT_COOKIES_FILE', found);
+    }
+  } catch {}
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -180,6 +273,8 @@ function diagnosticsExternalBinaries() {
   }
 }
 
+// Detect cookies file automatically before diagnostics and startup
+ensureCookiesConfigured();
 diagnosticsExternalBinaries();
 
 app.get(

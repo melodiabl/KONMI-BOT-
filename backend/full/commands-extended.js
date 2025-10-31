@@ -124,6 +124,11 @@ function buildYtDlpCommonArgs() {
   if (chunk) args.push('--http-chunk-size', chunk);
   const cacheDir = process.env.YTDLP_CACHE_DIR && String(process.env.YTDLP_CACHE_DIR).trim();
   if (cacheDir) args.push('--cache-dir', cacheDir);
+  // Config file (optional)
+  try {
+    const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim();
+    if (cfg && fs.existsSync(cfg)) args.push('--config-location', cfg);
+  } catch {}
   // Optional: use aria2c if installed or forced via env (faster multi-connection downloader)
   const WANT_ARIA2C = String(process.env.YTDLP_USE_ARIA2C || '').toLowerCase() === 'true';
   const DISABLE_ARIA2C = String(process.env.YTDLP_DISABLE_ARIA2C || '').toLowerCase() === 'true';

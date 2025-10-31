@@ -782,6 +782,8 @@ async function doRequest(provider, url, body, extraCtx) {
           '-f', opts.format,
           '--user-agent', YTDLP_USER_AGENT,
           '--extractor-args', buildExtractorArgs(),
+          // Optional external config
+          ...(() => { try { const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim(); return (cfg && (fs.existsSync?.(cfg) || fs.default?.existsSync?.(cfg))) ? ['--config-location', cfg] : [] } catch { return [] } })(),
           // Anti-detección / ritmo
           ...(process.env.YTDLP_SLEEP_INTERVAL ? ['--sleep-interval', String(process.env.YTDLP_SLEEP_INTERVAL)] : []),
           ...(process.env.YTDLP_SLEEP_MAX ? ['--max-sleep-interval', String(process.env.YTDLP_SLEEP_MAX)] : []),

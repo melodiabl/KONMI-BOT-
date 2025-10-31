@@ -330,3 +330,10 @@ export async function downloadWithYtDlp({
 }
 
 export default { downloadWithYtDlp }
+  // Archivo de configuración opcional (para centralizar flags)
+  try {
+    const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim()
+    if (cfg && fs.existsSync(cfg)) {
+      args.push('--config-location', cfg)
+    }
+  } catch {}
