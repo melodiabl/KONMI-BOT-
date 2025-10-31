@@ -19,12 +19,17 @@ const http = axios.create({
 // yt-dlp tuning variables for YouTube reliability on VPS
 const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 const YTDLP_USER_AGENT = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA
-const YTDLP_EXTRACTOR_ARGS_BASE = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=web,android'
+const YTDLP_EXTRACTOR_ARGS_BASE = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=android,lang=en,gl=US'
 const YTDLP_PO_TOKEN = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || ''
 const buildExtractorArgs = () => {
-  if (!YTDLP_PO_TOKEN) return YTDLP_EXTRACTOR_ARGS_BASE
-  const sep = YTDLP_EXTRACTOR_ARGS_BASE.includes(',') || YTDLP_EXTRACTOR_ARGS_BASE.includes(':') ? ',' : ''
-  return `${YTDLP_EXTRACTOR_ARGS_BASE}${sep}youtube:po_token=android.gvs+${YTDLP_PO_TOKEN}`
+  let base = YTDLP_EXTRACTOR_ARGS_BASE || ''
+  // Asegurar defaults útiles si no están presentes
+  if (!/player_client=/.test(base)) base = base ? `${base},youtube:player_client=android` : 'youtube:player_client=android'
+  if (!/lang=/.test(base)) base = `${base},youtube:lang=en`
+  if (!/gl=/.test(base)) base = `${base},youtube:gl=US`
+  if (!YTDLP_PO_TOKEN) return base
+  const sep = base.includes(',') || base.includes(':') ? ',' : ''
+  return `${base}${sep}youtube:po_token=android.gvs+${YTDLP_PO_TOKEN}`
 }
 
 /**
@@ -863,8 +868,71 @@ async function doRequest(provider, url, body, extraCtx) {
     try {
       // url aquí es el término completo como "ytsearch10:query"
       const execMod = await import('child_process')
+      const fsMod = await import('fs')
+      const pathMod = await import('path')
       const { spawn } = execMod
-      const baseArgs = ['-J', url]
+      const fs = fsMod.default || fsMod
+      const path = pathMod.default || pathMod
+
+      // Construir argumentos comunes tal como en LOCAL__YTDLP_URL: ignorar config de usuario, cookies, UA, extractor-args, IPv4, etc.
+      const commonArgs = []
+      try { if (String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true') commonArgs.push('--ignore-config') } catch {}
+      // Cookies: preferir archivo; fallback a header Cookie
+      try {
+        const envP = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
+        const candidates = [
+          envP,
+          path.join(process.cwd(), 'backend', 'full', 'all_cookies.txt'),
+          path.join(process.cwd(), 'backend', 'full', 'all_cookie.txt'),
+          '/home/admin/all_cookies.txt',
+          '/home/admin/all_cookie.txt',
+          '/home/admin/KONMI-BOT-/backend/full/all_cookies.txt',
+          '/home/admin/KONMI-BOT-/backend/full/all_cookie.txt',
+        ].filter(Boolean)
+        let picked = null
+        for (const p of candidates) {
+          try { if (p && (fs.existsSync?.(p) || fs.default?.existsSync?.(p))) { picked = p; break } } catch {}
+        }
+        if (picked) {
+          try {
+            const raw = fs.readFileSync(picked)
+            // Detect UTF-8 BOM (0xEF 0xBB 0xBF)
+            const hasBOM = raw && raw.length >= 3 && raw[0] === 0xEF && raw[1] === 0xBB && raw[2] === 0xBF
+            if (hasBOM) {
+              // Crear copia sin BOM en tmp y usarla
+              const tmpDir = path.join(process.cwd(), 'backend', 'full')
+              const outPath = path.join(tmpDir, '.cookies.sanitized.txt')
+              try { fs.writeFileSync(outPath, raw.slice(3)) } catch {}
+              commonArgs.push('--cookies', outPath)
+            } else {
+              commonArgs.push('--cookies', picked)
+            }
+          } catch {
+            commonArgs.push('--cookies', picked)
+          }
+        }
+        else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
+          commonArgs.push('--add-header', `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`)
+        }
+      } catch {}
+      // UA y extractor-args
+      if (YTDLP_USER_AGENT) commonArgs.push('--user-agent', YTDLP_USER_AGENT)
+      const extractorArgs = buildExtractorArgs()
+      if (extractorArgs) commonArgs.push('--extractor-args', extractorArgs)
+      // Opcionales de red
+      try {
+        if (process.env.YTDLP_BUFFER_SIZE) commonArgs.push('--buffer-size', String(process.env.YTDLP_BUFFER_SIZE))
+        if (process.env.YTDLP_RETRIES) commonArgs.push('--retries', String(process.env.YTDLP_RETRIES))
+        if (process.env.YTDLP_FRAGMENT_RETRIES) commonArgs.push('--fragment-retries', String(process.env.YTDLP_FRAGMENT_RETRIES))
+        if (String(process.env.YTDLP_FORCE_IPV4 || '').toLowerCase() === 'true') commonArgs.push('-4')
+        if (process.env.YTDLP_HTTP_CHUNK_SIZE) commonArgs.push('--http-chunk-size', String(process.env.YTDLP_HTTP_CHUNK_SIZE))
+        if (process.env.YTDLP_CONCURRENT_FRAGMENTS) commonArgs.push('--concurrent-fragments', String(process.env.YTDLP_CONCURRENT_FRAGMENTS))
+        // Config opcional externa
+        const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim()
+        if (cfg && (fs.existsSync?.(cfg) || fs.default?.existsSync?.(cfg))) commonArgs.push('--config-location', cfg)
+      } catch {}
+
+      const baseArgs = [...commonArgs, '-J', url]
       const runOnce = (cmd, extra = []) => new Promise((resolve, reject) => {
         try {
           const p = spawn(cmd, [...extra, ...baseArgs], { windowsHide: true })
@@ -880,6 +948,15 @@ async function doRequest(provider, url, body, extraCtx) {
       const candidates = []
       if (process.env.YTDLP_PATH) candidates.push({ cmd: process.env.YTDLP_PATH, extra: [] })
       if (process.env.YTDLP_BIN) candidates.push({ cmd: process.env.YTDLP_BIN, extra: [] })
+      // Windows: considerar binario local incluido en el repo
+      try {
+        if (process.platform === 'win32') {
+          const localExe = path.join(process.cwd(), 'backend', 'full', 'bin', 'yt-dlp.exe')
+          if (fs.existsSync?.(localExe) || fs.default?.existsSync?.(localExe)) {
+            candidates.push({ cmd: localExe, extra: [] })
+          }
+        }
+      } catch {}
       candidates.push({ cmd: 'yt-dlp', extra: [] }, { cmd: 'yt', extra: [] })
       const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
 

@@ -190,6 +190,14 @@ export async function downloadWithYtDlp({
     args.push('--ignore-config')
   }
 
+  // Optional external config file (centralized flags)
+  try {
+    const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim()
+    if (cfg && fs.existsSync(cfg)) {
+      args.push('--config-location', cfg)
+    }
+  } catch {}
+
   // Avoid full playlists unless explicitly desired
   args.push('--no-playlist')
 
@@ -401,10 +409,3 @@ export async function downloadWithYtDlp({
 }
 
 export default { downloadWithYtDlp }
-  // Archivo de configuración opcional (para centralizar flags)
-  try {
-    const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim()
-    if (cfg && fs.existsSync(cfg)) {
-      args.push('--config-location', cfg)
-    }
-  } catch {}
