@@ -145,3 +145,24 @@ export async function downloadWithSpotdl({
 }
 
 export default { downloadWithSpotdl }
+
+export function isSpotdlAvailable() {
+  try {
+    if (process.env.SPOTDL_PATH && fs.existsSync(process.env.SPOTDL_PATH)) {
+      const r = spawnSync(process.env.SPOTDL_PATH, ['--version'], { encoding: 'utf8', windowsHide: true })
+      if (!r.error && r.status === 0) return true
+    }
+  } catch {}
+  try {
+    const r = spawnSync('spotdl', ['--version'], { encoding: 'utf8', windowsHide: true })
+    if (!r.error && r.status === 0) return true
+  } catch {}
+  const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
+  for (const py of pyCands) {
+    try {
+      const r = spawnSync(py, ['-m', 'spotdl', '--version'], { encoding: 'utf8', windowsHide: true })
+      if (!r.error && r.status === 0) return true
+    } catch {}
+  }
+  return false
+}

@@ -120,6 +120,54 @@ function ensureCookiesConfigured() {
   } catch {}
 }
 
+// Auto-detect spotdl and persist SPOTDL_PATH for stability (used by wrappers)
+function resolveSpotdlPath() {
+  try {
+    // 1) Respect existing SPOTDL_PATH if it works
+    if (process.env.SPOTDL_PATH) {
+      try {
+        const r = spawnSync(process.env.SPOTDL_PATH, ['--version'], { encoding: 'utf8', windowsHide: true });
+        if (!r.error && (r.status === 0 || typeof r.status === 'undefined')) return process.env.SPOTDL_PATH;
+      } catch {}
+    }
+
+    // 2) Try plain 'spotdl'
+    try {
+      const r2 = spawnSync('spotdl', ['--version'], { encoding: 'utf8', windowsHide: true });
+      if (!r2.error && (r2.status === 0 || typeof r2.status === 'undefined')) {
+        // Resolve path with where/which when possible
+        try {
+          const cmd = process.platform === 'win32' ? 'where' : 'which';
+          const rpath = spawnSync(cmd, ['spotdl'], { encoding: 'utf8', windowsHide: true });
+          const out = (rpath.stdout || '').split(/\r?\n/).filter(Boolean)[0];
+          return out || 'spotdl';
+        } catch { return 'spotdl' }
+      }
+    } catch {}
+
+    // 3) Try python -m spotdl
+    const py = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'];
+    for (const p of py) {
+      try {
+        const r3 = spawnSync(p, ['-m', 'spotdl', '--version'], { encoding: 'utf8', windowsHide: true });
+        if (!r3.error && (r3.status === 0 || typeof r3.status === 'undefined')) return `${p} -m spotdl`;
+      } catch {}
+    }
+  } catch {}
+  return null;
+}
+
+function ensureSpotdlConfigured() {
+  try {
+    if (process.env.SPOTDL_PATH) return;
+    const resolved = resolveSpotdlPath();
+    if (resolved) {
+      process.env.SPOTDL_PATH = resolved;
+      persistEnvVar('SPOTDL_PATH', resolved);
+    }
+  } catch {}
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -275,6 +323,7 @@ function diagnosticsExternalBinaries() {
 
 // Detect cookies file automatically before diagnostics and startup
 ensureCookiesConfigured();
+ensureSpotdlConfigured();
 diagnosticsExternalBinaries();
 
 app.get(

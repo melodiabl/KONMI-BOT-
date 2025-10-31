@@ -1,4 +1,4 @@
-import './config.js';
+﻿import './config.js';
 // Baileys se cargará dinámicamente para permitir forks modificados
 let baileys = null;
 let DisconnectReason,
@@ -15,7 +15,7 @@ import fs from "fs";
 import readline from "readline";
 import db from "./db.js";
 import logger from "./config/logger.js";
-import { downloadWithSpotdl } from "./utils/spotdl-wrapper.js";
+import { downloadWithSpotdl, isSpotdlAvailable } from "./utils/spotdl-wrapper.js";
 import { downloadWithYtDlp } from "./utils/ytdlp-wrapper.js";
 import { join } from "path";
 import { promises as fsp } from "fs";
@@ -68,6 +68,7 @@ function withTimeoutController(timeoutMs = DEFAULT_EXTERNAL_TIMEOUT_MS) {
 async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_EXTERNAL_TIMEOUT_MS) {
   const { controller, timer } = withTimeoutController(timeoutMs);
   try {
+    const spotdlAvail = isSpotdlAvailable();
     const response = await fetch(url, { ...options, signal: controller.signal });
     return response;
   } finally {
@@ -528,7 +529,7 @@ async function downloadAndSendLocal({
 
   try {
     const apis = await import('./utils/api-providers.js');
-    if (isAudio && (preferSpotdl || (!isUrl && process.env.SPOTDL_PATH))) {
+    if (isAudio && (preferSpotdl || (!isUrl && spotdlAvail))) {
       // Intentar metadatos desde Spotify si hay texto
       if (!isUrl && typeof apis.searchSpotify === 'function') {
         try {
@@ -672,7 +673,7 @@ async function downloadAndSendLocal({
       try { const rp = path.resolve(p); const rr = path.resolve(TMP_ROOT); return rp === rr || rp.startsWith(rr + path.sep); } catch { return false }
     };
 
-    if (isAudio && (preferSpotdl || isSpotify || (!isUrl && process.env.SPOTDL_PATH))) {
+    if (isAudio && (preferSpotdl || isSpotify || (!isUrl && spotdlAvail))) {
       const outDir = useTemp ? makeTempOutDir('spotdl') : join(__dirname, 'storage', 'downloads', 'spotdl');
       try {
         const dl = await downloadWithSpotdl({ queryOrUrl: input, outDir, onProgress });
@@ -846,7 +847,7 @@ async function handleUnifiedAudioDownload({ sock, remoteJid, message, args, usua
   if (!isUrl) {
     try {
       const { searchSpotify, searchYouTubeMusic } = await import('./utils/api-providers.js');
-      const hasSpotdl = Boolean(process.env.SPOTDL_PATH);
+      const hasSpotdl = isSpotdlAvailable();
       if (hasSpotdl && !localOnly) {
         let sp = null; try { sp = await searchSpotify(input); } catch {}
         if (sp?.success && sp.url) {
@@ -5873,7 +5874,7 @@ Cuando desconectes el subbot de WhatsApp, se eliminará automáticamente del sis
           if (!isUrl) {
             try {
               const { searchSpotify, searchYouTubeMusic } = await import('./utils/api-providers.js');
-              const hasSpotdl = Boolean(process.env.SPOTDL_PATH);
+              const hasSpotdl = isSpotdlAvailable();
               if (hasSpotdl) {
                 let sp = null;
                 try { sp = await searchSpotify(input); } catch {}
