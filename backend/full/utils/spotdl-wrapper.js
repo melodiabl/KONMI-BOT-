@@ -48,20 +48,29 @@ export async function downloadWithSpotdl({
   if (ffmpegPath) {
     args.push('--ffmpeg', ffmpegPath)
   }
-  // Prefer YouTube backends when needed (spotdl v4: --audio)
-  args.push('--audio', 'youtube', 'youtube-music')
+  // Prefer audio providers (configurable). Default: piped first to avoid strict YT web clients
+  try {
+    const order = (process.env.SPOTDL_AUDIO_PROVIDERS || 'piped youtube youtube-music')
+      .split(/[\s,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (order.length) args.push('--audio', ...order)
+  } catch { args.push('--audio', 'piped', 'youtube', 'youtube-music') }
   // Pass cookies to yt-dlp inside spotdl when available
   try {
-    const envCookie = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-    const localCookies = [
-      path.join(outDir, '..', 'all_cookies.txt'),
-      path.join(outDir, '..', 'all_cookie.txt')
-    ]
-    const cookieFile = envCookie && fs.existsSync(envCookie)
-      ? envCookie
-      : (localCookies.find(p => { try { return fs.existsSync(p) } catch { return false } }) || null)
-    if (cookieFile) {
-      args.push('--cookie-file', cookieFile)
+    const skipCookies = String(process.env.SPOTDL_NO_YT_COOKIES || '').toLowerCase() === 'true'
+    if (!skipCookies) {
+      const envCookie = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
+      const localCookies = [
+        path.join(outDir, '..', 'all_cookies.txt'),
+        path.join(outDir, '..', 'all_cookie.txt')
+      ]
+      const cookieFile = envCookie && fs.existsSync(envCookie)
+        ? envCookie
+        : (localCookies.find(p => { try { return fs.existsSync(p) } catch { return false } }) || null)
+      if (cookieFile) {
+        args.push('--cookie-file', cookieFile)
+      }
     }
   } catch {}
   // Query/URL at the end

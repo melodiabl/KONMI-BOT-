@@ -1,4 +1,4 @@
-﻿import './config.js';
+import './config.js';
 // Baileys se cargará dinámicamente para permitir forks modificados
 let baileys = null;
 let DisconnectReason,
@@ -516,8 +516,7 @@ async function downloadAndSendLocal({
   quoted,
 }) {
   const isUrl = /^(https?:\/\/)/i.test(input);
-  const isSpotify = /open\.spotify\.com\/track\//i.test(input);
-  const isYouTube = /(youtube\.com|youtu\.be)/i.test(input);
+   /(youtube\.com|youtu\.be)/i.test(input);
   const isAudio = String(kind) === 'audio';
   // ===== Metadatos estáticos (no se editan) =====
   let metaTitle = null;
@@ -529,7 +528,7 @@ async function downloadAndSendLocal({
 
   try {
     const apis = await import('./utils/api-providers.js');
-    if (isAudio && (preferSpotdl || (!isUrl && spotdlAvail))) {
+    if (isAudio && (preferSpotdl)) {
       // Intentar metadatos desde Spotify si hay texto
       if (!isUrl && typeof apis.searchSpotify === 'function') {
         try {
@@ -673,7 +672,7 @@ async function downloadAndSendLocal({
       try { const rp = path.resolve(p); const rr = path.resolve(TMP_ROOT); return rp === rr || rp.startsWith(rr + path.sep); } catch { return false }
     };
 
-    if (isAudio && (preferSpotdl || isSpotify || (!isUrl && spotdlAvail))) {
+    if (isAudio && (preferSpotdl || isSpotify)) {
       const outDir = useTemp ? makeTempOutDir('spotdl') : join(__dirname, 'storage', 'downloads', 'spotdl');
       try {
         const dl = await downloadWithSpotdl({ queryOrUrl: input, outDir, onProgress });
@@ -686,7 +685,9 @@ async function downloadAndSendLocal({
           throw new Error('spotdl invalid output');
         }
       } catch (e) {
-        // Fallback a YouTube si SpotDL falla
+        // Fallback a YouTube si SpotDL falla (salvo que se fuerce solo SpotDL)
+        const spotdlOnly = String(process.env.MEDIA_SPOTDL_ONLY || '').toLowerCase() === 'true';
+        if (spotdlOnly) throw e;
         const yOut = useTemp ? makeTempOutDir('ytdlp') : join(__dirname, 'storage', 'downloads', 'ytdlp');
         const urlOrSearch = isUrl ? input : `ytsearch1:${input}`;
         const dl2 = await downloadWithYtDlp({ url: urlOrSearch, outDir: yOut, audioOnly: true, onProgress });
