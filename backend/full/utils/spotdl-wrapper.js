@@ -40,16 +40,31 @@ export async function downloadWithSpotdl({
 }) {
   ensureDir(outDir)
   const args = []
-  // Template simple para nombre final
-  args.push('-p', '{title}.{ext}')
-  args.push('--output', outDir)
-  args.push('--output-format', outputFormat)
+  // Output file template in the destination directory
+  const outTemplate = path.join(outDir, '{title}.{ext}')
+  args.push('--output', outTemplate)
+  // Format (spotdl v4 uses --format)
+  if (outputFormat) args.push('--format', outputFormat)
   if (ffmpegPath) {
     args.push('--ffmpeg', ffmpegPath)
   }
-  // Preferir YouTube si fuera necesario
-  args.push('--use-youtube')
-  // Query/URL al final
+  // Prefer YouTube backends when needed (spotdl v4: --audio)
+  args.push('--audio', 'youtube', 'youtube-music')
+  // Pass cookies to yt-dlp inside spotdl when available
+  try {
+    const envCookie = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
+    const localCookies = [
+      path.join(outDir, '..', 'all_cookies.txt'),
+      path.join(outDir, '..', 'all_cookie.txt')
+    ]
+    const cookieFile = envCookie && fs.existsSync(envCookie)
+      ? envCookie
+      : (localCookies.find(p => { try { return fs.existsSync(p) } catch { return false } }) || null)
+    if (cookieFile) {
+      args.push('--cookie-file', cookieFile)
+    }
+  } catch {}
+  // Query/URL at the end
   args.push(queryOrUrl)
 
   // Resolver binario de spotdl de forma adaptativa
@@ -127,8 +142,8 @@ export async function downloadWithSpotdl({
     })
   })
 
-  // Pick latest mp3 created file in outDir
-  const filePath = pickLatestFile(outDir, ['mp3'])
+  // Pick latest created file matching requested format
+  const filePath = pickLatestFile(outDir, [String(outputFormat).toLowerCase()])
   if (!filePath) {
     throw new Error('No se encontró ningún archivo generado por spotdl')
   }
