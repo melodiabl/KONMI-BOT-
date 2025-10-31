@@ -121,6 +121,10 @@ export async function downloadWithYtDlp({
     }
   }
   const args = []
+  // Allow opting out from user/system yt-dlp config files which may conflict
+  if (String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true') {
+    args.push('--ignore-config')
+  }
 
   // Avoid full playlists unless explicitly desired
   args.push('--no-playlist')

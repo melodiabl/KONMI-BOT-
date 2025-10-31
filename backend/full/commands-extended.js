@@ -101,6 +101,10 @@ function resolveCookiesArgs() {
 
 function buildYtDlpCommonArgs() {
   const args = [];
+  // Optional: ignore user/system config files to avoid conflicts
+  if (String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true') {
+    args.push('--ignore-config');
+  }
   // Cookies
   args.push(...resolveCookiesArgs());
   // UA and extractor-args

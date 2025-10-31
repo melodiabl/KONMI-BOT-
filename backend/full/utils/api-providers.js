@@ -776,6 +776,7 @@ async function doRequest(provider, url, body, extraCtx) {
           }
         } catch {}
         const commonArgs = [
+          ...(() => { try { return String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true' ? ['--ignore-config'] : [] } catch { return [] } })(),
           '--dump-single-json',
           '--no-warnings',
           '--retries', '1',
