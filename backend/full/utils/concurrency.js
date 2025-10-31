@@ -3,6 +3,7 @@ import os from 'os'
 const cpuCount = typeof os.cpus === 'function' ? os.cpus().length : 2
 const DEFAULT_MEDIA_LIMIT = Number.isFinite(cpuCount) ? Math.max(2, Math.min(6, cpuCount)) : 3
 const MEDIA_MAX_CONCURRENCY = parseInt(process.env.MEDIA_MAX_CONCURRENCY || DEFAULT_MEDIA_LIMIT, 10)
+const MEDIA_PER_CHAT_CONCURRENCY = parseInt(process.env.MEDIA_PER_CHAT_CONCURRENCY || '1', 10)
 
 class Limiter {
   constructor(limit = 3) {
@@ -37,5 +38,19 @@ class Limiter {
 
 export const mediaLimiter = new Limiter(MEDIA_MAX_CONCURRENCY)
 
-export default { mediaLimiter }
+// Limiter por chat para evitar que un solo chat acapare todos los recursos
+const perChat = new Map()
 
+function getChatLimiter(chatId) {
+  if (!chatId || MEDIA_PER_CHAT_CONCURRENCY <= 0) return null
+  let l = perChat.get(chatId)
+  if (!l) { l = new Limiter(MEDIA_PER_CHAT_CONCURRENCY); perChat.set(chatId, l) }
+  return l
+}
+
+// Modo sin colas ni límites: entrega permiso inmediato y no bloquea
+export async function acquireMediaPermit(_chatId) {
+  return () => {}
+}
+
+export default { mediaLimiter, acquireMediaPermit }

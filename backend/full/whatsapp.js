@@ -20,7 +20,7 @@ import { downloadWithYtDlp } from "./utils/ytdlp-wrapper.js";
 import { join } from "path";
 import { promises as fsp } from "fs";
 import os from "os";
-import { mediaLimiter } from "./utils/concurrency.js";
+import { acquireMediaPermit } from "./utils/concurrency.js";
 import {
   generateSubbotPairingCode,
   generateSubbotQR,
@@ -376,53 +376,55 @@ function ensureMentionJid(usuario) {
   return `${id}@s.whatsapp.net`;
 }
 
-  // Registro global de mensajes de progreso (throttle por invocación)
-  const __progressRegistry = new Map(); // key => { key, lastAt }
+// Registro global de mensajes de progreso (1 por chat+contexto)
+const __progressRegistry = new Map(); // key => { key, lastAt }
 
-  function createProgressMessenger(sock, remoteJid, initialText, { contextLabel, initialMessageExtra } = {}) {
+function createProgressMessenger(sock, remoteJid, initialText, { contextLabel, initialMessageExtra, singleton = true } = {}) {
   let progressKey = null;
   let queue = Promise.resolve();
   const logContext = contextLabel ? ` ${contextLabel}` : "";
-    // Mensaje por invocación: clave única por chat + contexto + instancia
-    const unique = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-    const regKey = `${remoteJid}:${contextLabel || 'default'}:${unique}`;
+  // Clave estable por chat+contexto para evitar barras duplicadas
+  const regKey = `${remoteJid}:${contextLabel || 'default'}`;
+  const known = singleton ? __progressRegistry.get(regKey) : null;
+  if (known?.key) {
+    progressKey = known.key;
+  }
+
+  const touch = (now) => {
+    __progressRegistry.set(regKey, { key: progressKey, lastAt: now || Date.now() });
+  };
 
   const sendText = async (text, initial = false) => {
     try {
-      // Cooldown por chat/contexto (configurable)
       const now = Date.now();
       const last = __progressRegistry.get(regKey);
       if (!initial && last && now - (last.lastAt || 0) < EDIT_COOLDOWN_MS) return;
 
-      if (progressKey && !initial) {
-        // Edición mínima y estable: solo texto + edit (NO reenviar portada en cada update)
+      if (progressKey) {
+        // Editar siempre que tengamos key (incluye envío inicial si ya existía)
         try {
           const edited = await sock.sendMessage(remoteJid, { text, edit: progressKey });
           if (edited?.key) progressKey = edited.key;
-          __progressRegistry.set(regKey, { key: progressKey, lastAt: now });
+          touch(now);
         } catch {}
         return;
       }
+
       // Enviar inicial con portada (si existe); sin fallback de borrado
       const payload = initialMessageExtra && typeof initialMessageExtra === 'object'
         ? { text, ...initialMessageExtra }
         : { text };
-      if (!initial && !progressKey) return;
       const sent = await sock.sendMessage(remoteJid, payload);
-      if (initial || !progressKey) {
-        progressKey = sent?.key || null;
-      }
-      __progressRegistry.set(regKey, { key: progressKey, lastAt: Date.now() });
+      if (sent?.key) progressKey = sent.key;
+      touch();
     } catch (error) {
       logger.warn(
         `No se pudo ${initial ? "enviar" : "actualizar"} mensaje de progreso${logContext}`,
         { error: error?.message },
       );
-      // No limpiar la clave: evita crear mensajes nuevos en siguientes updates
     }
   };
 
-  // Edición forzada con contextInfo (para adjuntar portada al final)
   const sendWithContext = async (text, contextInfo) => {
     try {
       // Asegurar que el texto cambie (algunos clientes ignoran ediciones idénticas)
@@ -451,12 +453,12 @@ function ensureMentionJid(usuario) {
           edited = await sock.sendMessage(remoteJid, { text: editedText, contextInfo: minimalCtx, edit: progressKey });
         }
         if (edited?.key) progressKey = edited.key;
-        __progressRegistry.set(regKey, { key: progressKey, lastAt: Date.now() });
+        touch();
         return;
       }
       const sent = await sock.sendMessage(remoteJid, contextInfo ? { text: editedText, contextInfo } : { text: editedText });
       if (sent?.key) progressKey = sent.key;
-      __progressRegistry.set(regKey, { key: progressKey, lastAt: Date.now() });
+      touch();
     } catch (error) {
       logger.warn(`No se pudo adjuntar portada${logContext}`, { error: error?.message });
     }
@@ -494,7 +496,11 @@ function ensureMentionJid(usuario) {
     }
   };
 
-  return { queueUpdate, queueUpdateWithContext, flush };
+  const close = () => {
+    try { __progressRegistry.delete(regKey); } catch {}
+  };
+
+  return { queueUpdate, queueUpdateWithContext, flush, close };
 }
 
 // Unificador local: descarga con spotdl o yt-dlp y envía (audio/video) con barra
@@ -627,13 +633,15 @@ async function downloadAndSendLocal({
 
   let filePath = null;
   let spinnerTimer = null;
+  let finished = false;
   // Concurrency control: allow multiple downloads but cap total active
   let releaseLimiter = null;
   try {
-    releaseLimiter = await mediaLimiter.acquire();
+    releaseLimiter = await acquireMediaPermit(remoteJid);
     // Throttle de progreso (más suave, cada ~3% o 10% si PROGRESS_LOW_OVERHEAD)
     let last = 0;
     const onProgress = ({ percent }) => {
+      if (finished) return;
       const p = Math.max(0, Math.min(100, Math.round(percent || 0)));
       targetPercent = p;
       const step = PROGRESS_LOW_OVERHEAD ? 10 : 3;
@@ -642,6 +650,7 @@ async function downloadAndSendLocal({
     if (!PROGRESS_LOW_OVERHEAD) {
       spinnerTimer = setInterval(() => {
         try {
+          if (finished) return;
           spinnerIndex = (spinnerIndex + 1) % SPINNER_FRAMES.length;
           smoothStep();
           progress.queueUpdate(render(currentPercent));
@@ -692,7 +701,8 @@ async function downloadAndSendLocal({
     logger.error('Descarga local falló:', e);
     progress.queueUpdate(render(null, '❌ No se pudo descargar.'));
     await progress.flush();
-    try { if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
+    try { finished = true; if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
+    try { progress.close?.(); } catch {}
     // Intentar limpiar directorios temporales creados
     try {
       const base = path.join(os.tmpdir(), 'konmi-bot-media');
@@ -741,7 +751,6 @@ async function downloadAndSendLocal({
 
     const mentions = [ ensureMentionJid(usuario) ].filter(Boolean);
     // Leer a Buffer para evitar fallos de envío con rutas locales
-    const data = await fsp.readFile(filePath);
     if (isAudio) {
       const mime = ext === 'mp3' ? 'audio/mpeg'
         : ext === 'm4a' ? 'audio/mp4'
@@ -751,7 +760,7 @@ async function downloadAndSendLocal({
         : 'audio/mpeg';
       await sock.sendMessage(
         remoteJid,
-        { audio: data, mimetype: mime, ptt: false, fileName: base, mentions },
+        { audio: { url: filePath }, mimetype: mime, ptt: false, fileName: base, mentions },
         { quoted }
       );
     } else {
@@ -760,11 +769,11 @@ async function downloadAndSendLocal({
         : 'video/mp4';
       await sock.sendMessage(
         remoteJid,
-        { video: data, mimetype: mime, fileName: base, mentions },
+        { video: { url: filePath }, mimetype: mime, fileName: base, mentions },
         { quoted }
       );
     }
-    try { clearInterval(spinnerTimer); } catch {}
+    try { finished = true; clearInterval(spinnerTimer); } catch {}
     // Limpiar archivo y carpeta temporal si corresponde
     try {
       const tmpRoot = path.join(os.tmpdir(), 'konmi-bot-media');
@@ -774,6 +783,7 @@ async function downloadAndSendLocal({
         try { const dir = path.dirname(filePath); fs.rmSync(dir, { recursive: true, force: true }); } catch {}
       }
     } catch {}
+    try { progress.close?.(); } catch {}
     return true;
   } catch (sendErr) {
     logger.error('Envío de media falló:', sendErr);
@@ -790,12 +800,13 @@ async function downloadAndSendLocal({
           try { const dir = path.dirname(filePath); fs.rmSync(dir, { recursive: true, force: true }); } catch {}
         }
       } catch {}
-      try { if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
+      try { finished = true; if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
+      try { progress.close?.(); } catch {}
       return true;
     } catch (e2) {
       progress.queueUpdate(render(null, '❌ Error al enviar.'));
       await progress.flush();
-      try { if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
+      try { finished = true; if (spinnerTimer) clearInterval(spinnerTimer); } catch {}
       // Cleanup temporal si existe
       try {
         const tmpRoot = path.join(os.tmpdir(), 'konmi-bot-media');
@@ -805,6 +816,7 @@ async function downloadAndSendLocal({
           try { const dir = path.dirname(filePath); fs.rmSync(dir, { recursive: true, force: true }); } catch {}
         }
       } catch {}
+      try { progress.close?.(); } catch {}
       return false;
     }
   }
@@ -1047,6 +1059,7 @@ async function sendMediaWithProgress({
     : { queueUpdate: async () => {}, flush: async () => {} };
 
   let spinnerTimerNet = null;
+  let finishedNet = false;
   if (showProgress) {
     progress.queueUpdate(
       render(5, `Conectando con el servidor de ${normalizedType}...`),
@@ -1054,6 +1067,7 @@ async function sendMediaWithProgress({
     if (!PROGRESS_LOW_OVERHEAD) {
       spinnerTimerNet = setInterval(() => {
         try {
+          if (finishedNet) return;
           spinnerIndexNet = (spinnerIndexNet + 1) % SPINNER_FRAMES.length;
           smoothStepNet();
           progress.queueUpdate(render(currentPercentNet));
@@ -1069,11 +1083,12 @@ async function sendMediaWithProgress({
   // Concurrency control for network/media jobs
   let releaseLimiterNet = null;
   try {
-    releaseLimiterNet = await mediaLimiter.acquire();
+    releaseLimiterNet = await acquireMediaPermit(remoteJid);
     buffer = await downloadBufferWithProgress(url, {
       timeoutMs,
       onProgress: showProgress
         ? ({ percent }) => {
+            if (finishedNet) return;
             if (Number.isFinite(percent)) {
               const rounded = Math.max(0, Math.min(100, Math.round(percent)));
               targetPercentNet = rounded;
@@ -1095,7 +1110,8 @@ async function sendMediaWithProgress({
     logger.error(`Error descargando ${normalizedType} (${contextLabel || "media"}):`, error);
     progress.queueUpdate(render(lastPercent, "No se pudo completar la descarga."));
     await progress.flush();
-    try { if (spinnerTimerNet) clearInterval(spinnerTimerNet); } catch {}
+    try { finishedNet = true; if (spinnerTimerNet) clearInterval(spinnerTimerNet); } catch {}
+    try { progress.close?.(); } catch {}
     if (typeof getFailureMessage === "function") {
       try {
         const message = getFailureMessage(error, { stage: "download" });
@@ -1134,7 +1150,8 @@ async function sendMediaWithProgress({
       progress.queueUpdate(render(100, "¡Descarga finalizada! Enviando archivo..."));
     }
     await progress.flush();
-    try { if (spinnerTimerNet) clearInterval(spinnerTimerNet); } catch {}
+    try { finishedNet = true; if (spinnerTimerNet) clearInterval(spinnerTimerNet); } catch {}
+    try { progress.close?.(); } catch {}
   }
 
   const messagePayload = {
@@ -2828,6 +2845,57 @@ export async function handleMessage(message, customSock = null, prefix = "") {
       message.message?.templateMessage?.hydratedTemplate?.hydratedContentText ||
       "";
 
+    // Mapear respuestas de botones/flows a comandos
+    try {
+      // Respuestas modernas (interactiveMessage / native flow)
+      const nfr = message.message?.interactiveResponseMessage?.nativeFlowResponseMessage;
+      if (nfr && (nfr.paramsJson || nfr.name)) {
+        try {
+          const params = nfr.paramsJson ? JSON.parse(nfr.paramsJson) : {};
+          const n = (nfr.name || '').toLowerCase();
+          if (n === 'quick_reply' && params.id) {
+            const id = String(params.id);
+            messageText = id.startsWith('/') ? id : `/${id}`;
+          } else if (n === 'single_select' && (params.selectedId || params.id)) {
+            const id = String(params.selectedId || params.id);
+            messageText = id.startsWith('/') ? id : `/${id}`;
+          } else if (n === 'cta_copy' && (params.copy_code || params.id)) {
+            const code = params.copy_code || params.id;
+            messageText = `/copy ${code}`;
+          }
+        } catch (_) {}
+      }
+
+      // Legacy buttons/list/template replies
+      const selectedId =
+        message.message?.templateButtonReplyMessage?.selectedId ||
+        message.message?.buttonsResponseMessage?.selectedButtonId ||
+        message.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+        null;
+      if (selectedId) {
+        if (String(selectedId).startsWith('copy:')) {
+          const code = String(selectedId).slice(5);
+          messageText = `/copy ${code}`;
+        } else {
+          const id = String(selectedId);
+          messageText = id.startsWith('/') ? id : `/${id}`;
+        }
+      } else {
+        const display =
+          message.message?.templateButtonReplyMessage?.selectedDisplayText ||
+          message.message?.buttonsResponseMessage?.selectedDisplayText ||
+          null;
+        if (display) {
+          const d = String(display).toLowerCase();
+          if (/ayuda|help/.test(d)) messageText = '/help';
+          else if (/(generar|nuevo|new).*\bqr\b|\bqr\b/.test(d)) messageText = '/qr';
+          else if (/(generar|nuevo|new).*\bcode\b|\bcódigo\b|\bcodigo\b|\bcode\b/.test(d)) messageText = '/code';
+          else if (/mis\s+subbots|my\s+subbots|mis\s+bots|my\s+bots/.test(d)) messageText = '/mybots';
+          else if (/subbots|bots/.test(d)) messageText = '/bots';
+        }
+      }
+    } catch (_) {}
+
     // Limpiar y normalizar el texto
     messageText = messageText
       // eliminar caracteres invisibles comunes (ZWSP, ZWNJ, ZWJ, BOM)
@@ -2915,8 +2983,10 @@ export async function handleMessage(message, customSock = null, prefix = "") {
       return;
     }
 
-    // Normalizar comando
-    let normalizedText = messageText.trim();
+    // Normalizar y sanear comando
+    const INVISIBLES = /[\u200B-\u200D\uFEFF\u2060\u00AD\u200E\u200F\u202A-\u202E\u061C\u180E\uFE0E\uFE0F]/g;
+    const toAsciiSlash = (s) => String(s||'').replace(/[\uFF0F\u2044\u2215]/g, '/');
+    let normalizedText = toAsciiSlash(messageText).replace(INVISIBLES, '').trim();
     if (normalizedText.startsWith("!") || normalizedText.startsWith(".")) {
       normalizedText = "/" + normalizedText.substring(1);
     }
@@ -2930,7 +3000,10 @@ export async function handleMessage(message, customSock = null, prefix = "") {
     }
 
     const parts = normalizedText.split(/\s+/);
-    const command = parts[0].toLowerCase();
+    let command = (parts[0] || '').toLowerCase();
+    command = toAsciiSlash(command).replace(INVISIBLES, '');
+    const baseCmd = command.replace(/^([\/!.])\s*/, '');
+    if (baseCmd) command = '/' + baseCmd;
     const args = parts.slice(1);
 
     logger.whatsapp.command(command, usuario, isGroup ? remoteJid : null);
@@ -3014,6 +3087,18 @@ export async function handleMessage(message, customSock = null, prefix = "") {
 
     // Solo llegar aqui si el bot esta activo O es un comando de activacion permitido
     let result = null;
+
+    // Router central de comandos (handler.js)
+    try {
+      const { routeCommand } = await import('./handler.js');
+      const routed = await routeCommand({ sock, message, remoteJid, isGroup, usuario, command, args });
+      if (routed && routed.handled === true) {
+        return;
+      }
+    } catch (e) {
+      try { logger.warn('Router de comandos falló', { error: e?.message }); } catch {}
+      // Continuar al switch legacy si falla
+    }
 
     switch (command) {
       // Comandos de subbots
@@ -3111,6 +3196,48 @@ export async function handleMessage(message, customSock = null, prefix = "") {
           { text: codeResponse.message },
           { quoted: message },
         );
+        // Botón para copiar el código al portapapeles
+        try {
+          const copyValue = codeResponse?.pairing || codeResponse?.code || '';
+          if (copyValue) {
+            try {
+              await sock.sendMessage(
+                remoteJid,
+                {
+                  interactiveMessage: {
+                    body: { text: 'Pulsa el botón para copiar el código' },
+                    footer: { text: 'Copiar al portapapeles' },
+                    nativeFlowMessage: {
+                      buttons: [
+                        {
+                          name: 'cta_copy',
+                          buttonParamsJson: JSON.stringify({
+                            display_text: 'Copiar código',
+                            copy_code: copyValue,
+                          }),
+                        },
+                      ],
+                    },
+                  },
+                },
+                { quoted: message },
+              );
+            } catch (nfErr) {
+              // Fallback: template buttons (quick reply). El parser convierte copy:<CODE> a /copy <CODE>
+              await sock.sendMessage(
+                remoteJid,
+                {
+                  text: `🔢 Código: ${copyValue}`,
+                  footer: 'Toca el botón para copiar',
+                  templateButtons: [
+                    { index: 1, quickReplyButton: { id: `copy:${copyValue}`, displayText: 'Copiar código' } },
+                  ],
+                },
+                { quoted: message },
+              );
+            }
+          }
+        } catch (_) {}
         // Si obtuvimos el código del subbot, adjuntar listeners para avisar al conectar
         if (codeResponse?.code) {
           try {

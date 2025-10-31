@@ -10,13 +10,29 @@ import { fileURLToPath } from "url";
 import QRCode from "qrcode";
 import pino from "pino";
 import { EventEmitter } from "events";
-import * as baileys from "@whiskeysockets/baileys";
+// Usar shim para soportar forks como elaina-bail/baileys-mod
+import * as baileys from "./utils/baileys-shim.js";
 import {
   startSubbot,
   stopSubbotRuntime as stopSubbot,
   getSubbotStatus as getRuntimeStatus,
 } from "./lib/subbots.js";
 import { processWhatsAppMedia } from "./file-manager.js";
+import { isSuperAdmin } from "./global-config.js";
+import {
+  handleBots as listUserBots,
+  handleAllBots as listAllBots,
+  handleAddGroup as addGroupCore,
+  handleDelGroup as delGroupCore,
+  handleKick as kickCore,
+  handlePromote as promoteCore,
+  handleDemote as demoteCore,
+  handleLock as lockCore,
+  handleUnlock as unlockCore,
+  handleTag as tagCore,
+  isOwnerOrAdmin as isOwnerOrAdminCore,
+  isRealGroupAdmin as isRealGroupAdminCore,
+} from "./commands-complete.js";
 
 const { makeWASocket, DisconnectReason, useMultiFileAuthState } = baileys;
 
@@ -98,6 +114,198 @@ function normalizePhone(phone) {
   if (!digits) return null;
   if (digits.startsWith("0") && digits.length > 10) return digits.slice(1);
   return digits;
+}
+
+// =========================
+// Router de comandos (mínimo)
+// Nota: NO modifica handlers existentes; solo los invoca.
+// =========================
+
+function onlyDigits(v) { return String(v||'').replace(/[^0-9]/g,''); }
+
+async function isOwnerNumber(usuario) {
+  try {
+    const owner = (process.env.OWNER_WHATSAPP_NUMBER || '595974154768').replace(/[^0-9]/g,'');
+    return onlyDigits(usuario) === owner;
+  } catch { return false }
+}
+
+async function isAdminOfGroup(usuario, grupo) {
+  try {
+    // Usa core consolidado (owner/superadmin o admin real)
+    const ok = await isOwnerOrAdminCore(usuario, grupo);
+    if (ok) return true;
+    return await isRealGroupAdminCore(usuario, grupo);
+  } catch { return false }
+}
+
+export async function routeCommand(ctx) {
+  const { command } = ctx;
+  if (!command || typeof command !== 'string') return { handled: false };
+
+  // Admin/bot
+  if (command === '/bot') return await handleBotRoute(ctx);
+
+  // Subbots
+  if (command === '/bots' || command === '/mybots' || command === '/mibots') return await handleBotsRoute(ctx);
+  // QR y Code: dejar que whatsapp.js maneje los comandos originales
+
+  // Admin grupo
+  if (command === '/addgroup') return await wrapGroup(addGroupCore, ctx);
+  if (command === '/delgroup') return await wrapGroup(delGroupCore, ctx);
+  if (command === '/kick') return await wrapGroupTarget(kickCore, ctx);
+  if (command === '/promote') return await wrapGroupTarget(promoteCore, ctx);
+  if (command === '/demote') return await wrapGroupTarget(demoteCore, ctx);
+  if (command === '/lock') return await wrapGroup(lockCore, ctx);
+  if (command === '/unlock') return await wrapGroup(unlockCore, ctx);
+  if (command === '/tag') return await wrapTag(ctx);
+
+  // Otros comandos: no manejados aquí
+  return { handled: false };
+}
+
+// Contexto simple por chat para mensajes idempotentes y UX mejorada
+const __chatContext = new Map(); // key: chatId -> { events: [{ type, at, actor }] }
+
+function pushChatEvent(chatId, type, actor) {
+  try {
+    const now = Date.now();
+    const ctx = __chatContext.get(chatId) || { events: [] };
+    ctx.events.push({ type, at: now, actor });
+    // Mantener últimos 20 eventos para memoria controlada
+    if (ctx.events.length > 20) ctx.events = ctx.events.slice(-20);
+    __chatContext.set(chatId, ctx);
+  } catch {}
+}
+
+function findLastEvent(chatId, type) {
+  try {
+    const ctx = __chatContext.get(chatId);
+    if (!ctx || !Array.isArray(ctx.events)) return null;
+    for (let i = ctx.events.length - 1; i >= 0; i--) {
+      const ev = ctx.events[i];
+      if (ev && ev.type === type) return ev;
+    }
+  } catch {}
+  return null;
+}
+
+function msToHuman(ms) {
+  try {
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    const d = Math.floor(h / 24);
+    return `${d}d`;
+  } catch { return '' }
+}
+
+async function handleBotRoute({ sock, remoteJid, isGroup, usuario, args }) {
+  // Global OFF/ON (owner)
+  if (args && args[0] === 'global') {
+    const owner = await isOwnerNumber(usuario);
+    if (!owner) {
+      await safeSend(sock, remoteJid, '⛔ Solo el owner puede usar comandos globales');
+      return { handled: true };
+    }
+    const turnOn = args[1] === 'on';
+    if (args[1] !== 'on' && args[1] !== 'off') {
+      await safeSend(sock, remoteJid, 'Uso: /bot global on | /bot global off');
+      return { handled: true };
+    }
+    try {
+      const existing = await db('bot_global_state').first('*');
+      if (existing) await db('bot_global_state').update({ is_on: turnOn }).where({ id: 1 });
+      else await db('bot_global_state').insert({ id: 1, is_on: turnOn });
+      // UX: mensaje idempotente básico con contexto
+      const type = turnOn ? 'bot_global_on' : 'bot_global_off';
+      const last = findLastEvent('GLOBAL', type);
+      pushChatEvent('GLOBAL', type, usuario);
+      const since = last ? ` (desde hace ${msToHuman(Date.now() - last.at)})` : '';
+      await safeSend(sock, remoteJid, turnOn ? `✅ Bot activado globalmente${since}` : `⛔ Bot desactivado globalmente${since}`);
+    } catch (e) {
+      await safeSend(sock, remoteJid, `⚠️ Error cambiando estado global: ${e.message}`);
+    }
+    return { handled: true };
+  }
+
+  // Grupo ON/OFF
+  if (!isGroup) { await safeSend(sock, remoteJid, 'ℹ️ Este comando solo funciona en grupos'); return { handled:true } }
+  const allowed = await isAdminOfGroup(usuario, remoteJid);
+  if (!allowed) { await safeSend(sock, remoteJid, '⛔ Solo owner o administradores del grupo pueden usar /bot on/off.'); return { handled:true } }
+  const turnOn = args && args[0] === 'on';
+  const turnOff = args && args[0] === 'off';
+  if (!turnOn && !turnOff) { await safeSend(sock, remoteJid, 'Uso: /bot on | /bot off | /bot global on | /bot global off'); return { handled:true } }
+  try {
+    const row = await db('group_settings').where({ group_id: remoteJid }).first();
+    let firstTime = false;
+    if (row) {
+      const already = row.is_active === 1 || row.is_active === true;
+      if (already === turnOn) {
+        // Idempotente: ya estaba en ese estado; adjuntar tiempo desde última acción si existe
+        const evType = turnOn ? 'bot_on' : 'bot_off';
+        const last = findLastEvent(remoteJid, evType);
+        pushChatEvent(remoteJid, evType, usuario);
+        const since = last ? ` (desde hace ${msToHuman(Date.now() - last.at)})` : '';
+        await safeSend(sock, remoteJid, turnOn ? `ℹ️ Bot ya estaba activo en este grupo${since}` : `ℹ️ Bot ya estaba desactivado en este grupo${since}`);
+        return { handled:true };
+      }
+      await db('group_settings').where({ group_id: remoteJid }).update({ is_active: turnOn, updated_by: usuario, updated_at: new Date().toISOString() });
+    } else {
+      await db('group_settings').insert({ group_id: remoteJid, is_active: turnOn, updated_by: usuario, updated_at: new Date().toISOString() });
+      firstTime = turnOn; // si no existía y activamos, es primera vez
+    }
+  } catch { /* fallback memoria omitido */ }
+  // Registrar evento en memoria para mensajes con contexto en futuras idempotencias
+  pushChatEvent(remoteJid, turnOn ? 'bot_on' : 'bot_off', usuario);
+  if (turnOn) {
+    await safeSend(sock, remoteJid, firstTime ? '✅ Bot activado por primera vez en este grupo' : '✅ Bot activado en este grupo');
+  } else {
+    await safeSend(sock, remoteJid, '⛔ Bot desactivado en este grupo');
+  }
+  return { handled: true };
+}
+
+async function handleBotsRoute({ sock, remoteJid, usuario, command }) {
+  try {
+    const isMy = command === '/mybots' || command === '/mibots';
+    const res = isMy ? await listUserBots(usuario) : await listAllBots(usuario);
+    const payload = res?.mentions ? { text: res.message, mentions: res.mentions } : { text: res?.message || '⚠️ Error obteniendo subbots' };
+    await sock.sendMessage(remoteJid, payload);
+  } catch { await safeSend(sock, remoteJid, '⚠️ Error obteniendo subbots') }
+  return { handled: true };
+}
+
+// Eliminados handlers locales de /qr y /code para permitir manejo original en whatsapp.js
+
+async function wrapGroup(coreFn, { sock, remoteJid, usuario, isGroup }) {
+  if (!isGroup) { await safeSend(sock, remoteJid, 'ℹ️ Este comando solo funciona en grupos'); return { handled:true } }
+  const ok = await isAdminOfGroup(usuario, remoteJid);
+  if (!ok) { await safeSend(sock, remoteJid, '⛔ Solo owner o administradores del grupo pueden usar este comando.'); return { handled:true } }
+  try { const r = await coreFn(usuario, remoteJid); await safeSend(sock, remoteJid, r?.message || '✅ Listo'); } catch { await safeSend(sock, remoteJid, '⚠️ Error ejecutando comando') }
+  return { handled:true };
+}
+
+async function wrapGroupTarget(coreFn, { sock, remoteJid, usuario, isGroup, args }) {
+  if (!isGroup) { await safeSend(sock, remoteJid, 'ℹ️ Este comando solo funciona en grupos'); return { handled:true } }
+  const ok = await isAdminOfGroup(usuario, remoteJid);
+  if (!ok) { await safeSend(sock, remoteJid, '⛔ Solo owner o administradores del grupo pueden usar este comando.'); return { handled:true } }
+  const target = args?.[0] || '';
+  try { const r = await coreFn(target, usuario, remoteJid); await safeSend(sock, remoteJid, r?.message || '✅ Listo'); } catch { await safeSend(sock, remoteJid, '⚠️ Error ejecutando comando') }
+  return { handled:true };
+}
+
+async function wrapTag({ sock, remoteJid, usuario, message }) {
+  const text = message?.message?.extendedTextMessage?.text || message?.message?.conversation || '';
+  try { const r = await tagCore(text, usuario, remoteJid); await safeSend(sock, remoteJid, r?.message || '✅'); } catch { await safeSend(sock, remoteJid, '⚠️ Error en tag') }
+  return { handled:true };
+}
+
+async function safeSend(sock, jid, text) {
+  try { await sock.sendMessage(jid, { text }); } catch {}
 }
 
 function isSubbotOnline(code) {

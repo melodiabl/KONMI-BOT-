@@ -1,4 +1,5 @@
-import * as baileys from 'baileys-mod';
+// Cargar Baileys desde el shim para soportar múltiples forks
+import * as baileys from './utils/baileys-shim.js';
 import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
@@ -35,6 +36,7 @@ try {
 }
 
 const RAW_CUSTOM_PAIRING = (process.env.PAIRING_CODE || process.env.CUSTOM_PAIRING_CODE || '').toString().trim();
+const PAIRING_ONLY_CUSTOM = String(process.env.PAIRING_ONLY_CUSTOM || process.env.ONLY_CUSTOM_PAIRING || 'false').toLowerCase() === 'true';
 const SANITIZED_CUSTOM_PAIRING = RAW_CUSTOM_PAIRING.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 
 if (!CODE || !DIR) {
@@ -293,18 +295,20 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
               lastError = customError;
               const statusCode = customError?.output?.statusCode || customError?.data?.statusCode;
               console.error('requestPairingCode (custom) falló:', customError);
-              if (!shouldRetry(statusCode)) {
+              if (!shouldRetry(statusCode) || PAIRING_ONLY_CUSTOM) {
                 pairingRequestInFlight = false;
                 emitError(customError?.message || 'Error solicitando pairing code', statusCode);
                 cleanup({ fatal: true, reason: customError?.message });
                 resolve({ status: 'fatal', statusCode, reason: customError?.message });
                 return;
               }
-              console.log('Custom code falló, intentando con código generado automáticamente...');
+              if (!PAIRING_ONLY_CUSTOM) {
+                console.log('Custom code falló, intentando con código generado automáticamente...');
+              }
             }
           }
 
-          if (!customPairingForRequest || customPairingForRequest.length !== 8) {
+          if ((!customPairingForRequest || customPairingForRequest.length !== 8) && !PAIRING_ONLY_CUSTOM) {
             console.log(`Solicitando pairing code a Baileys intento ${attempt}/${maxAttempts}`);
             const keysReady = await waitForAuthKeysReady(6000);
             console.log(`  keysReady(auto)=${keysReady}`);
@@ -312,6 +316,14 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
             console.log('Pairing code recibido:', code);
             emitPairingCode(code);
             pairingRequestInFlight = false;
+            return;
+          }
+          if (PAIRING_ONLY_CUSTOM && (!customPairingForRequest || customPairingForRequest.length !== 8)) {
+            pairingRequestInFlight = false;
+            const msg = 'PAIRING_ONLY_CUSTOM activo pero no hay PAIRING_CODE/CUSTOM_PAIRING_CODE válido (8 caracteres)';
+            emitError(msg, 'no_custom_code');
+            cleanup({ fatal: true, reason: msg });
+            resolve({ status: 'fatal', reason: msg });
             return;
           }
         } catch (error) {

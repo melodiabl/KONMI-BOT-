@@ -59,6 +59,15 @@ function resolveYtDlpCommand() {
   return null
 }
 
+function hasCommand(cmd, args = ['--version']) {
+  try {
+    const r = spawnSync(cmd, args, { encoding: 'utf8', windowsHide: true })
+    return !r.error && (r.status === 0 || typeof r.status === 'undefined')
+  } catch {
+    return false
+  }
+}
+
 /**
  * Download media with yt-dlp. Defaults to extracting audio to mp3.
  * @param {Object} opts
@@ -200,6 +209,31 @@ export async function downloadWithYtDlp({
   if (chunk) args.push('--http-chunk-size', chunk)
   const cacheDir = process.env.YTDLP_CACHE_DIR && String(process.env.YTDLP_CACHE_DIR).trim()
   if (cacheDir) args.push('--cache-dir', cacheDir)
+
+  // Opcionales de rendimiento/fiabilidad
+  const bufferSize = process.env.YTDLP_BUFFER_SIZE && String(process.env.YTDLP_BUFFER_SIZE).trim()
+  if (bufferSize) args.push('--buffer-size', bufferSize)
+  const retries = process.env.YTDLP_RETRIES && String(process.env.YTDLP_RETRIES).trim()
+  if (retries) args.push('--retries', retries)
+  const fragRetries = process.env.YTDLP_FRAGMENT_RETRIES && String(process.env.YTDLP_FRAGMENT_RETRIES).trim()
+  if (fragRetries) args.push('--fragment-retries', fragRetries)
+  const forceIPv4 = String(process.env.YTDLP_FORCE_IPV4 || '').toLowerCase() === 'true'
+  if (forceIPv4) args.push('-4')
+
+  // Usar aria2c si está disponible o si está forzado por env (suele ser más rápido para conexiones múltiples)
+  const WANT_ARIA2C = String(process.env.YTDLP_USE_ARIA2C || '').toLowerCase() === 'true'
+  const DISABLE_ARIA2C = String(process.env.YTDLP_DISABLE_ARIA2C || '').toLowerCase() === 'true'
+  const ariaAvailable = !DISABLE_ARIA2C && hasCommand('aria2c', ['-v'])
+  if (WANT_ARIA2C || ariaAvailable) {
+    // Para video segmentado, aria2c acelera notoriamente. Para solo audio también funciona, pero puede no aportar en algunos orígenes.
+    args.push('--downloader', 'aria2c')
+    const conn = parseInt(process.env.YTDLP_ARIA2C_CONNECTIONS || '16', 10)
+    const split = process.env.YTDLP_ARIA2C_SPLIT || String(Math.min(16, Math.max(4, conn)))
+    const fileAlloc = process.env.YTDLP_ARIA2C_FILE_ALLOCATION || 'none'
+    const extra = process.env.YTDLP_ARIA2C_EXTRA || ''
+    const dlArgs = [`-x ${conn}`, `-s ${split}`, `-k ${chunk || '1M'}`, `--file-allocation=${fileAlloc}`, extra].filter(Boolean).join(' ')
+    args.push('--downloader-args', `aria2c:${dlArgs}`)
+  }
 
   const template = outputTemplate || path.join(outDir, '%(title)s.%(ext)s')
   args.push('-o', template)

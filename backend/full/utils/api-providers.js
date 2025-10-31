@@ -789,6 +789,10 @@ async function doRequest(provider, url, body, extraCtx) {
           ...(process.env.YTDLP_CONCURRENT_FRAGMENTS ? ['--concurrent-fragments', String(process.env.YTDLP_CONCURRENT_FRAGMENTS)] : []),
           ...(process.env.YTDLP_REFERER ? ['--referer', String(process.env.YTDLP_REFERER)] : []),
           ...(process.env.YTDLP_HTTP_CHUNK_SIZE ? ['--http-chunk-size', String(process.env.YTDLP_HTTP_CHUNK_SIZE)] : []),
+          ...(process.env.YTDLP_BUFFER_SIZE ? ['--buffer-size', String(process.env.YTDLP_BUFFER_SIZE)] : []),
+          ...(process.env.YTDLP_RETRIES ? ['--retries', String(process.env.YTDLP_RETRIES)] : []),
+          ...(process.env.YTDLP_FRAGMENT_RETRIES ? ['--fragment-retries', String(process.env.YTDLP_FRAGMENT_RETRIES)] : []),
+          ...((String(process.env.YTDLP_FORCE_IPV4 || '').toLowerCase() === 'true') ? ['-4'] : []),
           ...cookieArgs,
           url,
         ]

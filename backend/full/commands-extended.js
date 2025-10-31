@@ -22,10 +22,19 @@ import {
 import { normalizeAporteTipo, logControlAction } from './commands.js';
 import { isSuperAdmin } from './global-config.js';
 import { createProgressNotifier } from './utils/progress-notifier.js';
-import { execFile } from 'child_process';
+import { execFile, spawnSync } from 'child_process';
+import { acquireMediaPermit } from './utils/concurrency.js';
 
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
+}
+
+function ytDlpBin() {
+  try {
+    const p = process.env.YTDLP_PATH && String(process.env.YTDLP_PATH).trim();
+    if (p) return p;
+  } catch {}
+  return process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
 }
 
 function streamToBuffer(readable) {
@@ -115,6 +124,31 @@ function buildYtDlpCommonArgs() {
   if (chunk) args.push('--http-chunk-size', chunk);
   const cacheDir = process.env.YTDLP_CACHE_DIR && String(process.env.YTDLP_CACHE_DIR).trim();
   if (cacheDir) args.push('--cache-dir', cacheDir);
+  // Optional: use aria2c if installed or forced via env (faster multi-connection downloader)
+  const WANT_ARIA2C = String(process.env.YTDLP_USE_ARIA2C || '').toLowerCase() === 'true';
+  const DISABLE_ARIA2C = String(process.env.YTDLP_DISABLE_ARIA2C || '').toLowerCase() === 'true';
+  let ariaAvailable = false;
+  if (!DISABLE_ARIA2C) {
+    try { const r = spawnSync('aria2c', ['-v'], { encoding: 'utf8', windowsHide: true }); ariaAvailable = !r.error && (r.status === 0 || typeof r.status === 'undefined'); } catch {}
+  }
+  if (WANT_ARIA2C || ariaAvailable) {
+    args.push('--downloader', 'aria2c');
+    const conn = parseInt(process.env.YTDLP_ARIA2C_CONNECTIONS || '16', 10);
+    const split = process.env.YTDLP_ARIA2C_SPLIT || String(Math.min(16, Math.max(4, conn)));
+    const fileAlloc = process.env.YTDLP_ARIA2C_FILE_ALLOCATION || 'none';
+    const extra = process.env.YTDLP_ARIA2C_EXTRA || '';
+    const dlArgs = [`-x ${conn}`, `-s ${split}`, `-k ${chunk || '1M'}`, `--file-allocation=${fileAlloc}`, extra].filter(Boolean).join(' ');
+    args.push('--downloader-args', `aria2c:${dlArgs}`);
+  }
+  // Extra rendimiento/fiabilidad
+  const bufferSize = process.env.YTDLP_BUFFER_SIZE && String(process.env.YTDLP_BUFFER_SIZE).trim();
+  if (bufferSize) args.push('--buffer-size', bufferSize);
+  const retries = process.env.YTDLP_RETRIES && String(process.env.YTDLP_RETRIES).trim();
+  if (retries) args.push('--retries', retries);
+  const fragRetries = process.env.YTDLP_FRAGMENT_RETRIES && String(process.env.YTDLP_FRAGMENT_RETRIES).trim();
+  if (fragRetries) args.push('--fragment-retries', fragRetries);
+  const forceIPv4 = String(process.env.YTDLP_FORCE_IPV4 || '').toLowerCase() === 'true';
+  if (forceIPv4) args.push('-4');
   return args;
 }
 
@@ -276,7 +310,10 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
     icon: ''
   });
 
+  let releaseLimiter = null;
   try {
+    // Concurrencia global + por chat (si chatId presente)
+    releaseLimiter = await acquireMediaPermit(chatId || grupo || usuario);
     if (!query) {
       return {
         success: true,
@@ -301,7 +338,7 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
     await notifier.update(15, 'Obteniendo informacin', { icon: '' });
 
     const infoResult = await new Promise((resolve, reject) => {
-      execFile('yt-dlp', infoArgs, { maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
+      execFile(ytDlpBin(), infoArgs, { maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
         if (err) return reject(err);
         resolve(stdout.trim());
       });
@@ -319,8 +356,10 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
     });
 
     // Ahora descargar con progreso real
-    const outputDir = '/tmp';
-    const outputTemplate = `${outputDir}/ytmusic_%(title)s.%(ext)s`;
+    const outputRoot = path.join(os.tmpdir(), 'konmi-bot-media');
+    try { fs.mkdirSync(outputRoot, { recursive: true }); } catch {}
+    const outputDir = outputRoot;
+    const outputTemplate = path.join(outputDir, 'ytmusic_%(title)s.%(ext)s');
     const downloadArgs = [
       ytQuery,
       '--extract-audio',
@@ -337,7 +376,7 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
     await notifier.update(30, 'Iniciando descarga', { icon: '' });
 
     const downloadResult = await new Promise((resolve, reject) => {
-      const child = execFile('yt-dlp', downloadArgs, { maxBuffer: 1024 * 1024 * 10 });
+      const child = execFile(ytDlpBin(), downloadArgs, { maxBuffer: 1024 * 1024 * 10 });
 
       let lastProgress = 30;
       child.stdout.on('data', async (data) => {
@@ -369,8 +408,15 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
 
     await notifier.update(95, 'Procesando archivo', { icon: '' });
 
-    const audioBuffer = fs.readFileSync(filename);
-    fs.unlinkSync(filename);
+    // Enviar por ruta de archivo para reducir uso de memoria
+    await notifier.complete('Enviando audio...');
+    const payload = { audio: { url: filename }, mimetype: 'audio/mpeg', ptt: false, fileName: `${sanitizeFilename(title)}.mp3` };
+    // Nota: Baileys acepta { url } y se encargará del streaming
+    const sock = await resolveSocket();
+    if (sock && typeof sock.sendMessage === 'function' && chatId) {
+      await sock.sendMessage(chatId, payload);
+    }
+    try { fs.unlinkSync(filename); } catch {}
 
     // Formatear informacin rica
     const viewsFormatted = views ? Number(views).toLocaleString('es-ES') : '';
@@ -419,6 +465,8 @@ async function handleMusic(query, usuario, grupo, fecha, chatId = null) {
     console.error('Error en handleMusic:', error);
     await notifier.fail('Error procesando el audio');
     return { success: false, message: ' Error procesando el audio. Intenta con otra cancin.' };
+  } finally {
+    try { if (releaseLimiter) releaseLimiter(); } catch {}
   }
 }
 
@@ -431,7 +479,9 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
     icon: ''
   });
 
+  let releaseLimiter2 = null;
   try {
+    releaseLimiter2 = await acquireMediaPermit(chatId || grupo || usuario);
     if (!query) {
       return {
         success: true,
@@ -456,7 +506,7 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
     await notifier.update(15, 'Obteniendo informacin', { icon: '' });
 
     const infoResult = await new Promise((resolve, reject) => {
-      execFile('yt-dlp', infoArgs, { maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
+      execFile(ytDlpBin(), infoArgs, { maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
         if (err) return reject(err);
         resolve(stdout.trim());
       });
@@ -475,8 +525,10 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
     });
 
     // Ahora descargar con progreso real
-    const outputDir = '/tmp';
-    const outputTemplate = `${outputDir}/ytvideo_%(title)s.%(ext)s`;
+    const outputRoot = path.join(os.tmpdir(), 'konmi-bot-media');
+    try { fs.mkdirSync(outputRoot, { recursive: true }); } catch {}
+    const outputDir = outputRoot;
+    const outputTemplate = path.join(outputDir, 'ytvideo_%(title)s.%(ext)s');
     const downloadArgs = [
       ytQuery,
       '-f', 'best[height<=720]/best', // Preferir 720p o menos para WhatsApp
@@ -490,8 +542,10 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
 
     await notifier.update(30, 'Iniciando descarga', { icon: '' });
 
+    // Limitar tamaño para mayor compatibilidad de envío (<= 60MB)
+    downloadArgs.push('--max-filesize', '60M');
     const downloadResult = await new Promise((resolve, reject) => {
-      const child = execFile('yt-dlp', downloadArgs, { maxBuffer: 1024 * 1024 * 10 });
+      const child = execFile(ytDlpBin(), downloadArgs, { maxBuffer: 1024 * 1024 * 20 });
 
       let lastProgress = 30;
       child.stdout.on('data', async (data) => {
@@ -523,8 +577,13 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
 
     await notifier.update(95, 'Procesando archivo', { icon: '' });
 
-    const videoBuffer = fs.readFileSync(filename);
-    fs.unlinkSync(filename);
+    await notifier.complete('Enviando video...');
+    const payload = { video: { url: filename }, mimetype: 'video/mp4', fileName: `${sanitizeFilename(title)}.mp4` };
+    const sock = await resolveSocket();
+    if (sock && typeof sock.sendMessage === 'function' && chatId) {
+      await sock.sendMessage(chatId, payload);
+    }
+    try { fs.unlinkSync(filename); } catch {}
 
     // Formatear informacin rica
     const viewsFormatted = views ? Number(views).toLocaleString('es-ES') : '';
@@ -577,6 +636,8 @@ async function handleVideo(query, usuario, grupo, fecha, chatId = null) {
     console.error('Error en handleVideo:', error);
     await notifier.fail('Error procesando el video');
     return { success: false, message: ' Error procesando el video. Intenta con otro enlace.' };
+  } finally {
+    try { if (releaseLimiter2) releaseLimiter2(); } catch {}
   }
 }
 
