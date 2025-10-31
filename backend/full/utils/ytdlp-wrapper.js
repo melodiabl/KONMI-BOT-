@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { buildYtDlpCookieArgs } from './cookies.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -41,6 +42,22 @@ function resolveYtDlpCommand() {
     if (envPath && fs.existsSync(envPath)) {
       const r = spawnSync(envPath, ['--version'], { encoding: 'utf8', windowsHide: true })
       if (!r.error && r.status === 0) return { cmd: envPath, pre: [] }
+    }
+  } catch {}
+
+  // Local bundled binaries (useful on Windows / CI)
+  try {
+    const cwd = process.cwd()
+    const winLocal = path.join(cwd, 'backend', 'full', 'bin', 'yt-dlp.exe')
+    const nixLocal = path.join(cwd, 'backend', 'full', 'bin', 'yt-dlp')
+    const candidates = []
+    if (process.platform === 'win32' && fs.existsSync(winLocal)) candidates.push(winLocal)
+    if (process.platform !== 'win32' && fs.existsSync(nixLocal)) candidates.push(nixLocal)
+    for (const c of candidates) {
+      try {
+        const r = spawnSync(c, ['--version'], { encoding: 'utf8', windowsHide: true })
+        if (!r.error && r.status === 0) return { cmd: c, pre: [] }
+      } catch {}
     }
   } catch {}
 
@@ -101,26 +118,7 @@ function normalizeCookieHeader(raw) {
 }
 
 function resolveCookiesArgsFromEnv() {
-  const args = []
-  try {
-    const envFile = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-    if (envFile && fs.existsSync(envFile)) return ['--cookies', envFile]
-
-    // Try local defaults under backend/full
-    const candidates = [
-      path.join(__dirname, '..', 'all_cookies.txt'),
-      path.join(__dirname, '..', 'all_cookie.txt'),
-      path.join(process.cwd(), 'backend', 'full', 'all_cookies.txt'),
-      path.join(process.cwd(), 'backend', 'full', 'all_cookie.txt'),
-    ]
-    for (const p of candidates) {
-      try { if (fs.existsSync(p)) return ['--cookies', p] } catch {}
-    }
-
-    const header = normalizeCookieHeader(process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES)
-    if (header) return ['--add-header', `Cookie: ${header}`]
-  } catch {}
-  return args
+  try { return buildYtDlpCookieArgs() } catch { return [] }
 }
 
 function hasCommand(cmd, args = ['--version']) {
@@ -230,33 +228,11 @@ export async function downloadWithYtDlp({
     args.push('--ffmpeg-location', ffmpegLoc)
   }
 
-  // Cookies: archivo preferido; si no, header Cookie desde env
-  let cookieFile = cookies || process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-  const candidates = []
-  if (cookieFile) candidates.push(cookieFile)
+  // Cookies (unificado): usar helper que maneja archivo/header/browser
   try {
-    // Local project candidates and common VPS absolute paths
-    const __dirname = process.cwd()
-    candidates.push(
-      // local repo paths
-      require('path').join(__dirname, 'backend', 'full', 'all_cookies.txt'),
-      require('path').join(__dirname, 'backend', 'full', 'all_cookie.txt'),
-      // common VPS locations
-      '/home/admin/all_cookies.txt',
-      '/home/admin/all_cookie.txt',
-      '/home/admin/KONMI-BOT-/backend/full/all_cookies.txt',
-      '/home/admin/KONMI-BOT-/backend/full/all_cookie.txt',
-    )
+    const cookieArgs = buildYtDlpCookieArgs()
+    if (Array.isArray(cookieArgs) && cookieArgs.length) args.push(...cookieArgs)
   } catch {}
-  let foundCookie = null
-  for (const p of candidates) {
-    try { if (p && fs.existsSync(p)) { foundCookie = p; break } } catch {}
-  }
-  if (foundCookie) args.push('--cookies', foundCookie)
-  else {
-    const raw = cookiesHeader || process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES
-    if (raw) args.push('--add-header', `Cookie: ${raw}`)
-  }
 
   // User-Agent and extractor-args for better YouTube reliability
   const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'

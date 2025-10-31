@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "description": "Panel de control para bot de WhatsApp con versiones full y lite",
     "type": "module",
-    "scripts": {
+  "scripts": {
         "start": "npm run start:production",
         "start:production": "cd backend/full && npm run migrate && node index.js",
         "start:full": "cd backend/full && node index.js",
@@ -32,8 +32,10 @@
         "migrate": "npx knex migrate:latest --knexfile backend/full/knexfile.js",
     "migrate:make": "npx knex migrate:make --knexfile backend/full/knexfile.js"
     ,
-    "setup:media": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-media.ps1"
+    "setup:media": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-media.ps1",
+    "diag:yt": "npm --prefix backend/full run diag:yt"
   },
+  "cookies:brave": "npm --prefix backend/full run cookies:brave",
     "dependencies": {
         "@chakra-ui/icons": "^2.2.4",
         "@chakra-ui/react": "^3.24.0",

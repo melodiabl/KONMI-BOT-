@@ -4,6 +4,7 @@
 import axios from 'axios'
 import logger from '../config/logger.js'
 import { getSpotifyAccessToken } from './spotify-auth.js'
+import { buildYtDlpCookieArgs } from './cookies.js'
 
 /**
  * Axios por defecto
@@ -723,6 +724,12 @@ async function doRequest(provider, url, body, extraCtx) {
         ytdlp = null
       }
       const want = (extraCtx && (extraCtx.__ytdlpType || extraCtx.type)) || 'audio'
+      // Elegir extractor según si hay cookies (web_safari con cookies; android sin cookies)
+      const __cookieArgs = (() => { try { return buildYtDlpCookieArgs() } catch { return [] } })()
+      const __hasCookies = Array.isArray(__cookieArgs) && __cookieArgs.length > 0
+      const __dynExtractor = process.env.YTDLP_EXTRACTOR_ARGS || (__hasCookies
+        ? 'youtube:player_client=web_safari,lang=en,gl=US'
+        : 'youtube:player_client=android,lang=en,gl=US')
       const opts = {
         dumpSingleJson: true,
         noWarnings: true,
@@ -732,7 +739,7 @@ async function doRequest(provider, url, body, extraCtx) {
         retries: 1,
         quiet: true,
         userAgent: YTDLP_USER_AGENT,
-        extractorArgs: buildExtractorArgs(),
+        extractorArgs: __dynExtractor,
         // Anti-detección / ritmo (opcional en ytdlp-exec)
         sleepInterval: process.env.YTDLP_SLEEP_INTERVAL && String(process.env.YTDLP_SLEEP_INTERVAL).trim(),
         maxSleepInterval: process.env.YTDLP_SLEEP_MAX && String(process.env.YTDLP_SLEEP_MAX).trim(),
@@ -787,7 +794,7 @@ async function doRequest(provider, url, body, extraCtx) {
           '--retries', '1',
           '-f', opts.format,
           '--user-agent', YTDLP_USER_AGENT,
-          '--extractor-args', buildExtractorArgs(),
+          '--extractor-args', __dynExtractor,
           // Optional external config
           ...(() => { try { const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim(); return (cfg && (fs.existsSync?.(cfg) || fs.default?.existsSync?.(cfg))) ? ['--config-location', cfg] : [] } catch { return [] } })(),
           // Anti-detección / ritmo
@@ -874,51 +881,18 @@ async function doRequest(provider, url, body, extraCtx) {
       const fs = fsMod.default || fsMod
       const path = pathMod.default || pathMod
 
-      // Construir argumentos comunes tal como en LOCAL__YTDLP_URL: ignorar config de usuario, cookies, UA, extractor-args, IPv4, etc.
+      // Construir argumentos comunes: ignorar config de usuario, cookies, UA, extractor-args, IPv4, etc.
       const commonArgs = []
       try { if (String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true') commonArgs.push('--ignore-config') } catch {}
-      // Cookies: preferir archivo; fallback a header Cookie
-      try {
-        const envP = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-        const candidates = [
-          envP,
-          path.join(process.cwd(), 'backend', 'full', 'all_cookies.txt'),
-          path.join(process.cwd(), 'backend', 'full', 'all_cookie.txt'),
-          '/home/admin/all_cookies.txt',
-          '/home/admin/all_cookie.txt',
-          '/home/admin/KONMI-BOT-/backend/full/all_cookies.txt',
-          '/home/admin/KONMI-BOT-/backend/full/all_cookie.txt',
-        ].filter(Boolean)
-        let picked = null
-        for (const p of candidates) {
-          try { if (p && (fs.existsSync?.(p) || fs.default?.existsSync?.(p))) { picked = p; break } } catch {}
-        }
-        if (picked) {
-          try {
-            const raw = fs.readFileSync(picked)
-            // Detect UTF-8 BOM (0xEF 0xBB 0xBF)
-            const hasBOM = raw && raw.length >= 3 && raw[0] === 0xEF && raw[1] === 0xBB && raw[2] === 0xBF
-            if (hasBOM) {
-              // Crear copia sin BOM en tmp y usarla
-              const tmpDir = path.join(process.cwd(), 'backend', 'full')
-              const outPath = path.join(tmpDir, '.cookies.sanitized.txt')
-              try { fs.writeFileSync(outPath, raw.slice(3)) } catch {}
-              commonArgs.push('--cookies', outPath)
-            } else {
-              commonArgs.push('--cookies', picked)
-            }
-          } catch {
-            commonArgs.push('--cookies', picked)
-          }
-        }
-        else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
-          commonArgs.push('--add-header', `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`)
-        }
-      } catch {}
+      // Cookies: helper unificado (archivo/header/browser)
+      try { const cArgs = buildYtDlpCookieArgs(); if (Array.isArray(cArgs) && cArgs.length) commonArgs.push(...cArgs) } catch {}
       // UA y extractor-args
       if (YTDLP_USER_AGENT) commonArgs.push('--user-agent', YTDLP_USER_AGENT)
-      const extractorArgs = buildExtractorArgs()
-      if (extractorArgs) commonArgs.push('--extractor-args', extractorArgs)
+      const cookiesPresent = commonArgs.some((v) => v === '--cookies' || v === '--add-header' || v === '--cookies-from-browser')
+      const dynExtractor = process.env.YTDLP_EXTRACTOR_ARGS || (cookiesPresent
+        ? 'youtube:player_client=web_safari,lang=en,gl=US'
+        : 'youtube:player_client=android,lang=en,gl=US')
+      if (dynExtractor) commonArgs.push('--extractor-args', dynExtractor)
       // Opcionales de red
       try {
         if (process.env.YTDLP_BUFFER_SIZE) commonArgs.push('--buffer-size', String(process.env.YTDLP_BUFFER_SIZE))

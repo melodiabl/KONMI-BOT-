@@ -8,6 +8,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "jest",
+    "cookies:brave": "node scripts/export-brave-cookies.js",
+    "diag:yt": "node scripts/diag-yt.js",
     "test:apis": "node scripts/test-apis.js",
     "test:api": "node scripts/test-apis.js",
     "migrate": "knex migrate:latest",
