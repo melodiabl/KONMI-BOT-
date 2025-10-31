@@ -1,7 +1,7 @@
 import db from "./db.js";
 import { getSocket } from "./whatsapp.js";
 import logger from "./config/logger.js";
-import * as baileys from "baileys-mod";
+import * as baileys from "./utils/baileys-shim.js";
 import {
   handleAI as handleAICommand,
   handleClasificar as handleClasificarCommand,
@@ -172,6 +172,69 @@ async function handleBots(usuario) {
   }
 }
 
+/**
+ * /bots - Lista todos los subbots (solo owner/admin). Incluye mención al dueño
+ */
+async function handleAllBots(usuario) {
+  try {
+    const allowed = await isOwnerOrAdmin(usuario);
+    if (!allowed) {
+      return {
+        success: true,
+        message:
+          ' ⚠️ No tienes permisos para ver todos los subbots.\n\nUsa `/mybots` para ver tus propios subbots.',
+      };
+    }
+
+    const rows = await db('subbots').select('*').orderBy('created_at', 'desc');
+    if (!rows || rows.length === 0) {
+      return { success: true, message: ' No hay subbots registrados.' };
+    }
+
+    const formatDate = (value) => {
+      if (!value) return null;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      return date.toLocaleString('es-ES');
+    };
+
+    const mentionSet = new Set();
+    const addMention = (digits) => {
+      const clean = String(digits || '').replace(/[^0-9]/g, '');
+      if (!clean) return { tag: null, jid: null };
+      const jid = `${clean}@s.whatsapp.net`;
+      mentionSet.add(jid);
+      return { tag: `@${clean}`, jid };
+    };
+
+    let text = `  *Todos los SubBots (${rows.length})*\n\n`;
+    rows.forEach((sb, index) => {
+      const code = sb.code || `subbot_${index + 1}`;
+      const isOnline = (sb.status || '').toLowerCase() === 'connected' || sb.is_online === true || sb.isOnline === true;
+      const statusSuffix = isOnline ? ' (online)' : '';
+      const ownerDigits = sb.user_phone || sb.owner || sb.metadata?.ownerNumber || '';
+      const owner = addMention(ownerDigits);
+      const alias = sb.user_name || sb.metadata?.displayName || sb.metadata?.uiLabel || null;
+      const createdAt = formatDate(sb.created_at || sb.metadata?.createdAt);
+      const lastActivity = formatDate(sb.last_activity || sb.updated_at || sb.metadata?.lastHeartbeat);
+
+      text += `${index + 1}. *${code}* — subbot: ${owner.tag || 'N/A'} ${statusSuffix}\n`;
+      if (alias) text += `   Alias: ${alias}\n`;
+      if (createdAt) text += `   Creado: ${createdAt}\n`;
+      if (lastActivity) text += `   Última actividad: ${lastActivity}\n`;
+      text += `\n`;
+    });
+
+    text += ' Acciones:\n';
+    text += '   /statusbot <codigo>  Ver estado detallado\n';
+    text += '   /delsubbot <codigo>  Eliminar subbot\n';
+
+    return { success: true, message: text, mentions: Array.from(mentionSet) };
+  } catch (error) {
+    console.error('Error en handleAllBots:', error);
+    return { success: false, message: ' Error al obtener subbots.' };
+  }
+}
 
 /** Determina si el usuario es el owner especfico (dinmico por ENV/global) o superadmin */
 function isSpecificOwner(usuario) {
@@ -309,6 +372,8 @@ function buildPrettyHelp(isAdmin) {
   text += "\n";
   text += " `help` / `menu`       Muestra este menu \n";
   text += " `whoami`             Tu ficha de usuario\n";
+  text += " `status`             Estado del bot\n";
+  text += " `ping`               Latencia\n";
   text += " `ia <texto>`         Pregunta a Gemini  \n";
   text += " `clasificar <txt>`   Categoriza contenido\n";
   text += "\n\n";
@@ -317,9 +382,9 @@ function buildPrettyHelp(isAdmin) {
   text += "\n";
   text += " `qr`                Crear subbot QR    \n";
   text += " `code`              Crear subbot CODE  \n";
-  text += " `bots`              Lista tus subbots  \n";
-  text += " `delbot <id>`       Elimina un subbot  \n";
-  text += " `delsubbot <id>`    Elimina un subbot  \n";
+  text += " `mybots`            Lista tus subbots  \n";
+  text += " `bots`              Lista todos (admin) \n";
+  
   text += "\n\n";
 
   text += " *MEDIA & ENTRETENIMIENTO*\n";
@@ -328,6 +393,9 @@ function buildPrettyHelp(isAdmin) {
   text += " `video <busqueda>`  Video de YouTube   \n";
   text += " `meme`              Meme aleatorio     \n";
   text += " `sticker`           Crear sticker      \n";
+  text += " `image <texto>`     Imagen IA         \n";
+  text += " `wallpaper <tema>`  Fondo de pantalla  \n";
+  text += " `joke`              Chiste aleatorio   \n";
   text += "\n\n";
 
   text += " *DESCARGAS & ARCHIVOS*\n";
@@ -355,8 +423,8 @@ function buildPrettyHelp(isAdmin) {
   if (isAdmin) {
     text += " *HERRAMIENTAS ADMIN*\n";
     text += "\n";
-    text += " `bot on/off`       Activar/desactivar \n";
-    text += " `bot global on/off`   Modo global      \n";
+    text += " `bot on/off`         Activar/desactivar (idempotente) \n";
+    text += " `bot global on/off`  Modo global      \n";
     text += " `update`           Actualizar bot      \n";
     text += " `logs [tipo]`      Ver logs del sistema\n";
     text += " `lock` / `unlock`  Bloquear/desbloquear\n";
@@ -2079,7 +2147,7 @@ async function _handleDelSubbot(code, usuario) {
         " Estado: Eliminado permanentemente\n" +
         ` Fecha: ${new Date().toLocaleString("es-ES")}\n` +
         "\n\n" +
-        " *Usa `bots` para ver tus subbots restantes*",
+        " *Usa `mybots` para ver tus subbots restantes*",
     };
   } catch (error) {
     return {
@@ -2177,7 +2245,7 @@ async function handleQR(subbotCode) {
           "          *SUBBOT NO ENCONTRADO*    \n" +
           "\n\n" +
           ` *No se encontr el subbot con ID: \`${subbotCode}\`*\n\n` +
-          " *Usa `bots` para ver tus subbots disponibles*",
+          " *Usa `mybots` para ver tus subbots disponibles*",
       };
     }
 
@@ -3638,6 +3706,7 @@ export { handleHelp };
 export { handleIA };
 export { handleClasificar };
 export { handleBots };
+export { handleAllBots };
 export { handleWhoami };
 export { handlePing };
 export { handleStatus };
