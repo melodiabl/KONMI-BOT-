@@ -845,6 +845,17 @@ async function handleUnifiedAudioDownload({ sock, remoteJid, message, args, usua
   let isYouTube = isUrl && /(youtube\.com|youtu\.be)/i.test(target);
   let source = isSpotify ? 'Spotify 🎧' : isYouTube ? 'YouTube ▶️' : (isUrl ? 'Genérico' : 'Búsqueda');
 
+  // Rechazar playlists/álbumes/canales: sólo una pista o video
+  if (isUrl) {
+    const lower = target.toLowerCase();
+    const isYtPlaylistOnly = (/youtube\.com\/(playlist|channel|@|user)\//.test(lower) || (/\blist=/.test(lower) && !/\bv=/.test(lower))) && !/\/watch\?/.test(lower);
+    const isSpList = /open\.spotify\.com\/(playlist|album|show|episode)\//.test(lower);
+    if (isYtPlaylistOnly || isSpList) {
+      await sock.sendMessage(remoteJid, { text: '⚠️ Sólo se aceptan canciones/videos individuales.\nNo se admiten playlist/álbum/canales.\n\nSugerencia: envía un enlace de video o escribe el nombre.' }, { quoted: message });
+      return;
+    }
+  }
+
   // Resolver búsqueda cuando es texto
   const localOnly = String(process.env.MEDIA_LOCAL_ONLY || 'false').toLowerCase() === 'true';
 
@@ -854,7 +865,8 @@ async function handleUnifiedAudioDownload({ sock, remoteJid, message, args, usua
       const hasSpotdl = isSpotdlAvailable();
       if (hasSpotdl && !localOnly) {
         let sp = null; try { sp = await searchSpotify(input); } catch {}
-        if (sp?.success && sp.url) {
+        // Aceptar sólo tracks (no playlist/álbum)
+        if (sp?.success && sp.url && /open\.spotify\.com\/track\//i.test(String(sp.url))) {
           target = sp.url; isSpotify = true; isYouTube = false; source = 'Spotify 🎧';
           metaTitle = sp.title || null; metaArtist = sp.artists || null; cover = sp.cover_url || null;
           if (sp.duration_ms) { const m = Math.floor(sp.duration_ms/60000); const s = String(Math.floor((sp.duration_ms%60000)/1000)).padStart(2,'0'); metaDuration = `${m}:${s}`; }
@@ -863,7 +875,9 @@ async function handleUnifiedAudioDownload({ sock, remoteJid, message, args, usua
       if (!isSpotify) {
         const yt = await searchYouTubeMusic(input);
         if (yt?.success && yt.results?.length) {
-          const top = yt.results[0];
+          // Filtrar cualquier entrada que no sea video (por seguridad)
+          const onlyVideos = yt.results.filter(r => r?.url && (/youtube\.com\/watch\?/.test(r.url) || /youtu\.be\//.test(r.url)));
+          const top = onlyVideos[0] || yt.results[0];
           target = top.url; isYouTube = true; source = 'YouTube ▶️';
           metaTitle = metaTitle || top.title || null; metaArtist = metaArtist || top.author || null; metaDuration = top.duration || null;
           cover = top.thumbnail || computeYouTubeCover(top.url || '') || cover;

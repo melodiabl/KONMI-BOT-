@@ -376,8 +376,15 @@ export const API_PROVIDERS = {
               views: r.views,
               author: r.channel,
               thumbnail: r.thumbnail,
-            },
-          ],
+    },
+    // Último recurso local: paquete yt-search (no playlist)
+    {
+      name: 'yt-search (local)',
+      method: 'LOCAL__YTSEARCH',
+      url: (query) => query,
+      parse: (data) => data,
+    },
+  ],
         }
       },
     },
@@ -949,15 +956,28 @@ async function doRequest(provider, url, body, extraCtx) {
       let json
       try { json = JSON.parse(output) } catch (e) { throw new Error('yt-dlp search JSON inválido') }
       const entries = Array.isArray(json?.entries) ? json.entries : []
-      const results = entries.map((v) => ({
-        title: v?.title,
-        url: v?.webpage_url || (v?.url && v.url.startsWith('http') ? v.url : undefined),
-        videoId: v?.id,
-        duration: v?.duration,
-        views: v?.view_count,
-        author: v?.uploader,
-        thumbnail: v?.thumbnail,
-      }))
+      // Mapear y filtrar para evitar playlist/canal
+      const mapped = entries.map((v) => {
+        const url = v?.webpage_url || (v?.url && v.url.startsWith?.('http') ? v.url : undefined)
+        return {
+          title: v?.title,
+          url,
+          videoId: v?.id,
+          duration: v?.duration,
+          views: v?.view_count,
+          author: v?.uploader,
+          thumbnail: v?.thumbnail,
+        }
+      })
+      const results = mapped.filter((r) => {
+        if (!r?.url) return false
+        const u = String(r.url)
+        // aceptar sólo URLs de video
+        const isWatch = /youtube\.com\/watch\?/.test(u) && /[?&]v=/.test(u)
+        const isShort = /youtube\.com\/shorts\//.test(u) || /youtu\.be\//.test(u)
+        const isPlaylistOnly = /youtube\.com\/(playlist|channel|@)/.test(u) && !isWatch && !isShort
+        return (isWatch || isShort) && !isPlaylistOnly
+      })
       return { data: { __local: true, success: results.length > 0, results }, status: 200 }
     } catch (e) {
       throw new Error('yt-dlp search falló: ' + (e?.message || e))
