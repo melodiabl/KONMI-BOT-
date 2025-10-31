@@ -516,6 +516,17 @@ async function downloadAndSendLocal({
   quoted,
 }) {
   const isUrl = /^(https?:\/\/)/i.test(input);
+  // Blindaje: no aceptar playlist/álbum/canales cuando se espera un único video
+  try {
+    if (isUrl) {
+      const lower = String(input).toLowerCase();
+      const isYtPlaylistOnly = (/youtube\.com\/(playlist|channel|@|user)\//.test(lower) || (/\blist=/.test(lower) && !/\bv=/.test(lower))) && !/\/watch\?/.test(lower);
+      if (kind === 'video' && isYtPlaylistOnly) {
+        await sock.sendMessage(remoteJid, { text: '⚠️ Sólo se aceptan videos individuales. No se admiten playlist/canales. Envía un enlace de video o escribe el nombre.' }, { quoted });
+        return false;
+      }
+    }
+  } catch {}
    /(youtube\.com|youtu\.be)/i.test(input);
   const isAudio = String(kind) === 'audio';
   // ===== Metadatos estáticos (no se editan) =====

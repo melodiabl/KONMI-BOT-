@@ -731,12 +731,13 @@ async function doRequest(provider, url, body, extraCtx) {
         ytdlp = null
       }
       const want = (extraCtx && (extraCtx.__ytdlpType || extraCtx.type)) || 'audio'
-      // Elegir extractor según si hay cookies (web_safari con cookies; android sin cookies)
+      // Elegir extractor según si hay cookies (web_safari con cookies; android sin cookies). Si env fuerza android y hay cookies, se sobreescribe.
       const __cookieArgs = (() => { try { return buildYtDlpCookieArgs() } catch { return [] } })()
       const __hasCookies = Array.isArray(__cookieArgs) && __cookieArgs.length > 0
-      const __dynExtractor = process.env.YTDLP_EXTRACTOR_ARGS || (__hasCookies
-        ? 'youtube:player_client=web_safari,lang=en,gl=US'
-        : 'youtube:player_client=android,lang=en,gl=US')
+      const __envExt = process.env.YTDLP_EXTRACTOR_ARGS || ''
+      const __dynExtractor = __hasCookies
+        ? (!__envExt || /player_client=android/i.test(__envExt) ? 'youtube:player_client=web_safari,lang=en,gl=US' : __envExt)
+        : (__envExt || 'youtube:player_client=android,lang=en,gl=US')
       const opts = {
         dumpSingleJson: true,
         noWarnings: true,
@@ -895,10 +896,11 @@ async function doRequest(provider, url, body, extraCtx) {
       try { const cArgs = buildYtDlpCookieArgs(); if (Array.isArray(cArgs) && cArgs.length) commonArgs.push(...cArgs) } catch {}
       // UA y extractor-args
       if (YTDLP_USER_AGENT) commonArgs.push('--user-agent', YTDLP_USER_AGENT)
-      const cookiesPresent = commonArgs.some((v) => v === '--cookies' || v === '--add-header' || v === '--cookies-from-browser')
-      const dynExtractor = process.env.YTDLP_EXTRACTOR_ARGS || (cookiesPresent
-        ? 'youtube:player_client=web_safari,lang=en,gl=US'
-        : 'youtube:player_client=android,lang=en,gl=US')
+        const cookiesPresent = commonArgs.some((v) => v === '--cookies' || v === '--add-header' || v === '--cookies-from-browser')
+        const envExtSearch = process.env.YTDLP_EXTRACTOR_ARGS || ''
+        const dynExtractor = cookiesPresent
+          ? (!envExtSearch || /player_client=android/i.test(envExtSearch) ? 'youtube:player_client=web_safari,lang=en,gl=US' : envExtSearch)
+          : (envExtSearch || 'youtube:player_client=android,lang=en,gl=US')
       if (dynExtractor) commonArgs.push('--extractor-args', dynExtractor)
       // Opcionales de red
       try {

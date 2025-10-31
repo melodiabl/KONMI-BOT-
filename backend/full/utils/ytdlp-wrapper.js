@@ -200,7 +200,8 @@ export async function downloadWithYtDlp({
   args.push('--no-playlist')
 
   // Cookies from env or local defaults
-  try { args.push(...resolveCookiesArgsFromEnv()) } catch {}
+  let __cookieArgs = []
+  try { __cookieArgs = resolveCookiesArgsFromEnv(); if (Array.isArray(__cookieArgs) && __cookieArgs.length) args.push(...__cookieArgs) } catch {}
 
   // Prefer mp3 audio when audioOnly
   if (format) {
@@ -235,9 +236,18 @@ export async function downloadWithYtDlp({
   } catch {}
 
   // User-Agent and extractor-args for better YouTube reliability
-  const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-  const ua = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA
-  const baseExtractor = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=web,android'
+  const DEFAULT_WEB_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15'
+  const DEFAULT_ANDROID_UA = 'com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip'
+  const cookiesPresent = Array.isArray(__cookieArgs) && __cookieArgs.length > 0
+  const ua = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || (cookiesPresent ? DEFAULT_WEB_UA : DEFAULT_ANDROID_UA)
+  // Prefer safari client when cookies present; android when not
+  const envExtractor = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || ''
+  let baseExtractor = envExtractor
+  if (cookiesPresent) {
+    if (!baseExtractor || /player_client=android/i.test(baseExtractor)) baseExtractor = 'youtube:player_client=web_safari,lang=en,gl=US'
+  } else {
+    if (!baseExtractor) baseExtractor = 'youtube:player_client=android,lang=en,gl=US'
+  }
   const poToken = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || ''
   let extractorArgs = baseExtractor
   if (poToken) {

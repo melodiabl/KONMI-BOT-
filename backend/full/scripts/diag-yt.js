@@ -47,9 +47,12 @@ async function main(){
   // Test search
   const cargs = cookieArgs()
   const hasCookies = Array.isArray(cargs) && cargs.length > 0
-  const extractor = process.env.YTDLP_EXTRACTOR_ARGS || (hasCookies
-    ? 'youtube:player_client=web_safari,lang=en,gl=US'
-    : 'youtube:player_client=android,lang=en,gl=US')
+  let extractor = process.env.YTDLP_EXTRACTOR_ARGS || ''
+  if (hasCookies) {
+    if (!extractor || /player_client=android/i.test(extractor)) extractor = 'youtube:player_client=web_safari,lang=en,gl=US'
+  } else {
+    if (!extractor) extractor = 'youtube:player_client=android,lang=en,gl=US'
+  }
   const args = [
     '--ignore-config',
     ...cargs,
