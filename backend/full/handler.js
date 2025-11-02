@@ -19,20 +19,7 @@ import {
 } from "./lib/subbots.js";
 import { processWhatsAppMedia } from "./file-manager.js";
 import { isSuperAdmin } from "./global-config.js";
-import {
-  handleBots as listUserBots,
-  handleAllBots as listAllBots,
-  handleAddGroup as addGroupCore,
-  handleDelGroup as delGroupCore,
-  handleKick as kickCore,
-  handlePromote as promoteCore,
-  handleDemote as demoteCore,
-  handleLock as lockCore,
-  handleUnlock as unlockCore,
-  handleTag as tagCore,
-  isOwnerOrAdmin as isOwnerOrAdminCore,
-  isRealGroupAdmin as isRealGroupAdminCore,
-} from "./commands-complete.js";
+// legacy helpers removidos; toda la lógica está en commands/*
 
 const { makeWASocket, DisconnectReason, useMultiFileAuthState } = baileys;
 
@@ -130,35 +117,40 @@ async function isOwnerNumber(usuario) {
   } catch { return false }
 }
 
-async function isAdminOfGroup(usuario, grupo) {
-  try {
-    // Usa core consolidado (owner/superadmin o admin real)
-    const ok = await isOwnerOrAdminCore(usuario, grupo);
-    if (ok) return true;
-    return await isRealGroupAdminCore(usuario, grupo);
-  } catch { return false }
-}
+async function isAdminOfGroup() { return false }
 
 export async function routeCommand(ctx) {
   const { command } = ctx;
   if (!command || typeof command !== 'string') return { handled: false };
 
-  // Admin/bot
-  if (command === '/bot') return await handleBotRoute(ctx);
+  // Admin/bot: manejado por registry
 
-  // Subbots
-  if (command === '/bots' || command === '/mybots' || command === '/mibots') return await handleBotsRoute(ctx);
-  // QR y Code: dejar que whatsapp.js maneje los comandos originales
+  // Subbots: ahora manejados vía registry (/qr, /code, /bots, /mybots)
 
-  // Admin grupo
-  if (command === '/addgroup') return await wrapGroup(addGroupCore, ctx);
-  if (command === '/delgroup') return await wrapGroup(delGroupCore, ctx);
-  if (command === '/kick') return await wrapGroupTarget(kickCore, ctx);
-  if (command === '/promote') return await wrapGroupTarget(promoteCore, ctx);
-  if (command === '/demote') return await wrapGroupTarget(demoteCore, ctx);
-  if (command === '/lock') return await wrapGroup(lockCore, ctx);
-  if (command === '/unlock') return await wrapGroup(unlockCore, ctx);
-  if (command === '/tag') return await wrapTag(ctx);
+  // Registro modular de comandos (organizado por carpeta)
+  // Evita modificar whatsapp.js y reduce líneas del switch
+  try {
+    const mod = await import('./commands/registry/index.js');
+    const reg = mod?.getCommandRegistry?.();
+    if (reg && reg.has(command)) {
+      const entry = reg.get(command);
+      const fecha = new Date().toISOString();
+      const params = { ...ctx, fecha };
+      let result = null;
+      try {
+        result = await entry.handler(params);
+      } catch (e) {
+        await safeSend(ctx.sock, ctx.remoteJid, `⚠️ Error ejecutando comando: ${e?.message || e}`);
+        return { handled: true };
+      }
+      await deliverResult(ctx.sock, ctx.remoteJid, result);
+      return { handled: true };
+    }
+  } catch (e) {
+    try { console.warn('Fallo al cargar registry de comandos:', e?.message); } catch {}
+  }
+
+  // Admin grupo (fallback) removido — usar commands/groups.js via registry
 
   // Otros comandos: no manejados aquí
   return { handled: false };
@@ -203,71 +195,7 @@ function msToHuman(ms) {
   } catch { return '' }
 }
 
-async function handleBotRoute({ sock, remoteJid, isGroup, usuario, args }) {
-  // Global OFF/ON (owner)
-  if (args && args[0] === 'global') {
-    const owner = await isOwnerNumber(usuario);
-    if (!owner) {
-      await safeSend(sock, remoteJid, '⛔ Solo el owner puede usar comandos globales');
-      return { handled: true };
-    }
-    const turnOn = args[1] === 'on';
-    if (args[1] !== 'on' && args[1] !== 'off') {
-      await safeSend(sock, remoteJid, 'Uso: /bot global on | /bot global off');
-      return { handled: true };
-    }
-    try {
-      const existing = await db('bot_global_state').first('*');
-      if (existing) await db('bot_global_state').update({ is_on: turnOn }).where({ id: 1 });
-      else await db('bot_global_state').insert({ id: 1, is_on: turnOn });
-      // UX: mensaje idempotente básico con contexto
-      const type = turnOn ? 'bot_global_on' : 'bot_global_off';
-      const last = findLastEvent('GLOBAL', type);
-      pushChatEvent('GLOBAL', type, usuario);
-      const since = last ? ` (desde hace ${msToHuman(Date.now() - last.at)})` : '';
-      await safeSend(sock, remoteJid, turnOn ? `✅ Bot activado globalmente${since}` : `⛔ Bot desactivado globalmente${since}`);
-    } catch (e) {
-      await safeSend(sock, remoteJid, `⚠️ Error cambiando estado global: ${e.message}`);
-    }
-    return { handled: true };
-  }
-
-  // Grupo ON/OFF
-  if (!isGroup) { await safeSend(sock, remoteJid, 'ℹ️ Este comando solo funciona en grupos'); return { handled:true } }
-  const allowed = await isAdminOfGroup(usuario, remoteJid);
-  if (!allowed) { await safeSend(sock, remoteJid, '⛔ Solo owner o administradores del grupo pueden usar /bot on/off.'); return { handled:true } }
-  const turnOn = args && args[0] === 'on';
-  const turnOff = args && args[0] === 'off';
-  if (!turnOn && !turnOff) { await safeSend(sock, remoteJid, 'Uso: /bot on | /bot off | /bot global on | /bot global off'); return { handled:true } }
-  try {
-    const row = await db('group_settings').where({ group_id: remoteJid }).first();
-    let firstTime = false;
-    if (row) {
-      const already = row.is_active === 1 || row.is_active === true;
-      if (already === turnOn) {
-        // Idempotente: ya estaba en ese estado; adjuntar tiempo desde última acción si existe
-        const evType = turnOn ? 'bot_on' : 'bot_off';
-        const last = findLastEvent(remoteJid, evType);
-        pushChatEvent(remoteJid, evType, usuario);
-        const since = last ? ` (desde hace ${msToHuman(Date.now() - last.at)})` : '';
-        await safeSend(sock, remoteJid, turnOn ? `ℹ️ Bot ya estaba activo en este grupo${since}` : `ℹ️ Bot ya estaba desactivado en este grupo${since}`);
-        return { handled:true };
-      }
-      await db('group_settings').where({ group_id: remoteJid }).update({ is_active: turnOn, updated_by: usuario, updated_at: new Date().toISOString() });
-    } else {
-      await db('group_settings').insert({ group_id: remoteJid, is_active: turnOn, updated_by: usuario, updated_at: new Date().toISOString() });
-      firstTime = turnOn; // si no existía y activamos, es primera vez
-    }
-  } catch { /* fallback memoria omitido */ }
-  // Registrar evento en memoria para mensajes con contexto en futuras idempotencias
-  pushChatEvent(remoteJid, turnOn ? 'bot_on' : 'bot_off', usuario);
-  if (turnOn) {
-    await safeSend(sock, remoteJid, firstTime ? '✅ Bot activado por primera vez en este grupo' : '✅ Bot activado en este grupo');
-  } else {
-    await safeSend(sock, remoteJid, '⛔ Bot desactivado en este grupo');
-  }
-  return { handled: true };
-}
+// handler de /bot removido; ahora en commands/bot-control.js
 
 async function handleBotsRoute({ sock, remoteJid, usuario, command }) {
   try {
@@ -306,6 +234,77 @@ async function wrapTag({ sock, remoteJid, usuario, message }) {
 
 async function safeSend(sock, jid, text) {
   try { await sock.sendMessage(jid, { text }); } catch {}
+}
+
+// Enviar resultados heterogéneos de comandos (texto / imagen / video)
+async function deliverResult(sock, jid, result) {
+  try {
+    if (!result) return;
+    if (result.success === false && result.message) {
+      // Soportar menciones también en respuestas de texto
+      if (result.mentions && Array.isArray(result.mentions)) {
+        await sock.sendMessage(jid, { text: result.message, mentions: result.mentions });
+      } else {
+        await safeSend(sock, jid, result.message);
+      }
+      return;
+    }
+    // Media: sticker
+    if (result.type === 'sticker' && (result.sticker || result.url)) {
+      const sticker = result.sticker || { url: result.url };
+      await sock.sendMessage(jid, {
+        sticker,
+        caption: result.caption || '',
+        mentions: result.mentions || [],
+      });
+      return;
+    }
+    // Media: video
+    if (result.type === 'video' && result.video) {
+      const video = typeof result.video === 'string' ? { url: result.video } : result.video;
+      await sock.sendMessage(jid, {
+        video,
+        caption: result.caption || '',
+        mentions: result.mentions || [],
+      });
+      return;
+    }
+    // Media: audio
+    if (result.type === 'audio' && result.audio) {
+      const audio = typeof result.audio === 'string' ? { url: result.audio } : result.audio;
+      await sock.sendMessage(jid, {
+        audio,
+        mimetype: result.mimetype || 'audio/mpeg',
+        ptt: result.ptt || false,
+        caption: result.caption || '',
+        mentions: result.mentions || [],
+      });
+      return;
+    }
+    // Media: imagen
+    if (result.type === 'image' && result.image) {
+      const image = typeof result.image === 'string' ? { url: result.image } : result.image;
+      await sock.sendMessage(jid, {
+        image,
+        caption: result.caption || '',
+        mentions: result.mentions || [],
+      });
+      return;
+    }
+    // Texto por defecto
+    if (typeof result.message === 'string' && result.message) {
+      if (result.mentions && Array.isArray(result.mentions)) {
+        await sock.sendMessage(jid, { text: result.message, mentions: result.mentions });
+      } else {
+        await safeSend(sock, jid, result.message);
+      }
+      return;
+    }
+    // Fallback generico
+    await safeSend(sock, jid, '✅ Listo');
+  } catch (e) {
+    try { await safeSend(sock, jid, `⚠️ Error enviando respuesta: ${e?.message || e}`) } catch {}
+  }
 }
 
 function isSubbotOnline(code) {

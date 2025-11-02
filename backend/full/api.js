@@ -3730,8 +3730,11 @@ router.get('/notificaciones-globales/stats', async (req, res) => {
 // Endpoint: /api/bot/global-shutdown - Apagar bot globalmente desde el panel
 router.post('/bot/global-shutdown', async (req, res) => {
   try {
-    const { handleBotGlobalOff } = await import('./commands-complete.js');
-    const result = await handleBotGlobalOff('admin_panel');
+    const db = (await import('./db.js')).default;
+    const existing = await db('bot_global_state').first('*');
+    if (existing) await db('bot_global_state').update({ is_on: false }).where({ id: 1 });
+    else await db('bot_global_state').insert({ id: 1, is_on: false });
+    const result = { success:true, message:'⛔ Bot global OFF' };
 
     res.json(result);
   } catch (error) {
@@ -3742,8 +3745,11 @@ router.post('/bot/global-shutdown', async (req, res) => {
 // Endpoint: /api/bot/global-startup - Encender bot globalmente desde el panel
 router.post('/bot/global-startup', async (req, res) => {
   try {
-    const { handleBotGlobalOn } = await import('./commands-complete.js');
-    const result = await handleBotGlobalOn('admin_panel');
+    const db = (await import('./db.js')).default;
+    const existing = await db('bot_global_state').first('*');
+    if (existing) await db('bot_global_state').update({ is_on: true }).where({ id: 1 });
+    else await db('bot_global_state').insert({ id: 1, is_on: true });
+    const result = { success:true, message:'✅ Bot global ON' };
 
     res.json(result);
   } catch (error) {
