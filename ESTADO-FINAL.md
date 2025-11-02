@@ -44,16 +44,10 @@
 
 ### 🔧 Archivos Mejorados
 
-1. **`backend/full/commands.js`**
-   - ✅ handleAI - Mejorado
-   - ✅ handleClasificar - Mejorado
-   - ✅ handleListClasificados - NUEVO
-   - ✅ handleLogs - NUEVO
-   - ✅ handleConfig - NUEVO
-   - ✅ handleRegistrarUsuario - NUEVO
-   - ✅ handleResetPassword - NUEVO
-   - ✅ handleMiInfo - NUEVO
-   - ✅ handleCleanSession - NUEVO
+1. **`backend/full/commands/*`**
+   - ✅ Modularización por dominio (ai, system, groups, files, images, maintenance, pairing, etc.)
+   - ✅ Registro central de comandos en `commands/registry/index.js`
+   - ✅ Router opcional en `commands/router.js`
 
 2. **`backend/full/package.json`**
    - Agregados scripts de prueba: `npm run test:apis`
@@ -80,7 +74,7 @@ El archivo `backend/full/whatsapp.js` **NO fue actualizado completamente** porqu
 2. La estructura era compleja de modificar sin romper
 3. Se hizo un `git restore` para evitar errores
 
-**SOLUCIÓN:** Los comandos nuevos están listos pero necesitan ser integrados manualmente en `whatsapp.js`
+**SOLUCIÓN:** El router modular (handler.routeCommand) prioriza `commands/registry`. Se desactivaron bloques legacy del switch.
 
 ---
 
@@ -90,38 +84,7 @@ El archivo `backend/full/whatsapp.js` **NO fue actualizado completamente** porqu
 
 Abre `backend/full/whatsapp.js` y:
 
-#### 1. Agregar imports al inicio del archivo (después de línea 35)
-
-```javascript
-import {
-  handleAI,
-  handleClasificar,
-  handleListClasificados,
-  handleLogs,
-  handleConfig,
-  handleRegistrarUsuario,
-  handleResetPassword,
-  handleMiInfo,
-  handleCleanSession,
-} from "./commands.js";
-
-import {
-  handleTikTokDownload,
-  handleInstagramDownload,
-  handleFacebookDownload,
-  handleTwitterDownload,
-  handlePinterestDownload,
-  handleMusicDownload,
-  handleVideoDownload,
-  handleSpotifySearch,
-  handleTranslate,
-  handleWeather,
-  handleQuote,
-  handleFact,
-  handleTriviaCommand,
-  handleMemeCommand,
-} from "./commands/download-commands.js";
-```
+#### 1. (Hecho) Desactivar el import legacy y priorizar registry/handler
 
 #### 2. Actualizar comandos de IA (buscar línea ~2220)
 

@@ -68,7 +68,7 @@ CMD ["yt-dlp", "--help"]
 ├── all_cookies.txt          # Cookies Netscape
 ├── yt-dlp-config.yml        # Configuración personalizada
 └── backend/full/
-    └── commands-extended.js  # Comandos /play y /video
+    └── commands/             # Comandos modulares (incluye media)
 ```
 
 ### ⚙️ **Archivo de Configuración (yt-dlp-config.yml)**
@@ -282,7 +282,6 @@ df -h
 ✅ **Escalable**: Fácil de mantener y actualizar
 
 ¡Tu bot ahora tiene capacidades de descarga de YouTube de nivel profesional! 🚀
-
 
 
 

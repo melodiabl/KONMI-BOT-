@@ -27,12 +27,9 @@ Este documento enumera y describe únicamente los archivos de código que compon
   - Exporta: `connectToWhatsApp(authPath)`, `getQRCode()`, `getQRCodeImage()`, `getCurrentPairingCode()`, `getCurrentPairingInfo()`, `getPairingTargetNumber()`, `connectWithPairingCode(phone, authPath)`, `getConnectionStatus()`, `getBotStatus()`, `getSocket()`, `getAvailableGroups()`, `setAuthMethod(method)`, `clearWhatsAppSession()`.
 - `backend/full/handler.js`
   - Exporta (selección): `addAporte({ contenido, tipo, usuario, grupo, fecha, mediaPath })`, `addPedido({ usuario, grupo, contenido, fecha })`, `handleAportar(...)`, `handlePedido(...)`, `handlePedidos(usuario, grupo)`, `getProviderStats()`, `getProviderAportes()`, `chatWithAI(msg, ctx)`, `analyzeContentWithAI(text, filename)`, `analyzeManhwaContent(text)`, `handleIA(...)`, `handleMyAportes(...)`, `handleAportes(...)`, `handleAddAporte(...)`, `handleAporteEstado(...)`, `handleLock(...)`, `handleUnlock(...)`, `handleTag(...)`, `handleWhoami(...)`, `handleDebugAdmin(...)`.
-- `backend/full/command-handlers.js`
-  - Exporta: `handleIA(...)`, `handleMyAportes(...)`, `handleAportes(...)`, `handleAddAporte(...)`, `handleAporteEstado(...)`, `handlePedido(...)`, `handlePedidos(...)`, `handleLock(...)`, `handleUnlock(...)`, `handleTag(...)`, `handleWhoami(...)`, `handleDebugAdmin(...)`.
-- `backend/full/commands.js`
-  - Exporta: `handleAportar(contenido, tipo, usuario, grupo, fecha)`.
-- `backend/full/commands/subbot-commands.js`
-  - Exporta handlers de SubBots: `handlePairSubbot(...)`, `handleQRSubbot(...)`, `handleListSubbots(...)`, `handleDeleteSubbot(...)`, etc.
+- `backend/full/commands/*` — Comandos modulares organizados por dominio (ai, system, groups, files, images, maintenance, pairing, etc.).
+  - Registro central: `backend/full/commands/registry/index.js`.
+  - Router de despacho: `backend/full/commands/router.js`.
 - `backend/full/subbot-manager.js`
   - Exporta: `createSubbotWithPairing({ ownerNumber, targetNumber, ... })`, `createSubbotWithQr({ ownerNumber, ... })`, `listUserSubbots(owner)`, `deleteUserSubbot(code, owner)`, `getSubbotByCode(code)`, `attachRuntimeListeners(code, listeners)`, `updateSubbotMetadata(code, patch)`, `markSubbotConnected(code, data)`, `markSubbotDisconnected(code, reason)`, `getActiveRuntimeSubbots()`, `syncAllRuntimeStates()`, `cleanOrphanSubbots()`, `isBotGloballyActive()`, `isBotActiveInGroup(jid)`, `setSubbotGroupState(...)`, `getSubbotGroupState(...)`.
 - `backend/full/lib/subbots.js`
@@ -48,9 +45,7 @@ Este documento enumera y describe únicamente los archivos de código que compon
 
 - `backend/full/whatsapp.js` — Integración con Baileys (carga dinámica), manejo de QR/Pairing, conexión y reconexión, despacho de comandos y actualización de estado global.
 - `backend/full/handler.js` — Lógica principal: alta de aportes/pedidos, clasificación/IA, manejo de media, gestión de grupos/usuarios y utilidades para el flujo del bot.
-- `backend/full/command-handlers.js` — Handlers específicos para comandos como `/ai`, `/myaportes`, `/aportes`, `/addaporte`, etc., con registro en base de datos y formatos de respuesta.
-- `backend/full/commands.js` — Comandos base del bot (aportación, IA, clasificación, listados) y normalización de tipos.
-- `backend/full/commands-extended.js` — Comandos extendidos (p. ej. interacciones rápidas con IA, horóscopos, etc.).
+- `backend/full/commands/*` — Comandos modulares por dominio y registro central (`commands/registry`).
 - `backend/full/commands/download-commands.js` — Comandos de descarga (TikTok, Instagram, Facebook, Twitter, YouTube, Pinterest, Spotify, clima, memes, etc.) mediante proveedores externos.
 - `backend/full/commands/subbot-commands.js` — Comandos para el sistema de SubBots: crear (QR/Pairing), listar, eliminar, configurar, reiniciar y ayuda.
 - `backend/full/fix-message-handler.js` — Ajustes utilitarios para manejo de mensajes (compatibilidad/estabilidad del flujo).
