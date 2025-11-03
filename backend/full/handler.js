@@ -1,4 +1,4 @@
-// handler.js
+﻿// handler.js
 import './config.js';
 // Handler principal para logica de aportes, media, pedidos y proveedores
 
@@ -10,8 +10,6 @@ import { fileURLToPath } from "url";
 import QRCode from "qrcode";
 import pino from "pino";
 import { EventEmitter } from "events";
-// Usar shim para soportar forks como elaina-bail/baileys-mod
-import * as baileys from "./utils/baileys-shim.js";
 import {
   startSubbot,
   stopSubbotRuntime as stopSubbot,
@@ -21,7 +19,7 @@ import { processWhatsAppMedia } from "./file-manager.js";
 import { isSuperAdmin } from "./global-config.js";
 // legacy helpers removidos; toda la lógica está en commands/*
 
-const { makeWASocket, DisconnectReason, useMultiFileAuthState } = baileys;
+// Nota: handler.js no maneja conexión; no requiere Baileys aquí.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1991,3 +1989,4 @@ export async function handleDebugAdmin(usuario, grupo) {
     };
   }
 }
+

@@ -18,7 +18,7 @@ export async function update({ usuario }) {
   try {
     const allowed = isOwner(usuario) || (()=>{ try { return isSuperAdmin(usuario) } catch { return false } })()
     if (!allowed) {
-      return { success: false, message: '⛔ Solo el owner puede ejecutar /update' }
+      return { success: false, message: '⛔ Solo el owner puede ejecutar /update', quoted: true }
     }
 
     // Intentar detener subbots si hay en ejecución (best-effort)
@@ -38,11 +38,10 @@ export async function update({ usuario }) {
     // Programar reinicio suave del proceso
     setTimeout(() => { try { process.exit(0) } catch {} }, 1200)
 
-    return { success: true, message: '🔄 Iniciando actualización y reinicio...\n\n• Deteniendo subbots\n• Actualizando (git/npm) si aplica\n• Reiniciando proceso' }
+    return { success: true, message: '🔄 Iniciando actualización y reinicio...\n\n• Deteniendo subbots\n• Actualizando (git/npm) si aplica\n• Reiniciando proceso', quoted: true }
   } catch (e) {
-    return { success: false, message: `⚠️ Error en /update: ${e?.message || e}` }
+    return { success: false, message: `⚠️ Error en /update: ${e?.message || e}`, quoted: true }
   }
 }
 
 export default { update }
-

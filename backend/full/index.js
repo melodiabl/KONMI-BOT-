@@ -10,6 +10,8 @@ import {
   getQRCodeImage,
   getConnectionStatus,
   getSocket,
+  clearWhatsAppSession,
+  setAuthMethod,
 } from "./whatsapp.js";
 import { restoreActiveSubbots, syncAllRuntimeStates } from "./subbot-manager.js";
 import apiRouter from "./api.js";
@@ -27,35 +29,30 @@ import { spawnSync } from "child_process";
 import ffmpegStatic from "ffmpeg-static";
 import fluentFfmpeg from "fluent-ffmpeg";
 
-// Auto-detect and persist YouTube cookies file into backend/full/.env
+// ===== utils =====
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+function fileExists(p) { try { return fs.existsSync(p) } catch { return false } }
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+
+// ===== cookies helpers (opcional, igual que antes) =====
 function findCookiesFile() {
   try {
-    // 1) If already set and exists, respect it
-    const envHints = [
-      process.env.YOUTUBE_COOKIES_FILE,
-      process.env.YT_COOKIES_FILE,
-    ].filter(Boolean);
-    for (const hint of envHints) {
-      try { if (hint && fs.existsSync(hint)) return hint; } catch {}
-    }
+    const envHints = [process.env.YOUTUBE_COOKIES_FILE, process.env.YT_COOKIES_FILE].filter(Boolean);
+    for (const hint of envHints) { try { if (hint && fs.existsSync(hint)) return hint } catch {} }
 
-    // 2) Common candidates
     const candidates = [];
-    // Local project paths
     candidates.push(join(__dirname, 'all_cookies.txt'));
     candidates.push(join(__dirname, 'all_cookie.txt'));
     candidates.push(join(process.cwd(), 'backend', 'full', 'all_cookies.txt'));
     candidates.push(join(process.cwd(), 'backend', 'full', 'all_cookie.txt'));
     candidates.push(join(process.cwd(), 'all_cookies.txt'));
     candidates.push(join(process.cwd(), 'cookies.txt'));
-    // Windows APPDATA
     try {
       const appData = process.env.APPDATA;
-      if (appData) {
-        candidates.push(join(appData, 'yt-dlp', 'cookies.txt'));
-      }
+      if (appData) candidates.push(join(appData, 'yt-dlp', 'cookies.txt'));
     } catch {}
-    // Linux/Mac typical config dir
     try {
       const home = process.env.HOME || process.env.USERPROFILE;
       if (home) {
@@ -63,25 +60,20 @@ function findCookiesFile() {
         candidates.push(join(home, '.config', 'yt-dlp', 'cookies'));
       }
     } catch {}
-
-    for (const p of candidates) {
-      try { if (p && fs.existsSync(p)) return p; } catch {}
-    }
+    for (const p of candidates) { try { if (p && fs.existsSync(p)) return p } catch {} }
   } catch {}
   return null;
 }
-
 function looksLikeCookies(filePath) {
   try {
     const data = fs.readFileSync(filePath, 'utf8');
     const head = (data || '').split(/\r?\n/).slice(0, 5).join('\n');
     if (!head) return false;
-    if (head.includes('\t')) return true; // Netscape format (TAB separated)
-    if (/^[A-Za-z0-9_\-]+=.+/m.test(head)) return true; // name=value lines
+    if (head.includes('\t')) return true;
+    if (/^[A-Za-z0-9_\-]+=.+/m.test(head)) return true;
   } catch {}
   return false;
 }
-
 function persistEnvVar(key, value) {
   try {
     const envPath = join(__dirname, '.env');
@@ -93,23 +85,15 @@ function persistEnvVar(key, value) {
       return true;
     }
     const re = new RegExp(`^${key}=.*$`, 'm');
-    if (re.test(content)) {
-      content = content.replace(re, line);
-    } else {
-      content = content.trimEnd() + '\n' + line + '\n';
-    }
+    if (re.test(content)) content = content.replace(re, line);
+    else content = content.trimEnd() + '\n' + line + '\n';
     fs.writeFileSync(envPath, content, 'utf8');
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
-
 function ensureCookiesConfigured() {
   try {
-    if (process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE || process.env.YOUTUBE_COOKIES) {
-      return; // already configured
-    }
+    if (process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE || process.env.YOUTUBE_COOKIES) return;
     const found = findCookiesFile();
     if (found && looksLikeCookies(found)) {
       process.env.YOUTUBE_COOKIES_FILE = found;
@@ -120,22 +104,18 @@ function ensureCookiesConfigured() {
   } catch {}
 }
 
-// Auto-detect spotdl and persist SPOTDL_PATH for stability (used by wrappers)
+// ===== spotdl helpers (igual que antes) =====
 function resolveSpotdlPath() {
   try {
-    // 1) Respect existing SPOTDL_PATH if it works
     if (process.env.SPOTDL_PATH) {
       try {
         const r = spawnSync(process.env.SPOTDL_PATH, ['--version'], { encoding: 'utf8', windowsHide: true });
         if (!r.error && (r.status === 0 || typeof r.status === 'undefined')) return process.env.SPOTDL_PATH;
       } catch {}
     }
-
-    // 2) Try plain 'spotdl'
     try {
       const r2 = spawnSync('spotdl', ['--version'], { encoding: 'utf8', windowsHide: true });
       if (!r2.error && (r2.status === 0 || typeof r2.status === 'undefined')) {
-        // Resolve path with where/which when possible
         try {
           const cmd = process.platform === 'win32' ? 'where' : 'which';
           const rpath = spawnSync(cmd, ['spotdl'], { encoding: 'utf8', windowsHide: true });
@@ -144,8 +124,6 @@ function resolveSpotdlPath() {
         } catch { return 'spotdl' }
       }
     } catch {}
-
-    // 3) Try python -m spotdl
     const py = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'];
     for (const p of py) {
       try {
@@ -156,7 +134,6 @@ function resolveSpotdlPath() {
   } catch {}
   return null;
 }
-
 function ensureSpotdlConfigured() {
   try {
     if (process.env.SPOTDL_PATH) return;
@@ -168,9 +145,6 @@ function ensureSpotdlConfigured() {
   } catch {}
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 const app = express();
 const port = config.server.port;
 
@@ -178,26 +152,14 @@ app.use(cors(config.cors));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Serve storage media statically (uploads, media, downloads)
+// Archivos estáticos de media
 app.use("/media", express.static(join(__dirname, "storage")));
 
-// Serve static files from frontend build in production
-// Comentado: El frontend se sirve con Caddy
-// if (process.env.NODE_ENV === 'production') {
-//   const frontendDistPath = join(__dirname, '../../frontend-panel/dist');
-//   app.use(express.static(frontendDistPath));
-// }
-
-// La autenticacin interactiva ahora est integrada en whatsapp.js
-// No es necesario preguntar aqu, se preguntar automticamente al conectar
-
-// Rutas de autenticacin
+// Rutas
 app.use("/api/auth", authRouter);
-
-// Rutas principales de la API
 app.use("/api", apiRouter);
 
-// Endpoints de WhatsApp bajo /api
+// Endpoints WhatsApp
 app.get(
   "/api/whatsapp/qr",
   authenticateToken,
@@ -205,7 +167,6 @@ app.get(
   (_req, res) => {
     const qrImage = getQRCodeImage();
     const status = getConnectionStatus();
-
     if (qrImage) {
       const base64Data = qrImage.replace(/^data:image\/png;base64,/, "");
       return res.json({
@@ -214,13 +175,52 @@ app.get(
         status: "waiting_for_scan",
       });
     }
-
     res.json({ qr: null, qrImage: null, status });
   },
 );
 
-// ===== Arranque: diagnóstico de binarios externos (yt-dlp / ffmpeg) =====
-function checkCommand(cmd, args = ["--version"], friendly = cmd) {
+app.get(
+  "/api/whatsapp/status",
+  authenticateToken,
+  authorizeRoles("admin", "owner"),
+  (_req, res) => res.json({ status: getConnectionStatus() }),
+);
+
+app.post(
+  "/api/whatsapp/logout",
+  authenticateToken,
+  authorizeRoles("owner"),
+  async (_req, res) => {
+    try {
+      await clearWhatsAppSession();
+      return res.json({ success: true, message: "Sesión cerrada" });
+    } catch (e) {
+      return res.status(500).json({ error: e?.message || String(e) });
+    }
+  },
+);
+
+app.get(
+  "/api/whatsapp/groups",
+  authenticateToken,
+  authorizeRoles("admin", "owner"),
+  async (_req, res) => {
+    try { res.json(await getAvailableGroups()); }
+    catch (e) { res.status(500).json({ error: e?.message || String(e) }); }
+  },
+);
+
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || "development",
+  });
+});
+
+// ===== Diagnóstico de binarios externos =====
+function checkCommand(cmd, args = ["--version"]) {
   try {
     const res = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
     if (res.error) return { ok: false, error: res.error.message };
@@ -230,339 +230,136 @@ function checkCommand(cmd, args = ["--version"], friendly = cmd) {
     return { ok: false, error: e?.message || String(e) };
   }
 }
-
 function diagnosticsExternalBinaries() {
   try {
-    const ytdlpPath = process.env.YTDLP_PATH && fs.existsSync(process.env.YTDLP_PATH)
-      ? process.env.YTDLP_PATH
-      : null;
-
-    let ytdlp = { ok: false, how: "" };
-    if (ytdlpPath) {
-      const r = checkCommand(ytdlpPath, ["--version"], "yt-dlp");
-      ytdlp = r.ok ? { ok: true, how: `bin:${ytdlpPath}`, version: r.output } : { ok: false, how: `bin:${ytdlpPath}`, error: r.error };
-    }
+    let ytdlp = checkCommand("yt-dlp");
     if (!ytdlp.ok) {
-      let r = checkCommand("yt-dlp", ["--version"], "yt-dlp");
-      if (r.ok) ytdlp = { ok: true, how: "yt-dlp", version: r.output };
-      else {
-        // Intentar python -m yt_dlp
-        const pyCmds = process.platform === "win32" ? ["py", "python"] : ["python3", "python"];
-        for (const py of pyCmds) {
-          r = checkCommand(py, ["-m", "yt_dlp", "--version"], "python -m yt_dlp");
-          if (r.ok) { ytdlp = { ok: true, how: `${py} -m yt_dlp`, version: r.output }; break; }
-        }
-        if (!ytdlp.ok) ytdlp = { ok: false, how: "not found", error: r.error };
+      const py = process.platform === "win32" ? ["py", "python"] : ["python3", "python"];
+      for (const p of py) {
+        const r = checkCommand(p, ['-m', 'yt_dlp', '--version']);
+        if (r.ok) { ytdlp = r; break; }
       }
     }
-
-    // ffmpeg detection: PATH -> FFMPEG_PATH -> ffmpeg-static
-    let ffmpeg = checkCommand("ffmpeg", ["-version"], "ffmpeg");
-    const ffmpegPathEnv = process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)
-      ? process.env.FFMPEG_PATH
-      : null;
-    if (!ffmpeg.ok && ffmpegPathEnv) {
-      const r = checkCommand(ffmpegPathEnv, ["-version"], "ffmpeg(env)");
-      if (r.ok) {
-        ffmpeg = { ok: true, output: r.output, how: `env:${ffmpegPathEnv}` };
-        try { fluentFfmpeg.setFfmpegPath(ffmpegPathEnv); } catch {}
-      }
+    let ffmpeg = checkCommand("ffmpeg", ["-version"]);
+    if (ffmpeg.ok === false && ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+      const r = checkCommand(ffmpegStatic, ["-version"]);
+      if (r.ok) { ffmpeg = r; try { fluentFfmpeg.setFfmpegPath(ffmpegStatic); } catch {} }
     }
-    if (!ffmpeg.ok && ffmpegStatic && fs.existsSync(ffmpegStatic)) {
-      const r = checkCommand(ffmpegStatic, ["-version"], "ffmpeg(static)");
-      if (r.ok) {
-        ffmpeg = { ok: true, output: r.output, how: `static:${ffmpegStatic}` };
-        try { fluentFfmpeg.setFfmpegPath(ffmpegStatic); } catch {}
-      }
-    }
-
-    if (ytdlp.ok) {
-      logger.info?.(`[diag] yt-dlp OK (${ytdlp.how}) v${ytdlp.version}`);
-    } else {
-      logger.warn?.(`[diag] yt-dlp NO DISPONIBLE (${ytdlp.how}). Para mejores descargas, instala yt-dlp o define YTDLP_PATH. Error: ${ytdlp.error || ""}`);
-    }
-    if (ffmpeg.ok) {
-      const first = (ffmpeg.output || "").split(/\r?\n/)[0];
-      logger.info?.(`[diag] ffmpeg OK ${first}${ffmpeg.how ? ` (${ffmpeg.how})` : ""}`);
-    } else {
-      logger.warn?.(`[diag] ffmpeg NO DISPONIBLE. Instala ffmpeg para mayor compatibilidad. Error: ${ffmpeg.error || ""}`);
-    }
-
-    // spotdl / instaloader / gallery-dl
-    const extras = [
-      { name: 'spotdl', env: process.env.SPOTDL_PATH },
-      { name: 'instaloader', env: process.env.INSTALOADER_PATH },
-      { name: 'gallery-dl', env: process.env.GALLERYDL_PATH },
-    ];
-    for (const x of extras) {
-      let ok = false, how = '', msg = '';
-      if (x.env && fs.existsSync(x.env)) {
-        const r = checkCommand(x.env, ['--version'], x.name);
-        ok = r.ok; how = `env:${x.env}`; msg = r.output || r.error || '';
-      }
-      if (!ok) {
-        const r2 = checkCommand(x.name, ['--version'], x.name);
-        ok = r2.ok; how = ok ? x.name : 'not found'; msg = r2.output || r2.error || '';
-      }
-      if (!ok) {
-        // Intentar como módulo Python
-        const py = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'];
-        const mod = x.name === 'gallery-dl' ? 'gallery_dl' : x.name;
-        for (const p of py) {
-          const r3 = checkCommand(p, ['-m', mod, '--version'], `${p} -m ${mod}`);
-          if (r3.ok) { ok = true; how = `${p} -m ${mod}`; msg = r3.output || ''; break; }
-        }
-      }
-      if (ok) logger.info?.(`[diag] ${x.name} OK ${msg}${how ? ` (${how})` : ''}`);
-      else logger.warn?.(`[diag] ${x.name} NO DISPONIBLE. Error: ${msg}`);
-    }
+    if (ytdlp.ok) logger.info?.(`[diag] yt-dlp OK v${ytdlp.output}`);
+    else logger.warn?.(`[diag] yt-dlp NO DISPONIBLE: ${ytdlp.error || ''}`);
+    if (ffmpeg.ok) logger.info?.(`[diag] ffmpeg OK ${ffmpeg.output.split(/\r?\n/)[0]}`);
+    else logger.warn?.(`[diag] ffmpeg NO DISPONIBLE: ${ffmpeg.error || ''}`);
   } catch (e) {
-    logger.warn?.(`[diag] Error ejecutando diagnóstico externos: ${e?.message || e}`);
+    logger.warn?.(`[diag] error diag externos: ${e?.message || e}`);
   }
 }
 
-// Detect cookies file automatically before diagnostics and startup
 ensureCookiesConfigured();
 ensureSpotdlConfigured();
 diagnosticsExternalBinaries();
 
-app.get(
-  "/api/bot/qr",
-  authenticateToken,
-  authorizeRoles("owner"),
-  (_req, res) => {
-    const qrImage = getQRCodeImage();
-    const qrCode = getQRCode();
-    const status = getConnectionStatus();
-
-    if (qrImage) {
-      const base64Data = qrImage.replace(/^data:image\/png;base64,/, "");
-      return res.json({
-        available: true,
-        qr: base64Data,
-        qrCode,
-        qrCodeImage: qrImage,
-        status: "waiting_for_scan",
-      });
-    }
-
-    if (qrCode) {
-      return res.json({
-        available: true,
-        qr: qrCode,
-        qrCode,
-        qrCodeImage: null,
-        status: "waiting_for_scan",
-      });
-    }
-
-    res.json({
-      available: false,
-      qr: null,
-      qrCode: null,
-      qrCodeImage: null,
-      status: status.status,
-      message: "No hay cdigo QR disponible",
-    });
-  },
-);
-
-app.get(
-  "/api/whatsapp/status",
-  authenticateToken,
-  authorizeRoles("admin", "owner"),
-  (_req, res) => {
-    const status = getConnectionStatus();
-    res.json({ status });
-  },
-);
-
-app.post(
-  "/api/whatsapp/logout",
-  authenticateToken,
-  authorizeRoles("owner"),
-  async (_req, res) => {
-    try {
-      const sock = getSocket();
-      if (sock) {
-        await sock.logout();
-        return res.json({
-          success: true,
-          message: "Desconectado exitosamente",
-        });
-      }
-      return res.json({ success: false, message: "No hay conexin activa" });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-);
-
-// Compatibilidad con versiones anteriores del panel
-app.post(
-  "/api/bot/disconnect",
-  authenticateToken,
-  authorizeRoles("owner"),
-  async (_req, res) => {
-    try {
-      const sock = getSocket();
-      if (sock) {
-        await sock.logout();
-        return res.json({ success: true });
-      }
-      return res.json({ success: false, message: "No hay conexin activa" });
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
-  },
-);
-
-app.post(
-  "/api/bot/restart",
-  authenticateToken,
-  authorizeRoles("owner"),
-  async (_req, res) => {
-    try {
-      const sock = getSocket();
-      if (sock) {
-        try {
-          await sock.logout();
-        } catch (_) {}
-      }
-      await connectToWhatsApp(join(__dirname, "storage", "baileys_full"));
-      try {
-        const restored = await restoreActiveSubbots();
-        if (restored > 0) {
-          console.log(` ♻️  Subbots reactivados tras reinicio: ${restored}`);
-        }
-      } catch (error) {
-        console.warn(
-          " No se pudieron reactivar los subbots guardados tras reinicio:",
-          error?.message || error,
-        );
-      }
-      try {
-        await syncAllRuntimeStates();
-        console.log(" Subbots sincronizados tras reiniciar el bot principal");
-      } catch (error) {
-        console.warn(
-          " No se pudo sincronizar el estado de subbots tras reinicio:",
-          error?.message || error,
-        );
-      }
-      return res.json({ success: true });
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
-  },
-);
-
-// Endpoint para obtener grupos disponibles del bot
-app.get(
-  "/api/whatsapp/groups",
-  authenticateToken,
-  authorizeRoles("admin", "owner"),
-  async (req, res) => {
-    try {
-      const groups = await getAvailableGroups();
-      res.json(groups);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-);
-
-// Health check endpoint for Railway
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || "development",
-  });
-});
-
-// Catch-all handler: send back React's index.html file in production
-// Comentado: El frontend se sirve con Caddy
-// if (process.env.NODE_ENV === 'production') {
-//   app.get('*', (req, res) => {
-//     const frontendDistPath = join(__dirname, '../../frontend-panel/dist');
-//     res.sendFile(join(frontendDistPath, 'index.html'));
-//   });
-// }
-
-// Start the bot connection and server
+// ====== Inicio ======
 async function start() {
-  // 0) Migraciones automticas (idempotentes)
-  try {
-    console.log(" Ejecutando migraciones de base de datos...");
-    await db.migrate.latest();
-    console.log(" Migraciones aplicadas correctamente.");
-  } catch (error) {
-    console.warn(
-      " No se pudieron aplicar migraciones automticamente:",
-      error?.message || error,
-    );
-  }
+  // 0) Migraciones
+  try { await db.migrate.latest(); } catch (e) { console.warn("Migraciones: ", e?.message || e) }
 
-  // 1) Iniciar el servidor HTTP
-  app.listen(port, config.server.host, () => {
-    // Banner de inicio profesional
-    console.log(
-      "\n╔═══════════════════════════════════════════════════════════╗",
-    );
-    console.log(
-      "║                                                           ║",
-    );
-    console.log("║  🤖 KONMI BOT - Sistema Multi-Bot Avanzado v2.5.0        ║");
-    console.log(
-      "║  ✨ Panel de Administración y Control                     ║",
-    );
-    console.log(
-      "║                                                           ║",
-    );
-    console.log(
-      "╚═══════════════════════════════════════════════════════════╝\n",
-    );
-
-    logger.info(`🚀 [Servidor] Backend iniciado en puerto ${port}`);
-    logger.info(`🌐 [Servidor] Host: ${config.server.host}`);
-    logger.info(`📦 [Servidor] Entorno: ${config.server.environment}`);
-    logger.info(`🎨 [Frontend] URL: ${config.frontend.url}`);
-    logger.info(`🤖 [Bot] ${config.bot.name} v${config.bot.version}`);
-
-    console.log(
-      "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
-    );
-    logger.system.startup(config.bot.version);
-    console.log("✅ Sistema listo para recibir conexiones\n");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-  });
-
-  // 2) Conectar el bot (esto mostrar el men interactivo segn mtodo seleccionado)
-  await connectToWhatsApp(join(__dirname, "storage", "baileys_full"));
-  try {
-    const restored = await restoreActiveSubbots();
-    if (restored > 0) {
-      console.log(` ♻️  Subbots reactivados automáticamente: ${restored}`);
+  // 1) Servidor (robusto con fallback de puerto)
+  function bindServer(p, attempt = 1) {
+    try {
+      const srv = app.listen(p, config.server.host, () => {
+        logger.info(`🚀 Backend en ${config.server.host}:${srv.address().port}`);
+      });
+      srv.on('error', (err) => {
+        try { logger.warn?.(`[server] error listen ${err?.code || err?.message}`) } catch {}
+        if (err && err.code === 'EADDRINUSE') {
+          const next = attempt === 1 ? (Number(process.env.FALLBACK_PORT || 0) || (Number(p) + 1)) : 0;
+          try { logger.warn?.(`[server] puerto ${p} ocupado. Reintentando en ${next === 0 ? 'puerto aleatorio' : next}...`) } catch {}
+          setTimeout(() => bindServer(next, attempt + 1), 300);
+        } else {
+          try { logger.error?.(`[server] listen falló: ${err?.message || err}`) } catch {}
+        }
+      });
+      return srv;
+    } catch (e) {
+      try { logger.error?.(`[server] no se pudo iniciar: ${e?.message || e}`) } catch {}
+      return null;
     }
-  } catch (error) {
-    console.warn(
-      " No se pudieron reactivar los subbots guardados:",
-      error?.message || error,
-    );
   }
+
+  bindServer(port);
+
+  // 2) Autenticación interactiva real
+  const authDir = join(__dirname, "storage", "baileys_full");
   try {
-    await syncAllRuntimeStates();
-    console.log(" Subbots sincronizados tras iniciar el bot principal");
-  } catch (error) {
-    console.warn(
-      " No se pudo sincronizar el estado de subbots al iniciar:",
-      error?.message || error,
-    );
+    await ensureAuthInteractive(authDir);
+  } catch (e) {
+    console.warn("ensureAuthInteractive falló, conectando por defecto:", e?.message || e);
+    await connectToWhatsApp(authDir);
   }
+
+  // 3) Subbots
+  try { await restoreActiveSubbots(); } catch {}
+  try { await syncAllRuntimeStates(); } catch {}
 }
 
 start();
+
+// ======== Selección interactiva (ARREGLADA) ========
+async function prompt(question) {
+  const { createInterface } = await import('readline');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => rl.question(question, ans => { rl.close(); resolve(String(ans || '').trim()) }));
+}
+
+async function ensureAuthInteractive(authPath) {
+  const creds = join(authPath, 'creds.json');
+
+  // Si hay sesión válida, conecta directo
+  if (fileExists(creds)) {
+    await connectToWhatsApp(authPath);
+    return;
+  }
+
+  // Si no hay TTY (ej. servidor remoto)
+  if (!process.stdin.isTTY) {
+    if (process.env.AUTH_METHOD === 'pairing' && process.env.PAIR_NUMBER) {
+      await clearWhatsAppSession();
+      setAuthMethod('pairing', { phoneNumber: process.env.PAIR_NUMBER });
+      await connectToWhatsApp(authPath, true, process.env.PAIR_NUMBER);
+      return;
+    }
+    await connectToWhatsApp(authPath);
+    return;
+  }
+
+  // Interactivo local
+  console.log('\n🔐 Selección de autenticación');
+  console.log('1) Código QR (recomendado)');
+  console.log('2) Pairing Code (código numérico)');
+
+  let choice = await prompt('Elige método (1/2): ');
+  if (choice !== '1' && choice !== '2') choice = '1';
+
+  // === Pairing Code ===
+  if (choice === '2') {
+    const raw = await prompt('Ingresa tu número en formato internacional (ej: 595974154768): ');
+    const digits = (raw || '').replace(/\D/g, '');
+    if (!digits) {
+      console.log('Número inválido. Volviendo a QR…');
+      await connectToWhatsApp(authPath, false);
+      return;
+    }
+    await clearWhatsAppSession();
+    try { fs.rmSync(authPath, { recursive: true, force: true }); } catch {}
+    try { fs.mkdirSync(authPath, { recursive: true }); } catch {}
+    setAuthMethod('pairing', { phoneNumber: digits });
+    console.log(`\n📱 Esperando pairing code para +${digits}...`);
+    await connectToWhatsApp(authPath, true, digits);
+    return;
+  }
+
+  // === Código QR ===
+  await connectToWhatsApp(authPath, false);
+}
 
 export { db, app };

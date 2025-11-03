@@ -20,31 +20,31 @@ export async function ownerInfo({ usuario }) {
     `🛡️ Mods: ${mods}`,
     `💎 Premium: ${prems}`,
   ].join('\n')
-  return { success:true, message: msg }
+  return { success:true, message: msg, quoted: true }
 }
 
 export async function checkOwner({ usuario }) {
   const ok = isOwner(usuario) || (()=>{ try{return isSuperAdmin(usuario)}catch{return false} })()
-  return { success: true, message: ok ? '✅ Tienes rol de owner/superadmin' : '⛔ No eres owner ni superadmin' }
+  return { success: true, message: ok ? '✅ Tienes rol de owner/superadmin' : '⛔ No eres owner ni superadmin', quoted: true }
 }
 
 export async function setOwner({ args }) {
   const numero = (args||[])[0] && String((args||[])[0]).replace(/\D/g,'')
   const nombre = (args||[]).slice(1).join(' ') || 'Owner'
-  if (!numero) return { success:true, message:'ℹ️ Uso: /setowner <numero> <nombre>' }
+  if (!numero) return { success:true, message:'ℹ️ Uso: /setowner <numero> <nombre>', quoted: true }
   try {
     if (!Array.isArray(global.owner)) global.owner = []
     const exists = global.owner.find(([n]) => String(n)===numero)
     if (!exists) global.owner.push([numero, nombre, true])
-    return { success:true, message:`✅ Owner agregado: ${nombre} (+${numero})` }
-  } catch { return { success:false, message:'⚠️ Error actualizando owner.' } }
+    return { success:true, message:`✅ Owner agregado: ${nombre} (+${numero})`, quoted: true }
+  } catch { return { success:false, message:'⚠️ Error actualizando owner.', quoted: true } }
 }
 
 export async function debugMe({ usuario }) {
   const roles = []
   if (isOwner(usuario)) roles.push('owner')
   try { if (isSuperAdmin(usuario)) roles.push('superadmin') } catch {}
-  return { success: true, message: `👤 ${usuario}\n🔖 Roles: ${roles.join(', ') || 'ninguno'}` }
+  return { success: true, message: `👤 ${usuario}\n🔖 Roles: ${roles.join(', ') || 'ninguno'}`, quoted: true }
 }
 
 export async function debugFull(ctx) {
@@ -53,7 +53,7 @@ export async function debugFull(ctx) {
 
 export async function testAdmin({ usuario }) {
   const ok = isOwner(usuario) || (()=>{ try{return isSuperAdmin(usuario)}catch{return false} })()
-  return { success: true, message: ok ? '✅ Admin OK' : '⛔ No admin' }
+  return { success: true, message: ok ? '✅ Admin OK' : '⛔ No admin', quoted: true }
 }
 
 export default { ownerInfo, checkOwner, setOwner, debugMe, debugFull, testAdmin }

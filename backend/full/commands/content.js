@@ -9,7 +9,7 @@ export async function listManhwas() {
   try {
     const manhwas = await db('manhwas').select('*').limit(10);
     if (manhwas.length === 0) {
-      return { success: true, message: '📚 *Lista de manhwas*\n\nℹ️ No hay manhwas registrados.\n\n➕ Usa `/addmanhwa` para agregar uno.' };
+      return { success: true, message: '📚 *Lista de manhwas*\n\nℹ️ No hay manhwas registrados.\n\n➕ Usa `/addmanhwa` para agregar uno.', quoted: true };
     }
     let text = '📚 *Lista de manhwas*\n\n';
     manhwas.forEach((m, i) => {
@@ -17,9 +17,9 @@ export async function listManhwas() {
       text += `   🏷️ Género: ${m.genero}\n`;
       text += `   🗓️ Agregado: ${new Date(m.created_at).toLocaleDateString('es-ES')}\n\n`;
     });
-    return { success: true, message: text };
+    return { success: true, message: text, quoted: true };
   } catch (e) {
-    return { success: false, message: '⚠️ Error obteniendo manhwas. Intenta más tarde.' };
+    return { success: false, message: '⚠️ Error obteniendo manhwas. Intenta más tarde.', quoted: true };
   }
 }
 
@@ -62,9 +62,9 @@ export async function addManhwa({ message, usuario, args }) {
 
     const extra = coverPath ? '\n🖼️ Adjunto guardado' : '';
     const msg = `✅ *Manhwa agregado*\n\n📌 Título: ${titulo}\n🏷️ Género: ${genero}\n📝 Descripción: ${descripcion}${extra}\n👤 Por: ${usuario}\n🕒 Fecha: ${new Date().toLocaleString('es-ES')}`;
-    return { success: true, message: msg };
+    return { success: true, message: msg, quoted: true };
   } catch (e) {
-    return { success: false, message: '⚠️ Error agregando manhwa. Intenta más tarde.' };
+    return { success: false, message: '⚠️ Error agregando manhwa. Intenta más tarde.', quoted: true };
   }
 }
 
@@ -73,7 +73,7 @@ export async function listSeries() {
   try {
     const series = await db('manhwas').where('genero', 'like', '%serie%').limit(10);
     if (series.length === 0) {
-      return { success: true, message: '📺 *Lista de series*\n\nℹ️ No hay series registradas.\n\n➕ Usa `/addserie` para agregar una.' };
+      return { success: true, message: '📺 *Lista de series*\n\nℹ️ No hay series registradas.\n\n➕ Usa `/addserie` para agregar una.', quoted: true };
     }
     let text = '📺 *Lista de series*\n\n';
     series.forEach((s, i) => {
@@ -81,9 +81,9 @@ export async function listSeries() {
       text += `   🏷️ Género: ${s.genero}\n`;
       text += `   🗓️ Agregada: ${new Date(s.created_at).toLocaleDateString('es-ES')}\n\n`;
     });
-    return { success: true, message: text };
+    return { success: true, message: text, quoted: true };
   } catch (e) {
-    return { success: false, message: '⚠️ Error obteniendo series. Intenta más tarde.' };
+    return { success: false, message: '⚠️ Error obteniendo series. Intenta más tarde.', quoted: true };
   }
 }
 
@@ -126,9 +126,9 @@ export async function addSerie({ message, usuario, args }) {
 
     const extra = coverPath ? '\n🖼️ Adjunto guardado' : '';
     const msg = `✅ *Serie agregada*\n\n📌 Título: ${titulo}\n🏷️ Género: ${genero}\n📝 Descripción: ${descripcion}${extra}\n👤 Por: ${usuario}\n🕒 Fecha: ${new Date().toLocaleString('es-ES')}`;
-    return { success: true, message: msg };
+    return { success: true, message: msg, quoted: true };
   } catch (e) {
-    return { success: false, message: '⚠️ Error agregando serie. Intenta más tarde.' };
+    return { success: false, message: '⚠️ Error agregando serie. Intenta más tarde.', quoted: true };
   }
 }
 
@@ -136,86 +136,85 @@ export async function addSerie({ message, usuario, args }) {
 export async function listExtra() {
   try {
     const extras = await db('aportes').where('tipo', 'extra').limit(10);
-    if (extras.length === 0) return { success: true, message: 'ℹ️ No hay contenido extra disponible.' };
+    if (extras.length === 0) return { success: true, message: 'ℹ️ No hay contenido extra disponible.', quoted: true };
     let text = '✨ *Contenido extra:*\n\n';
     extras.forEach((e, i) => {
       text += `${i + 1}. **${e.contenido}**\n`;
       text += `   👤 Por: ${e.usuario}\n`;
       text += `   🗓️ ${new Date(e.fecha).toLocaleDateString()}\n\n`;
     });
-    return { success: true, message: text };
+    return { success: true, message: text, quoted: true };
   } catch {
-    return { success: false, message: '⚠️ Error obteniendo contenido extra.' };
+    return { success: false, message: '⚠️ Error obteniendo contenido extra.', quoted: true };
   }
 }
 
 export async function listIlustraciones() {
   try {
     const rows = await db('aportes').where('tipo', 'ilustracion').limit(10);
-    if (!rows.length) return { success: true, message: 'ℹ️ No hay ilustraciones disponibles.' };
+    if (!rows.length) return { success: true, message: 'ℹ️ No hay ilustraciones disponibles.', quoted: true };
     let text = '🖼️ *Ilustraciones:*\n\n';
     rows.forEach((r, i) => {
       text += `${i + 1}. **${r.contenido}**\n`;
       text += `   👤 Por: ${r.usuario}\n`;
       text += `   🗓️ ${new Date(r.fecha).toLocaleDateString()}\n\n`;
     });
-    return { success: true, message: text };
+    return { success: true, message: text, quoted: true };
   } catch {
-    return { success: false, message: '⚠️ Error obteniendo ilustraciones.' };
+    return { success: false, message: '⚠️ Error obteniendo ilustraciones.', quoted: true };
   }
 }
 
 export async function obtenerExtra({ args }) {
-  if (!args || !args.length) return { success: true, message: 'ℹ️ Uso: /obtenerextra [nombre]\nEjemplo: /obtenerextra wallpaper' };
+  if (!args || !args.length) return { success: true, message: 'ℹ️ Uso: /obtenerextra [nombre]\nEjemplo: /obtenerextra wallpaper', quoted: true };
   const searchTerm = args.join(' ');
   try {
     const rows = await db('aportes').where('tipo', 'extra').where('contenido', 'like', `%${searchTerm}%`).limit(5);
-    if (!rows.length) return { success: true, message: `🔎 No se encontró contenido extra con: "${searchTerm}"` };
+    if (!rows.length) return { success: true, message: `🔎 No se encontró contenido extra con: "${searchTerm}"`, quoted: true };
     let text = `✨ *Resultados para "${searchTerm}":*\n\n`;
     rows.forEach((r, i) => {
       text += `${i + 1}. **${r.contenido}**\n`;
       text += `   👤 Por: ${r.usuario}\n`;
       text += `   🗓️ ${new Date(r.fecha).toLocaleDateString()}\n\n`;
     });
-    return { success: true, message: text };
+    return { success: true, message: text, quoted: true };
   } catch {
-    return { success: false, message: '⚠️ Error buscando contenido extra.' };
+    return { success: false, message: '⚠️ Error buscando contenido extra.', quoted: true };
   }
 }
 
 export async function obtenerIlustracion({ args }) {
-  if (!args || !args.length) return { success: true, message: 'ℹ️ Uso: /obtenerilustracion [nombre]\nEjemplo: /obtenerilustracion anime' };
+  if (!args || !args.length) return { success: true, message: 'ℹ️ Uso: /obtenerilustracion [nombre]\nEjemplo: /obtenerilustracion anime', quoted: true };
   const searchTerm = args.join(' ');
   try {
     const rows = await db('aportes').where('tipo', 'ilustracion').where('contenido', 'like', `%${searchTerm}%`).limit(5);
-    if (!rows.length) return { success: true, message: `🔎 No se encontraron ilustraciones con: "${searchTerm}"` };
+    if (!rows.length) return { success: true, message: `🔎 No se encontraron ilustraciones con: "${searchTerm}"`, quoted: true };
     let text = `🖼️ *Ilustraciones para "${searchTerm}":*\n\n`;
     rows.forEach((r, i) => {
       text += `${i + 1}. **${r.contenido}**\n`;
       text += `   👤 Por: ${r.usuario}\n`;
       text += `   🗓️ ${new Date(r.fecha).toLocaleDateString()}\n\n`;
     });
-    return { success: true, message: text };
+    return { success: true, message: text, quoted: true };
   } catch {
-    return { success: false, message: '⚠️ Error buscando ilustraciones.' };
+    return { success: false, message: '⚠️ Error buscando ilustraciones.', quoted: true };
   }
 }
 
 export async function obtenerPack({ args }) {
-  if (!args || !args.length) return { success: true, message: 'ℹ️ Uso: /obtenerpack [nombre]\nEjemplo: /obtenerpack stickers' };
+  if (!args || !args.length) return { success: true, message: 'ℹ️ Uso: /obtenerpack [nombre]\nEjemplo: /obtenerpack stickers', quoted: true };
   const searchTerm = args.join(' ');
   try {
     const rows = await db('aportes').where('tipo', 'pack').where('contenido', 'like', `%${searchTerm}%`).limit(5);
-    if (!rows.length) return { success: true, message: `🔎 No se encontraron packs con: "${searchTerm}"` };
+    if (!rows.length) return { success: true, message: `🔎 No se encontraron packs con: "${searchTerm}"`, quoted: true };
     let text = `🧩 *Packs para "${searchTerm}":*\n\n`;
     rows.forEach((r, i) => {
       text += `${i + 1}. **${r.contenido}**\n`;
       text += `   👤 Por: ${r.usuario}\n`;
       text += `   🗓️ ${new Date(r.fecha).toLocaleDateString()}\n\n`;
     });
-    return { success: true, message: text };
+    return { success: true, message: text, quoted: true };
   } catch {
-    return { success: false, message: '⚠️ Error buscando packs.' };
+    return { success: false, message: '⚠️ Error buscando packs.', quoted: true };
   }
 }
-

@@ -1,5 +1,22 @@
-// Cargar Baileys desde el shim para soportar múltiples forks
-import * as baileys from './utils/baileys-shim.js';
+﻿// Cargar Baileys desde el shim para soportar múltiples forks
+// (baileys loader inline abajo)
+let makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers;
+async function loadBaileysLocal(){
+  const candidates=[]; try{ if(process?.env?.BAILEYS_MODULE) candidates.push(process.env.BAILEYS_MODULE) }catch{}
+  candidates.push('@whiskeysockets/baileys','baileys-mod','@rexxhayanasi/elaina-bail','baileys')
+  let lastErr=null
+  for(const name of candidates){
+    try{ const mod=await import(name); const M=(mod&&Object.keys(mod).length?mod:(mod?.default||mod)); const pick=(k)=> (M?.[k]??mod?.default?.[k]??mod?.[k]);
+      makeWASocket = pick('makeWASocket') ?? pick('default');
+      useMultiFileAuthState = pick('useMultiFileAuthState');
+      fetchLatestBaileysVersion = pick('fetchLatestBaileysVersion');
+      Browsers = pick('Browsers');
+      return true; } catch(e){ lastErr=e }
+  }
+  console.log('No se pudo cargar Baileys para subbot-runner:', lastErr?.message||lastErr)
+  return false
+}
+await loadBaileysLocal();
 import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
@@ -10,12 +27,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const {
-  makeWASocket,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  Browsers
-} = baileys;
+
 
 const CODE = process.env.SUB_CODE;
 const TYPE = process.env.SUB_TYPE || 'qr';
@@ -552,3 +564,4 @@ start().catch((error) => {
   process.send?.({ event: 'error', data: { message: error.message } });
   process.exit(1);
 });
+

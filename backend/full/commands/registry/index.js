@@ -37,7 +37,10 @@ import * as files from '../files.js';
 import * as maintenance from '../maintenance.js';
 import * as utils from '../utils.js';
 import * as admin from '../admin.js';
+import * as adminMenu from '../admin-menu.js';
 import * as botctl from '../bot-control.js';
+import * as menu from '../menu.js';
+import * as demo from '../demo.js';
 
 // Estructura de entrada de registro
 // key: comando (lowercase, con "/")
@@ -77,6 +80,9 @@ add('/unlock', async (ctx) => groupCmd.unlock(ctx), { category: 'group' });
 add('/tag', async (ctx) => groupCmd.tag(ctx), { category: 'group' });
 add('/whoami', async (ctx) => groupCmd.whoami(ctx), { category: 'group' });
 add('/debugadmin', async (ctx) => groupCmd.debugadmin(ctx), { category: 'group' });
+add('/admins', async (ctx) => groupCmd.admins(ctx), { category: 'group' });
+add('/adminmenu', async (ctx) => adminMenu.adminMenu(ctx), { category: 'group' });
+add('/admin', async (ctx) => adminMenu.adminMenu(ctx), { category: 'group' });
 
 // ---- Categoria: Sistema / Config ----
 add('/cleansession', async () => system.cleanSession(), { category: 'system' });
@@ -198,6 +204,13 @@ add('/paircode', async (ctx) => registry.get('/code').handler(ctx), { category: 
 // Eliminado alias legacy: /qr_legacy
 
 // ---- Categoria: Básicos ----
+add('/menu', async (ctx) => menu.menu(ctx), { category: 'basic' });
+add('/help', async (ctx) => menu.help(ctx), { category: 'basic' });
+add('/poll', async (ctx) => demo.poll(ctx), { category: 'demo' });
+add('/location', async (ctx) => demo.location(ctx), { category: 'demo' });
+add('/contact', async (ctx) => demo.contact(ctx), { category: 'demo' });
+add('/buttons', async (ctx) => demo.buttons(ctx), { category: 'demo' });
+add('/listdemo', async (ctx) => demo.listdemo(ctx), { category: 'demo' });
 add('/ping', async () => ({ success:true, message:'🏓 Pong' }), { category: 'info' });
 add('/status', async () => sysInfo.status(), { category: 'info' });
 add('/test', async ({ usuario }) => ({ success: true, message: `✅ Bot funcionando\n\n👤 ${usuario}\n🕒 ${new Date().toLocaleString('es-ES')}` }), { category: 'info' });

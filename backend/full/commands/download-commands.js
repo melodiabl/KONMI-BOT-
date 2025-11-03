@@ -18,6 +18,7 @@ import {
   getRandomMeme,
 } from '../utils/api-providers.js';
 import logger from '../config/logger.js';
+import { buildQuickReplyFlow } from '../utils/flows.js';
 
 /**
  * Comando /tiktok - Descarga videos de TikTok
@@ -40,19 +41,33 @@ export async function handleTikTokDownload(url, usuario) {
       };
     }
 
-    return {
+    const flow = buildQuickReplyFlow({
+      header: '📹 TikTok',
+      body: result.title ? `Título: ${result.title}` : 'Descarga lista',
+      footer: 'Acciones rápidas',
+      buttons: [
+        { text: '🎬 Video', command: `/video ${url}` },
+        { text: '🎵 Audio', command: `/music ${url}` },
+        { text: '🔁 Reintentar', command: `/tiktok ${url}` },
+      ],
+    })
+return [
+      {
       success: true,
       type: 'video',
       video: result.video,
       caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.description || result.title || 'Sin descripción'}\n🎵 *Música:* ${result.music || 'N/A'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
+      quoted: true,
+      viewOnce: true,
       info: {
         title: result.title,
         author: result.author,
         description: result.description,
         provider: result.provider,
-      },
-    };
+       },
+    },
+    { type: 'content', content: flow, quoted: true, ephemeralDuration: 300 } ];
   } catch (error) {
     logger.error('Error en handleTikTokDownload:', error);
     return {
@@ -85,7 +100,9 @@ export async function handleInstagramDownload(url, usuario) {
 
     const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.caption || 'Sin descripción'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`;
 
-    return {
+    const flow = buildQuickReplyFlow({ header: '📸 Instagram', body: result.caption || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/instagram ${url}` } ] })
+    return [
+      {
       success: true,
       type: result.type === 'video' ? 'video' : 'image',
       image: result.image,
@@ -93,13 +110,16 @@ export async function handleInstagramDownload(url, usuario) {
       url: result.url,
       caption,
       mentions: [`${usuario}@s.whatsapp.net`],
+      quoted: true,
+      viewOnce: true,
       info: {
         title: result.caption,
         author: result.author,
         type: result.type,
         provider: result.provider,
-      },
-    };
+       },
+    },
+    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
   } catch (error) {
     logger.error('Error en handleInstagramDownload:', error);
     return {
@@ -130,19 +150,24 @@ export async function handleFacebookDownload(url, usuario) {
       };
     }
 
-    return {
+    const flow = buildQuickReplyFlow({ header: '📹 Facebook', body: result.title || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/facebook ${url}` } ] })
+    return [
+      {
       success: true,
       type: 'video',
       video: result.video,
       caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'Sin título'}\n⏱️ *Duración:* ${result.duration || 'N/A'}\n👤 *Autor:* ${result.author || 'Desconocido'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
       mentions: [`${usuario}@s.whatsapp.net`],
+      quoted: true,
+      viewOnce: true,
       info: {
         title: result.title,
         author: result.author,
         duration: result.duration,
         provider: result.provider,
       },
-    };
+    },
+    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
   } catch (error) {
     logger.error('Error en handleFacebookDownload:', error);
     return {
@@ -175,20 +200,25 @@ export async function handleTwitterDownload(url, usuario) {
 
     const caption = `🐦 *Twitter/X ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* @${result.author || 'Desconocido'}\n📝 *Tweet:* ${result.text || 'Sin texto'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`;
 
-    return {
+    const flow = buildQuickReplyFlow({ header: '🐦 Twitter/X', body: result.text || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/twitter ${url}` } ] })
+    return [
+      {
       success: true,
       type: result.type === 'video' ? 'video' : 'image',
       video: result.video,
       image: result.image,
       caption,
       mentions: [`${usuario}@s.whatsapp.net`],
+      quoted: true,
+      viewOnce: true,
       info: {
         author: result.author,
         type: result.type,
         text: result.text,
         provider: result.provider,
       },
-    };
+    },
+    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
   } catch (error) {
     logger.error('Error en handleTwitterDownload:', error);
     return {

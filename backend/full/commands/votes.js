@@ -18,38 +18,37 @@ export async function crear({ args, remoteJid }){
   await ensureTables()
   const raw=(args||[]).join(' ').trim()
   const parts=raw.split('|').map(s=>s.trim()).filter(Boolean)
-  if(parts.length<3) return { success:true, message:'ℹ️ Uso: /crearvotacion <tema>|<op1>|<op2>[|op3...]' }
+  if(parts.length<3) return { success:true, message:'ℹ️ Uso: /crearvotacion <tema>|<op1>|<op2>[|op3...]', quoted: true }
   const tema=parts[0]; const opciones=parts.slice(1)
-  try{ const [id]=await db('votaciones').insert({ tema, opciones: JSON.stringify(opciones), grupo: remoteJid, abierta:true }); return { success:true, message:`🗳️ Votación #${id}: ${tema}\nOpciones: ${opciones.map((o,i)=>`${i+1}. ${o}`).join('\n')}` } }catch{ return { success:false, message:'⚠️ Error creando votación.' } }
+  try{ const [id]=await db('votaciones').insert({ tema, opciones: JSON.stringify(opciones), grupo: remoteJid, abierta:true }); return { success:true, message:`🗳️ Votación #${id}: ${tema}\nOpciones: ${opciones.map((o,i)=>`${i+1}. ${o}`).join('\n')}`, quoted: true } }catch{ return { success:false, message:'⚠️ Error creando votación.', quoted: true } }
 }
 
 export async function votar({ args, usuario, remoteJid }){
   await ensureTables()
   const num = parseInt((args||[])[0]||'0',10)
-  if(!num) return { success:true, message:'ℹ️ Uso: /votar <número de opción>' }
+  if(!num) return { success:true, message:'ℹ️ Uso: /votar <número de opción>', quoted: true }
   try{
     const v = await db('votaciones').where({ grupo: remoteJid, abierta:true }).orderBy('creada_en','desc').first()
-    if(!v) return { success:true, message:'ℹ️ No hay votación abierta.' }
+    if(!v) return { success:true, message:'ℹ️ No hay votación abierta.', quoted: true }
     const opts = JSON.parse(v.opciones||'[]')
-    if(num<1||num>opts.length) return { success:true, message:'ℹ️ Opción inválida.' }
+    if(num<1||num>opts.length) return { success:true, message:'ℹ️ Opción inválida.', quoted: true }
     await db('votos').insert({ votacion_id: v.id, usuario, opcion: num })
-    return { success:true, message:`✅ Voto registrado: ${opts[num-1]}` }
-  }catch{ return { success:false, message:'⚠️ Error registrando voto.' } }
+    return { success:true, message:`✅ Voto registrado: ${opts[num-1]}`, quoted: true }
+  }catch{ return { success:false, message:'⚠️ Error registrando voto.', quoted: true } }
 }
 
 export async function cerrar({ remoteJid }){
   await ensureTables()
   try{
     const v = await db('votaciones').where({ grupo: remoteJid, abierta:true }).orderBy('creada_en','desc').first()
-    if(!v) return { success:true, message:'ℹ️ No hay votación abierta.' }
+    if(!v) return { success:true, message:'ℹ️ No hay votación abierta.', quoted: true }
     await db('votaciones').where({ id: v.id }).update({ abierta:false })
     const votos = await db('votos').where({ votacion_id: v.id })
     const opts = JSON.parse(v.opciones||'[]')
     const conteo = Array(opts.length).fill(0); votos.forEach(x=>{ if(x.opcion>=1 && x.opcion<=opts.length) conteo[x.opcion-1]++ })
     let msg = `🗳️ Resultado: ${v.tema}\n\n` + opts.map((o,i)=>`${i+1}. ${o}: ${conteo[i]} voto(s)`).join('\n')
-    return { success:true, message: msg }
-  }catch{ return { success:false, message:'⚠️ Error cerrando votación.' } }
+    return { success:true, message: msg, quoted: true }
+  }catch{ return { success:false, message:'⚠️ Error cerrando votación.', quoted: true } }
 }
 
 export default { crear, votar, cerrar }
-

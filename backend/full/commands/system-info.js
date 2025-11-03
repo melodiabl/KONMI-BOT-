@@ -23,7 +23,7 @@ export async function status() {
   msg += `Uptime: ${st.status === 'connected' ? Math.round(process.uptime()) + 's' : '0s'}\n`;
   msg += `Memoria: RSS ${humanBytes(mem.rss)}, Heap ${humanBytes(mem.heapUsed)}\n`;
   if (load.length) msg += `Carga: ${load.map(n=>n.toFixed(2)).join(' | ')}\n`;
-  return { success: true, message: msg };
+  return { success: true, message: msg, quoted: true };
 }
 
 export async function serverInfo() {
@@ -34,14 +34,14 @@ export async function serverInfo() {
   msg += `SO: ${os.type?.()} ${os.release?.()} (${os.platform?.()})\n`;
   msg += `CPU: ${cpus[0]?.model || 'N/A'} x${cpus.length} @ ${(cpus[0]?.speed||0)/1000} GHz\n`;
   msg += `Mem: ${humanBytes(memFree)} libres / ${humanBytes(memTotal)} totales\n`;
-  return { success: true, message: msg };
+  return { success: true, message: msg, quoted: true };
 }
 
 export async function hardware() {
   const cpus = os.cpus?.() || [];
   let msg = '🔧 Hardware\n\n';
   msg += cpus.slice(0,4).map((c,i)=>`CPU${i+1}: ${c.model} @ ${c.speed}MHz`).join('\n');
-  return { success: true, message: msg };
+  return { success: true, message: msg, quoted: true };
 }
 
 export async function runtime() {
@@ -49,6 +49,5 @@ export async function runtime() {
   msg += `Node: ${process.version}\n`;
   msg += `PID: ${process.pid}\n`;
   msg += `Uptime: ${Math.round(process.uptime())}s\n`;
-  return { success: true, message: msg };
+  return { success: true, message: msg, quoted: true };
 }
-
