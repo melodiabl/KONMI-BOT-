@@ -3,26 +3,43 @@
 
 import db from '../db.js'
 import { buildQuickReplyFlow } from '../utils/flows.js'
+import { isOwnerNumber, isGroupAdmin } from '../utils/identity.js'
 
-
-function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
-function isOwnerNumber(usuario){ try { const o = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER||''); return o && onlyDigits(usuario)===o } catch { return false } }
-
-async function isGroupAdmin(sock, remoteJid, usuario){
-  try{
-    const meta = await sock.groupMetadata(remoteJid)
-    const userNum = String(usuario).split(':')[0]
-    const p = (meta?.participants||[]).find(x=>String(x.id).startsWith(userNum))
-    return !!(p && (p.admin==='admin' || p.admin==='superadmin'))
-  }catch{ return false }
+async function ensureGatingTables() {
+  // Tabla global de encendido/apagado ya se asegura en la sección global
+  // Aquí aseguramos tablas usadas por el gateo por grupo en subbot-manager
+  try {
+    const exists = await db.schema.hasTable('grupos_desactivados')
+    if (!exists) {
+      await db.schema.createTable('grupos_desactivados', (t) => {
+        t.increments('id')
+        t.string('jid').unique().notNullable()
+        t.timestamp('updated_at').defaultTo(db.fn.now())
+      })
+    }
+  } catch {}
+  try {
+    const exists = await db.schema.hasTable('subbot_group_state')
+    if (!exists) {
+      await db.schema.createTable('subbot_group_state', (t) => {
+        t.increments('id').primary()
+        t.string('subbot_code', 120).notNullable()
+        t.string('group_jid', 200).notNullable()
+        t.boolean('is_active').notNullable().defaultTo(true)
+        t.timestamp('updated_at').defaultTo(db.fn.now())
+        t.unique(['subbot_code', 'group_jid'])
+      })
+    }
+  } catch {}
 }
 
 export async function bot({ usuario, args, isGroup, remoteJid, sock, message }) {
   try {
     const a0 = (args||[])[0]
+    const fromMe = !!(message?.key?.fromMe)
     // Global on/off (solo owner)
     if (a0 === 'global') {
-      if (!isOwnerNumber(usuario)) {
+      if (!fromMe && !isOwnerNumber(usuario, sock)) {
         return {
           success: true,
           type: 'buttons',
@@ -52,9 +69,21 @@ export async function bot({ usuario, args, isGroup, remoteJid, sock, message }) 
       }
       const turnOn = v === 'on'
       try {
+        // asegurar tabla bot_global_state para evitar errores "no such table"
+        const exists = await db.schema.hasTable('bot_global_state')
+        if (!exists) {
+          await db.schema.createTable('bot_global_state', (table) => {
+            table.increments('id').primary()
+            table.boolean('is_on').notNullable().defaultTo(true)
+            table.string('estado')
+            table.string('activado_por')
+            table.timestamp('fecha_cambio').defaultTo(db.fn.now())
+          })
+          await db('bot_global_state').insert({ id: 1, is_on: true, estado: 'on' }).catch(()=>{})
+        }
         const row = await db('bot_global_state').first('*')
-        if (row) await db('bot_global_state').update({ is_on: turnOn }).where({ id: 1 })
-        else await db('bot_global_state').insert({ id: 1, is_on: turnOn })
+        if (row) await db('bot_global_state').update({ is_on: turnOn, estado: turnOn ? 'on' : 'off', activado_por: String(usuario), fecha_cambio: db.fn.now() }).where({ id: row.id || 1 })
+        else await db('bot_global_state').insert({ id: 1, is_on: turnOn, estado: turnOn ? 'on' : 'off', activado_por: String(usuario) })
       } catch {}
       const msg = turnOn ? '✅ Bot activado globalmente' : '⛔ Bot desactivado globalmente'
       const flow = buildQuickReplyFlow({
@@ -71,7 +100,9 @@ export async function bot({ usuario, args, isGroup, remoteJid, sock, message }) 
 
     // Grupo on/off
     if (!isGroup) return { success: true, message: 'ℹ️ Este comando solo funciona en grupos', quoted: true, ephemeralDuration: 120 }
-    const allowed = isOwnerNumber(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
+    // Si el comando es fromMe (enviado desde el propio bot), permitir siempre
+    // Esto facilita la administración directa desde el dispositivo vinculado del bot
+    const allowed = fromMe || isOwnerNumber(usuario, sock) || await isGroupAdmin(sock, remoteJid, usuario)
     if (!allowed) return { success: true, message: '⛔ Solo owner o administradores del grupo pueden usar /bot on/off.', quoted: true, ephemeralDuration: 120 }
     const turnOn = a0 === 'on'
     const turnOff = a0 === 'off'
@@ -88,9 +119,42 @@ export async function bot({ usuario, args, isGroup, remoteJid, sock, message }) 
       ]
     }
     try {
-      const row = await db('group_settings').where({ group_id: remoteJid }).first()
-      if (row) await db('group_settings').where({ group_id: remoteJid }).update({ is_active: turnOn, updated_by: usuario, updated_at: new Date().toISOString() })
-      else await db('group_settings').insert({ group_id: remoteJid, is_active: turnOn, updated_by: usuario, updated_at: new Date().toISOString() })
+      // Compat previo: group_settings (no usado por el gate actual, pero mantenemos)
+      try {
+        const exists = await db.schema.hasTable('group_settings')
+        if (exists) {
+          const row = await db('group_settings').where({ group_id: remoteJid }).first()
+          if (row) await db('group_settings').where({ group_id: remoteJid }).update({ is_active: turnOn, updated_by: usuario, updated_at: new Date().toISOString() })
+          else await db('group_settings').insert({ group_id: remoteJid, is_active: turnOn, updated_by: usuario, updated_at: new Date().toISOString() })
+        }
+      } catch {}
+
+      // Gate efectivo usado por whatsapp.js (subbot-manager):
+      await ensureGatingTables()
+      if (turnOn) {
+        // Eliminar de grupos_desactivados y marcar activo en subbot_group_state
+        try { await db('grupos_desactivados').where({ jid: remoteJid }).del() } catch {}
+        try {
+          await db('subbot_group_state')
+            .insert({ subbot_code: 'main', group_jid: remoteJid, is_active: true, updated_at: db.fn.now() })
+            .onConflict(['subbot_code', 'group_jid'])
+            .merge({ is_active: true, updated_at: db.fn.now() })
+        } catch {}
+      } else {
+        // Agregar a grupos_desactivados y marcar inactivo en subbot_group_state
+        try {
+          await db('grupos_desactivados')
+            .insert({ jid: remoteJid, updated_at: db.fn.now() })
+            .onConflict(['jid'])
+            .merge({ updated_at: db.fn.now() })
+        } catch {}
+        try {
+          await db('subbot_group_state')
+            .insert({ subbot_code: 'main', group_jid: remoteJid, is_active: false, updated_at: db.fn.now() })
+            .onConflict(['subbot_code', 'group_jid'])
+            .merge({ is_active: false, updated_at: db.fn.now() })
+        } catch {}
+      }
     } catch {}
     const msg = turnOn ? '✅ Bot activado en este grupo' : '⛔ Bot desactivado en este grupo'
     const flow = buildQuickReplyFlow({
@@ -110,4 +174,5 @@ export async function bot({ usuario, args, isGroup, remoteJid, sock, message }) 
 }
 
 export default { bot }
+
 

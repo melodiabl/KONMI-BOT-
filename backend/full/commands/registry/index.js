@@ -22,11 +22,16 @@ import * as system from '../system.js';
 
 // Dominios adicionales
 import * as groupCmd from '../groups.js';
+import * as groupSettings from '../group-settings.js';
+import * as groupAdminX from '../group-admin-extra.js';
+import * as mod from '../moderation.js';
 import * as aporteCmd from '../aportes.js';
 import * as pedidoCmd from '../pedidos.js';
 import * as sysInfo from '../system-info.js';
 import * as content from '../content.js';
 import * as images from '../images.js';
+import * as stickers from '../stickers.js';
+import * as gextra from '../group-extra.js';
 import * as pairing from '../pairing.js';
 // Subbots: listas globales/personales
 import * as subbots from '../subbots.js';
@@ -36,11 +41,16 @@ import * as files from '../files.js';
 // Mantenimiento
 import * as maintenance from '../maintenance.js';
 import * as utils from '../utils.js';
+import * as utilmath from '../util-math.js';
 import * as admin from '../admin.js';
 import * as adminMenu from '../admin-menu.js';
 import * as botctl from '../bot-control.js';
 import * as menu from '../menu.js';
+import { getTheme } from '../../utils/theme.js';
+import * as diag from '../diag.js';
 import * as demo from '../demo.js';
+import * as broadcast from '../broadcast.js';
+import * as promo from '../promo.js';
 
 // Estructura de entrada de registro
 // key: comando (lowercase, con "/")
@@ -81,8 +91,32 @@ add('/tag', async (ctx) => groupCmd.tag(ctx), { category: 'group' });
 add('/whoami', async (ctx) => groupCmd.whoami(ctx), { category: 'group' });
 add('/debugadmin', async (ctx) => groupCmd.debugadmin(ctx), { category: 'group' });
 add('/admins', async (ctx) => groupCmd.admins(ctx), { category: 'group' });
+add('/debuggroup', async (ctx) => groupCmd.debuggroup(ctx), { category: 'group' });
 add('/adminmenu', async (ctx) => adminMenu.adminMenu(ctx), { category: 'group' });
 add('/admin', async (ctx) => adminMenu.adminMenu(ctx), { category: 'group' });
+add('/tagall', async (ctx) => gextra.tagall(ctx), { category: 'group' });
+add('/all', async (ctx) => gextra.tagall(ctx), { category: 'group' });
+add('/groupinfo', async (ctx) => gextra.groupinfo(ctx), { category: 'group' });
+add('/muteall', async (ctx) => groupAdminX.muteall(ctx), { category: 'group' });
+add('/lockinfo', async (ctx) => groupAdminX.lockinfo(ctx), { category: 'group' });
+add('/subject', async (ctx) => groupAdminX.subject(ctx), { category: 'group' });
+add('/desc', async (ctx) => groupAdminX.desc(ctx), { category: 'group' });
+add('/invite', async (ctx) => groupAdminX.invite(ctx), { category: 'group' });
+add('/warn', async (ctx) => mod.warn(ctx), { category: 'group' });
+add('/unwarn', async (ctx) => mod.unwarn(ctx), { category: 'group' });
+add('/warns', async (ctx) => mod.warns(ctx), { category: 'group' });
+// Group settings
+add('/antilink', async (ctx) => groupSettings.antilink(ctx), { category: 'group' });
+add('/antilinkmode', async (ctx) => groupSettings.antilinkmode(ctx), { category: 'group' });
+add('/slowmode', async (ctx) => groupSettings.slowmode(ctx), { category: 'group' });
+add('/antiflood', async (ctx) => groupSettings.antiflood(ctx), { category: 'group' });
+add('/antifloodmode', async (ctx) => groupSettings.antifloodmode(ctx), { category: 'group' });
+add('/antifloodrate', async (ctx) => groupSettings.antifloodrate(ctx), { category: 'group' });
+add('/welcome', async (ctx) => groupSettings.welcome(ctx), { category: 'group' });
+add('/setwelcome', async (ctx) => groupSettings.setwelcome(ctx), { category: 'group' });
+add('/settings', async (ctx) => groupSettings.settings(ctx), { category: 'group' });
+add('/rules', async (ctx) => groupSettings.rules(ctx), { category: 'group' });
+add('/setrules', async (ctx) => groupSettings.setrules(ctx), { category: 'group' });
 
 // ---- Categoria: Sistema / Config ----
 add('/cleansession', async () => system.cleanSession(), { category: 'system' });
@@ -194,6 +228,13 @@ add('/spot', async (ctx) => registry.get('/spotify').handler(ctx), { category: '
 add('/download', async (ctx) => registry.get('/video').handler(ctx), { category: 'media' });
 add('/dl', async (ctx) => registry.get('/video').handler(ctx), { category: 'media' });
 add('/descargar', async (ctx) => registry.get('/video').handler(ctx), { category: 'media' });
+add('/tiktok', async ({ args, usuario }) => handleTikTokDownload((args||[]).join(' ').trim(), usuario), { category: 'media' });
+add('/tiktoksearch', async ({ args, usuario }) => {
+  const q = (args||[]).join(' ').trim()
+  if (!q) return { success:false, message:'❌ Uso: /tiktoksearch <texto o URL>\n\nPega un enlace de TikTok o usa /video <consulta> para buscar en YouTube.' }
+  if (/tiktok\.com/i.test(q)) return handleTikTokDownload(q, usuario)
+  return { success:false, message:'🔎 Aún no tengo buscador de TikTok por texto.\n\nPega un enlace de TikTok (usa /tiktok <url>) o usa /video <consulta> para buscar en YouTube.' }
+}, { category: 'media' });
 // Aliases/populares
 add('/play', async (ctx) => registry.get('/music').handler(ctx), { category: 'media' });
 add('/pin', async (ctx) => registry.get('/pinterest').handler(ctx), { category: 'media' });
@@ -204,19 +245,26 @@ add('/paircode', async (ctx) => registry.get('/code').handler(ctx), { category: 
 // Eliminado alias legacy: /qr_legacy
 
 // ---- Categoria: Básicos ----
-add('/menu', async (ctx) => menu.menu(ctx), { category: 'basic' });
-add('/help', async (ctx) => menu.help(ctx), { category: 'basic' });
+// Unificar /menu con /help para que muestren el mismo listado/categorías
+add('/menu', async (ctx) => registry.get('/help').handler(ctx), { category: 'info' });
 add('/poll', async (ctx) => demo.poll(ctx), { category: 'demo' });
 add('/location', async (ctx) => demo.location(ctx), { category: 'demo' });
 add('/contact', async (ctx) => demo.contact(ctx), { category: 'demo' });
 add('/buttons', async (ctx) => demo.buttons(ctx), { category: 'demo' });
 add('/listdemo', async (ctx) => demo.listdemo(ctx), { category: 'demo' });
+add('/live', async (ctx) => demo.live(ctx), { category: 'demo' });
+add('/react', async (ctx) => demo.react(ctx), { category: 'demo' });
+add('/edit', async (ctx) => demo.edit(ctx), { category: 'demo' });
+add('/delete', async (ctx) => demo.del(ctx), { category: 'demo' });
+add('/presence', async (ctx) => demo.presence(ctx), { category: 'demo' });
 add('/ping', async () => ({ success:true, message:'🏓 Pong' }), { category: 'info' });
 add('/status', async () => sysInfo.status(), { category: 'info' });
 add('/test', async ({ usuario }) => ({ success: true, message: `✅ Bot funcionando\n\n👤 ${usuario}\n🕒 ${new Date().toLocaleString('es-ES')}` }), { category: 'info' });
 add('/whoami', async (ctx) => groupCmd.whoami(ctx), { category: 'info' });
 add('/mynumber', async (ctx) => registry.get('/whoami').handler(ctx), { category: 'info' });
 add('/bot', async (ctx) => botctl.bot(ctx), { category: 'group' });
+add('/broadcast', async (ctx) => broadcast.broadcast(ctx), { category: 'system' });
+add('/promo', async (ctx) => promo.promo(ctx), { category: 'utils' });
 
 // ---- Categoria: Archivos/Descargas (file manager) ----
 add('/guardar', async (ctx) => files.guardar(ctx), { category: 'files' });
@@ -233,9 +281,15 @@ add('/stats', async () => files.stats(), { category: 'files' });
 // ---- Categoria: Utilidades ----
 add('/short', async ({ args, usuario }) => utils.shortUrl((args||[]).join(' ').trim(), usuario), { category: 'utils' });
 add('/acortar', async (ctx) => registry.get('/short').handler(ctx), { category: 'utils' });
+// Fun: definir /joke primero y mapear /chiste como alias para evitar undefined
+add('/joke', async ({ usuario }) => handleFact(usuario), { category: 'fun' });
 add('/chiste', async (ctx) => registry.get('/joke').handler(ctx), { category: 'fun' });
 add('/dato', async (ctx) => registry.get('/fact').handler(ctx), { category: 'fun' });
 add('/tts', async (ctx) => utils.tts(ctx), { category: 'utils' });
+add('/calc', async (ctx) => utilmath.calc(ctx), { category: 'utils' });
+add('/stickerurl', async (ctx) => stickers.stickerurl(ctx), { category: 'utils' });
+add('/toimg', async (ctx) => stickers.toimg(ctx), { category: 'utils' });
+add('/sticker', async (ctx) => stickers.sticker(ctx), { category: 'utils' });
 
 // ---- Categoria: Votaciones ----
 import * as votes from '../votes.js';
@@ -250,11 +304,16 @@ add('/setowner', async (ctx) => admin.setOwner(ctx), { category: 'system' });
 add('/debugme', async (ctx) => admin.debugMe(ctx), { category: 'system' });
 add('/debugfull', async (ctx) => admin.debugFull(ctx), { category: 'system' });
 add('/testadmin', async (ctx) => admin.testAdmin(ctx), { category: 'system' });
+add('/debugbot', async (ctx) => admin.debugBot(ctx), { category: 'system' });
 
 import { promotionalLinks } from '../../config/links.js';
+import * as logsCmd from '../logs.js';
+add('/logfind', async (ctx) => logsCmd.find(ctx), { category: 'system' });
+add('/topcmd', async (ctx) => logsCmd.topcmd(ctx), { category: 'system' });
 
-// ---- Ayuda dinámica construida desde el registro ----
+// ---- Ayuda dinámica con categorías ----
 async function buildHelp(ctx) {
+  const th = getTheme();
   const byCat = {};
   for (const [cmd, meta] of registry.entries()) {
     const cat = (meta.category || 'otros').toLowerCase();
@@ -262,39 +321,34 @@ async function buildHelp(ctx) {
     byCat[cat].push(cmd);
   }
 
-  const categories = ['ai', 'group', 'aportes', 'pedidos', 'library', 'media', 'utils', 'fun', 'pairing', 'system', 'info', 'user', 'otros'];
-  
-  const categoryButtons = categories.map(cat => ({
-    buttonId: `help_category_${cat}`,
-    buttonText: { displayText: cat },
-    type: 1,
-  }));
+  const categories = ['ai','group','aportes','pedidos','library','media','utils','fun','pairing','system','info','user','otros'];
 
-  const linkButtons = promotionalLinks.map(link => ({
-    buttonId: `url|${link.url}`,
-    buttonText: { displayText: link.text },
-    type: 1,
-  }));
+  // Si viene categoría específica: /help <cat>
+  const selected = (ctx?.args && ctx.args[0]) ? String(ctx.args[0]).toLowerCase().trim() : null;
+  if (selected && byCat[selected]) {
+    const cmds = byCat[selected].slice().sort();
+    const text = `${th.accent} Comandos de ${selected}\n\n${cmds.map(c=>`${th.bullet} ${c}`).join('\n') || 'Sin comandos en esta categoría'}`;
+    return [
+      { success: true, message: `${th.header('KONMI BOT')}\n${text}\n${th.footer()}`, quoted: true },
+      { type: 'buttons', text: '¿Volver al menú?', footer: 'KONMI BOT', buttons: [ { text: '⬅️ Volver', command: '/help' }, { text: '🧪 SelfTest', command: '/selftest' } ], quoted: true }
+    ];
+  }
 
-  const buttons = [...linkButtons, ...categoryButtons];
+  const sections = [
+    {
+      title: `${th.accent} Categorías disponibles`,
+      rows: categories.map(cat => ({ title: cat, description: `${(byCat[cat] || []).length} comando(s)`, id: `/help ${cat}` }))
+    },
+    {
+      title: 'Comunidades / Enlaces',
+      rows: promotionalLinks.map(link => ({ title: link.text, description: link.url, id: `url|${link.url}` }))
+    }
+  ];
 
-  const buttonMessage = {
-    text: '¡Hola! Soy KONMI-BOT, tu asistente personal. Elige una categoría para ver los comandos o únete a nuestras comunidades.',
-    footer: 'Selecciona una opción',
-    buttons: buttons,
-    headerType: 1,
-  };
-
-  await ctx.sock.sendMessage(ctx.remoteJid, buttonMessage);
-}
-
-add('/help', async (ctx) => {
-  await buildHelp(ctx);
-  return { handled: true };
-}, { category: 'info' });
+  return { type: 'list', text: `${th.accent} ${th.strings.helpTitle}`, buttonText: `${th.accent} ${th.strings.viewOptions}`, sections, quoted: true };
+}add('/help', async (ctx) => buildHelp(ctx), { category: 'info' });
 
 add('/ayuda', async (ctx) => registry.get('/help').handler(ctx), { category: 'info' });
-add('/menu', async (ctx) => registry.get('/help').handler(ctx), { category: 'info' });
 add('/comandos', async (ctx) => registry.get('/help').handler(ctx), { category: 'info' });
 
 export function getCommandRegistry() {
@@ -307,3 +361,12 @@ add('/bots', async (ctx) => subbots.all(ctx), { category: 'pairing' });
 // Usuario: lista sus propios subbots (alias mybots/mibots)
 add('/mybots', async (ctx) => subbots.mine(ctx), { category: 'pairing' });
 add('/mibots', async (ctx) => subbots.mine(ctx), { category: 'pairing' });
+
+
+
+
+add('/selftest', async (ctx) => diag.selftest(ctx), { category: 'system' });
+add('/diag', async (ctx) => diag.selftest(ctx), { category: 'system' });
+add('/diagnostico', async (ctx) => diag.selftest(ctx), { category: 'system' });
+
+

@@ -4,11 +4,24 @@
 import db from '../db.js'
 
 function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
-function isOwner(usuario){ try{ const o=onlyDigits(process.env.OWNER_WHATSAPP_NUMBER||''); return o && onlyDigits(usuario)===o }catch{return false} }
+function normalizeDigits(userOrJid){
+  try {
+    let s = String(userOrJid || '')
+    const at = s.indexOf('@'); if (at > 0) s = s.slice(0, at)
+    const colon = s.indexOf(':'); if (colon > 0) s = s.slice(0, colon)
+    return s.replace(/\D/g, '')
+  } catch { return onlyDigits(userOrJid) }
+}
+function isOwner(usuario){
+  try { const env = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER||''); if (env && normalizeDigits(usuario)===env) return true } catch {}
+  try { const base = onlyDigits(global.BOT_BASE_NUMBER||''); if (base && normalizeDigits(usuario)===base) return true } catch {}
+  try { const first = Array.isArray(global.owner)&&global.owner[0]?.[0]; if (first && normalizeDigits(usuario)===onlyDigits(first)) return true } catch {}
+  return false
+}
 
 export async function mine({ usuario }){
   try{
-    const phone = onlyDigits(usuario)
+    const phone = normalizeDigits(usuario)
     const rows = await db('subbots').where({ user_phone: phone }).orderBy('created_at','desc').limit(50)
     if(!rows.length) return { success:true, message:'📦 No tienes subbots.' }
     let msg = `🤖 Mis Subbots (${rows.length})\n\n`
@@ -35,4 +48,3 @@ export async function all({ usuario }){
 }
 
 export default { mine, all }
-

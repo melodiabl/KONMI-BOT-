@@ -72,7 +72,9 @@ logger.whatsapp = {
   message: (type, command, user, group, details = {}) => {
     const context = group ? `📱 Grupo: ${group}` : "💬 Privado";
     const userContext = `👤 Usuario: ${user}`;
-    const fullContext = `${context} | ${userContext}`;
+    const botId = (details && (details.bot || details.botId || details.botJid)) ? (details.bot || details.botId || details.botJid) : null;
+    const botContext = botId ? ` | 🤖 Bot: ${botId}` : '';
+    const fullContext = `${context} | ${userContext}${botContext}`;
 
     const emoji = type === "comando" ? "⚡" : "💬";
     const logMessage = `${emoji} [WhatsApp] ${command} - ${fullContext}`;

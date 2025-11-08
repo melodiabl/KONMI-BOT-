@@ -1,9 +1,31 @@
-﻿// Cargar Baileys desde el shim para soportar múltiples forks
+// Cargar .env del backend si no viene heredado
+import 'dotenv/config'
+
+// Cargar Baileys desde el shim para soportar múltiples forks
 // (baileys loader inline abajo)
 let makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers;
 async function loadBaileysLocal(){
-  const candidates=[]; try{ if(process?.env?.BAILEYS_MODULE) candidates.push(process.env.BAILEYS_MODULE) }catch{}
-  candidates.push('@whiskeysockets/baileys','baileys-mod','@rexxhayanasi/elaina-bail','baileys')
+  const candidates=[];
+  const normalizeSpecifier=(raw)=>{
+    try{
+      if(!raw) return null; const s=String(raw).trim(); const l=s.toLowerCase();
+      if(l==='bail'||l.includes('nstar-y/bail')||l.includes('github:nstar-y/bail')||l==='baileys-mod') return 'baileys-mod';
+      if(l.includes('whiskeysockets')||l==='@whiskeysockets/baileys'||l==='baileys') return '@whiskeysockets/baileys';
+      if(l.includes('elaina')||l.includes('rexxhayanasi')) return '@rexxhayanasi/elaina-bail';
+      return s;
+    }catch{ return raw }
+  }
+  try{
+    if(process?.env?.BAILEYS_MODULE){
+      const norm=normalizeSpecifier(process.env.BAILEYS_MODULE);
+      if(norm) candidates.push(norm);
+      if(!norm||norm!==process.env.BAILEYS_MODULE) candidates.push(process.env.BAILEYS_MODULE);
+    }
+  }catch{}
+  // Solo el módulo definido por .env; si no hay, usar oficial como fallback
+  if(candidates.length===0){
+    candidates.push('@whiskeysockets/baileys')
+  }
   let lastErr=null
   for(const name of candidates){
     try{ const mod=await import(name); const M=(mod&&Object.keys(mod).length?mod:(mod?.default||mod)); const pick=(k)=> (M?.[k]??mod?.default?.[k]??mod?.[k]);
@@ -63,7 +85,9 @@ if (RAW_CUSTOM_PAIRING && SANITIZED_CUSTOM_PAIRING.length !== 8) {
 const MAX_RETRIES = parseInt(process.env.SUBBOT_MAX_RETRIES || '3', 10);
 const RETRY_DELAY_MS = parseInt(process.env.SUBBOT_RETRY_DELAY_MS || '3000', 10);
 const ATTEMPT_TIMEOUT_MS = parseInt(process.env.SUBBOT_ATTEMPT_TIMEOUT_MS || '180000', 10);
-const SUBBOT_BROWSER = (process.env.SUBBOT_BROWSER || 'ubuntu').toLowerCase();
+const SUBBOT_BROWSER = (process.env.SUBBOT_BROWSER || process.env.BOT_BROWSER || 'ubuntu').toLowerCase();
+const SUBBOT_VERBOSE = /^(1|true|yes)$/i.test(process.env.SUBBOT_VERBOSE || process.env.LOG_VERBOSE || process.env.LOG_CONSOLE_TRACE || '')
+const vlog = (...a)=>{ if (SUBBOT_VERBOSE) try { console.log(...a) } catch {} }
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -88,7 +112,7 @@ function resolveBrowserPreset() {
 }
 
 async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPairingCode }) {
-  console.log(`  Intento ${attempt}/${maxAttempts || '∞'}`);
+  vlog(`  Intento ${attempt}/${maxAttempts || '∞'}`);
 
   if (cleanupAuth) {
     try {
@@ -118,7 +142,7 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
     }
   }
 
-  console.log('Auth state preparado');
+  vlog('Auth state preparado');
 
   const runtimeContext = {
     mode: 'subbot',
@@ -130,7 +154,7 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
   };
 
   const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log('Baileys version:', { version, isLatest });
+  vlog('Baileys version:', { version, isLatest });
 
   const sock = makeWASocket({
     version,
@@ -139,7 +163,7 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
     auth: state,
     browser: resolveBrowserPreset()
   });
-  console.log('Socket creado');
+  vlog('Socket creado');
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -200,10 +224,8 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
         if (!Array.isArray(messages)) return;
         for (const message of messages) {
           try {
-            // FILTRO INTELIGENTE fromMe:
-            // - Si fromMe = true, verificar si es un COMANDO
-            // - Si es comando, PERMITIR (para que el owner pueda usar el subbot)
-            // - Si NO es comando, IGNORAR (son respuestas del subbot)
+            // Política configurable para mensajes propios (fromMe)
+            // Modos: all | commands | none (default: commands)
             if (message.key.fromMe) {
               const txt = (
                 message.message?.conversation ||
@@ -211,12 +233,14 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
                 ''
               ).trim();
               const isCommand = txt.startsWith('/') || txt.startsWith('!') || txt.startsWith('.');
-
-              // Solo permitir si es un comando
-              if (!isCommand) {
-                continue; // Ignorar respuestas del subbot
-              }
-              // Si es comando, continuar procesando
+              const mode = String(
+                process.env.SUBBOT_FROMME_MODE ||
+                process.env.FROMME_MODE ||
+                process.env.ALLOW_FROM_ME ||
+                'commands'
+              ).toLowerCase();
+              const allow = (mode === 'all' || mode === 'true') || (mode === 'commands' && isCommand);
+              if (!allow) continue; // ignorar según política
             }
 
             if (!await isBotGloballyActive()) {
@@ -224,6 +248,37 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
             }
 
             const remoteJid = message.key?.remoteJid || '';
+            // Debug robusto de texto/keys
+            try {
+              const unwrap = (msg) => {
+                try {
+                  let x = msg?.message || {};
+                  let guard = 0;
+                  while (guard++ < 6) {
+                    if (x?.ephemeralMessage?.message) { x = x.ephemeralMessage.message; continue }
+                    if (x?.viewOnceMessage?.message) { x = x.viewOnceMessage.message; continue }
+                    if (x?.viewOnceMessageV2?.message) { x = x.viewOnceMessageV2.message; continue }
+                    if (x?.viewOnceMessageV2Extension?.message) { x = x.viewOnceMessageV2Extension.message; continue }
+                    if (x?.message && typeof x.message === 'object') { x = x.message; continue }
+                    break;
+                  }
+                  return x || {};
+                } catch { return (msg?.message || {}) }
+              };
+              const mm = unwrap(message);
+              const text = (
+                mm?.extendedTextMessage?.text ||
+                mm?.conversation ||
+                mm?.imageMessage?.caption ||
+                mm?.videoMessage?.caption ||
+                ''
+              ).trim();
+              const isCmd = !!text && (/^[\/!.]/.test(text));
+              if (String(process.env.LOG_CONSOLE_TRACE||'').toLowerCase()==='true' && (!text || text === '[Mensaje sin texto]')) {
+                const keys = Object.keys(mm || {});
+            if (SUBBOT_VERBOSE) console.log(`[subbot ${CODE}] upsert`, { remoteJid, isGroup: remoteJid.endsWith('@g.us'), isCmd, keys: keys.join(', ') || '(sin claves)' });
+              }
+            } catch (_) {}
             if (remoteJid.endsWith('@g.us')) {
               const activeInGroup = await isBotActiveInGroup(CODE, remoteJid);
               if (!activeInGroup) {
@@ -234,6 +289,7 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
             await handleMainMessage(message, sock, `[SUBBOT ${CODE}] `, runtimeContext);
           } catch (handlerError) {
             console.error('Error manejando mensaje en subbot:', handlerError?.message || handlerError);
+            try { await sock.sendMessage(remoteJid, { text: `⚠️ Error interno del subbot: ${handlerError?.message || handlerError}` }, { quoted: message }) } catch (_) {}
           }
         }
       } catch (error) {
@@ -289,6 +345,9 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
       pairingRequestInFlight = true;
       const maxAttempts = 3;
       let lastError = null;
+      // Detectar método disponible en el fork (@vkazee/baileys u otros)
+      const availableMethod = ['requestPairingCode','requestPhonePairingCode','requestPairCode','generatePairingCode']
+        .find((m)=> typeof sock?.[m] === 'function')
 
       for (let attempt = 1; attempt <= maxAttempts && !pairingDelivered && sock?.requestPairingCode; attempt++) {
         try {
@@ -298,7 +357,11 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
             try {
               const keysReady = await waitForAuthKeysReady(6000);
               console.log(`  keysReady(custom)=${keysReady}`);
-              const code = await sock.requestPairingCode(targetDigits, customPairingForRequest);
+              if (!availableMethod) throw new Error('No pairing method available')
+              const accepts = /requestPairingCode|requestPhonePairingCode|requestPairCode/.test(availableMethod)
+              const code = accepts
+                ? await sock[availableMethod](targetDigits, customPairingForRequest)
+                : await sock[availableMethod](targetDigits)
               console.log('Pairing code personalizado recibido:', code);
               emitPairingCode(code);
               pairingRequestInFlight = false;
@@ -324,7 +387,11 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
             console.log(`Solicitando pairing code a Baileys intento ${attempt}/${maxAttempts}`);
             const keysReady = await waitForAuthKeysReady(6000);
             console.log(`  keysReady(auto)=${keysReady}`);
-            const code = await sock.requestPairingCode(targetDigits);
+            if (!availableMethod) throw new Error('No pairing method available')
+            const accepts = /requestPairingCode|requestPhonePairingCode|requestPairCode/.test(availableMethod)
+            const code = accepts
+              ? await sock[availableMethod](targetDigits)
+              : await sock[availableMethod](targetDigits)
             console.log('Pairing code recibido:', code);
             emitPairingCode(code);
             pairingRequestInFlight = false;
@@ -441,10 +508,10 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
         const reasonMessage = lastDisconnect?.error?.output?.payload?.message || lastDisconnect?.error?.message;
         const messageLC = String(reasonMessage || '').toLowerCase();
         const isLoggedOut = messageLC.includes('logged out') || messageLC.includes('logged off') || messageLC.includes('device removed') || statusCode === 401;
-        console.log('Conexión cerrada con código:', statusCode, reasonMessage || 'sin mensaje');
+        vlog('Conexión cerrada con código:', statusCode, reasonMessage || 'sin mensaje');
 
         if (pairingDelivered && awaitingConnection && shouldRetry(statusCode)) {
-          console.log('Conexión cerrada antes de completar la vinculación. Reintentando con un nuevo socket...');
+          vlog('Conexión cerrada antes de completar la vinculación. Reintentando con un nuevo socket...');
           awaitingConnection = false;
           pairingDelivered = false;
           pairingRequestInFlight = false;
@@ -490,11 +557,11 @@ async function runAttempt({ attempt, maxAttempts, authDir, cleanupAuth, customPa
 
 async function start() {
   try {
-    console.log('Iniciando subbot runner...');
-    console.log('CODE:', CODE);
-    console.log('TYPE:', TYPE);
-    console.log('DIR:', DIR);
-    console.log('TARGET:', TARGET || 'N/A');
+    vlog('Iniciando subbot runner...');
+    vlog('CODE:', CODE);
+    vlog('TYPE:', TYPE);
+    vlog('DIR:', DIR);
+    vlog('TARGET:', TARGET || 'N/A');
 
     if (TYPE === 'code' && !TARGET) {
       process.send?.({ event: 'error', data: { message: 'No se proporcionó número objetivo para pairing.' } });
@@ -502,7 +569,7 @@ async function start() {
     }
 
     const authDir = path.join(DIR, 'auth');
-    console.log('Auth dir:', authDir);
+    vlog('Auth dir:', authDir);
 
     const infiniteRetries = Number.isNaN(MAX_RETRIES) || MAX_RETRIES <= 0;
     let attempt = 1;
@@ -520,13 +587,13 @@ async function start() {
       });
 
       if (result.status === 'success') {
-        console.log('Subbot finalizado con éxito.');
+        vlog('Subbot finalizado con éxito.');
         setTimeout(() => process.exit(0), 1500);
         return;
       }
 
       if (result.status === 'fatal') {
-        console.log('Fallo fatal en intento:', result.statusCode, result.reason);
+        vlog('Fallo fatal en intento:', result.statusCode, result.reason);
         process.send?.({
           event: 'error',
           data: {
@@ -538,11 +605,11 @@ async function start() {
       }
 
       if (customPairingCodeForAttempt) {
-        console.log('Desactivando código de pairing personalizado para próximos intentos.');
+      vlog('Desactivando código de pairing personalizado para próximos intentos.');
         customPairingCodeForAttempt = '';
       }
 
-      console.log('Reintentando en', RETRY_DELAY_MS, 'ms');
+      vlog('Reintentando en', RETRY_DELAY_MS, 'ms');
       await delay(RETRY_DELAY_MS);
       attempt += 1;
     }
@@ -564,4 +631,7 @@ start().catch((error) => {
   process.send?.({ event: 'error', data: { message: error.message } });
   process.exit(1);
 });
+
+
+
 

@@ -510,7 +510,19 @@ async function setupSubbotMessageHandlers(sock, subbotCode) {
       try {
         const messages = upsert.messages || [];
         for (const message of messages) {
-          if (message.key.fromMe) continue;
+          // Política configurable para mensajes propios (fromMe)
+          // Modos: all | commands | none (default: commands)
+          if (message.key.fromMe) {
+            const txt = (
+              message.message?.conversation ||
+              message.message?.extendedTextMessage?.text ||
+              ''
+            ).trim();
+            const isCommand = txt.startsWith('/') || txt.startsWith('!') || txt.startsWith('.');
+            const mode = String(process.env.FROMME_MODE || process.env.ALLOW_FROM_ME || 'commands').toLowerCase();
+            const allow = (mode === 'all' || mode === 'true') || (mode === 'commands' && isCommand);
+            if (!allow) continue;
+          }
           const session = subbotSessions.get(subbotCode);
           if (session) session.lastActivity = Date.now();
 

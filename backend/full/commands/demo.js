@@ -48,5 +48,30 @@ export async function listdemo() {
   }
 }
 
-export default { poll, location, contact, buttons, listdemo }
+export async function live({ args }) {
+  const lat = Number(args?.[0] || 0)
+  const lon = Number(args?.[1] || 0)
+  const caption = (args||[]).slice(2).join(' ').trim() || 'Ubicación en vivo'
+  return { type: 'liveLocation', lat, lon, caption, quoted: true }
+}
 
+export async function react({ args, message }) {
+  const emoji = (args?.[0] || '👍')
+  return { type: 'reaction', emoji, quoted: message }
+}
+
+export async function edit({ args, message }) {
+  const text = (args||[]).join(' ').trim() || 'Mensaje editado'
+  return { type: 'edit', text, quoted: message }
+}
+
+export async function del({ message }) {
+  return { type: 'delete', quoted: message }
+}
+
+export async function presence({ args }) {
+  const state = String(args?.[0] || 'composing').toLowerCase()
+  return { type: 'presence', state }
+}
+
+export default { poll, location, contact, buttons, listdemo }

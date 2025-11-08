@@ -736,12 +736,11 @@ async function doRequest(provider, url, body, extraCtx) {
       const __dynExtractor = __hasCookies
         ? (!__envExt || /player_client=android/i.test(__envExt) ? 'youtube:player_client=web_safari' : __envExt)
         : (__envExt || 'youtube:player_client=android')
-      const opts = {
+      const optsBase = {
         dumpSingleJson: true,
         noWarnings: true,
         preferFreeFormats: false,
-        // Elegir formatos progresivos para descarga directa
-        format: want === 'audio' ? 'bestaudio[ext=m4a]/bestaudio/best' : 'best[ext=mp4]/best',
+        // format será inyectado dinámicamente con fallbacks
         retries: 1,
         quiet: true,
         userAgent: YTDLP_USER_AGENT,
@@ -759,14 +758,44 @@ async function doRequest(provider, url, body, extraCtx) {
         const fs = fsMod.default || fsMod
         const cookieFile = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
         if (cookieFile && (fs.existsSync?.(cookieFile) || fs.default?.existsSync?.(cookieFile))) {
-          opts.cookies = cookieFile
+          optsBase.cookies = cookieFile
         } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
-          opts.addHeader = [ `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}` ]
+          optsBase.addHeader = [ `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}` ]
         }
       } catch {}
       let info
+      // Candidatos de formato con fallbacks robustos contra SABR y ausencia de MP4
+      const formatCandidates = want === 'audio'
+        ? [
+            'bestaudio[ext=m4a]/bestaudio/best',
+            'bestaudio/best',
+            'best'
+          ]
+        : [
+            // Intentar progresivo o combinación si es posible, luego retroceder a best
+            'best[ext=mp4]/bv*+ba/b',
+            'bv*+ba/b',
+            'best'
+          ]
       if (ytdlp) {
-        info = await ytdlp(url, opts)
+        // Probar múltiples expresiones de formato con yt-dlp-exec
+        let lastErrExec
+        for (const fmt of formatCandidates) {
+          try {
+            info = await ytdlp(url, { ...optsBase, format: fmt })
+            if (info) break
+          } catch (e) {
+            lastErrExec = e
+            const msg = String(e?.message || e || '')
+            if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
+              // intentar siguiente formato
+              continue
+            }
+            // Error distinto: propagar
+            throw e
+          }
+        }
+        if (!info && lastErrExec) throw lastErrExec
       } else {
         const { spawn } = await import('child_process')
         // Construir argumentos de cookies de forma síncrona
@@ -793,30 +822,33 @@ async function doRequest(provider, url, body, extraCtx) {
             cookieArgs.push('--add-header', `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`)
           }
         } catch {}
-        const commonArgs = [
-          ...(() => { try { return String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true' ? ['--ignore-config'] : [] } catch { return [] } })(),
-          '--dump-single-json',
-          '--no-warnings',
-          '--retries', '1',
-          '-f', opts.format,
-          '--user-agent', YTDLP_USER_AGENT,
-          '--extractor-args', __dynExtractor,
-          // Optional external config
-          ...(() => { try { const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim(); return (cfg && (fs.existsSync?.(cfg) || fs.default?.existsSync?.(cfg))) ? ['--config-location', cfg] : [] } catch { return [] } })(),
-          // Anti-detección / ritmo
-          ...(process.env.YTDLP_SLEEP_INTERVAL ? ['--sleep-interval', String(process.env.YTDLP_SLEEP_INTERVAL)] : []),
-          ...(process.env.YTDLP_SLEEP_MAX ? ['--max-sleep-interval', String(process.env.YTDLP_SLEEP_MAX)] : []),
-          ...(process.env.YTDLP_RATE_LIMIT ? ['--limit-rate', String(process.env.YTDLP_RATE_LIMIT)] : []),
-          ...(process.env.YTDLP_CONCURRENT_FRAGMENTS ? ['--concurrent-fragments', String(process.env.YTDLP_CONCURRENT_FRAGMENTS)] : []),
-          ...(process.env.YTDLP_REFERER ? ['--referer', String(process.env.YTDLP_REFERER)] : []),
-          ...(process.env.YTDLP_HTTP_CHUNK_SIZE ? ['--http-chunk-size', String(process.env.YTDLP_HTTP_CHUNK_SIZE)] : []),
-          ...(process.env.YTDLP_BUFFER_SIZE ? ['--buffer-size', String(process.env.YTDLP_BUFFER_SIZE)] : []),
-          ...(process.env.YTDLP_RETRIES ? ['--retries', String(process.env.YTDLP_RETRIES)] : []),
-          ...(process.env.YTDLP_FRAGMENT_RETRIES ? ['--fragment-retries', String(process.env.YTDLP_FRAGMENT_RETRIES)] : []),
-          ...((String(process.env.YTDLP_FORCE_IPV4 || '').toLowerCase() === 'true') ? ['-4'] : []),
-          ...cookieArgs,
-          url,
-        ]
+        const buildArgs = (fmt) => {
+          const fs = (() => { try { const m = require('fs'); return m.default || m } catch { return {} } })()
+          return [
+            ...(() => { try { return String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true' ? ['--ignore-config'] : [] } catch { return [] } })(),
+            '--dump-single-json',
+            '--no-warnings',
+            '--retries', '1',
+            '-f', fmt,
+            '--user-agent', YTDLP_USER_AGENT,
+            '--extractor-args', __dynExtractor,
+            // Optional external config
+            ...(() => { try { const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim(); return (cfg && (fs.existsSync?.(cfg) || fs.default?.existsSync?.(cfg))) ? ['--config-location', cfg] : [] } catch { return [] } })(),
+            // Anti-detección / ritmo
+            ...(process.env.YTDLP_SLEEP_INTERVAL ? ['--sleep-interval', String(process.env.YTDLP_SLEEP_INTERVAL)] : []),
+            ...(process.env.YTDLP_SLEEP_MAX ? ['--max-sleep-interval', String(process.env.YTDLP_SLEEP_MAX)] : []),
+            ...(process.env.YTDLP_RATE_LIMIT ? ['--limit-rate', String(process.env.YTDLP_RATE_LIMIT)] : []),
+            ...(process.env.YTDLP_CONCURRENT_FRAGMENTS ? ['--concurrent-fragments', String(process.env.YTDLP_CONCURRENT_FRAGMENTS)] : []),
+            ...(process.env.YTDLP_REFERER ? ['--referer', String(process.env.YTDLP_REFERER)] : []),
+            ...(process.env.YTDLP_HTTP_CHUNK_SIZE ? ['--http-chunk-size', String(process.env.YTDLP_HTTP_CHUNK_SIZE)] : []),
+            ...(process.env.YTDLP_BUFFER_SIZE ? ['--buffer-size', String(process.env.YTDLP_BUFFER_SIZE)] : []),
+            ...(process.env.YTDLP_RETRIES ? ['--retries', String(process.env.YTDLP_RETRIES)] : []),
+            ...(process.env.YTDLP_FRAGMENT_RETRIES ? ['--fragment-retries', String(process.env.YTDLP_FRAGMENT_RETRIES)] : []),
+            ...((String(process.env.YTDLP_FORCE_IPV4 || '').toLowerCase() === 'true') ? ['-4'] : []),
+            ...cookieArgs,
+            url,
+          ]
+        }
         const tryCmd = async (cmd, args) => new Promise((resolve, reject) => {
           const p = spawn(cmd, args, { windowsHide: true })
           let out = ''
@@ -834,15 +866,50 @@ async function doRequest(provider, url, body, extraCtx) {
         const binEnv = process.env.YTDLP_PATH || process.env.YTDLP_BIN || null
         const candidates = []
         if (binEnv) candidates.push(binEnv)
+        // Preferir bin local en Windows si existe
+        try {
+          if (process.platform === 'win32') {
+            const localBin = 'bin\\yt-dlp.exe'
+            const fsMod = await import('fs')
+            const fs = fsMod.default || fsMod
+            if (fs.existsSync?.(localBin) || fs.default?.existsSync?.(localBin)) {
+              candidates.push(localBin)
+            }
+          }
+        } catch {}
         candidates.push('yt-dlp', 'yt')
         let lastErr
         for (const c of candidates) {
-          try { info = await tryCmd(c, commonArgs); lastErr = null; break } catch (e) { lastErr = e }
+          for (const fmt of formatCandidates) {
+            const args = buildArgs(fmt)
+            try { info = await tryCmd(c, args); lastErr = null; break } catch (e) {
+              lastErr = e
+              const msg = String(e?.message || e || '')
+              if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
+                // intentar siguiente formato
+                continue
+              }
+              // Corte por error distinto a formatos
+              break
+            }
+          }
+          if (info) break
         }
         if (!info) {
           const pyCandidates = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
           for (const py of pyCandidates) {
-            try { info = await tryCmd(py, ['-m', 'yt_dlp', ...commonArgs]); lastErr = null; break } catch (e) { lastErr = e }
+            for (const fmt of formatCandidates) {
+              const args = buildArgs(fmt)
+              try { info = await tryCmd(py, ['-m', 'yt_dlp', ...args]); lastErr = null; break } catch (e) {
+                lastErr = e
+                const msg = String(e?.message || e || '')
+                if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
+                  continue
+                }
+                break
+              }
+            }
+            if (info) break
           }
         }
         if (!info) throw lastErr || new Error('yt-dlp no disponible en PATH')

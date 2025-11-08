@@ -14,6 +14,9 @@ export async function menu({ usuario }) {
       { text: '🤖 Mis Subbots', command: '/mybots' },
       { text: '📋 Ayuda', command: '/help' },
       { text: '🛡️ Admin', command: '/admin' },
+      { text: '👥 Grupo', command: '/groupinfo' },
+      { text: '🛡️ Mod', command: '/settings' },
+      { text: '🧰 Utils', command: '/help utils' },
     ],
   })
   return { type: 'content', content: flow, quoted: true }

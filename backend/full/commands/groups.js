@@ -2,18 +2,8 @@
 // Administración de grupos: implementación directa con dependencias locales
 
 import db from '../db.js'
-
-function onlyDigits(v) { return String(v || '').replace(/[^0-9]/g, ''); }
-function isOwner(usuario){ try { const o = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER||''); return o && onlyDigits(usuario)===o } catch { return false } }
-
-async function isGroupAdmin(sock, remoteJid, usuario){
-  try{
-    const meta = await sock.groupMetadata(remoteJid)
-    const userNum = String(usuario).split(':')[0]
-    const p = (meta?.participants||[]).find(x=>String(x.id).startsWith(userNum))
-    return !!(p && (p.admin==='admin' || p.admin==='superadmin'))
-  }catch{ return false }
-}
+import { buildQuickReplyFlow } from '../utils/flows.js'
+import { normalizeDigits, isGroupAdmin, isBotAdmin, isOwnerNumber as isOwner, onlyDigits, isAdminFlag } from '../utils/identity.js'
 
 async function ensureGroupsTable() {
   try {
@@ -65,7 +55,8 @@ function first(v){ return (Array.isArray(v) && v.length) ? v[0] : null }
 
 export async function kick({ isGroup, usuario, remoteJid, args, sock, message }) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos', quoted: true }
-  const allowed = isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
+  const fromMe = !!(message?.key?.fromMe)
+  const allowed = fromMe || isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
   if (!allowed) return { success: false, message: '⛔ Solo owner o administradores del grupo pueden usar este comando.', quoted: true }
 
   let targetJid = null
@@ -89,7 +80,10 @@ export async function kick({ isGroup, usuario, remoteJid, args, sock, message })
   }
 
   const targetNum = onlyDigits(String(targetJid).split('@')[0])
-  const actorNum = onlyDigits(usuario)
+  const actorNum = normalizeDigits(usuario)
+  // Verificar que el bot sea admin del grupo
+  const botOk = await isBotAdmin(sock, remoteJid)
+  if (!botOk) return { success:false, message:'⛔ El bot no es administrador del grupo. Otórgale admin para usar /kick.', quoted:true }
   try {
     await sock.groupParticipantsUpdate(remoteJid, [targetJid], 'remove')
     return {
@@ -106,7 +100,8 @@ export async function kick({ isGroup, usuario, remoteJid, args, sock, message })
 
 export async function promote({ isGroup, usuario, remoteJid, args, sock, message }) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos', quoted: true }
-  const allowed = isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
+  const fromMe = !!(message?.key?.fromMe)
+  const allowed = fromMe || isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
   if (!allowed) return { success: false, message: '⛔ Solo owner o administradores del grupo pueden usar este comando.', quoted: true }
   let targetJid = null
   try {
@@ -124,7 +119,7 @@ export async function promote({ isGroup, usuario, remoteJid, args, sock, message
   }
   if (!targetJid) return { success:true, message:'ℹ️ Uso: /promote @usuario | responder mensaje | /promote <numero>', quoted: true }
   const targetNum = onlyDigits(String(targetJid).split('@')[0])
-  const actorNum = onlyDigits(usuario)
+  const actorNum = normalizeDigits(usuario)
   const wantsConfirm = String((args||[])[0]||'').toLowerCase() === 'confirm'
   if (!wantsConfirm) {
     const flowConfirm = buildQuickReplyFlow({
@@ -138,6 +133,9 @@ export async function promote({ isGroup, usuario, remoteJid, args, sock, message
       { type:'content', content: flowConfirm, quoted:true, ephemeralDuration:300 },
     ]
   }
+  // Requiere que el bot sea admin del grupo
+  const botOk = await isBotAdmin(sock, remoteJid)
+  if (!botOk) return { success:false, message:'⛔ El bot no es administrador del grupo. Otórgale admin para usar /promote.', quoted:true }
   try {
     await sock.groupParticipantsUpdate(remoteJid, [targetJid], 'promote')
     const flow = buildQuickReplyFlow({
@@ -155,7 +153,8 @@ export async function promote({ isGroup, usuario, remoteJid, args, sock, message
 
 export async function demote({ isGroup, usuario, remoteJid, args, sock, message }) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos', quoted: true }
-  const allowed = isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
+  const fromMe = !!(message?.key?.fromMe)
+  const allowed = fromMe || isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
   if (!allowed) return { success: false, message: '⛔ Solo owner o administradores del grupo pueden usar este comando.', quoted: true }
   let targetJid = null
   try {
@@ -173,7 +172,7 @@ export async function demote({ isGroup, usuario, remoteJid, args, sock, message 
   }
   if (!targetJid) return { success:true, message:'ℹ️ Uso: /demote @usuario | responder mensaje | /demote <numero>', quoted: true }
   const targetNum = onlyDigits(String(targetJid).split('@')[0])
-  const actorNum = onlyDigits(usuario)
+  const actorNum = normalizeDigits(usuario)
   const wantsConfirm = String((args||[])[0]||'').toLowerCase() === 'confirm'
   if (!wantsConfirm) {
     const flow = buildQuickReplyFlow({
@@ -187,6 +186,9 @@ export async function demote({ isGroup, usuario, remoteJid, args, sock, message 
       { type:'content', content: flow, quoted:true, ephemeralDuration:300 },
     ]
   }
+  // Requiere que el bot sea admin del grupo
+  const botOk = await isBotAdmin(sock, remoteJid)
+  if (!botOk) return { success:false, message:'⛔ El bot no es administrador del grupo. Otórgale admin para usar /demote.', quoted:true }
   try {
     await sock.groupParticipantsUpdate(remoteJid, [targetJid], 'demote')
     const flow = buildQuickReplyFlow({
@@ -202,15 +204,19 @@ export async function demote({ isGroup, usuario, remoteJid, args, sock, message 
   } catch { return { success:false, message:'⚠️ Error ejecutando /demote' } }
 }
 
-export async function lock({ isGroup, usuario, remoteJid, sock, args }) {
+export async function lock({ isGroup, usuario, remoteJid, sock, args, message }) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos', quoted: true }
-  const allowed = isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
+  const fromMe = !!(message?.key?.fromMe)
+  const allowed = fromMe || isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
   if (!allowed) return { success: false, message: '⛔ Solo owner o administradores del grupo pueden usar este comando.', quoted: true }
   const wantsConfirm = String((args||[])[0]||'').toLowerCase() === 'confirm'
   if (!wantsConfirm) {
     const flowConfirm = buildQuickReplyFlow({ header:'⚠️ Confirmar bloqueo', body:`Grupo: ${remoteJid}`, footer:'Acciones', buttons:[ { text:'✅ Confirmar', command:'/lock confirm' }, { text:'❌ Cancelar', command:'/menu' } ] })
     return [ { success:true, message:'¿Confirmas bloquear el grupo?', quoted:true, ephemeralDuration:300 }, { type:'content', content: flowConfirm, quoted:true, ephemeralDuration:300 } ]
   }
+  // Requiere que el bot sea admin
+  const botOk = await isBotAdmin(sock, remoteJid)
+  if (!botOk) return { success:false, message:'⛔ El bot no es administrador del grupo. Otórgale admin para usar /lock.', quoted:true }
   try {
     await sock.groupSettingUpdate(remoteJid, 'announcement')
     const flow = buildQuickReplyFlow({
@@ -226,15 +232,18 @@ export async function lock({ isGroup, usuario, remoteJid, sock, args }) {
   } catch { return { success:false, message:'⚠️ Error ejecutando /lock' } }
 }
 
-export async function unlock({ isGroup, usuario, remoteJid, sock, args }) {
+export async function unlock({ isGroup, usuario, remoteJid, sock, args, message }) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos', quoted: true }
-  const allowed = isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
+  const fromMe = !!(message?.key?.fromMe)
+  const allowed = fromMe || isOwner(usuario) || await isGroupAdmin(sock, remoteJid, usuario)
   if (!allowed) return { success: false, message: '⛔ Solo owner o administradores del grupo pueden usar este comando.', quoted: true }
   const wantsConfirm = String((args||[])[0]||'').toLowerCase() === 'confirm'
   if (!wantsConfirm) {
     const flowConfirm = buildQuickReplyFlow({ header:'⚠️ Confirmar desbloqueo', body:`Grupo: ${remoteJid}`, footer:'Acciones', buttons:[ { text:'✅ Confirmar', command:'/unlock confirm' }, { text:'❌ Cancelar', command:'/menu' } ] })
     return [ { success:true, message:'¿Confirmas desbloquear el grupo?', quoted:true, ephemeralDuration:300 }, { type:'content', content: flowConfirm, quoted:true, ephemeralDuration:300 } ]
   }
+  const botOk = await isBotAdmin(sock, remoteJid)
+  if (!botOk) return { success:false, message:'⛔ El bot no es administrador del grupo. Otórgale admin para usar /unlock.', quoted:true }
   try {
     await sock.groupSettingUpdate(remoteJid, 'not_announcement')
     const flow = buildQuickReplyFlow({
@@ -271,28 +280,72 @@ export async function tag({ message, usuario, remoteJid, sock, args }) {
   } catch { return { success:false, message:'⚠️ Error ejecutando /tag' } }
 }
 
+import { getTheme } from '../utils/theme.js'
+
 export async function whoami({ usuario, remoteJid, isGroup }) {
+  const th = getTheme()
   const num = usuario.split(':')[0]
-  const info = [
+  const body = [
     `👤 ${num}`,
     isGroup ? `👥 Grupo: ${remoteJid}` : '💬 Privado',
   ].join('\n')
-  return { success:true, message: info }
+  const info = `${th.header('TU PERFIL')}\n${body}\n${th.footer()}`
+  return { success:true, message: info, quoted:true }
 }
 
-export async function debugadmin({ usuario, remoteJid }) {
-  const ok = await isAdminOfGroup(usuario, remoteJid)
-  return { success:true, message: ok ? '✅ Tienes permisos de admin en este grupo' : '⛔ No tienes permisos de admin en este grupo' }
+export async function debugadmin({ sock, usuario, remoteJid }) {
+  try {
+    const ok = await isGroupAdmin(sock, remoteJid, usuario)
+    return { success:true, message: ok ? '✅ Tienes permisos de admin en este grupo' : '⛔ No tienes permisos de admin en este grupo' }
+  } catch {
+    return { success:false, message:'⚠️ Error verificando permisos de admin.' }
+  }
 }
 
 export async function admins({ remoteJid, sock }) {
   try {
+    const th = getTheme()
     const md = await sock.groupMetadata(remoteJid)
-    const admins = (md?.participants||[]).filter(p => p.admin==='admin' || p.admin==='superadmin')
+    const admins = (md?.participants||[]).filter(p => isAdminFlag(p))
     if (!admins.length) return { success:true, message:'ℹ️ No hay administradores en este grupo.', quoted: true }
     const list = admins.map((a,i)=> `${i+1}. @${String(a.id).split('@')[0]}`).join('\n')
     const mentions = admins.map(a => a.id)
-    return { success:true, message:`👑 Administradores\n\n${list}`, mentions, quoted: true }
+    const text = `${th.header('ADMINISTRADORES')}\n${list}\n${th.footer()}`
+    return { success:true, message:text, mentions, quoted: true }
   } catch { return { success:false, message:'⚠️ Error obteniendo administradores.', quoted: true } }
 }
+
+export async function debuggroup({ sock, remoteJid, usuario, message }) {
+  try {
+    const th = getTheme()
+    const md = await sock.groupMetadata(remoteJid)
+    const parts = md?.participants || []
+    const norm = (v)=>{ try{ let s=String(v||''); const at=s.indexOf('@'); if(at>0)s=s.slice(0,at); const col=s.indexOf(':'); if(col>0)s=s.slice(0,col); return s.replace(/\D/g,'') }catch{return String(v||'').replace(/\D/g,'')} }
+    const left = (v)=>{ try{ return String(v||'').split('@')[0] } catch { return '' } }
+    const isAdminFlag = (p)=>{ try{ return (p && ((p.admin==='admin'||p.admin==='superadmin')||p.admin===true||p.isAdmin===true||p.isSuperAdmin===true||(typeof p.privilege==='string'&&/admin/i.test(p.privilege)))) }catch{ return false } }
+    const meDigits = norm(usuario)
+    const meLeft = left(message?.key?.participant || usuario)
+    const botDigits = norm(sock?.user?.id||'')
+    let me = parts.find(p => norm(p?.id||p?.jid) === meDigits)
+    if (!me && meLeft) me = parts.find(p => left(p?.id||p?.jid) === meLeft)
+    const bot = parts.find(p => norm(p?.id||p?.jid) === botDigits)
+    const body = [
+      '🧪 Debug del grupo',
+      `• Tú: +${meDigits} | admin=${isAdminFlag(me)}`,
+      `• Bot: +${botDigits} | admin=${isAdminFlag(bot)}`,
+      `• Total participantes: ${parts.length}`,
+    ].join('\n')
+    const msg = `${th.header('DEBUG GRUPO')}\n${body}\n${th.footer()}`
+    return { success:true, message: msg, quoted:true }
+  } catch (e) {
+    return { success:false, message:`⚠️ Error debuggroup: ${e?.message||e}`, quoted:true }
+  }
+}
+
+// (Eliminadas las definiciones duplicadas de promote/demote para evitar "Identifier ... already declared")
+
+
+
+
+
 

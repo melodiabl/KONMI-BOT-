@@ -14,7 +14,15 @@ function urlBtn(text, url) {
 }
 
 export function buildQuickReplyFlow({ header, body, footer, buttons = [] }) {
-  const nativeButtons = buttons.map(b => (b.url ? urlBtn(b.text || b.title, b.url) : qrBtn(b.text || b.title, b.id || b.command)))
+  const nativeButtons = buttons.map((b) => {
+    const label = b.text || b.title || 'Acción'
+    if (b.copy) {
+      // Botón nativo: copiar al portapapeles (si el cliente lo soporta)
+      return { name: 'cta_copy', buttonParamsJson: JSON.stringify({ display_text: label, copy_code: String(b.copy), code: String(b.copy) }) }
+    }
+    if (b.url) return urlBtn(label, b.url)
+    return qrBtn(label, b.id || b.command || '/noop')
+  })
   return {
     viewOnceMessage: {
       message: {
@@ -31,4 +39,3 @@ export function buildQuickReplyFlow({ header, body, footer, buttons = [] }) {
 }
 
 export default { buildQuickReplyFlow }
-
