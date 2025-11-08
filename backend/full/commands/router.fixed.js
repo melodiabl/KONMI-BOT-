@@ -112,6 +112,31 @@ function toMediaInput(value) {
   return value
 }
 
+function buildSendOptions(result) {
+  try {
+    if (!result || typeof result !== 'object') return undefined
+    const opts = {}
+    if (result.quoted && typeof result.quoted === 'object') opts.quoted = result.quoted
+    const ttl = Number(result.ephemeralDuration)
+    if (Number.isFinite(ttl) && ttl > 0) opts.ephemeralExpiration = Math.floor(ttl)
+    if (result.linkPreview === false) opts.linkPreview = false
+    return Object.keys(opts).length ? opts : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function buildVCard(contact = {}) {
+  try {
+    const digits = normalizeDigits(contact.phone || contact.number || contact.id || '')
+    const name = String(contact.name || contact.displayName || digits || 'Contacto').replace(/\n/g, ' ')
+    if (!digits) return null
+    return `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL;type=CELL;type=VOICE;waid=${digits}:${digits}\nEND:VCARD`
+  } catch {
+    return null
+  }
+}
+
 async function sendResult(sock, jid, result, ctx) {
   if (!result) {
     // Fallback seguro si el handler no devolvió nada
@@ -119,8 +144,7 @@ async function sendResult(sock, jid, result, ctx) {
     return
   }
   // Evitar quoted=true por compatibilidad; solo aceptar objeto explícito
-  const quoted = (result.quoted && typeof result.quoted === 'object') ? result.quoted : undefined
-  const opts = quoted ? { quoted } : undefined
+  const opts = buildSendOptions(result)
 
   // Fallback a DM si el bot no es admin en grupos bloqueados
   let targetJid = jid
@@ -146,12 +170,104 @@ async function sendResult(sock, jid, result, ctx) {
   } catch {}
   if (typeof result === 'string') { await safeSend(sock, targetJid, { text: result }, opts); return }
   if (result.message) { await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts); return }
-  // Reacciones
-  if (result.type === 'reaction' && result.emoji && result.key) { try { await sock.sendMessage(targetJid, { react: { text: result.emoji, key: result.key } }, opts); } catch {}; return }
+  // Reacciones y presencia
+  if (result.type === 'reaction' && result.emoji) {
+    const key = result.key || result.quoted?.key || ctx?.message?.key
+    try { if (key) await sock.sendMessage(targetJid, { react: { text: result.emoji, key } }, opts) } catch {}
+    return
+  }
+  if (result.type === 'presence') {
+    try { await sock.sendPresenceUpdate(result.state || 'composing', targetJid) } catch {}
+    return
+  }
+  if (result.type === 'edit' && result.text) {
+    const key = result.key || result.quoted?.key
+    if (key) {
+      try { await sock.sendMessage(targetJid, { edit: key, text: result.text }) }
+      catch (err) { try { await safeSend(sock, targetJid, { text: result.text }, opts) } catch {} }
+      return
+    }
+  }
+  if (result.type === 'delete') {
+    const key = result.key || result.quoted?.key
+    if (key) {
+      try { await sock.sendMessage(targetJid, { delete: key }) } catch {}
+      return
+    }
+  }
   if (result.type === 'image' && result.image) { await safeSend(sock, targetJid, { image: toMediaInput(result.image), caption: result.caption, mentions: result.mentions }, opts); return }
   if (result.type === 'video' && result.video) { await safeSend(sock, targetJid, { video: toMediaInput(result.video), caption: result.caption, mentions: result.mentions }, opts); return }
   if (result.type === 'audio' && result.audio) { await safeSend(sock, targetJid, { audio: toMediaInput(result.audio), mimetype: result.mimetype || 'audio/mpeg', ptt: !!result.ptt }, opts); return }
   if (result.type === 'sticker' && result.sticker) { await safeSend(sock, targetJid, { sticker: toMediaInput(result.sticker) }, opts, true); return }
+  if (result.type === 'spotify') {
+    let sentPrimary = false
+    if (result.image) {
+      sentPrimary = await safeSend(sock, targetJid, { image: toMediaInput(result.image), caption: result.caption, mentions: result.mentions }, opts, true)
+    }
+    if (!sentPrimary && result.caption) {
+      await safeSend(sock, targetJid, { text: result.caption, mentions: result.mentions }, opts)
+    }
+    if (result.audio) {
+      await safeSend(sock, targetJid, { audio: toMediaInput(result.audio), mimetype: result.mimetype || 'audio/mpeg', ptt: !!result.ptt }, opts)
+    }
+    return
+  }
+  if (result.type === 'poll') {
+    const options = Array.isArray(result.options) && result.options.length ? result.options : ['Sí', 'No']
+    const multi = result.allowMultiple === true || Number(result.selectableCount) > 1
+    let selectableCount = 1
+    if (multi) {
+      const raw = Number(result.selectableCount)
+      selectableCount = Number.isFinite(raw) && raw > 1 ? Math.min(options.length, Math.floor(raw)) : options.length
+    }
+    const pollPayload = { name: result.title || 'Encuesta', values: options }
+    if (selectableCount > 1) pollPayload.selectableCount = selectableCount
+    const ok = await safeSend(sock, targetJid, { poll: pollPayload }, opts, true)
+    if (!ok) {
+      const text = `${pollPayload.name}\n${options.map((opt, idx) => `${idx + 1}. ${opt}`).join('\n')}`
+      await safeSend(sock, targetJid, { text }, opts)
+    }
+    return
+  }
+  if (result.type === 'location') {
+    const lat = Number(result.lat ?? result.latitude ?? 0)
+    const lon = Number(result.lon ?? result.lng ?? result.longitude ?? 0)
+    const payload = {
+      location: {
+        degreesLatitude: lat,
+        degreesLongitude: lon,
+        name: result.name || result.caption || 'Ubicación',
+        address: result.address,
+      },
+      mentions: result.mentions,
+    }
+    const ok = await safeSend(sock, targetJid, payload, opts, true)
+    if (!ok) {
+      const mapLink = `https://maps.google.com/?q=${lat},${lon}`
+      await safeSend(sock, targetJid, { text: `${result.name || 'Ubicación'}\n${mapLink}` }, opts)
+    }
+    return
+  }
+  if (result.type === 'liveLocation') {
+    const lat = Number(result.lat ?? result.latitude ?? 0)
+    const lon = Number(result.lon ?? result.lng ?? result.longitude ?? 0)
+    const caption = result.caption || 'Ubicación en vivo'
+    const ok = await safeSend(sock, targetJid, { location: { degreesLatitude: lat, degreesLongitude: lon, name: caption }, mentions: result.mentions }, opts, true)
+    if (!ok) {
+      const mapLink = `https://maps.google.com/?q=${lat},${lon}`
+      await safeSend(sock, targetJid, { text: `${caption}\n${mapLink}` }, opts)
+    }
+    return
+  }
+  if (result.type === 'contact') {
+    const vcard = buildVCard(result.contact)
+    if (vcard) {
+      await safeSend(sock, targetJid, { contacts: { displayName: result.contact?.name || result.contact?.displayName || 'Contacto', contacts: [{ vcard }] } }, opts)
+    } else if (result.contact?.phone) {
+      await safeSend(sock, targetJid, { text: `${result.contact.name || 'Contacto'}: +${normalizeDigits(result.contact.phone)}` }, opts)
+    }
+    return
+  }
   // Botones (templateButtons)
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
     const templateButtons = result.buttons.map((b, i) => {
