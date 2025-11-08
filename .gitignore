@@ -38,3 +38,4 @@ pgdata/
 backend/full/storage/
 frontend-panel-backup-*/
 **/*.sqlite
+storage/baileys_full
