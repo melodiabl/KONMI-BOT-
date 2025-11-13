@@ -92,6 +92,7 @@ async function resolveWaVersion(fetchLatestBaileysVersion) {
 /* ===== Estado básico ===== */
 let sock = null
 const groupSubjectCache = new Map()
+const groupMetadataCache = new Map()
 let connectionStatus = 'disconnected'
 let qrCode = null
 let qrCodeImage = null
@@ -644,25 +645,34 @@ export async function connectToWhatsApp(
       if (!method) {
         infoLog('⚠️ Este paquete no expone método de pairing. Usá QR o un fork compatible.')
       } else {
+        let res = null;
+        let usedCustom = false;
+
         try {
-          let res
-          // Política: si hay custom válido y método lo acepta, usarlo.
-          // Si ONLY_CUSTOM=true y no hay custom válido, no intentar sin código.
-          const methodAcceptsCode = (method === 'requestPairingCode' || method === 'requestPhonePairingCode' || method === 'requestPairCode')
-          if (methodAcceptsCode) {
             if (custom) {
-              try { res = await sock[method](number, custom) } catch (e) {
-                if (onlyCustom) throw e
-              }
+                const methodAcceptsCode = ['requestPairingCode', 'requestPhonePairingCode', 'requestPairCode'].includes(method);
+                if (methodAcceptsCode) {
+                    infoLog(`ℹ️ Intentando solicitar pairing con código personalizado: ${custom}`);
+                    try {
+                        res = await sock[method](number, custom);
+                        usedCustom = true;
+                    } catch (e) {
+                        infoLog(`⚠️ Falló el intento con código personalizado: ${e?.message || e}`);
+                        if (onlyCustom) {
+                            throw new Error(`El código personalizado "${custom}" fue rechazado y ONLY_CUSTOM está activado.`);
+                        }
+                    }
+                } else {
+                    infoLog('⚠️ El método de pairing del paquete no soporta códigos personalizados. Ignorando custom code.');
+                }
             }
+
             if (!res && !onlyCustom) {
-              // Intento sin custom
-              res = await sock[method](number)
+                infoLog('ℹ️ Solicitando nuevo código de pairing a WhatsApp...');
+                res = await sock[method](number);
+            } else if (!res && onlyCustom) {
+                infoLog('❌ No se pudo obtener un código de pairing. ONLY_CUSTOM está activado y no se proveyó un custom code válido o este falló.');
             }
-          } else {
-            // generatePairingCode(phone)
-            res = await sock[method](number)
-          }
           const raw = typeof res === 'string' ? res : (res?.code || res?.pairingCode || null)
           if (raw) {
             const formatted = (String(raw).match(/.{1,4}/g) || [String(raw)]).join('-')
@@ -676,15 +686,15 @@ export async function connectToWhatsApp(
               console.log('║     CÓDIGO DE EMPAREJAMIENTO LISTO     ║')
               console.log('╚════════════════════════════════════════╝')
               console.log(`📞 Número: +${number}`)
-              if (custom) console.log(`🔑 Solicitado con custom: ${custom}`)
+              if (usedCustom) console.log(`🔑 Usando código personalizado: ${custom}`)
               console.log(`🔑 Código: ${formatted}`)
               console.log('👉 WhatsApp > Dispositivos vinculados > Vincular con número de teléfono\n')
             }
           } else {
-            infoLog('⚠️ No se pudo obtener Pairing Code. Probá iniciar por QR una vez y reintentar.')
+            infoLog('⚠️ No se pudo obtener Pairing Code. Revisa la configuración y el número de teléfono.')
           }
         } catch (e) {
-          infoLog('❌ Error solicitando Pairing Code:', e?.message || e)
+          infoLog(`❌ Error fatal solicitando Pairing Code: ${e?.message || e}`)
         }
       }
     } else {
@@ -721,167 +731,140 @@ export function getBotStatus() {
 export async function handleMessage(message, customSock = null, prefix = '') {
   try {
     const s = customSock || sock
-    if (!s || !message || !message.key) return
+    if (!s || !message || !message.key || !message.key.remoteJid) {
+      return
+    }
+
     const remoteJid = message.key.remoteJid
-    if (!remoteJid) return
-    const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
-    // Normalizar identidad del emisor: para fromMe, usar siempre el JID del bot
-    const normalizeDigits = (jid) => {
-      try {
-        let s = String(jid || '')
-        const at = s.indexOf('@'); if (at > 0) s = s.slice(0, at)
-        const colon = s.indexOf(':'); if (colon > 0) s = s.slice(0, colon)
-        return s.replace(/\D/g, '')
-      } catch { return String(jid||'').replace(/\D/g,'') }
-    }
-    const fromMe = !!message?.key?.fromMe
-    let usuarioRaw = ''
-    if (fromMe) {
-      usuarioRaw = s?.user?.id || ''
-    } else if (isGroup) {
-      // En grupos, identificar SIEMPRE al emisor real; nunca caer al ID del bot.
-      usuarioRaw = message?.key?.participant || message?.participant || ''
+    const fromMe = !!message.key.fromMe
+    const isGroup = remoteJid.endsWith('@g.us')
+    const botJid = s.user?.id
+
+    // --- 1. Identificación robusta del usuario ---
+    let usuario
+    if (isGroup) {
+      usuario = message.key.participant || message.participant
     } else {
-      usuarioRaw = message?.key?.remoteJid || ''
-    }
-    // Evitar falsos positivos en grupos: no caer al ID del bot si no se detecta participant
-    let usuario = usuarioRaw
-    if (!usuario) {
-      if (!isGroup) {
-        usuario = message?.key?.remoteJid || s?.user?.id || ''
-      } else {
-        usuario = ''
-      }
+      usuario = fromMe ? botJid : remoteJid
     }
 
-    // Logs enriquecidos (grupo/privado/owner/command)
-    try {
-      const full = String(process.env.WHATSAPP_FULL_LOGS || process.env.FULL_LOGS || 'true').toLowerCase() !== 'false'
-      if (full) {
-        const body = (
-          message?.message?.conversation
-          || message?.message?.extendedTextMessage?.text
-          || message?.message?.imageMessage?.caption
-          || message?.message?.videoMessage?.caption
-          || ''
-        ).trim()
-        const userDigits = normalizeDigits(usuario)
-        const ownerDigits = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '')
-        const isOwner = ownerDigits && userDigits === ownerDigits
-        if (isGroup) {
-          logger.whatsapp?.groupMessage?.(body || '(no-text)', remoteJid, userDigits, { fromMe: !!message?.key?.fromMe, owner: isOwner })
-        } else {
-          logger.whatsapp?.privateMessage?.(body || '(no-text)', userDigits, { fromMe: !!message?.key?.fromMe, owner: isOwner })
-        }
-        // Si parece comando, log detallado
-        if (/^[\/!.]/.test(body)) {
-          const cmd = body.split(/\s+/)[0]
-          logger.whatsapp?.command?.(cmd, userDigits, isGroup ? remoteJid : null, { owner: isOwner })
-        }
-      }
-    } catch {}
+    // Si no se puede identificar al usuario en un grupo, es un evento de sistema que no procesamos.
+    if (isGroup && !usuario) {
+      return
+    }
 
-    // Política fromMe
-    try {
-      if (message.key.fromMe) {
-        const m = message.message || {}
-        const txt = (m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || '').trim()
-        // Detectar selecciones interactivas como comandos aunque no tengan prefijo
-        const btnId = m.buttonsResponseMessage?.selectedButtonId
-          || m.templateButtonReplyMessage?.selectedId
-          || m.buttonReplyMessage?.selectedButtonId
-        const rowId = m.listResponseMessage?.singleSelectReply?.selectedRowId
-          || m.listResponseMessage?.singleSelectReply?.selectedId
-          || m.interactiveResponseMessage?.listResponseMessage?.singleSelectReply?.selectedRowId
-        let nfId = null
-        try { const pj = m.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson; if (pj) { const p = JSON.parse(pj); nfId = p?.id || p?.command || p?.rowId || p?.row_id || null } } catch {}
-        const hasInteractive = !!(btnId || rowId || nfId)
-        const isCommand = txt.startsWith('/') || txt.startsWith('!') || txt.startsWith('.') || hasInteractive
-        const mode = String(process.env.FROMME_MODE || process.env.ALLOW_FROM_ME || 'commands').toLowerCase()
-        // Si el texto está vacío, asumimos que puede ser una respuesta interactiva no estandar y permitimos
-        const allow = (mode === 'all' || mode === 'true') || (mode === 'commands' && (isCommand || txt.length === 0))
-        if (!allow) {
-          try { const traceEv = String(process.env.DEBUG_WA_EVENTS || process.env.LOG_CONSOLE_TRACE || 'false').toLowerCase() === 'true'; if (traceEv) console.log(`[wa] skip fromMe (mode=${mode}) text='${txt}' interactive=${hasInteractive}`) } catch {}
-          return
-        }
-      }
-    } catch {}
+    // --- 2. Detección de Owner, Admin y si el Bot es Admin ---
+    const ownerNumbers = (process.env.OWNER_WHATSAPP_NUMBER || '')
+      .split(',')
+      .map(n => n.trim().replace(/\D/g, ''))
+      .filter(Boolean)
 
-    // Auto read opcional
+    const userNumber = String(usuario).split('@')[0]
+    const isOwner = ownerNumbers.includes(userNumber) || (fromMe && ownerNumbers.includes(String(botJid).split('@')[0]))
+
+    let isAdmin = false
+    let isBotAdmin = false
+    if (isGroup) {
+      try {
+        if (!groupMetadataCache.has(remoteJid)) {
+          const meta = await s.groupMetadata(remoteJid).catch(() => null)
+          if (meta) groupMetadataCache.set(remoteJid, meta)
+        }
+        const groupMeta = groupMetadataCache.get(remoteJid)
+        if (groupMeta) {
+          const botParticipant = groupMeta.participants.find(p => p.id === botJid)
+          isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin'
+
+          const userParticipant = groupMeta.participants.find(p => p.id === usuario)
+          isAdmin = userParticipant?.admin === 'admin' || userParticipant?.admin === 'superadmin'
+        }
+      } catch (e) {
+        // No loguear errores si el bot ya no está en el grupo
+      }
+    }
+
+    // --- Política `fromMe` centralizada ---
+    if (fromMe) {
+      const m = message.message || {}
+      const txt = (m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || '').trim()
+      const hasInteractive = !!(m.buttonsResponseMessage || m.templateButtonReplyMessage || m.listResponseMessage || m.interactiveResponseMessage)
+      const isCommand = txt.startsWith('/') || txt.startsWith('!') || txt.startsWith('.') || hasInteractive
+      const mode = String(process.env.FROMME_MODE || 'commands').toLowerCase()
+
+      const allow = (mode === 'all' || mode === 'true') || (mode === 'commands' && (isCommand || txt.length === 0))
+      if (!allow) {
+        return
+      }
+    }
+
+    // --- Auto read opcional ---
     try {
       const autoRead = String(process.env.AUTO_READ_MESSAGES || 'true').toLowerCase() === 'true'
-      if (autoRead && message?.key?.id) {
-        await s.readMessages([{ remoteJid, id: message.key.id, fromMe: message.key.fromMe }])
+      if (autoRead && message.key.id) {
+        await s.readMessages([{ remoteJid, id: message.key.id, fromMe }])
       }
     } catch {}
 
-    // Despacho al router
+    // --- Despacho al router ---
     try {
       let dispatch = null
       try {
         const mod = await import(routerPath)
         dispatch = mod?.dispatch || mod?.default?.dispatch || mod?.default
-      } catch {}
-      if (!dispatch) {
+      } catch {
         const mod = await import('./commands/router.js')
         dispatch = mod?.dispatch || mod?.default?.dispatch || mod?.default
       }
+
       if (typeof dispatch === 'function') {
         const trace = String(process.env.LOG_CONSOLE_TRACE || 'true').toLowerCase() === 'true'
-        let jidLabel = remoteJid
-        if (isGroup) {
-          try {
-            if (!groupSubjectCache.has(remoteJid)) {
-              const meta = await s.groupMetadata(remoteJid).catch(()=>null)
-              groupSubjectCache.set(remoteJid, (meta && meta.subject) ? meta.subject : remoteJid)
-            }
-            const name = groupSubjectCache.get(remoteJid) || remoteJid
-            jidLabel = name + ' (' + remoteJid + ')'
-          } catch {}
-        }
-        if (trace) logger.info(`➡️ dispatch start | chat=${jidLabel} | user=${String(usuario).split("@")[0]} | group=${isGroup}`)
-        
-        const handled = await dispatch({ sock: s, message, remoteJid, usuario, isGroup })
-        if (trace) logger.info(`✅ dispatch done | chat=${jidLabel} | handled=${handled === true}`)
-        const replyFallback = String(process.env.REPLY_ON_UNMATCHED || 'false').toLowerCase() === 'true'
-        const fromMe = !!message?.key?.fromMe
-        if (replyFallback && handled !== true && !fromMe) {
-          try {
-            // Fallback solo en privado, o en grupos si hay mención al bot, + anti-spam por chat.
-            const pv = !isGroup
-            let mentionedBot = false
-            try { mentionedBot = !!(message?.message?.extendedTextMessage?.contextInfo?.mentionedJid||[]).includes(s?.user?.id) } catch {}
-            const eligible = pv || mentionedBot
-            if (eligible) {
-              global.__fallbackTs = global.__fallbackTs || new Map()
-              const k = remoteJid
-              const now = Date.now()
-              const last = global.__fallbackTs.get(k) || 0
-              if (now - last > 60000) {
-                await safeSend(s, remoteJid, { text: '👋 Envíame un comando. Usa /menu o /help' }, { quoted: message })
-                global.__fallbackTs.set(k, now)
-              }
-            }
-          } catch (e) {
-            logger.warn(`fallback reply failed: ${e?.message || e}`)
+        if (trace) {
+          let jidLabel = remoteJid
+          if (isGroup) {
+            try {
+              const subject = groupMetadataCache.get(remoteJid)?.subject
+              if (subject) jidLabel = `${subject} (${remoteJid})`
+            } catch {}
           }
+          logger.info(`➡️ dispatch start | chat=${jidLabel} | user=${userNumber} | group=${isGroup} | owner=${isOwner} | admin=${isAdmin}`)
         }
 
-        // Ack opcional tras dispatch (debug). Habilitar con ACK_AFTER_DISPATCH=true
-        try {
-          const ack = String(process.env.ACK_AFTER_DISPATCH || 'false').toLowerCase() === 'true'
-          if (ack && handled === true) {
-            await safeSend(s, remoteJid, { text: '✅' }, { quoted: message })
+        const handled = await dispatch({
+          sock: s,
+          message,
+          remoteJid,
+          usuario,
+          isGroup,
+          isOwner,
+          isAdmin,
+          isBotAdmin
+        })
+
+        if (trace) logger.info(`✅ dispatch done | chat=${remoteJid} | handled=${handled === true}`)
+
+        // --- Fallback para mensajes no manejados ---
+        const replyFallback = String(process.env.REPLY_ON_UNMATCHED || 'false').toLowerCase() === 'true'
+        if (replyFallback && handled !== true && !fromMe) {
+          const pv = !isGroup
+          let mentionedBot = false
+          try { mentionedBot = (message.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).includes(botJid) } catch {}
+
+          if (pv || mentionedBot) {
+            global.__fallbackTs = global.__fallbackTs || new Map()
+            const now = Date.now()
+            const last = global.__fallbackTs.get(remoteJid) || 0
+            if (now - last > 60000) {
+              await safeSend(s, remoteJid, { text: '👋 Envíame un comando. Usa /menu o /help' }, { quoted: message })
+              global.__fallbackTs.set(remoteJid, now)
+            }
           }
-        } catch {}
+        }
       }
     } catch (e) {
-      try {
-        logger.warn(`[handleMessage] router failed: ${e?.message || e}`)
-      } catch {}
+      logger.warn(`[handleMessage] router failed: ${e?.message || e}`)
     }
   } catch (err) {
-    try { logger.error(`[handleMessage] error: ${err?.message || String(err)}`) } catch {}
+    logger.error(`[handleMessage] fatal error: ${err?.message || String(err)}`)
   }
 }
 
