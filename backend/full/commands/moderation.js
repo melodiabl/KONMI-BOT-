@@ -1,54 +1,53 @@
-// commands/moderation.js — sistema de advertencias por grupo
-import db from '../db.js'
+import db from '../db.js';
 
-async function ensureWarningsTable(){
-  try { const exists = await db.schema.hasTable('group_warnings'); if (!exists) await db.schema.createTable('group_warnings', t=>{ t.increments('id'); t.string('group_id'); t.string('user'); t.integer('count').defaultTo(0); t.timestamp('updated_at').defaultTo(db.fn.now()) }) } catch {}
-}
+const requireGroupAdmin = (handler) => async (ctx) => {
+  if (!ctx.isGroup) return { message: 'ℹ️ Este comando solo funciona en grupos.' };
+  if (!ctx.isAdmin && !ctx.isOwner) return { message: '⛔ Solo admins o el owner pueden usar este comando.' };
+  return handler(ctx);
+};
 
-function first(arr){ return Array.isArray(arr) && arr.length ? arr[0] : null }
-function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
+const onlyDigits = (v) => String(v || '').replace(/\D/g, '');
 
-async function extractTargetFromContext(message){
-  try {
-    const xt = message?.message?.extendedTextMessage
-    const ctx = xt?.contextInfo
-    const mentioned = first(ctx?.mentionedJid)
-    if (mentioned) return mentioned
-    if (ctx?.quotedMessage && ctx?.participant) return ctx.participant
-  } catch {}
-  return null
-}
+const getTargetJid = (message, args) => {
+  const xt = message?.message?.extendedTextMessage;
+  const ctx = xt?.contextInfo;
+  if (ctx?.mentionedJid?.[0]) return ctx.mentionedJid[0];
+  if (ctx?.quotedMessage && ctx?.participant) return ctx.participant;
+  const digits = onlyDigits(args.join(' '));
+  return digits ? `${digits}@s.whatsapp.net` : null;
+};
 
-export async function warn({ sock, remoteJid, usuario, args, message }){
-  await ensureWarningsTable()
-  const mentioned = await extractTargetFromContext(message)
-  let target = mentioned
-  if (!target && args && args[0]) target = `${onlyDigits(args[0])}@s.whatsapp.net`
-  if (!target) return { success:true, message:'ℹ️ Uso: /warn @usuario | responde a un mensaje con /warn', quoted:true }
-  const user = onlyDigits(target)
-  const row = await db('group_warnings').where({ group_id: remoteJid, user }).first()
-  const count = row ? (row.count+1) : 1
-  if (row) await db('group_warnings').where({ group_id: remoteJid, user }).update({ count, updated_at: new Date().toISOString() })
-  else await db('group_warnings').insert({ group_id: remoteJid, user, count, updated_at: new Date().toISOString() })
-  return { success:true, message:`⚠️ Advertencia para @${user}. Total: ${count}`, mentions:[`${user}@s.whatsapp.net`], quoted:true }
-}
+export const warn = requireGroupAdmin(async (ctx) => {
+  const { remoteJid, args, message } = ctx;
+  const target = getTargetJid(message, args);
+  if (!target) return { message: 'ℹ️ Uso: /warn @usuario | responder a un mensaje' };
 
-export async function unwarn({ remoteJid, args }){
-  await ensureWarningsTable()
-  const user = onlyDigits((args||[])[0]||'')
-  if (!user) return { success:true, message:'ℹ️ Uso: /unwarn <numero_sin_+>', quoted:true }
-  await db('group_warnings').where({ group_id: remoteJid, user }).del()
-  return { success:true, message:`♻️ Advertencias reseteadas para +${user}`, quoted:true }
-}
+  const user = onlyDigits(target);
+  const row = await db('group_warnings').where({ group_id: remoteJid, user }).first();
+  const count = (row?.count || 0) + 1;
 
-export async function warns({ remoteJid }){
-  await ensureWarningsTable()
-  const rows = await db('group_warnings').where({ group_id: remoteJid }).orderBy('count','desc').limit(15)
-  if (!rows.length) return { success:true, message:'ℹ️ No hay advertencias registradas en este grupo', quoted:true }
-  let msg = '📋 Advertencias por usuario (top 15)\n\n'
-  rows.forEach((r,i)=>{ msg += `${i+1}. +${r.user} — ${r.count}\n` })
-  return { success:true, message: msg, quoted:true }
-}
+  await db('group_warnings').insert({ group_id: remoteJid, user, count }).onConflict(['group_id', 'user']).merge();
+
+  return { message: `⚠️ Advertencia para @${user}. Total: ${count}`, mentions: [target] };
+});
+
+export const unwarn = requireGroupAdmin(async (ctx) => {
+  const { remoteJid, args } = ctx;
+  const user = onlyDigits(args[0] || '');
+  if (!user) return { message: 'ℹ️ Uso: /unwarn <numero_sin_+>' };
+
+  await db('group_warnings').where({ group_id: remoteJid, user }).del();
+  return { message: `♻️ Advertencias reseteadas para +${user}` };
+});
+
+export const warns = requireGroupAdmin(async (ctx) => {
+  const { remoteJid } = ctx;
+  const rows = await db('group_warnings').where({ group_id: remoteJid }).orderBy('count', 'desc').limit(15);
+  if (!rows.length) return { message: 'ℹ️ No hay advertencias registradas.' };
+
+  const list = rows.map((r, i) => `${i + 1}. +${r.user} — ${r.count}`).join('\n');
+  return { message: `📋 Advertencias (top 15)\n\n${list}` };
+});
 
 export default { warn, unwarn, warns }
 

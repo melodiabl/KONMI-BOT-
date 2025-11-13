@@ -1,83 +1,81 @@
-// commands/system.js
-// Sistema: clean session, logs, config, registrar, resetpass, miinfo
+import fs from 'fs';
+import path from 'path';
+import bcrypt from 'bcryptjs';
+import db from '../db.js';
 
-import fs from 'fs'
-import path from 'path'
-import bcrypt from 'bcryptjs'
-import db from '../db.js'
+const requireOwner = (handler) => async (ctx) => {
+  if (!ctx.isOwner) return { message: '⛔ Este comando solo puede ser usado por el owner del bot.' };
+  return handler(ctx);
+};
 
-export async function cleanSession() {
-  let cleaned = 0
-  const targets = [
-    path.join(process.cwd(), 'backend', 'full', 'storage', 'baileys_full'),
-    path.join(process.cwd(), 'backend', 'full', 'sessions'),
-    path.join(process.cwd(), 'backend', 'full', 'tmp')
-  ]
+export const cleanSession = requireOwner(async () => {
+  const targets = [path.join(process.cwd(), 'backend', 'full', 'storage', 'baileys_full')];
+  let cleaned = 0;
   for (const dir of targets) {
-    try { if (fs.existsSync(dir)) { fs.rmSync(dir, { recursive:true, force:true }); cleaned++ } } catch {}
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      cleaned++;
+    }
   }
-  return { success:true, message:`🧹 Sesiones limpiadas (${cleaned} carpeta(s)). Reinicia el bot para generar nuevo QR.`, quoted: true }
-}
+  return { message: `🧹 ${cleaned} sesión(es) limpiada(s). Reinicia el bot.` };
+});
 
-export async function logs({ args }) {
-  const limit = parseInt((args||[])[0]||'10',10)
-  try {
-    const rows = await db('logs').select('*').orderBy('fecha','desc').limit(isNaN(limit)?10:limit)
-    if (!rows.length) return { success:true, message:'🗒️ No hay logs.', quoted: true }
-    let msg = '🗒️ Logs recientes\n\n'
-    rows.forEach((r,i)=>{ msg += `${i+1}. [${r.tipo||'-'}] ${r.comando||''} — ${new Date(r.fecha).toLocaleString('es-ES')}\n` })
-    return { success:true, message: msg, quoted: true }
-  } catch { return { success:false, message:'⚠️ Error obteniendo logs.', quoted: true } }
-}
+export const logs = requireOwner(async ({ args }) => {
+  const limit = parseInt(args[0] || '10', 10);
+  const rows = await db('logs').select('*').orderBy('fecha', 'desc').limit(isNaN(limit) ? 10 : limit);
+  if (!rows.length) return { message: '🗒️ No hay logs.' };
+  const logList = rows.map((r, i) => `${i + 1}. [${r.tipo || '-'}] ${r.comando || ''} - ${new Date(r.fecha).toLocaleString('es-ES')}`).join('\n');
+  return { message: `🗒️ Logs recientes\n\n${logList}` };
+});
 
-async function ensureConfigTable() {
-  try {
-    const exists = await db.schema.hasTable('bot_config')
-    if (!exists) await db.schema.createTable('bot_config', t => { t.string('key').primary(); t.text('value').nullable() })
-  } catch {}
-}
+export const config = requireOwner(async ({ args }) => {
+  const [sub, key, ...valueParts] = args;
+  const value = valueParts.join(' ');
 
-export async function config({ args }) {
-  const sub = (args||[])[0]
-  await ensureConfigTable()
   if (sub === 'set') {
-    const key = (args||[])[1]; const value = (args||[]).slice(2).join(' ')
-    if (!key) return { success:true, message:'ℹ️ Uso: /config set <key> <valor>', quoted: true }
-    try { const exists = await db('bot_config').where({ key }).first(); if (exists) await db('bot_config').where({ key }).update({ value }); else await db('bot_config').insert({ key, value }); return { success:true, message:`✅ Config ${key} = ${value}`, quoted: true } } catch { return { success:false, message:'⚠️ Error guardando configuración.', quoted: true } }
+    if (!key) return { message: 'ℹ️ Uso: /config set <key> <valor>' };
+    await db('bot_config').insert({ key, value }).onConflict('key').merge();
+    return { message: `✅ Config ${key} = ${value}` };
   }
   if (sub === 'get') {
-    const key = (args||[])[1]
-    if (!key) return { success:true, message:'ℹ️ Uso: /config get <key>', quoted: true }
-    try { const row = await db('bot_config').where({ key }).first(); return { success:true, message: row ? `🔧 ${key} = ${row.value||''}` : 'ℹ️ No definido', quoted: true } } catch { return { success:false, message:'⚠️ Error leyendo configuración.', quoted: true } }
+    if (!key) return { message: 'ℹ️ Uso: /config get <key>' };
+    const row = await db('bot_config').where({ key }).first();
+    return { message: row ? `🔧 ${key} = ${row.value || ''}` : 'ℹ️ No definido' };
   }
-  return { success:true, message:'ℹ️ Uso: /config get <key> | /config set <key> <valor>', quoted: true }
+  return { message: 'ℹ️ Uso: /config get <key> | /config set <key> <valor>' };
+});
+
+export async function registrar(ctx) {
+  const { args, usuario } = ctx;
+  const username = args[0];
+  if (!username) return { message: 'ℹ️ Uso: /registrar <username>' };
+  const whatsapp_number = usuario.split('@')[0];
+  const existing = await db('usuarios').where({ username }).orWhere({ whatsapp_number }).first();
+  if (existing) return { message: '⚠️ Ya existe un usuario con ese nombre o número.' };
+
+  const tempPassword = Math.random().toString(36).slice(-8);
+  const password = await bcrypt.hash(tempPassword, 10);
+
+  await db('usuarios').insert({ username, whatsapp_number, password, rol: 'usuario' });
+  return { message: `✅ Usuario ${username} registrado.\n\n🔑 Tu contraseña temporal es: ${tempPassword}\n\nÚsala para iniciar sesión en el panel.` };
 }
 
-async function ensureUsersTable() {
-  try {
-    const exists = await db.schema.hasTable('usuarios')
-    if (!exists) await db.schema.createTable('usuarios', t => { t.increments('id'); t.string('username').unique(); t.string('whatsapp_number'); t.string('password_hash'); t.string('rol').defaultTo('user'); t.timestamp('created_at').defaultTo(db.fn.now()) })
-  } catch {}
-}
+export const resetpass = requireOwner(async ({ args }) => {
+  const [username, newPass] = args;
+  if (!username || !newPass) return { message: 'ℹ️ Uso: /resetpass <username> <newpass>' };
+  const password = await bcrypt.hash(newPass, 10);
+  const updated = await db('usuarios').where({ username }).update({ password });
+  return { message: updated ? '✅ Password actualizado' : 'ℹ️ Usuario no encontrado' };
+});
 
-export async function registrar({ args, usuario }) {
-  await ensureUsersTable()
-  const username = (args||[])[0]
-  if (!username) return { success:true, message:'ℹ️ Uso: /registrar <username>', quoted: true }
-  try { await db('usuarios').insert({ username, whatsapp_number: usuario.split(':')[0] }); return { success:true, message:`✅ Usuario ${username} registrado`, quoted: true } } catch { return { success:false, message:'⚠️ Error registrando usuario (quizá ya existe).', quoted: true } }
-}
-
-export async function resetpass({ args }) {
-  await ensureUsersTable()
-  const username = (args||[])[0]
-  const newPass = (args||[])[1]
-  if (!username || !newPass) return { success:true, message:'ℹ️ Uso: /resetpass <username> <newpass>', quoted: true }
-  try { const hash = await bcrypt.hash(newPass, 10); const updated = await db('usuarios').where({ username }).update({ password_hash: hash }); return { success:true, message: updated? '✅ Password actualizado' : 'ℹ️ Usuario no encontrado', quoted: true } } catch { return { success:false, message:'⚠️ Error actualizando password.', quoted: true } }
-}
-
-export async function miinfo({ usuario }) {
-  await ensureUsersTable()
-  try { const row = await db('usuarios').where({ username: usuario.split(':')[0] }).first(); if (!row) return { success:true, message:'ℹ️ Aún no estás registrado. Usa /registrar <username>', quoted: true }; const rol = row.rol || 'user'; const fecha = row.created_at ? new Date(row.created_at).toLocaleString('es-ES') : ''; return { success:true, message:`👤 ${row.username}\n📱 ${row.whatsapp_number||'-'}\n🔖 ${rol}\n📅 ${fecha}`, quoted: true } } catch { return { success:false, message:'⚠️ Error obteniendo tu info.', quoted: true } }
+export async function miinfo(ctx) {
+  const { usuario } = ctx;
+  const whatsapp_number = usuario.split('@')[0];
+  const row = await db('usuarios').where({ whatsapp_number }).first();
+  if (!row) return { message: 'ℹ️ Aún no estás registrado. Usa /registrar <username>' };
+  const { username, rol, created_at } = row;
+  const fecha = created_at ? new Date(created_at).toLocaleString('es-ES') : 'N/A';
+  return { message: `👤 ${username}\n📱 +${whatsapp_number}\n🔖 ${rol || 'usuario'}\n📅 ${fecha}` };
 }
 
 export default { cleanSession, logs, config, registrar, resetpass, miinfo }

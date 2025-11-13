@@ -20,16 +20,14 @@ import {
 import logger from '../config/logger.js';
 import { buildQuickReplyFlow } from '../utils/flows.js';
 
-/**
- * Comando /tiktok - Descarga videos de TikTok
- */
-export async function handleTikTokDownload(url, usuario) {
+const normalizeUser = (u) => String(u || '').split('@')[0];
+
+export async function handleTikTokDownload(ctx) {
+  const { args, usuario } = ctx;
+  const url = args[0] || '';
   try {
     if (!url || !url.includes('tiktok.com')) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/tiktok [URL]`\n\n*Ejemplo:*\n`/tiktok https://www.tiktok.com/@user/video/123`',
-      };
+      return { message: '❌ Uso: /tiktok [URL]' };
     }
 
     const result = await downloadTikTok(url);
@@ -44,49 +42,32 @@ export async function handleTikTokDownload(url, usuario) {
     const flow = buildQuickReplyFlow({
       header: '📹 TikTok',
       body: result.title ? `Título: ${result.title}` : 'Descarga lista',
-      footer: 'Acciones rápidas',
       buttons: [
         { text: '🎬 Video', command: `/video ${url}` },
         { text: '🎵 Audio', command: `/music ${url}` },
-        { text: '🔁 Reintentar', command: `/tiktok ${url}` },
       ],
-    })
-return [
+    });
+    return [
       {
-      success: true,
-      type: 'video',
-      video: result.video,
-      caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.description || result.title || 'Sin descripción'}\n🎵 *Música:* ${result.music || 'N/A'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
-      quoted: true,
-      viewOnce: true,
-      info: {
-        title: result.title,
-        author: result.author,
-        description: result.description,
-        provider: result.provider,
-       },
-    },
-    { type: 'content', content: flow, quoted: true, ephemeralDuration: 300 } ];
+        type: 'video',
+        video: result.video,
+        caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'N/A'}\n📝 *Descripción:* ${result.description || 'N/A'}\n\n✅ Solicitado por: @${normalizeUser(usuario)}`,
+        mentions: [usuario],
+      },
+      { type: 'content', content: flow }
+    ];
   } catch (error) {
     logger.error('Error en handleTikTokDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar TikTok*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
+    return { message: `⚠️ Error al descargar TikTok: ${error.message}` };
   }
 }
 
-/**
- * Comando /instagram - Descarga contenido de Instagram
- */
-export async function handleInstagramDownload(url, usuario) {
+export async function handleInstagramDownload(ctx) {
+  const { args, usuario } = ctx;
+  const url = args[0] || '';
   try {
     if (!url || !url.includes('instagram.com')) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/instagram [URL]`\n\n*Ejemplo:*\n`/instagram https://www.instagram.com/p/ABC123/`',
-      };
+      return { message: '❌ Uso: /instagram [URL]' };
     }
 
     const result = await downloadInstagram(url);
@@ -98,188 +79,78 @@ export async function handleInstagramDownload(url, usuario) {
       };
     }
 
-    const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.caption || 'Sin descripción'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`;
-
-    const flow = buildQuickReplyFlow({ header: '📸 Instagram', body: result.caption || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/instagram ${url}` } ] })
-    return [
-      {
-      success: true,
-      type: result.type === 'video' ? 'video' : 'image',
-      image: result.image,
-      video: result.video,
-      url: result.url,
-      caption,
-      mentions: [`${usuario}@s.whatsapp.net`],
-      quoted: true,
-      viewOnce: true,
-      info: {
-        title: result.caption,
-        author: result.author,
-        type: result.type,
-        provider: result.provider,
-       },
-    },
-    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
+    const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram*\n\n👤 *Autor:* ${result.author || 'N/A'}\n📝 *Descripción:* ${result.caption || 'N/A'}\n\n✅ Solicitado por: @${normalizeUser(usuario)}`;
+    const flow = buildQuickReplyFlow({ header: '📸 Instagram', body: result.caption || 'Descarga lista', buttons: [{ text: '🎬 Video', command: `/video ${url}` }, { text: '🎵 Audio', command: `/music ${url}` }] });
+    return [{ type: result.type, [result.type]: result.image || result.video, caption, mentions: [usuario] }, { type: 'content', content: flow }];
   } catch (error) {
     logger.error('Error en handleInstagramDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar Instagram*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
+    return { message: `⚠️ Error al descargar Instagram: ${error.message}` };
   }
 }
 
-/**
- * Comando /facebook - Descarga videos de Facebook
- */
-export async function handleFacebookDownload(url, usuario) {
+export async function handleFacebookDownload(ctx) {
+  const { args, usuario } = ctx;
+  const url = args[0] || '';
   try {
     if (!url || !url.includes('facebook.com')) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/facebook [URL]`\n\n*Ejemplo:*\n`/facebook https://www.facebook.com/watch/?v=123456`',
-      };
+      return { message: '❌ Uso: /facebook [URL]' };
     }
-
     const result = await downloadFacebook(url);
-
     if (!result.success || !result.video) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo descargar el video de Facebook. Verifica la URL.',
-      };
+      return { message: '⚠️ No se pudo descargar el video de Facebook.' };
     }
-
-    const flow = buildQuickReplyFlow({ header: '📹 Facebook', body: result.title || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/facebook ${url}` } ] })
-    return [
-      {
-      success: true,
-      type: 'video',
-      video: result.video,
-      caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'Sin título'}\n⏱️ *Duración:* ${result.duration || 'N/A'}\n👤 *Autor:* ${result.author || 'Desconocido'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
-      quoted: true,
-      viewOnce: true,
-      info: {
-        title: result.title,
-        author: result.author,
-        duration: result.duration,
-        provider: result.provider,
-      },
-    },
-    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
+    const flow = buildQuickReplyFlow({ header: '📹 Facebook', body: result.title || 'Descarga lista', buttons: [{ text: '🎬 Video', command: `/video ${url}` }, { text: '🎵 Audio', command: `/music ${url}` }] });
+    return [{ type: 'video', video: result.video, caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'N/A'}\n\n✅ Solicitado por: @${normalizeUser(usuario)}`, mentions: [usuario] }, { type: 'content', content: flow }];
   } catch (error) {
     logger.error('Error en handleFacebookDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar Facebook*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
+    return { message: `⚠️ Error al descargar Facebook: ${error.message}` };
   }
 }
 
-/**
- * Comando /twitter - Descarga contenido de Twitter/X
- */
-export async function handleTwitterDownload(url, usuario) {
+export async function handleTwitterDownload(ctx) {
+  const { args, usuario } = ctx;
+  const url = args[0] || '';
   try {
     if (!url || (!url.includes('twitter.com') && !url.includes('x.com'))) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/twitter [URL]`\n\n*Ejemplo:*\n`/twitter https://twitter.com/user/status/123456`',
-      };
+      return { message: '❌ Uso: /twitter [URL]' };
     }
-
     const result = await downloadTwitter(url);
-
     if (!result.success || (!result.video && !result.image)) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo descargar el contenido de Twitter/X. Verifica la URL.',
-      };
+      return { message: '⚠️ No se pudo descargar el contenido de Twitter/X.' };
     }
-
-    const caption = `🐦 *Twitter/X ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* @${result.author || 'Desconocido'}\n📝 *Tweet:* ${result.text || 'Sin texto'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`;
-
-    const flow = buildQuickReplyFlow({ header: '🐦 Twitter/X', body: result.text || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/twitter ${url}` } ] })
-    return [
-      {
-      success: true,
-      type: result.type === 'video' ? 'video' : 'image',
-      video: result.video,
-      image: result.image,
-      caption,
-      mentions: [`${usuario}@s.whatsapp.net`],
-      quoted: true,
-      viewOnce: true,
-      info: {
-        author: result.author,
-        type: result.type,
-        text: result.text,
-        provider: result.provider,
-      },
-    },
-    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
+    const caption = `🐦 *Twitter/X ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* @${result.author || 'N/A'}\n📝 *Tweet:* ${result.text || 'N/A'}\n\n✅ Solicitado por: @${normalizeUser(usuario)}`;
+    const flow = buildQuickReplyFlow({ header: '🐦 Twitter/X', body: result.text || 'Descarga lista', buttons: [{ text: '🎬 Video', command: `/video ${url}` }, { text: '🎵 Audio', command: `/music ${url}` }] });
+    return [{ type: result.type, [result.type]: result.video || result.image, caption, mentions: [usuario] }, { type: 'content', content: flow }];
   } catch (error) {
     logger.error('Error en handleTwitterDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar Twitter/X*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
+    return { message: `⚠️ Error al descargar Twitter/X: ${error.message}` };
   }
 }
 
-/**
- * Comando /pinterest - Descarga imágenes de Pinterest
- */
-export async function handlePinterestDownload(url, usuario) {
+export async function handlePinterestDownload(ctx) {
+  const { args, usuario } = ctx;
+  const url = args[0] || '';
   try {
     if (!url || !url.includes('pinterest.com')) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/pinterest [URL]`\n\n*Ejemplo:*\n`/pinterest https://www.pinterest.com/pin/123456789/`',
-      };
+      return { message: '❌ Uso: /pinterest [URL]' };
     }
-
     const result = await downloadPinterest(url);
-
     if (!result.success || !result.image) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo descargar la imagen de Pinterest. Verifica la URL.',
-      };
+      return { message: '⚠️ No se pudo descargar la imagen de Pinterest.' };
     }
-
-    return {
-      success: true,
-      type: 'image',
-      image: result.image,
-      caption: `📌 *Pinterest*\n\n📝 *Título:* ${result.title || 'Sin título'}\n📄 *Descripción:* ${result.description || 'Sin descripción'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
-      info: {
-        title: result.title,
-        description: result.description,
-        provider: result.provider,
-      },
-    };
+    return { type: 'image', image: result.image, caption: `📌 *Pinterest*\n\n📝 *Título:* ${result.title || 'N/A'}\n\n✅ Solicitado por: @${normalizeUser(usuario)}`, mentions: [usuario] };
   } catch (error) {
     logger.error('Error en handlePinterestDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar Pinterest*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
+    return { message: `⚠️ Error al descargar Pinterest: ${error.message}` };
   }
 }
 
-/**
- * Comando /music - Busca y descarga música de YouTube
- */
-export async function handleMusicDownload(query, usuario) {
+export async function handleMusicDownload(ctx) {
+  const { args, usuario } = ctx;
+  const query = args.join(' ');
   try {
     if (!query) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/music [nombre o URL]`\n\n*Ejemplos:*\n`/music tears sabrina carpenter`\n`/music https://www.youtube.com/watch?v=dQw4w9WgXcQ`',
-      };
+      return { message: '❌ Uso: /music [nombre o URL]' };
     }
 
     const input = String(query).trim();
