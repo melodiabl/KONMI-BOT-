@@ -84,10 +84,12 @@ async function resolveWaVersion(fetchLatestBaileysVersion) {
     const parts = raw.split(/[.,\s]+/).map(n => parseInt(n, 10)).filter(n => !Number.isNaN(n)).slice(0, 3)
     if (parts.length === 3) return parts
   }
+  // Forzar la obtención de la última versión si no se especificó
   try {
     const { version } = await fetchLatestBaileysVersion()
     if (Array.isArray(version) && version.length === 3) return version
   } catch {}
+  // Fallback seguro si fetch falla
   return [2, 3000, 1027934701]
 }
 
@@ -203,7 +205,8 @@ export async function connectToWhatsApp(
   // Limpieza opcional como en subbot-runner
   try {
     const clean = String(process.env.PAIRING_CLEAN_AUTH_ON_START || '').match(/^(1|true|yes)$/i)
-    if (usePairingCode && clean && fs.existsSync(savedAuthPath)) {
+    const isPairing = usePairingCode || !!pickCustomFromEnv()
+    if (isPairing && clean && fs.existsSync(savedAuthPath)) {
       fs.rmSync(savedAuthPath, { recursive: true, force: true })
     }
   } catch {}
