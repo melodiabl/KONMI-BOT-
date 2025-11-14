@@ -25,19 +25,17 @@ import logger from '../config/logger.js';
 export async function handleTikTokDownload(ctx) {
   const { args, sender } = ctx;
   const url = args.join(' ');
+  if (!url || !url.includes('tiktok.com')) {
+    return { success: false, message: '❌ Uso incorrecto: /tiktok [URL]' };
+  }
+
   try {
-    if (!url || !url.includes('tiktok.com')) {
-      return { success: false, message: '❌ Uso incorrecto: /tiktok [URL]' };
-    }
-
     const result = await downloadTikTok(url);
-
     if (!result.success || !result.video) {
       return { success: false, message: '⚠️ No se pudo descargar el video de TikTok. Verifica la URL.' };
     }
 
     return {
-      success: true,
       type: 'video',
       video: result.video,
       caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'N/D'}\n📝 *Descripción:* ${result.description || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
@@ -55,13 +53,12 @@ export async function handleTikTokDownload(ctx) {
 export async function handleInstagramDownload(ctx) {
   const { args, sender } = ctx;
   const url = args.join(' ');
+  if (!url || !url.includes('instagram.com')) {
+    return { success: false, message: '❌ Uso incorrecto: /instagram [URL]' };
+  }
+
   try {
-    if (!url || !url.includes('instagram.com')) {
-      return { success: false, message: '❌ Uso incorrecto: /instagram [URL]' };
-    }
-
     const result = await downloadInstagram(url);
-
     if (!result.success || (!result.image && !result.video)) {
       return { success: false, message: '⚠️ No se pudo descargar el contenido de Instagram. Verifica la URL.' };
     }
@@ -69,7 +66,6 @@ export async function handleInstagramDownload(ctx) {
     const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram*\n\n👤 *Autor:* ${result.author || 'N/D'}\n📝 *Descripción:* ${result.caption || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
 
     return {
-      success: true,
       type: result.type,
       [result.type]: result.image || result.video,
       caption,
@@ -81,25 +77,20 @@ export async function handleInstagramDownload(ctx) {
   }
 }
 
-/**
- * Comando /facebook - Descarga videos de Facebook
- */
 export async function handleFacebookDownload(ctx) {
     const { args, sender } = ctx;
     const url = args.join(' ');
+    if (!url || !url.includes('facebook.com')) {
+        return { success: false, message: '❌ Uso incorrecto: /facebook [URL]' };
+    }
+
     try {
-        if (!url || !url.includes('facebook.com')) {
-            return { success: false, message: '❌ Uso incorrecto: /facebook [URL]' };
-        }
-
         const result = await downloadFacebook(url);
-
         if (!result.success || !result.video) {
-            return { success: false, message: '⚠️ No se pudo descargar el video de Facebook. Verifica la URL.' };
+            return { success: false, message: '⚠️ No se pudo descargar el video de Facebook.' };
         }
 
         return {
-            success: true,
             type: 'video',
             video: result.video,
             caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
@@ -111,27 +102,22 @@ export async function handleFacebookDownload(ctx) {
     }
 }
 
-/**
- * Comando /twitter - Descarga contenido de Twitter/X
- */
 export async function handleTwitterDownload(ctx) {
     const { args, sender } = ctx;
     const url = args.join(' ');
+    if (!url || (!url.includes('twitter.com') && !url.includes('x.com'))) {
+        return { success: false, message: '❌ Uso incorrecto: /twitter [URL]' };
+    }
+
     try {
-        if (!url || (!url.includes('twitter.com') && !url.includes('x.com'))) {
-            return { success: false, message: '❌ Uso incorrecto: /twitter [URL]' };
-        }
-
         const result = await downloadTwitter(url);
-
         if (!result.success || (!result.video && !result.image)) {
-            return { success: false, message: '⚠️ No se pudo descargar el contenido de Twitter/X. Verifica la URL.' };
+            return { success: false, message: '⚠️ No se pudo descargar el contenido de Twitter/X.' };
         }
 
         const caption = `🐦 *Twitter/X ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* @${result.author || 'N/D'}\n📝 *Tweet:* ${result.text || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
 
         return {
-            success: true,
             type: result.type,
             [result.type]: result.video || result.image,
             caption,
@@ -142,9 +128,6 @@ export async function handleTwitterDownload(ctx) {
         return { success: false, message: `⚠️ Error al descargar de Twitter/X: ${error.message}` };
     }
 }
-
-
-// --- Resto de los comandos refactorizados ---
 
 export async function handlePinterestDownload(ctx) {
     const { args, sender } = ctx;
@@ -222,42 +205,37 @@ export async function handleSpotifySearch(ctx) {
         const result = await searchSpotify(query);
         if (!result.success) return { success: false, message: `😕 No encontré resultados para "${query}" en Spotify.` };
 
-        // Intentar descargar el audio desde YouTube como fallback
         let audioBuffer = null;
         try {
             const ytResult = await searchYouTubeMusic(`${result.title} ${result.artists}`);
             if (ytResult.success && ytResult.results.length) {
-                const ytVideo = ytResult.results[0];
-                const dlResult = await downloadYouTube(ytVideo.url, 'audio');
+                const dlResult = await downloadYouTube(ytResult.results[0].url, 'audio');
                 if (dlResult.success) audioBuffer = dlResult.download;
             }
         } catch {}
 
         const caption = `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
 
+        const response = {
+            caption,
+            mentions: [sender]
+        };
+
         if (audioBuffer) {
-            return {
-                type: 'audio',
-                audio: audioBuffer,
-                caption: caption,
-                mentions: [sender]
-            };
+            response.type = 'audio';
+            response.audio = audioBuffer;
         } else {
-             // Si no hay audio, enviar solo la info con la portada
-            return {
-                type: 'image',
-                image: { url: result.cover_url },
-                caption: caption,
-                mentions: [sender]
-            };
+            response.type = 'image';
+            response.image = { url: result.cover_url };
         }
+        return response;
     } catch (e) {
         return { success: false, message: `⚠️ Error en /spotify: ${e.message}` };
     }
 }
 
 export async function handleTranslate(ctx) {
-    const { args, sender } = ctx;
+    const { args } = ctx;
     const lang = args.pop();
     const text = args.join(' ');
     if (!text || !lang) return { success: false, message: '❌ Uso: /translate [texto] [código de idioma]' };
@@ -272,7 +250,7 @@ export async function handleTranslate(ctx) {
 }
 
 export async function handleWeather(ctx) {
-    const { args, sender } = ctx;
+    const { args } = ctx;
     const city = args.join(' ');
     if (!city) return { success: false, message: '❌ Uso: /weather [ciudad]' };
 
