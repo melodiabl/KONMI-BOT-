@@ -5,6 +5,9 @@ import axios from 'axios'
 import logger from '../config/logger.js'
 import { getSpotifyAccessToken } from './spotify-auth.js'
 import { buildYtDlpCookieArgs } from './cookies.js'
+import { tmpdir } from 'os';
+import { join as pathJoin } from 'path';
+import { mkdir, rm } from 'fs/promises';
 
 /**
  * Axios por defecto
@@ -718,230 +721,293 @@ async function doRequest(provider, url, body, extraCtx) {
     }
   }
 
-  // Proveedor local: yt-dlp-exec para obtener URL directa robusta
-  if (provider?.method === 'LOCAL__YTDLP_URL') {
+// Proveedor local: yt-dlp-exec para obtener URL directa robusta o descargar localmente
+if (provider?.method === 'LOCAL__YTDLP_URL') {
+    let tempDir = null;
     try {
-      let ytdlp
-      try {
-        const execMod = await import('yt-dlp-exec')
-        ytdlp = execMod.default || execMod
-      } catch (_) {
-        ytdlp = null
-      }
-      const want = (extraCtx && (extraCtx.__ytdlpType || extraCtx.type)) || 'audio'
-      // Elegir extractor según si hay cookies (web_safari con cookies; android sin cookies). Si env fuerza android y hay cookies, se sobreescribe.
-      const __cookieArgs = (() => { try { return buildYtDlpCookieArgs() } catch { return [] } })()
-      const __hasCookies = Array.isArray(__cookieArgs) && __cookieArgs.length > 0
-      const __envExt = process.env.YTDLP_EXTRACTOR_ARGS || ''
-      const __dynExtractor = __hasCookies
-        ? (!__envExt || /player_client=android/i.test(__envExt) ? 'youtube:player_client=web_safari' : __envExt)
-        : (__envExt || 'youtube:player_client=android')
-      const optsBase = {
-        dumpSingleJson: true,
-        noWarnings: true,
-        preferFreeFormats: false,
-        // format será inyectado dinámicamente con fallbacks
-        retries: 1,
-        quiet: true,
-        userAgent: YTDLP_USER_AGENT,
-        extractorArgs: __dynExtractor,
-        // Anti-detección / ritmo (opcional en ytdlp-exec)
-        sleepInterval: process.env.YTDLP_SLEEP_INTERVAL && String(process.env.YTDLP_SLEEP_INTERVAL).trim(),
-        maxSleepInterval: process.env.YTDLP_SLEEP_MAX && String(process.env.YTDLP_SLEEP_MAX).trim(),
-        limitRate: process.env.YTDLP_RATE_LIMIT && String(process.env.YTDLP_RATE_LIMIT).trim(),
-        concurrentFragments: process.env.YTDLP_CONCURRENT_FRAGMENTS && String(process.env.YTDLP_CONCURRENT_FRAGMENTS).trim(),
-        referer: process.env.YTDLP_REFERER && String(process.env.YTDLP_REFERER).trim(),
-        httpChunkSize: process.env.YTDLP_HTTP_CHUNK_SIZE && String(process.env.YTDLP_HTTP_CHUNK_SIZE).trim(),
-      }
-      try {
-        const fsMod = await import('fs')
-        const fs = fsMod.default || fsMod
-        const cookieFile = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-        if (cookieFile && (fs.existsSync?.(cookieFile) || fs.default?.existsSync?.(cookieFile))) {
-          optsBase.cookies = cookieFile
-        } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
-          optsBase.addHeader = [ `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}` ]
-        }
-      } catch {}
-      let info
-      // Candidatos de formato con fallbacks robustos contra SABR y ausencia de MP4
-      const formatCandidates = want === 'audio'
-        ? [
-            'bestaudio[ext=m4a]/bestaudio/best',
-            'bestaudio/best',
-            'best'
-          ]
-        : [
-            // Intentar progresivo o combinación si es posible, luego retroceder a best
-            'best[ext=mp4]/bv*+ba/b',
-            'bv*+ba/b',
-            'best'
-          ]
-      if (ytdlp) {
-        // Probar múltiples expresiones de formato con yt-dlp-exec
-        let lastErrExec
-        for (const fmt of formatCandidates) {
-          try {
-            info = await ytdlp(url, { ...optsBase, format: fmt })
-            if (info) break
-          } catch (e) {
-            lastErrExec = e
-            const msg = String(e?.message || e || '')
-            if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
-              // intentar siguiente formato
-              continue
-            }
-            // Error distinto: propagar
-            throw e
-          }
-        }
-        if (!info && lastErrExec) throw lastErrExec
-      } else {
-        const { spawn } = await import('child_process')
-        // Construir argumentos de cookies de forma síncrona
-        const cookieArgs = []
-        try {
-          const fsMod = await import('fs')
-          const fs = fsMod.default || fsMod
-          const envP = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-          const candidates = [
-            envP,
-            '/home/admin/all_cookies.txt',
-            '/home/admin/KONMI-BOT-/backend/full/all_cookies.txt',
-            // tolerar typo común
-            '/home/admin/all_cookie.txt',
-            '/home/admin/KONMI-BOT-/backend/full/all_cookie.txt',
-          ].filter(Boolean)
-          let picked = null
-          for (const p of candidates) {
-            try { if (p && (fs.existsSync?.(p) || fs.default?.existsSync?.(p))) { picked = p; break } } catch {}
-          }
-          if (picked) {
-            cookieArgs.push('--cookies', picked)
-          } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
-            cookieArgs.push('--add-header', `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`)
-          }
-        } catch {}
-        const buildArgs = (fmt) => {
-          const fs = (() => { try { const m = require('fs'); return m.default || m } catch { return {} } })()
-          return [
-            ...(() => { try { return String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true' ? ['--ignore-config'] : [] } catch { return [] } })(),
-            '--dump-single-json',
-            '--no-warnings',
-            '--retries', '1',
-            '-f', fmt,
-            '--user-agent', YTDLP_USER_AGENT,
-            '--extractor-args', __dynExtractor,
-            // Optional external config
-            ...(() => { try { const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim(); return (cfg && (fs.existsSync?.(cfg) || fs.default?.existsSync?.(cfg))) ? ['--config-location', cfg] : [] } catch { return [] } })(),
-            // Anti-detección / ritmo
-            ...(process.env.YTDLP_SLEEP_INTERVAL ? ['--sleep-interval', String(process.env.YTDLP_SLEEP_INTERVAL)] : []),
-            ...(process.env.YTDLP_SLEEP_MAX ? ['--max-sleep-interval', String(process.env.YTDLP_SLEEP_MAX)] : []),
-            ...(process.env.YTDLP_RATE_LIMIT ? ['--limit-rate', String(process.env.YTDLP_RATE_LIMIT)] : []),
-            ...(process.env.YTDLP_CONCURRENT_FRAGMENTS ? ['--concurrent-fragments', String(process.env.YTDLP_CONCURRENT_FRAGMENTS)] : []),
-            ...(process.env.YTDLP_REFERER ? ['--referer', String(process.env.YTDLP_REFERER)] : []),
-            ...(process.env.YTDLP_HTTP_CHUNK_SIZE ? ['--http-chunk-size', String(process.env.YTDLP_HTTP_CHUNK_SIZE)] : []),
-            ...(process.env.YTDLP_BUFFER_SIZE ? ['--buffer-size', String(process.env.YTDLP_BUFFER_SIZE)] : []),
-            ...(process.env.YTDLP_RETRIES ? ['--retries', String(process.env.YTDLP_RETRIES)] : []),
-            ...(process.env.YTDLP_FRAGMENT_RETRIES ? ['--fragment-retries', String(process.env.YTDLP_FRAGMENT_RETRIES)] : []),
-            ...((String(process.env.YTDLP_FORCE_IPV4 || '').toLowerCase() === 'true') ? ['-4'] : []),
-            ...cookieArgs,
-            url,
-          ]
-        }
-        const tryCmd = async (cmd, args) => new Promise((resolve, reject) => {
-          const p = spawn(cmd, args, { windowsHide: true })
-          let out = ''
-          let err = ''
-          p.stdout.on('data', (d) => out += d.toString())
-          p.stderr.on('data', (d) => err += d.toString())
-          p.on('error', (e) => reject(e))
-          p.on('close', (code) => {
-            if (code === 0) {
-              try { resolve(JSON.parse(out)) } catch (e) { reject(new Error('yt-dlp JSON parse fail')) }
-            } else reject(new Error(err || ('exit '+code)))
-          })
-        })
+        const onProgress = extraCtx?.onProgress;
+        const want = (extraCtx && (extraCtx.__ytdlpType || extraCtx.type)) || 'audio';
+        const isAudioDownload = want === 'audio';
 
-        const binEnv = process.env.YTDLP_PATH || process.env.YTDLP_BIN || null
-        const candidates = []
-        if (binEnv) candidates.push(binEnv)
-        // Preferir bin local en Windows si existe
+        if (isAudioDownload) {
+            tempDir = pathJoin(tmpdir(), `konmi-dl-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+            await mkdir(tempDir, { recursive: true });
+        }
+
+        let ytdlp;
         try {
-          if (process.platform === 'win32') {
-            const localBin = 'bin\\yt-dlp.exe'
-            const fsMod = await import('fs')
-            const fs = fsMod.default || fsMod
-            if (fs.existsSync?.(localBin) || fs.default?.existsSync?.(localBin)) {
-              candidates.push(localBin)
-            }
-          }
-        } catch {}
-        candidates.push('yt-dlp', 'yt')
-        let lastErr
-        for (const c of candidates) {
-          for (const fmt of formatCandidates) {
-            const args = buildArgs(fmt)
-            try { info = await tryCmd(c, args); lastErr = null; break } catch (e) {
-              lastErr = e
-              const msg = String(e?.message || e || '')
-              if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
-                // intentar siguiente formato
-                continue
-              }
-              // Corte por error distinto a formatos
-              break
-            }
-          }
-          if (info) break
+            const execMod = await import('yt-dlp-exec');
+            ytdlp = execMod.default || execMod;
+        } catch (_) {
+            ytdlp = null;
         }
-        if (!info) {
-          const pyCandidates = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
-          for (const py of pyCandidates) {
-            for (const fmt of formatCandidates) {
-              const args = buildArgs(fmt)
-              try { info = await tryCmd(py, ['-m', 'yt_dlp', ...args]); lastErr = null; break } catch (e) {
-                lastErr = e
-                const msg = String(e?.message || e || '')
-                if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
-                  continue
-                }
-                break
-              }
-            }
-            if (info) break
-          }
-        }
-        if (!info) throw lastErr || new Error('yt-dlp no disponible en PATH')
-      }
-      const pickFromFormats = (formats, predicate) => {
-        if (!Array.isArray(formats)) return null
-        const list = formats.filter(predicate)
-        if (!list.length) return null
-        return list.sort((a,b)=> (b.abr||b.tbr||0) - (a.abr||a.tbr||0))[0]
-      }
-      let chosenUrl = null
-      if (Array.isArray(info?.requested_downloads) && info.requested_downloads.length) {
-        chosenUrl = info.requested_downloads[0]?.url || null
-      }
-      if (!chosenUrl && Array.isArray(info?.requested_formats)) {
-        chosenUrl = info.requested_formats[0]?.url || null
-      }
-      if (!chosenUrl && info?.url) chosenUrl = info.url
-      if (!chosenUrl && Array.isArray(info?.formats)) {
-        if (want === 'audio') {
-          const f = pickFromFormats(info.formats, f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
-          chosenUrl = f?.url || null
+
+        const __cookieArgs = (() => { try { return buildYtDlpCookieArgs() } catch { return [] } })()
+        const __hasCookies = Array.isArray(__cookieArgs) && __cookieArgs.length > 0
+        const __envExt = process.env.YTDLP_EXTRACTOR_ARGS || ''
+        const __dynExtractor = __hasCookies
+            ? (!__envExt || /player_client=android/i.test(__envExt) ? 'youtube:player_client=web_safari' : __envExt)
+            : (__envExt || 'youtube:player_client=android')
+
+        const optsBase = {
+            noWarnings: true,
+            preferFreeFormats: false,
+            retries: 1,
+            quiet: true,
+            userAgent: YTDLP_USER_AGENT,
+            extractorArgs: __dynExtractor,
+            sleepInterval: process.env.YTDLP_SLEEP_INTERVAL && String(process.env.YTDLP_SLEEP_INTERVAL).trim(),
+            maxSleepInterval: process.env.YTDLP_SLEEP_MAX && String(process.env.YTDLP_SLEEP_MAX).trim(),
+            limitRate: process.env.YTDLP_RATE_LIMIT && String(process.env.YTDLP_RATE_LIMIT).trim(),
+            concurrentFragments: process.env.YTDLP_CONCURRENT_FRAGMENTS && String(process.env.YTDLP_CONCURRENT_FRAGMENTS).trim(),
+            referer: process.env.YTDLP_REFERER && String(process.env.YTDLP_REFERER).trim(),
+            httpChunkSize: process.env.YTDLP_HTTP_CHUNK_SIZE && String(process.env.YTDLP_HTTP_CHUNK_SIZE).trim(),
+        };
+
+        if (isAudioDownload) {
+            optsBase.printJson = true;
+            optsBase.output = pathJoin(tempDir, '%(title)s.%(ext)s');
+            optsBase.extractAudio = true;
+            optsBase.audioFormat = 'mp3';
+            optsBase.embedThumbnail = true;
         } else {
-          const f = pickFromFormats(info.formats, f => (f.ext === 'mp4' || /mp4|m4v/i.test(f.ext)) && (f.vcodec && f.vcodec !== 'none'))
-          chosenUrl = f?.url || null
+            optsBase.dumpSingleJson = true;
         }
-      }
-      return { data: { __local: true, success: Boolean(chosenUrl), download: chosenUrl, title: info?.title, quality: info?.quality }, status: 200 }
+
+        try {
+            const fsMod = await import('fs');
+            const fs = fsMod.default || fsMod;
+            const cookieFile = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE;
+            if (cookieFile && (fs.existsSync?.(cookieFile) || fs.default?.existsSync?.(cookieFile))) {
+                optsBase.cookies = cookieFile;
+            } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
+                optsBase.addHeader = [`Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`];
+            }
+        } catch {}
+
+        let info;
+        const formatCandidates = isAudioDownload
+            ? ['bestaudio[ext=m4a]/bestaudio/best']
+            : want === 'audio'
+                ? ['bestaudio[ext=m4a]/bestaudio/best', 'bestaudio/best', 'best']
+                : ['best[ext=mp4]/bv*+ba/b', 'bv*+ba/b', 'best'];
+
+        if (ytdlp) {
+            let lastErrExec;
+            for (const fmt of formatCandidates) {
+                try {
+                    info = await ytdlp(url, { ...optsBase, format: fmt });
+                    if (info) break;
+                } catch (e) {
+                    lastErrExec = e;
+                    const msg = String(e?.message || e || '');
+                    if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
+                        continue;
+                    }
+                    throw e;
+                }
+            }
+            if (!info && lastErrExec) throw lastErrExec;
+        } else {
+            const { spawn } = await import('child_process');
+            const cookieArgs = [];
+            try {
+                const fsMod = await import('fs');
+                const fs = fsMod.default || fsMod;
+                const envP = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE;
+                const candidates = [
+                    envP,
+                    '/home/admin/all_cookies.txt',
+                    '/home/admin/KONMI-BOT-/backend/full/all_cookies.txt',
+                    '/home/admin/all_cookie.txt',
+                    '/home/admin/KONMI-BOT-/backend/full/all_cookie.txt',
+                ].filter(Boolean);
+                let picked = null;
+                for (const p of candidates) {
+                    try { if (p && (fs.existsSync?.(p) || fs.default?.existsSync?.(p))) { picked = p; break } } catch {}
+                }
+                if (picked) {
+                    cookieArgs.push('--cookies', picked);
+                } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
+                    cookieArgs.push('--add-header', `Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`);
+                }
+            } catch {}
+
+            const buildArgs = (fmt) => {
+                const fs = (() => { try { const m = require('fs'); return m.default || m } catch { return {} } })();
+                const base = [
+                    ...(() => { try { return String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true' ? ['--ignore-config'] : [] } catch { return [] } })(),
+                    '--no-warnings',
+                    '--retries', '1',
+                    '-f', fmt,
+                    '--user-agent', YTDLP_USER_AGENT,
+                    '--extractor-args', __dynExtractor,
+                    ...(() => { try { const cfg = process.env.YTDLP_CONFIG_FILE && String(process.env.YTDLP_CONFIG_FILE).trim(); return (cfg && (fs.existsSync?.(cfg) || fs.default?.existsSync?.(cfg))) ? ['--config-location', cfg] : [] } catch { return [] } })(),
+                    ...(process.env.YTDLP_SLEEP_INTERVAL ? ['--sleep-interval', String(process.env.YTDLP_SLEEP_INTERVAL)] : []),
+                    ...(process.env.YTDLP_SLEEP_MAX ? ['--max-sleep-interval', String(process.env.YTDLP_SLEEP_MAX)] : []),
+                    ...(process.env.YTDLP_RATE_LIMIT ? ['--limit-rate', String(process.env.YTDLP_RATE_LIMIT)] : []),
+                    ...(process.env.YTDLP_CONCURRENT_FRAGMENTS ? ['--concurrent-fragments', String(process.env.YTDLP_CONCURRENT_FRAGMENTS)] : []),
+                    ...(process.env.YTDLP_REFERER ? ['--referer', String(process.env.YTDLP_REFERER)] : []),
+                    ...(process.env.YTDLP_HTTP_CHUNK_SIZE ? ['--http-chunk-size', String(process.env.YTDLP_HTTP_CHUNK_SIZE)] : []),
+                    ...(process.env.YTDLP_BUFFER_SIZE ? ['--buffer-size', String(process.env.YTDLP_BUFFER_SIZE)] : []),
+                    ...(process.env.YTDLP_RETRIES ? ['--retries', String(process.env.YTDLP_RETRIES)] : []),
+                    ...(process.env.YTDLP_FRAGMENT_RETRIES ? ['--fragment-retries', String(process.env.YTDLP_FRAGMENT_RETRIES)] : []),
+                    ...((String(process.env.YTDLP_FORCE_IPV4 || '').toLowerCase() === 'true') ? ['-4'] : []),
+                    ...cookieArgs,
+                ];
+
+                if (isAudioDownload) {
+                    base.push(
+                        '--extract-audio',
+                        '--audio-format', 'mp3',
+                        '--embed-thumbnail',
+                        '--print-json',
+                        '-o', pathJoin(tempDir, '%(title)s.%(ext)s')
+                    );
+                } else {
+                    base.push('--dump-single-json');
+                }
+                base.push(url);
+                return base;
+            };
+
+            const tryCmd = async (cmd, args) => new Promise((resolve, reject) => {
+                const p = spawn(cmd, args, { windowsHide: true });
+                let out = '';
+                let err = '';
+                p.stdout.on('data', (d) => out += d.toString());
+                p.stderr.on('data', (d) => {
+                    const str = d.toString();
+                    if (onProgress && str.includes('[download]')) {
+                        const match = str.match(/(\d+\.\d+)%|\s(\d+)%/);
+                        if (match) {
+                            onProgress(parseFloat(match[1] || match[2]));
+                        }
+                    }
+                    err += str;
+                });
+                p.on('error', (e) => reject(e));
+                p.on('close', (code) => {
+                    if (code === 0) {
+                        try {
+                            resolve(JSON.parse(out));
+                        } catch (e) {
+                            reject(new Error('yt-dlp JSON parse fail'));
+                        }
+                    } else {
+                        reject(new Error(err || ('exit ' + code)));
+                    }
+                });
+            });
+
+            const binEnv = process.env.YTDLP_PATH || process.env.YTDLP_BIN || null;
+            const candidates = [];
+            if (binEnv) candidates.push(binEnv);
+            try {
+                if (process.platform === 'win32') {
+                    const localBin = 'bin\\yt-dlp.exe';
+                    const fsMod = await import('fs');
+                    const fs = fsMod.default || fsMod;
+                    if (fs.existsSync?.(localBin) || fs.default?.existsSync?.(localBin)) {
+                        candidates.push(localBin);
+                    }
+                }
+            } catch {}
+            candidates.push('yt-dlp', 'yt');
+            let lastErr;
+
+            for (const c of candidates) {
+                for (const fmt of formatCandidates) {
+                    const args = buildArgs(fmt);
+                    try {
+                        info = await tryCmd(c, args);
+                        lastErr = null;
+                        break;
+                    } catch (e) {
+                        lastErr = e;
+                        const msg = String(e?.message || e || '');
+                        if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                if (info) break;
+            }
+
+            if (!info) {
+                const pyCandidates = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'];
+                for (const py of pyCandidates) {
+                    for (const fmt of formatCandidates) {
+                        const args = buildArgs(fmt);
+                        try {
+                            info = await tryCmd(py, ['-m', 'yt_dlp', ...args]);
+                            lastErr = null;
+                            break;
+                        } catch (e) {
+                            lastErr = e;
+                            const msg = String(e?.message || e || '');
+                            if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                    if (info) break;
+                }
+            }
+            if (!info) throw lastErr || new Error('yt-dlp no disponible en PATH');
+        }
+
+        if (isAudioDownload) {
+            const filePath = info?._filename;
+            if (filePath) {
+                return {
+                    data: {
+                        __local: true,
+                        success: true,
+                        download: { url: filePath, isLocal: true },
+                        title: info?.title,
+                        quality: info?.quality,
+                        tempDir: tempDir // Pasar el dir para limpieza posterior
+                    },
+                    status: 200
+                };
+            }
+            throw new Error('No se pudo obtener la ruta del archivo descargado.');
+        }
+
+        const pickFromFormats = (formats, predicate) => {
+            if (!Array.isArray(formats)) return null;
+            const list = formats.filter(predicate);
+            return list.length ? list.sort((a, b) => (b.abr || b.tbr || 0) - (a.abr || a.tbr || 0))[0] : null;
+        };
+
+        let chosenUrl = null;
+        if (Array.isArray(info?.requested_downloads) && info.requested_downloads.length) {
+            chosenUrl = info.requested_downloads[0]?.url || null;
+        }
+        if (!chosenUrl && Array.isArray(info?.requested_formats)) {
+            chosenUrl = info.requested_formats[0]?.url || null;
+        }
+        if (!chosenUrl && info?.url) chosenUrl = info.url;
+        if (!chosenUrl && Array.isArray(info?.formats)) {
+            if (want === 'audio') {
+                const f = pickFromFormats(info.formats, f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'));
+                chosenUrl = f?.url || null;
+            } else {
+                const f = pickFromFormats(info.formats, f => (f.ext === 'mp4' || /mp4|m4v/i.test(f.ext)) && (f.vcodec && f.vcodec !== 'none'));
+                chosenUrl = f?.url || null;
+            }
+        }
+        return { data: { __local: true, success: Boolean(chosenUrl), download: { url: chosenUrl }, title: info?.title, quality: info?.quality }, status: 200 };
     } catch (e) {
-      throw new Error((e && e.stderr) ? String(e.stderr).slice(0,200) : (e?.message || e))
+        if (tempDir) {
+            try { await rm(tempDir, { recursive: true, force: true }); } catch {}
+        }
+        throw new Error((e && e.stderr) ? String(e.stderr).slice(0, 200) : (e?.message || e));
     }
-  }
+}
 
   // Proveedor local: yt-dlp para búsqueda (ytsearchN:query)
   if (provider?.method === 'LOCAL__YTDLP_SEARCH') {
@@ -1106,7 +1172,7 @@ async function doRequest(provider, url, body, extraCtx) {
  * @param {object} options - Opciones adicionales
  * @returns {Promise<object>} Resultado parseado + {provider}
  */
-export async function downloadWithFallback(type, param, options = {}) {
+export async function downloadWithFallback(type, param, options = {}, onProgress) {
   let providers = API_PROVIDERS[type]
   if (!providers?.length) throw new Error('Tipo de API no soportado: ' + type)
 
@@ -1162,7 +1228,7 @@ export async function downloadWithFallback(type, param, options = {}) {
         ? provider.body(param, options)
         : provider.body
 
-      const { data, status } = await doRequest(provider, url, body, extra)
+      const { data, status } = await doRequest(provider, url, body, { ...extra, onProgress })
 
       const parsed = data?.__local ? data : (provider.parse?.(data, extra) || { success: false })
 
@@ -1188,8 +1254,8 @@ export async function searchYouTubeMusic(query) {
   return downloadWithFallback('youtubeSearch', query)
 }
 
-export async function downloadYouTube(url, type = 'audio') {
-  return downloadWithFallback('youtube', url, { type })
+export async function downloadYouTube(url, type = 'audio', onProgress) {
+  return downloadWithFallback('youtube', url, { type }, onProgress)
 }
 
 export async function downloadTikTok(url) {

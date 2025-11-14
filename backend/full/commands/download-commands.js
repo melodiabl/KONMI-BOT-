@@ -149,61 +149,152 @@ export async function handlePinterestDownload(ctx) {
 }
 
 export async function handleMusicDownload(ctx) {
-    const { args, sender } = ctx;
+    const { args, sender, reply, editMessage, deleteMessage } = ctx;
     const query = args.join(' ');
-    if (!query) return { success: false, message: '❌ Uso: /music [nombre o URL]' };
+    if (!query) {
+        await reply('❌ Uso: /play [nombre o URL]');
+        return;
+    }
 
+    let searchingMsg;
     try {
+        searchingMsg = await reply(`Buscando... ⏳\n\n*${query}*`);
+
         const result = await searchYouTubeMusic(query);
-        if (!result.success || !result.results.length) return { success: false, message: `😕 No encontré resultados para "${query}".` };
+        if (!result.success || !result.results.length) {
+            await editMessage(searchingMsg.key, `😕 No encontré resultados para "${query}".`);
+            return;
+        }
 
         const video = result.results[0];
-        const downloadResult = await downloadYouTube(video.url, 'audio');
-        if (!downloadResult.success || !downloadResult.download) return { success: false, message: '⚠️ Error al descargar el audio.' };
+        const infoCaption = `*Título:* ${video.title}\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n*Iniciando descarga...*`;
 
-        return {
-            type: 'audio',
-            audio: downloadResult.download,
-            caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+        await editMessage(searchingMsg.key, {
+            image: { url: video.thumbnail },
+            caption: infoCaption
+        });
+
+        let lastProgress = 0;
+        const downloadResult = await downloadYouTube(video.url, 'audio', (progress) => {
+            if (progress > lastProgress) {
+                lastProgress = progress;
+                const progressBar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
+                editMessage(searchingMsg.key, {
+                    image: { url: video.thumbnail },
+                    caption: `*Título:* ${video.title}\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n*Descargando...* ${progressBar} ${progress.toFixed(1)}%`
+                });
+            }
+        });
+
+        if (!downloadResult.success || !downloadResult.download) {
+            await editMessage(searchingMsg.key, '⚠️ Error al descargar el audio.');
+            return;
+        }
+
+        await reply({
+            audio: { url: downloadResult.download.url },
+            caption: `*${video.title}*\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
             mentions: [sender],
-        };
+        });
+
+        await deleteMessage(searchingMsg.key);
+
     } catch (e) {
-        return { success: false, message: `⚠️ Error en /music: ${e.message}` };
+        const errorMsg = `⚠️ Error en /play: ${e.message}`;
+        logger.error(errorMsg);
+        if (searchingMsg) {
+            await editMessage(searchingMsg.key, errorMsg);
+        } else {
+            await reply(errorMsg);
+        }
     }
 }
 
 export async function handleVideoDownload(ctx) {
-    const { args, sender } = ctx;
+    const { args, sender, reply, editMessage, deleteMessage } = ctx;
     const query = args.join(' ');
-    if (!query) return { success: false, message: '❌ Uso: /video [nombre o URL]' };
+    if (!query) {
+        await reply('❌ Uso: /video [nombre o URL]');
+        return;
+    }
 
+    let searchingMsg;
     try {
+        searchingMsg = await reply(`Buscando video... ⏳\n\n*${query}*`);
+
         const result = await searchYouTubeMusic(query);
-        if (!result.success || !result.results.length) return { success: false, message: `😕 No encontré resultados para "${query}".` };
+        if (!result.success || !result.results.length) {
+            await editMessage(searchingMsg.key, `😕 No encontré resultados para "${query}".`);
+            return;
+        }
 
         const video = result.results[0];
-        const downloadResult = await downloadYouTube(video.url, 'video');
-        if (!downloadResult.success || !downloadResult.download) return { success: false, message: '⚠️ Error al descargar el video.' };
+        const infoCaption = `*Título:* ${video.title}\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n*Iniciando descarga...*`;
 
-        return {
-            type: 'video',
-            video: downloadResult.download,
-            caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+        await editMessage(searchingMsg.key, {
+            image: { url: video.thumbnail },
+            caption: infoCaption
+        });
+
+        let lastProgress = 0;
+        const downloadResult = await downloadYouTube(video.url, 'video', (progress) => {
+            if (progress > lastProgress) {
+                lastProgress = progress;
+                const progressBar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
+                editMessage(searchingMsg.key, {
+                    image: { url: video.thumbnail },
+                    caption: `*Título:* ${video.title}\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n*Descargando...* ${progressBar} ${progress.toFixed(1)}%`
+                });
+            }
+        });
+        if (!downloadResult.success || !downloadResult.download) {
+            await editMessage(searchingMsg.key, '⚠️ Error al descargar el video.');
+            return;
+        }
+
+        await reply({
+            video: { url: downloadResult.download.url },
+            caption: `*${video.title}*\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
             mentions: [sender],
-        };
+        });
+
+        await deleteMessage(searchingMsg.key);
+
     } catch (e) {
-        return { success: false, message: `⚠️ Error en /video: ${e.message}` };
+        const errorMsg = `⚠️ Error en /video: ${e.message}`;
+        logger.error(errorMsg);
+        if (searchingMsg) {
+            await editMessage(searchingMsg.key, errorMsg);
+        } else {
+            await reply(errorMsg);
+        }
     }
 }
 
 export async function handleSpotifySearch(ctx) {
-    const { args, sender } = ctx;
+    const { args, sender, reply, editMessage, deleteMessage } = ctx;
     const query = args.join(' ');
-    if (!query) return { success: false, message: '❌ Uso: /spotify [nombre de canción]' };
+    if (!query) {
+        await reply('❌ Uso: /spotify [nombre de canción]');
+        return;
+    }
 
+    let searchingMsg;
     try {
+        searchingMsg = await reply(`Buscando en Spotify... ⏳\n\n*${query}*`);
+
         const result = await searchSpotify(query);
-        if (!result.success) return { success: false, message: `😕 No encontré resultados para "${query}" en Spotify.` };
+        if (!result.success) {
+            await editMessage(searchingMsg.key, `😕 No encontré resultados para "${query}" en Spotify.`);
+            return;
+        }
+
+        const caption = `*Título:* ${result.title}\n*Artista:* ${result.artists}\n*Álbum:* ${result.album}\n\n*Buscando en YouTube y descargando...*`;
+
+        await editMessage(searchingMsg.key, {
+            image: { url: result.cover_url },
+            caption: caption,
+        });
 
         let audioBuffer = null;
         try {
@@ -211,10 +302,28 @@ export async function handleSpotifySearch(ctx) {
             if (ytResult.success && ytResult.results.length) {
                 const dlResult = await downloadYouTube(ytResult.results[0].url, 'audio');
                 if (dlResult.success) audioBuffer = dlResult.download;
+        // Intentar descargar el audio desde YouTube como fallback
+        let audioUrl = null;
+        try {
+            const ytResult = await searchYouTubeMusic(`${result.title} ${result.artists}`);
+            if (ytResult.success && ytResult.results.length) {
+                const ytVideo = ytResult.results[0];
+                let lastProgress = 0;
+                const dlResult = await downloadYouTube(ytVideo.url, 'audio', (progress) => {
+                    if (progress > lastProgress) {
+                        lastProgress = progress;
+                        const progressBar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
+                        editMessage(searchingMsg.key, {
+                            image: { url: result.cover_url },
+                            caption: `*Título:* ${result.title}\n*Artista:* ${result.artists}\n*Álbum:* ${result.album}\n\n*Descargando...* ${progressBar} ${progress.toFixed(1)}%`
+                        });
+                    }
+                });
+                if (dlResult.success) audioUrl = dlResult.download.url;
             }
-        } catch {}
-
-        const caption = `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
+        } catch (e) {
+            logger.error('Error en el fallback de Spotify a YouTube:', e);
+        }
 
         const response = {
             caption,
@@ -229,8 +338,28 @@ export async function handleSpotifySearch(ctx) {
             response.image = { url: result.cover_url };
         }
         return response;
+        if (audioUrl) {
+            await reply({
+                audio: { url: audioUrl },
+                caption: `*${result.title}* - *${result.artists}*\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+                mentions: [sender]
+            });
+        } else {
+             // Si no hay audio, simplemente deja el mensaje con la info de Spotify
+            await editMessage(searchingMsg.key, `*Título:* ${result.title}\n*Artista:* ${result.artists}\n*Álbum:* ${result.album}\n\n⚠️ No se pudo descargar el audio.`);
+            return;
+        }
+
+        await deleteMessage(searchingMsg.key);
+
     } catch (e) {
-        return { success: false, message: `⚠️ Error en /spotify: ${e.message}` };
+        const errorMsg = `⚠️ Error en /spotify: ${e.message}`;
+        logger.error(errorMsg);
+        if (searchingMsg) {
+            await editMessage(searchingMsg.key, errorMsg);
+        } else {
+            await reply(errorMsg);
+        }
     }
 }
 
