@@ -403,7 +403,11 @@ export async function dispatch(ctx = {}) {
     const mod = await import('./registry/index.js')
     const get = mod?.getCommandRegistry
     registry = typeof get === 'function' ? get() : null
-  } catch {}
+  } catch (e) {
+    // IMPORTANTE: Loguear el error de importación para que el usuario pueda diagnosticar
+    console.error('⚠️ ERROR CRÍTICO AL CARGAR EL REGISTRO DE COMANDOS. CAUSA DEL MODO DE EMERGENCIA:', e?.message || e)
+    console.error('Stack Trace:', e?.stack)
+  }
   if (!registry || !registry.has(command)) {
     // Fallback directo para comandos críticos si el registry falla
     const lazy = new Map()

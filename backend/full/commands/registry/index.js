@@ -1,54 +1,3 @@
-// commands/registry/index.js
-// Registro centralizado de comandos. Refactorizado para un /help unificado.
-
-import {
-  handleTikTokDownload,
-  handleInstagramDownload,
-  handleFacebookDownload,
-  handleTwitterDownload,
-  handlePinterestDownload,
-  handleTranslate,
-  handleWeather,
-  handleQuote,
-  handleFact,
-  handleTriviaCommand,
-  handleMemeCommand,
-  handleMusicDownload,
-  handleVideoDownload,
-  handleSpotifySearch,
-} from '../download-commands.js'
-
-import * as ai from '../ai.js'
-import * as admin from '../admin.js'
-import * as adminMenu from '../admin-menu.js'
-import * as aporteCmd from '../aportes.js'
-import * as botctl from '../bot-control.js'
-import * as broadcast from '../broadcast.js'
-import * as content from '../content.js'
-import * as demo from '../demo.js'
-import * as diag from '../diag.js'
-import * as files from '../files.js'
-import * as gextra from '../group-extra.js'
-import * as groupAdminX from '../group-admin-extra.js'
-import * as groupCmd from '../groups.js'
-import * as groupSettings from '../group-settings.js'
-import * as images from '../images.js'
-import * as maintenance from '../maintenance.js'
-import * as menu from '../menu.js'
-import * as mod from '../moderation.js'
-import * as pairing from '../pairing.js'
-import * as pedidoCmd from '../pedidos.js'
-import * as promo from '../promo.js'
-import * as stickers from '../stickers.js'
-import * as subbots from '../subbots.js'
-import * as sysInfo from '../system-info.js'
-import * as system from '../system.js'
-import * as utils from '../utils.js'
-import * as utilmath from '../util-math.js'
-import * as votes from '../votes.js'
-import * as logsCmd from '../logs.js'
-import * as polls from '../polls.js'
-
 import { promotionalLinks } from '../../config/links.js'
 import { getTheme } from '../../utils/theme.js'
 
@@ -99,6 +48,64 @@ function register(entries = []) {
     }
   }
 }
+
+// --- Carga de Módulos a Prueba de Fallos ---
+async function safeImport(modulePath) {
+  try {
+    const mod = await import(modulePath)
+    return mod
+  } catch (e) {
+    console.error(`⚠️ ERROR: No se pudo importar el módulo ${modulePath}. Los comandos asociados no se cargarán.`, e?.message || e)
+    return {}
+  }
+}
+
+// Carga de módulos
+const [
+  downloadCmd, ai, admin, adminMenu, aporteCmd, botctl, broadcast, content, demo, diag, files, gextra,
+  groupAdminX, groupCmd, groupSettings, images, maintenance, menu, mod, pairing, pedidoCmd, promo,
+  stickers, subbots, sysInfo, system, utils, utilmath, votes, logsCmd, polls
+] = await Promise.all([
+  safeImport('../download-commands.js'),
+  safeImport('../ai.js'),
+  safeImport('../admin.js'),
+  safeImport('../admin-menu.js'),
+  safeImport('../aportes.js'),
+  safeImport('../bot-control.js'),
+  safeImport('../broadcast.js'),
+  safeImport('../content.js'),
+  safeImport('../demo.js'),
+  safeImport('../diag.js'),
+  safeImport('../files.js'),
+  safeImport('../group-extra.js'),
+  safeImport('../group-admin-extra.js'),
+  safeImport('../groups.js'),
+  safeImport('../group-settings.js'),
+  safeImport('../images.js'),
+  safeImport('../maintenance.js'),
+  safeImport('../menu.js'),
+  safeImport('../moderation.js'),
+  safeImport('../pairing.js'),
+  safeImport('../pedidos.js'),
+  safeImport('../promo.js'),
+  safeImport('../stickers.js'),
+  safeImport('../subbots.js'),
+  safeImport('../system-info.js'),
+  safeImport('../system.js'),
+  safeImport('../utils.js'),
+  safeImport('../util-math.js'),
+  safeImport('../votes.js'),
+  safeImport('../logs.js'),
+  safeImport('../polls.js'),
+])
+
+// Desestructuración de comandos de download-commands.js
+const {
+  handleTikTokDownload, handleInstagramDownload, handleFacebookDownload, handleTwitterDownload,
+  handlePinterestDownload, handleTranslate, handleWeather, handleQuote, handleFact,
+  handleTriviaCommand, handleMemeCommand, handleMusicDownload, handleVideoDownload,
+  handleSpotifySearch,
+} = downloadCmd
 
 const CATEGORY_META = {
   ai: { emoji: '🤖', label: 'Inteligencia Artificial' },
@@ -214,7 +221,6 @@ async function buildHelp(ctx) {
     mentions: [ctx.sender],
   };
 }
-
 
 register([
   // Inteligencia Artificial
@@ -349,53 +355,42 @@ register([
   { command: '/mybots', handler: (ctx) => subbots.mine(ctx), category: 'pairing', description: 'Ver tus subbots vinculados' },
   { command: '/mibots', aliasOf: '/mybots', category: 'pairing' },
 
-  // Biblioteca de contenido
-  { command: '/manhwas', handler: () => content.listManhwas(), category: 'library', description: 'Lista de manhwas disponibles' },
-  { command: '/addmanhwa', handler: (ctx) => content.addManhwa(ctx), category: 'library', description: 'Agregar nuevo manhwa' },
-  { command: '/series', handler: () => content.listSeries(), category: 'library', description: 'Series disponibles' },
-  { command: '/addserie', handler: (ctx) => content.addSerie(ctx), category: 'library', description: 'Registrar nueva serie' },
-  { command: '/extra', handler: () => content.listExtra(), category: 'aportes', description: 'Contenido extra disponible' },
-  { command: '/ilustraciones', handler: () => content.listIlustraciones(), category: 'aportes', description: 'Listado de ilustraciones' },
-  { command: '/obtenerextra', handler: (ctx) => content.obtenerExtra(ctx), category: 'aportes', description: 'Obtener un extra específico' },
-  { command: '/obtenerilustracion', handler: (ctx) => content.obtenerIlustracion(ctx), category: 'aportes', description: 'Obtener ilustración por código' },
-  { command: '/obtenerpack', handler: (ctx) => content.obtenerPack(ctx), category: 'aportes', description: 'Recibir un pack multimedia' },
-  { command: '/obtenermanhwa', handler: (ctx) => content.obtenerManhwa(ctx), category: 'library', description: 'Descargar manhwa por código' },
-
-  // Archivos
-  { command: '/guardar', handler: (ctx) => files.guardar(ctx), category: 'files', description: 'Guardar archivo adjunto' },
-  { command: '/save', aliasOf: '/guardar', category: 'files' },
-  { command: '/archivos', handler: (ctx) => files.archivos(ctx), category: 'files', description: 'Listado de archivos globales' },
-  { command: '/files', aliasOf: '/archivos', category: 'files' },
-  { command: '/misarchivos', handler: (ctx) => files.misArchivos(ctx), category: 'files', description: 'Archivos que subiste' },
-  { command: '/myfiles', aliasOf: '/misarchivos', category: 'files' },
-  { command: '/buscararchivo', handler: (ctx) => files.buscarArchivo(ctx), category: 'files', description: 'Buscar archivo por texto' },
-  { command: '/findfile', aliasOf: '/buscararchivo', category: 'files' },
-  { command: '/estadisticas', handler: () => files.estadisticas(), category: 'files', description: 'Estadísticas de archivos' },
-  { command: '/stats', aliasOf: '/estadisticas', category: 'files' },
-
-  // Utilidades varias
-  { command: '/translate', handler: (ctx) => handleTranslate(ctx), category: 'utils', description: 'Traducir textos a otro idioma' },
+  // Utilidades
+  { command: '/sticker', handler: (ctx) => stickers.sticker(ctx), category: 'utils', description: 'Crear sticker desde imagen/video' },
+  { command: '/stickerurl', handler: (ctx) => stickers.stickerUrl(ctx), category: 'utils', description: 'Crear sticker desde URL' },
+  { command: '/toimg', handler: (ctx) => stickers.toimg(ctx), category: 'utils', description: 'Convertir sticker a imagen' },
+  { command: '/calc', handler: (ctx) => utilmath.calc(ctx), category: 'utils', description: 'Calculadora matemática' },
+  { command: '/short', handler: (ctx) => utils.short(ctx), category: 'utils', description: 'Acortar una URL' },
+  { command: '/acortar', aliasOf: '/short', category: 'utils' },
+  { command: '/translate', handler: (ctx) => handleTranslate(ctx), category: 'utils', description: 'Traducir texto a otro idioma' },
+  { command: '/tts', handler: (ctx) => utils.tts(ctx), category: 'utils', description: 'Convertir texto a voz' },
   { command: '/weather', handler: (ctx) => handleWeather(ctx), category: 'utils', description: 'Consultar el clima' },
   { command: '/clima', aliasOf: '/weather', category: 'utils' },
-  { command: '/short', handler: (ctx) => utils.shortUrl(ctx), category: 'utils', description: 'Acortar enlaces largos' },
-  { command: '/acortar', aliasOf: '/short', category: 'utils' },
-  { command: '/tts', handler: (ctx) => utils.tts(ctx), category: 'utils', description: 'Texto a voz en varios idiomas' },
-  { command: '/calc', handler: (ctx) => utilmath.calc(ctx), category: 'utils', description: 'Calculadora avanzada' },
-  { command: '/stickerurl', handler: (ctx) => stickers.stickerurl(ctx), category: 'utils', description: 'Crear sticker desde URL' },
-  { command: '/toimg', handler: (ctx) => stickers.toimg(ctx), category: 'utils', description: 'Convertir sticker a imagen' },
-  { command: '/sticker', handler: (ctx) => stickers.sticker(ctx), category: 'utils', description: 'Crear sticker desde imagen/video' },
-  { command: '/promo', handler: (ctx) => promo.promo(ctx), category: 'utils', description: 'Compartir enlaces promocionales' },
 
-  // Administración avanzada
-  { command: '/owner', handler: (ctx) => admin.ownerInfo(ctx), category: 'system', description: 'Ver datos del owner' },
-  { command: '/checkowner', handler: (ctx) => admin.checkOwner(ctx), category: 'system', description: 'Verificar si eres owner' },
-  { command: '/setowner', handler: (ctx) => admin.setOwner(ctx), category: 'system', description: 'Configurar número owner' },
-  { command: '/debugme', handler: (ctx) => admin.debugMe(ctx), category: 'system', description: 'Debug de usuario en panel' },
-  { command: '/debugfull', handler: (ctx) => admin.debugFull(ctx), category: 'system', description: 'Debug completo del bot' },
-  { command: '/testadmin', handler: (ctx) => admin.testAdmin(ctx), category: 'system', description: 'Verifica privilegios actuales' },
-  { command: '/debugbot', handler: (ctx) => admin.debugBot(ctx), category: 'system', description: 'Estado de Baileys y subprocesos' },
-  { command: '/broadcast', handler: (ctx) => broadcast.broadcast(ctx), category: 'system', description: 'Enviar difusión a múltiples chats' },
-  { command: '/bot', handler: (ctx) => botctl.bot(ctx), category: 'group', description: 'Información del bot y controles rápidos' },
+  // Archivos
+  { command: '/files', handler: (ctx) => files.listFiles(ctx), category: 'files', description: 'Listar archivos guardados' },
+  { command: '/archivos', aliasOf: '/files', category: 'files' },
+  { command: '/save', handler: (ctx) => files.saveFile(ctx), category: 'files', description: 'Guardar archivo en la nube' },
+  { command: '/guardar', aliasOf: '/save', category: 'files' },
+  { command: '/findfile', handler: (ctx) => files.findFile(ctx), category: 'files', description: 'Buscar archivo por nombre' },
+  { command: '/buscararchivo', aliasOf: '/findfile', category: 'files' },
+  { command: '/myfiles', handler: (ctx) => files.myFiles(ctx), category: 'files', description: 'Ver mis archivos guardados' },
+  { command: '/misarchivos', aliasOf: '/myfiles', category: 'files' },
+
+  // Biblioteca
+  { command: '/addmanhwa', handler: (ctx) => content.addManhwa(ctx), category: 'library', description: 'Añadir manhwa a la biblioteca' },
+  { command: '/addserie', handler: (ctx) => content.addSerie(ctx), category: 'library', description: 'Añadir serie a la biblioteca' },
+  { command: '/manhwas', handler: (ctx) => content.listManhwas(ctx), category: 'library', description: 'Ver manhwas disponibles' },
+  { command: '/series', handler: (ctx) => content.listSeries(ctx), category: 'library', description: 'Ver series disponibles' },
+  { command: '/obtenermanhwa', handler: (ctx) => content.getManhwa(ctx), category: 'library', description: 'Obtener un manhwa' },
+  { command: '/obtenerilustracion', handler: (ctx) => content.getIlustracion(ctx), category: 'library', description: 'Obtener una ilustración' },
+  { command: '/obtenerpack', handler: (ctx) => content.getPack(ctx), category: 'library', description: 'Obtener un pack' },
+  { command: '/obtenerextra', handler: (ctx) => content.getExtra(ctx), category: 'library', description: 'Obtener contenido extra' },
+  { command: '/ilustraciones', handler: (ctx) => content.listIlustraciones(ctx), category: 'library', description: 'Ver ilustraciones' },
+  { command: '/extra', handler: (ctx) => content.listExtras(ctx), category: 'library', description: 'Ver contenido extra' },
+
+  // Promociones
+  { command: '/promo', handler: (ctx) => promo.promo(ctx), category: 'info', description: 'Ver promociones activas' },
 
   // Logs
   { command: '/logfind', handler: (ctx) => logsCmd.find(ctx), category: 'system', description: 'Buscar en logs' },
