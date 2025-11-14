@@ -60,6 +60,7 @@ async function loadBaileys() {
         fetchLatestBaileysVersion: M?.fetchLatestBaileysVersion,
         Browsers: M?.Browsers,
         DisconnectReason: M?.DisconnectReason,
+        jidDecode: M?.jidDecode, // Añadir jidDecode
         loadedName: name
       }
       if (!api.makeWASocket || !api.useMultiFileAuthState) {
@@ -193,7 +194,7 @@ export async function connectToWhatsApp(
   usePairingCode = false,
   phoneNumber = null
 ) {
-  const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason } = await loadBaileys()
+  const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason, jidDecode } = await loadBaileys()
 
   savedAuthPath = path.resolve(authPath)
   // Limpieza opcional como en subbot-runner
@@ -727,52 +728,50 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     if (!remoteJid) return
     const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
 
-    // ---- START: Construcción de CTX unificado ----
-    const normalizeDigits = (jid) => String(jid||'').split('@')[0].split(':')[0].replace(/\D/g,'')
-    const fromMe = !!message?.key?.fromMe
-    const botNumber = normalizeDigits(s.user?.id)
+    // ---- START: Construcción de CTX unificado (Refactorizado con jidDecode) ----
+    const fromMe = !!message?.key?.fromMe;
+    const botJid = s.user?.id;
+    const botNumber = botJid ? jidDecode(botJid).user : null;
 
-    let usuario, usuarioRaw, participant, participantNumber, usuarioNumber
-    if (fromMe) {
-      usuario = s.user.id
-      usuarioNumber = botNumber
-    } else {
-      participant = message.key.participant || message.participant
-      usuario = isGroup ? participant : remoteJid
-      usuarioNumber = normalizeDigits(usuario)
-    }
+    const sender = isGroup ? (message.key.participant || remoteJid) : remoteJid;
+    const senderNumber = sender ? jidDecode(sender).user : null;
 
-    const ownerNumber = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '')
-    const isOwner = ownerNumber && (usuarioNumber === ownerNumber)
+    const ownerNumber = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '');
+    const isOwner = !!(ownerNumber && senderNumber && senderNumber === ownerNumber);
 
-    let isAdmin = false
-    let isBotAdmin = false
-    let groupMetadata = null
+    let isAdmin = false;
+    let isBotAdmin = false;
+    let groupMetadata = null;
     if (isGroup) {
-      try {
-        groupMetadata = await s.groupMetadata(remoteJid)
-        const participantInfo = (groupMetadata.participants || []).find(p => normalizeDigits(p.id) === usuarioNumber)
-        isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin')
-        const botInfo = (groupMetadata.participants || []).find(p => normalizeDigits(p.id) === botNumber)
-        isBotAdmin = !!botInfo && (botInfo.admin === 'admin' || botInfo.admin === 'superadmin')
-      } catch {}
+        try {
+            groupMetadata = await s.groupMetadata(remoteJid);
+            const participantInfo = (groupMetadata.participants || []).find(p => p.id === sender);
+            isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin');
+
+            const botInfo = (groupMetadata.participants || []).find(p => p.id === botJid);
+            isBotAdmin = !!botInfo && (botInfo.admin === 'admin' || botInfo.admin === 'superadmin');
+        } catch (e) {
+            logger.error(`Error obteniendo metadatos del grupo ${remoteJid}: ${e.message}`);
+        }
     }
 
     const ctx = {
-      sock: s,
-      message,
-      remoteJid,
-      usuario,
-      isGroup,
-      fromMe,
-      botNumber,
-      usuarioNumber,
-      isOwner,
-      isAdmin,
-      isBotAdmin,
-      groupMetadata,
-      ...runtimeContext
-    }
+        sock: s,
+        message,
+        key: message.key,
+        remoteJid,
+        sender,
+        senderNumber,
+        isGroup,
+        fromMe,
+        botJid,
+        botNumber,
+        isOwner,
+        isAdmin,
+        isBotAdmin,
+        groupMetadata,
+        ...runtimeContext
+    };
     // ---- END: Construcción de CTX unificado ----
 
     // Política fromMe (revisada)
