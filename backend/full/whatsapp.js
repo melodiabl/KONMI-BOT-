@@ -93,6 +93,7 @@ async function resolveWaVersion(fetchLatestBaileysVersion) {
 
 /* ===== Estado básico ===== */
 let sock = null
+let jidDecode; // Declarar a nivel de módulo
 const groupSubjectCache = new Map()
 let connectionStatus = 'disconnected'
 let qrCode = null
@@ -194,7 +195,9 @@ export async function connectToWhatsApp(
   usePairingCode = false,
   phoneNumber = null
 ) {
-  const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason, jidDecode } = await loadBaileys()
+  const baileysAPI = await loadBaileys();
+  const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason } = baileysAPI;
+  jidDecode = baileysAPI.jidDecode; // Asignar al scope del módulo
 
   savedAuthPath = path.resolve(authPath)
   // Limpieza opcional como en subbot-runner

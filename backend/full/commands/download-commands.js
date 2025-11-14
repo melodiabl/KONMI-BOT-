@@ -1,5 +1,5 @@
-// download-commands.js
-// Comandos de descarga mejorados con múltiples APIs y fallback automático
+// commands/download-commands.js
+// Comandos de descarga refactorizados para usar el contexto (ctx) unificado.
 
 import {
   downloadTikTok,
@@ -18,68 +18,34 @@ import {
   getRandomMeme,
 } from '../utils/api-providers.js';
 import logger from '../config/logger.js';
-import { buildQuickReplyFlow } from '../utils/flows.js';
-
-function getMention(ctx) {
-  return `${ctx.usuarioNumber}@s.whatsapp.net`;
-}
 
 /**
  * Comando /tiktok - Descarga videos de TikTok
  */
 export async function handleTikTokDownload(ctx) {
-  const { args, usuarioNumber } = ctx;
+  const { args, sender } = ctx;
   const url = args.join(' ');
   try {
     if (!url || !url.includes('tiktok.com')) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/tiktok [URL]`\n\n*Ejemplo:*\n`/tiktok https://www.tiktok.com/@user/video/123`',
-      };
+      return { success: false, message: '❌ Uso incorrecto: /tiktok [URL]' };
     }
 
     const result = await downloadTikTok(url);
 
     if (!result.success || !result.video) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo descargar el video de TikTok. Verifica la URL.',
-      };
+      return { success: false, message: '⚠️ No se pudo descargar el video de TikTok. Verifica la URL.' };
     }
 
-    const flow = buildQuickReplyFlow({
-      header: '📹 TikTok',
-      body: result.title ? `Título: ${result.title}` : 'Descarga lista',
-      footer: 'Acciones rápidas',
-      buttons: [
-        { text: '🎬 Video', command: `/video ${url}` },
-        { text: '🎵 Audio', command: `/music ${url}` },
-        { text: '🔁 Reintentar', command: `/tiktok ${url}` },
-      ],
-    })
-return [
-      {
+    return {
       success: true,
       type: 'video',
       video: result.video,
-      caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.description || result.title || 'Sin descripción'}\n🎵 *Música:* ${result.music || 'N/A'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-      quoted: true,
-      viewOnce: true,
-      info: {
-        title: result.title,
-        author: result.author,
-        description: result.description,
-        provider: result.provider,
-       },
-    },
-    { type: 'content', content: flow, quoted: true, ephemeralDuration: 300 } ];
+      caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'N/D'}\n📝 *Descripción:* ${result.description || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+      mentions: [sender],
+    };
   } catch (error) {
     logger.error('Error en handleTikTokDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar TikTok*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
+    return { success: false, message: `⚠️ Error al descargar TikTok: ${error.message}` };
   }
 }
 
@@ -87,53 +53,31 @@ return [
  * Comando /instagram - Descarga contenido de Instagram
  */
 export async function handleInstagramDownload(ctx) {
-  const { args, usuarioNumber } = ctx;
+  const { args, sender } = ctx;
   const url = args.join(' ');
   try {
     if (!url || !url.includes('instagram.com')) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/instagram [URL]`\n\n*Ejemplo:*\n`/instagram https://www.instagram.com/p/ABC123/`',
-      };
+      return { success: false, message: '❌ Uso incorrecto: /instagram [URL]' };
     }
 
     const result = await downloadInstagram(url);
 
     if (!result.success || (!result.image && !result.video)) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo descargar el contenido de Instagram. Verifica la URL.',
-      };
+      return { success: false, message: '⚠️ No se pudo descargar el contenido de Instagram. Verifica la URL.' };
     }
 
-    const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.caption || 'Sin descripción'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`;
+    const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram*\n\n👤 *Autor:* ${result.author || 'N/D'}\n📝 *Descripción:* ${result.caption || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
 
-    const flow = buildQuickReplyFlow({ header: '📸 Instagram', body: result.caption || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/instagram ${url}` } ] })
-    return [
-      {
+    return {
       success: true,
-      type: result.type === 'video' ? 'video' : 'image',
-      image: result.image,
-      video: result.video,
-      url: result.url,
+      type: result.type,
+      [result.type]: result.image || result.video,
       caption,
-      mentions: [getMention(ctx)],
-      quoted: true,
-      viewOnce: true,
-      info: {
-        title: result.caption,
-        author: result.author,
-        type: result.type,
-        provider: result.provider,
-       },
-    },
-    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
+      mentions: [sender],
+    };
   } catch (error) {
     logger.error('Error en handleInstagramDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar Instagram*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
+    return { success: false, message: `⚠️ Error al descargar Instagram: ${error.message}` };
   }
 }
 
@@ -141,734 +85,246 @@ export async function handleInstagramDownload(ctx) {
  * Comando /facebook - Descarga videos de Facebook
  */
 export async function handleFacebookDownload(ctx) {
-  const { args, usuarioNumber } = ctx;
-  const url = args.join(' ');
-  try {
-    if (!url || !url.includes('facebook.com')) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/facebook [URL]`\n\n*Ejemplo:*\n`/facebook https://www.facebook.com/watch/?v=123456`',
-      };
+    const { args, sender } = ctx;
+    const url = args.join(' ');
+    try {
+        if (!url || !url.includes('facebook.com')) {
+            return { success: false, message: '❌ Uso incorrecto: /facebook [URL]' };
+        }
+
+        const result = await downloadFacebook(url);
+
+        if (!result.success || !result.video) {
+            return { success: false, message: '⚠️ No se pudo descargar el video de Facebook. Verifica la URL.' };
+        }
+
+        return {
+            success: true,
+            type: 'video',
+            video: result.video,
+            caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+            mentions: [sender],
+        };
+    } catch (error) {
+        logger.error('Error en handleFacebookDownload:', error);
+        return { success: false, message: `⚠️ Error al descargar de Facebook: ${error.message}` };
     }
-
-    const result = await downloadFacebook(url);
-
-    if (!result.success || !result.video) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo descargar el video de Facebook. Verifica la URL.',
-      };
-    }
-
-    const flow = buildQuickReplyFlow({ header: '📹 Facebook', body: result.title || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/facebook ${url}` } ] })
-    return [
-      {
-      success: true,
-      type: 'video',
-      video: result.video,
-      caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'Sin título'}\n⏱️ *Duración:* ${result.duration || 'N/A'}\n👤 *Autor:* ${result.author || 'Desconocido'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-      quoted: true,
-      viewOnce: true,
-      info: {
-        title: result.title,
-        author: result.author,
-        duration: result.duration,
-        provider: result.provider,
-      },
-    },
-    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
-  } catch (error) {
-    logger.error('Error en handleFacebookDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar Facebook*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
-  }
 }
 
 /**
  * Comando /twitter - Descarga contenido de Twitter/X
  */
 export async function handleTwitterDownload(ctx) {
-  const { args, usuarioNumber } = ctx;
-  const url = args.join(' ');
-  try {
-    if (!url || (!url.includes('twitter.com') && !url.includes('x.com'))) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/twitter [URL]`\n\n*Ejemplo:*\n`/twitter https://twitter.com/user/status/123456`',
-      };
-    }
-
-    const result = await downloadTwitter(url);
-
-    if (!result.success || (!result.video && !result.image)) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo descargar el contenido de Twitter/X. Verifica la URL.',
-      };
-    }
-
-    const caption = `🐦 *Twitter/X ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* @${result.author || 'Desconocido'}\n📝 *Tweet:* ${result.text || 'Sin texto'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`;
-
-    const flow = buildQuickReplyFlow({ header: '🐦 Twitter/X', body: result.text || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/twitter ${url}` } ] })
-    return [
-      {
-      success: true,
-      type: result.type === 'video' ? 'video' : 'image',
-      video: result.video,
-      image: result.image,
-      caption,
-      mentions: [getMention(ctx)],
-      quoted: true,
-      viewOnce: true,
-      info: {
-        author: result.author,
-        type: result.type,
-        text: result.text,
-        provider: result.provider,
-      },
-    },
-    { type:'content', content: flow, quoted: true, ephemeralDuration:300 } ];
-  } catch (error) {
-    logger.error('Error en handleTwitterDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar Twitter/X*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
-  }
-}
-
-/**
- * Comando /pinterest - Descarga imágenes de Pinterest
- */
-export async function handlePinterestDownload(ctx) {
-  const { args, usuarioNumber } = ctx;
-  const url = args.join(' ');
-  try {
-    if (!url || !url.includes('pinterest.com')) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/pinterest [URL]`\n\n*Ejemplo:*\n`/pinterest https://www.pinterest.com/pin/123456789/`',
-      };
-    }
-
-    const result = await downloadPinterest(url);
-
-    if (!result.success || !result.image) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo descargar la imagen de Pinterest. Verifica la URL.',
-      };
-    }
-
-    return {
-      success: true,
-      type: 'image',
-      image: result.image,
-      caption: `📌 *Pinterest*\n\n📝 *Título:* ${result.title || 'Sin título'}\n📄 *Descripción:* ${result.description || 'Sin descripción'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-      info: {
-        title: result.title,
-        description: result.description,
-        provider: result.provider,
-      },
-    };
-  } catch (error) {
-    logger.error('Error en handlePinterestDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al descargar Pinterest*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
-  }
-}
-
-/**
- * Comando /music - Busca y descarga música de YouTube
- */
-export async function handleMusicDownload(ctx) {
-  const { args, usuarioNumber } = ctx;
-  const query = args.join(' ');
-  try {
-    if (!query) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/music [nombre o URL]`\n\n*Ejemplos:*\n`/music tears sabrina carpenter`\n`/music https://www.youtube.com/watch?v=dQw4w9WgXcQ`',
-      };
-    }
-
-    const input = String(query).trim();
-    const isUrl = /^(https?:\/\/)/i.test(input);
-    const isYouTube = /(?:youtube\.com|youtu\.be)/i.test(input);
-    const isSpotify = /open\.spotify\.com\/track\//i.test(input);
-
-    if (isUrl && isYouTube) {
-      const downloadResult = await downloadYouTube(input, 'audio');
-      if (!downloadResult.success || !downloadResult.download) {
-        return { success: false, message: '⚠️ Error al descargar el audio del enlace.' };
-      }
-      const title = downloadResult.title || 'Audio de YouTube';
-      // Portada a partir del ID de YouTube
-      let cover = null;
-      try {
-        const urlObj = new URL(input);
-        let vid = urlObj.searchParams.get('v');
-        if (!vid && /youtu\.be$/i.test(urlObj.hostname)) {
-          const p = urlObj.pathname.split('/').filter(Boolean);
-          if (p[0]) vid = p[0];
+    const { args, sender } = ctx;
+    const url = args.join(' ');
+    try {
+        if (!url || (!url.includes('twitter.com') && !url.includes('x.com'))) {
+            return { success: false, message: '❌ Uso incorrecto: /twitter [URL]' };
         }
-        if (!vid) {
-          const m = input.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/);
-          vid = m ? m[1] : null;
-        }
-        if (vid) cover = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
-      } catch (_) {}
-      return {
-        success: true,
-        type: 'audio',
-        audio: downloadResult.download,
-        image: cover,
-        info: {
-          title,
-          author: downloadResult.author || 'Desconocido',
-          duration: downloadResult.duration,
-          views: downloadResult.views,
-          quality: downloadResult.quality,
-          provider: downloadResult.provider,
-          cover_url: cover,
-        },
-        caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${title}\n📶 *Calidad:* ${downloadResult.quality || 'N/A'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${downloadResult.provider}`,
-        mentions: [getMention(ctx)],
-      };
-    }
 
-    if (isUrl && isSpotify) {
-      const sp = await searchSpotify(input);
-      if (sp?.success && (sp.download || sp.preview_url)) {
+        const result = await downloadTwitter(url);
+
+        if (!result.success || (!result.video && !result.image)) {
+            return { success: false, message: '⚠️ No se pudo descargar el contenido de Twitter/X. Verifica la URL.' };
+        }
+
+        const caption = `🐦 *Twitter/X ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* @${result.author || 'N/D'}\n📝 *Tweet:* ${result.text || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
+
         return {
-          success: true,
-          type: 'audio',
-          audio: sp.download || sp.preview_url,
-          image: sp.cover_url || null,
-          info: {
-            title: sp.title,
-            artists: sp.artists,
-            album: sp.album,
-            duration: sp.duration_ms,
-            release_date: sp.release_date,
-            provider: sp.provider,
-            cover_url: sp.cover_url || null,
-          },
-          caption: `🎶 *Spotify*\n\n📌 *Título:* ${sp.title}\n👤 *Artista:* ${sp.artists}\n💽 *Álbum:* ${sp.album}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${sp.provider}`,
-          mentions: [getMention(ctx)],
-        };
-      }
-      const yt = await searchYouTubeMusic(input);
-      if (yt?.success && yt.results?.length) {
-        const video = yt.results[0];
-        const dl = await downloadYouTube(video.url, 'audio');
-        if (dl?.success && dl.download) {
-          // Portada del resultado de YouTube
-          let cover = video.thumbnail || null;
-          if (!cover) {
-            try {
-              const urlObj = new URL(video.url);
-              let vid = urlObj.searchParams.get('v');
-              if (!vid && /youtu\.be$/i.test(urlObj.hostname)) {
-                const p = urlObj.pathname.split('/').filter(Boolean);
-                if (p[0]) vid = p[0];
-              }
-              if (!vid) {
-                const m = (video.url || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/);
-                vid = m ? m[1] : null;
-              }
-              if (vid) cover = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
-            } catch (_) {}
-          }
-          return {
             success: true,
+            type: result.type,
+            [result.type]: result.video || result.image,
+            caption,
+            mentions: [sender],
+        };
+    } catch (error) {
+        logger.error('Error en handleTwitterDownload:', error);
+        return { success: false, message: `⚠️ Error al descargar de Twitter/X: ${error.message}` };
+    }
+}
+
+
+// --- Resto de los comandos refactorizados ---
+
+export async function handlePinterestDownload(ctx) {
+    const { args, sender } = ctx;
+    const url = args.join(' ');
+    if (!url || !url.includes('pinterest.')) return { success: false, message: '❌ Uso: /pinterest [URL]' };
+
+    try {
+        const result = await downloadPinterest(url);
+        if (!result.success || !result.image) return { success: false, message: '⚠️ No se pudo descargar la imagen.' };
+        return {
+            type: 'image',
+            image: result.image,
+            caption: `📌 *Pinterest*\n\n📝 *Título:* ${result.title || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+            mentions: [sender],
+        };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en Pinterest: ${e.message}` };
+    }
+}
+
+export async function handleMusicDownload(ctx) {
+    const { args, sender } = ctx;
+    const query = args.join(' ');
+    if (!query) return { success: false, message: '❌ Uso: /music [nombre o URL]' };
+
+    try {
+        const result = await searchYouTubeMusic(query);
+        if (!result.success || !result.results.length) return { success: false, message: `😕 No encontré resultados para "${query}".` };
+
+        const video = result.results[0];
+        const downloadResult = await downloadYouTube(video.url, 'audio');
+        if (!downloadResult.success || !downloadResult.download) return { success: false, message: '⚠️ Error al descargar el audio.' };
+
+        return {
             type: 'audio',
-            audio: dl.download,
-            image: cover,
-            info: {
-              title: video.title,
-              author: video.author,
-              duration: video.duration,
-              views: video.views,
-              quality: dl.quality,
-              provider: dl.provider,
-              cover_url: cover,
-            },
-            caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n📶 *Calidad:* ${dl.quality}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${dl.provider}`,
-            mentions: [getMention(ctx)],
-          };
-        }
-      }
-      return { success: false, message: '⚠️ No se pudo resolver el enlace de Spotify.' };
+            audio: downloadResult.download,
+            caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+            mentions: [sender],
+        };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /music: ${e.message}` };
     }
-
-    // Texto (título + artista) => buscar en YouTube y descargar
-    const searchResult = await searchYouTubeMusic(input);
-    if (!searchResult.success || !Array.isArray(searchResult.results) || searchResult.results.length === 0) {
-      return {
-        success: false,
-        message: `🔎 *Búsqueda de música*\n\n😕 No se encontraron resultados para: "${input}"\n\n💡 Sugerencia: incluye el artista. Ej.:\n   /play tears sabrina carpenter`,
-      };
-    }
-    const video = searchResult.results[0];
-    const downloadResult = await downloadYouTube(video.url, 'audio');
-    if (!downloadResult.success || !downloadResult.download) {
-      return { success: false, message: '⚠️ Error al descargar el audio. Intenta con otra canción.' };
-    }
-    // Portada del resultado de YouTube
-    let cover = video.thumbnail || null;
-    if (!cover) {
-      try {
-        const urlObj = new URL(video.url);
-        let vid = urlObj.searchParams.get('v');
-        if (!vid && /youtu\.be$/i.test(urlObj.hostname)) {
-          const p = urlObj.pathname.split('/').filter(Boolean);
-          if (p[0]) vid = p[0];
-        }
-        if (!vid) {
-          const m = (video.url || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/);
-          vid = m ? m[1] : null;
-        }
-        if (vid) cover = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
-      } catch (_) {}
-    }
-    return {
-      success: true,
-      type: 'audio',
-      audio: downloadResult.download,
-      image: cover,
-      info: {
-        title: video.title,
-        author: video.author,
-        duration: video.duration,
-        views: video.views,
-        quality: downloadResult.quality,
-        provider: downloadResult.provider,
-        cover_url: cover,
-      },
-      caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${downloadResult.quality}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${downloadResult.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleMusicDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al buscar música*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
-  }
 }
 
-/**
- * Comando /video - Busca y descarga videos de YouTube
- */
 export async function handleVideoDownload(ctx) {
-  const { args, usuarioNumber } = ctx;
-  const query = args.join(' ');
-  try {
-    if (!query) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/video [búsqueda]`\n\n*Ejemplo:*\n`/video tutorial javascript`',
-      };
-    }
+    const { args, sender } = ctx;
+    const query = args.join(' ');
+    if (!query) return { success: false, message: '❌ Uso: /video [nombre o URL]' };
 
-    const input = String(query).trim();
-    const isUrl = /^(https?:\/\/)/i.test(input);
-    const isYouTube = /(?:youtube\.com|youtu\.be)/i.test(input);
+    try {
+        const result = await searchYouTubeMusic(query);
+        if (!result.success || !result.results.length) return { success: false, message: `😕 No encontré resultados para "${query}".` };
 
-    const computeCover = (u) => {
-      try {
-        const urlObj = new URL(u);
-        let vid = urlObj.searchParams.get('v');
-        if (!vid && /youtu\.be$/i.test(urlObj.hostname)) {
-          const p = urlObj.pathname.split('/').filter(Boolean);
-          if (p[0]) vid = p[0];
-        }
-        if (!vid) {
-          const m = u.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/);
-          vid = m ? m[1] : null;
-        }
-        return vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : null;
-      } catch (_) { return null; }
-    };
+        const video = result.results[0];
+        const downloadResult = await downloadYouTube(video.url, 'video');
+        if (!downloadResult.success || !downloadResult.download) return { success: false, message: '⚠️ Error al descargar el video.' };
 
-    // Ruta 1: URL directa de YouTube
-    if (isUrl && isYouTube) {
-      const dl = await downloadYouTube(input, 'video');
-      if (!dl?.success || !dl.download) {
-        return { success: false, message: '⚠️ Error al descargar el video del enlace.' };
-      }
-      const cover = computeCover(input);
-      return {
-        success: true,
-        type: 'video',
-        video: dl.download,
-        image: cover,
-        info: {
-          title: dl.title || 'Video',
-          author: dl.author,
-          duration: dl.duration,
-          views: dl.views,
-          quality: dl.quality,
-          provider: dl.provider,
-          cover_url: cover,
-        },
-        caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${dl.title || 'Video'}\n📶 *Calidad:* ${dl.quality || 'N/A'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${dl.provider}`,
-        mentions: [getMention(ctx)],
-      };
+        return {
+            type: 'video',
+            video: downloadResult.download,
+            caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+            mentions: [sender],
+        };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /video: ${e.message}` };
     }
-
-    // Ruta 2: Texto => buscar en YouTube y descargar
-    const searchResult = await searchYouTubeMusic(input);
-    if (!searchResult.success || !Array.isArray(searchResult.results) || searchResult.results.length === 0) {
-      return {
-        success: false,
-        message: `🔎 *Búsqueda de video*\n\n😕 No se encontraron resultados para: "${input}"\n\n💡 Intenta con otra búsqueda.`,
-      };
-    }
-    const video = searchResult.results[0];
-    const dl = await downloadYouTube(video.url, 'video');
-    if (!dl?.success || !dl.download) {
-      return { success: false, message: '⚠️ Error al descargar el video. Intenta con otra búsqueda.' };
-    }
-    const cover = video.thumbnail || computeCover(video.url || '') || null;
-    return {
-      success: true,
-      type: 'video',
-      video: dl.download,
-      image: cover,
-      info: {
-        title: video.title,
-        author: video.author,
-        duration: video.duration,
-        views: video.views,
-        quality: dl.quality,
-        provider: dl.provider,
-        cover_url: cover,
-      },
-      caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${dl.quality}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${dl.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleVideoDownload:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al buscar video*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
-  }
 }
 
-/**
- * Comando /spotify - Busca música en Spotify
- */
 export async function handleSpotifySearch(ctx) {
-  const { args, usuarioNumber } = ctx;
-  const query = args.join(' ');
-  try {
-    if (!query) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/spotify [nombre de la canción]`\n\n*Ejemplo:*\n`/spotify Shape of You Ed Sheeran`',
-      };
-    }
+    const { args, sender } = ctx;
+    const query = args.join(' ');
+    if (!query) return { success: false, message: '❌ Uso: /spotify [nombre de canción]' };
 
-  const result = await searchSpotify(query);
+    try {
+        const result = await searchSpotify(query);
+        if (!result.success) return { success: false, message: `😕 No encontré resultados para "${query}" en Spotify.` };
 
-    if (!result.success) {
-      return {
-        success: false,
-        message: `🔎 *Búsqueda en Spotify*\n\n😕 No se encontraron resultados para: "${query}"\n\n💡 Intenta con el nombre exacto de la canción y artista.`,
-      };
-    }
+        // Intentar descargar el audio desde YouTube como fallback
+        let audioBuffer = null;
+        try {
+            const ytResult = await searchYouTubeMusic(`${result.title} ${result.artists}`);
+            if (ytResult.success && ytResult.results.length) {
+                const ytVideo = ytResult.results[0];
+                const dlResult = await downloadYouTube(ytVideo.url, 'audio');
+                if (dlResult.success) audioBuffer = dlResult.download;
+            }
+        } catch {}
 
-    const duration = Math.floor(result.duration_ms / 60000);
-    const seconds = String(Math.floor((result.duration_ms % 60000) / 1000)).padStart(2, '0');
-    const linkLine = result.url ? `\n🔗 Escuchar: ${result.url}` : '';
+        const caption = `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
 
-    // Intentar conseguir audio: preview de Spotify o fallback a YouTube
-    let audioUrl = result.download || result.preview_url || null;
-    if (!audioUrl && result.title) {
-      try {
-        const ytQuery = `${result.title} ${result.artists || ''}`.trim();
-        const yt = await searchYouTubeMusic(ytQuery);
-        if (yt?.success && Array.isArray(yt.results) && yt.results.length) {
-          const top = yt.results[0];
-          const dl = await downloadYouTube(top.url, 'audio');
-          if (dl?.success && dl.download) {
-            audioUrl = dl.download;
-          }
+        if (audioBuffer) {
+            return {
+                type: 'audio',
+                audio: audioBuffer,
+                caption: caption,
+                mentions: [sender]
+            };
+        } else {
+             // Si no hay audio, enviar solo la info con la portada
+            return {
+                type: 'image',
+                image: { url: result.cover_url },
+                caption: caption,
+                mentions: [sender]
+            };
         }
-      } catch (_) {}
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /spotify: ${e.message}` };
     }
-
-    return {
-      success: true,
-      type: 'spotify',
-      image: result.cover_url,
-      audio: audioUrl,
-      info: {
-        title: result.title,
-        artists: result.artists,
-        album: result.album,
-        duration: `${duration}:${seconds}`,
-        release_date: result.release_date,
-        provider: result.provider,
-        url: result.url || undefined,
-      },
-      caption: `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n⏱️ *Duración:* ${duration}:${seconds}\n📅 *Lanzamiento:* ${result.release_date}${linkLine}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleSpotifySearch:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al buscar en Spotify*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
-  }
 }
 
-/**
- * Comando /translate - Traduce texto
- */
 export async function handleTranslate(ctx) {
-  const { args, usuarioNumber } = ctx;
-  const text = args.slice(0, -1).join(' ');
-  const targetLang = args.slice(-1)[0] || 'es';
-  try {
-    if (!text) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/translate [texto] | [idioma]`\n\n*Ejemplos:*\n`/translate Hello world`\n`/translate Hola mundo | en`\n\n*Idiomas:* es, en, fr, de, it, pt, ja, ko, zh, ar, ru',
-      };
+    const { args, sender } = ctx;
+    const lang = args.pop();
+    const text = args.join(' ');
+    if (!text || !lang) return { success: false, message: '❌ Uso: /translate [texto] [código de idioma]' };
+
+    try {
+        const result = await translateText(text, lang);
+        if (!result.success) return { success: false, message: '⚠️ No se pudo traducir el texto.' };
+        return { message: `🌐 *Traducción*\n\n*Original:* ${text}\n*Traducido (${lang}):* ${result.translatedText}` };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /translate: ${e.message}` };
     }
-
-    const result = await translateText(text, targetLang);
-
-    if (!result.success || !result.translatedText) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo traducir el texto. Intenta nuevamente.',
-      };
-    }
-
-    return {
-      success: true,
-      message: `🌐 *Traducción*\n\n📝 *Original:* ${text}\n\n✅ *Traducido:* ${result.translatedText}\n\n🔤 *Idioma detectado:* ${result.detectedLanguage || 'Desconocido'}\n🎯 *Idioma destino:* ${targetLang}\n\n👤 Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleTranslate:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al traducir*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
-  }
 }
 
-/**
- * Comando /weather - Obtiene el clima
- */
 export async function handleWeather(ctx) {
-  const { args, usuarioNumber } = ctx;
-  const city = args.join(' ');
-  try {
-    if (!city) {
-      return {
-        success: false,
-        message: '❌ *Uso incorrecto*\n\n*Formato:* `/weather [ciudad]`\n\n*Ejemplos:*\n`/weather Madrid`\n`/weather Buenos Aires`\n`/weather Tokyo`',
-      };
+    const { args, sender } = ctx;
+    const city = args.join(' ');
+    if (!city) return { success: false, message: '❌ Uso: /weather [ciudad]' };
+
+    try {
+        const result = await getWeather(city);
+        if (!result.success) return { success: false, message: `😕 No encontré el clima para "${city}".` };
+        return { message: `🌤️ *Clima en ${result.city}*: ${result.temperature}°C, ${result.description}.` };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /weather: ${e.message}` };
     }
-
-    const result = await getWeather(city);
-
-    if (!result.success) {
-      return {
-        success: false,
-        message: `⚠️ No se pudo obtener el clima para: "${city}"\n\n💡 Verifica el nombre de la ciudad.`,
-      };
-    }
-
-    const weatherEmoji = getWeatherEmoji(result.weatherCode || 0);
-
-    return {
-      success: true,
-      message: `${weatherEmoji} *Clima en ${result.city}*\n\n🌡️ *Temperatura:* ${result.temperature}°C\n💧 *Humedad:* ${result.humidity}%\n💨 *Viento:* ${result.windSpeed} km/h\n${result.description ? `☁️ *Estado:* ${result.description}\n` : ''}${result.feelsLike ? `🌡️ *Sensación térmica:* ${result.feelsLike}°C\n` : ''}📍 *País:* ${result.country}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleWeather:', error);
-    return {
-      success: false,
-      message: `⚠️ *Error al obtener clima*\n\n${error.message}\n\n💡 Intenta nuevamente en unos momentos.`,
-    };
-  }
 }
 
-/**
- * Comando /quote - Obtiene una frase inspiradora
- */
 export async function handleQuote(ctx) {
-  const { usuarioNumber } = ctx;
-  try {
-    const result = await getRandomQuote();
-
-    if (!result.success || !result.quote) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo obtener una frase. Intenta nuevamente.',
-      };
+    try {
+        const result = await getRandomQuote();
+        if (!result.success) return { success: false, message: '⚠️ No pude obtener una frase.' };
+        return { message: `"${result.quote}"\n- ${result.author}` };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /quote: ${e.message}` };
     }
-
-    return {
-      success: true,
-      message: `💭 *Frase del día*\n\n"${result.quote}"\n\n✍️ *— ${result.author || 'Anónimo'}*\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleQuote:', error);
-    return {
-      success: false,
-      message: '⚠️ Error al obtener frase. Intenta nuevamente.',
-    };
-  }
 }
 
-/**
- * Comando /fact - Obtiene un dato curioso
- */
 export async function handleFact(ctx) {
-  const { usuarioNumber } = ctx;
-  try {
-    const result = await getRandomFact();
-
-    if (!result.success || !result.fact) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo obtener un dato curioso. Intenta nuevamente.',
-      };
+    try {
+        const result = await getRandomFact();
+        if (!result.success) return { success: false, message: '⚠️ No pude obtener un dato curioso.' };
+        return { message: `🤓 *Dato Curioso:* ${result.fact}` };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /fact: ${e.message}` };
     }
-
-    return {
-      success: true,
-      message: `🤓 *Dato curioso*\n\n${result.fact}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleFact:', error);
-    return {
-      success: false,
-      message: '⚠️ Error al obtener dato curioso. Intenta nuevamente.',
-    };
-  }
 }
 
-/**
- * Comando /trivia - Obtiene una pregunta de trivia
- */
 export async function handleTriviaCommand(ctx) {
-  const { usuarioNumber } = ctx;
-  try {
-    const result = await getTrivia();
-
-    if (!result.success || !result.question) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo obtener pregunta de trivia. Intenta nuevamente.',
-      };
+    try {
+        const result = await getTrivia();
+        if (!result.success) return { success: false, message: '⚠️ No pude obtener una pregunta de trivia.' };
+        return { message: `❓ *Trivia:* ${result.question}\n\n*Respuesta:* ||${result.correct_answer}||` };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /trivia: ${e.message}` };
     }
-
-    const allAnswers = [result.correct_answer, ...result.incorrect_answers].sort(() => Math.random() - 0.5);
-
-    return {
-      success: true,
-      message: `🎯 *Trivia*\n\n❓ *Pregunta:* ${decodeHTML(result.question)}\n\n📚 *Categoría:* ${result.category}\n⭐ *Dificultad:* ${result.difficulty}\n\n*Opciones:*\n${allAnswers.map((ans, i) => `${String.fromCharCode(65 + i)}) ${decodeHTML(ans)}`).join('\n')}\n\n💡 *Respuesta correcta:* ||${decodeHTML(result.correct_answer)}||\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleTriviaCommand:', error);
-    return {
-      success: false,
-      message: '⚠️ Error al obtener trivia. Intenta nuevamente.',
-    };
-  }
 }
 
-/**
- * Comando /meme - Obtiene un meme aleatorio
- */
 export async function handleMemeCommand(ctx) {
-  const { usuarioNumber } = ctx;
-  try {
-    const result = await getRandomMeme();
-
-    if (!result.success || !result.image) {
-      return {
-        success: false,
-        message: '⚠️ No se pudo obtener un meme. Intenta nuevamente.',
-      };
+    try {
+        const result = await getRandomMeme();
+        if (!result.success) return { success: false, message: '⚠️ No pude obtener un meme.' };
+        return {
+            type: 'image',
+            image: { url: result.image },
+            caption: `😂 *${result.title}*`,
+        };
+    } catch (e) {
+        return { success: false, message: `⚠️ Error en /meme: ${e.message}` };
     }
-
-    return {
-      success: true,
-      type: 'image',
-      image: result.image,
-      caption: `😂 *Meme aleatorio*\n\n📝 *Título:* ${result.title || 'Sin título'}\n${result.subreddit ? `📂 *De:* r/${result.subreddit}\n` : ''}${result.author ? `👤 *Por:* u/${result.author}\n` : ''}\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [getMention(ctx)],
-    };
-  } catch (error) {
-    logger.error('Error en handleMemeCommand:', error);
-    return {
-      success: false,
-      message: '⚠️ Error al obtener meme. Intenta nuevamente.',
-    };
-  }
 }
-
-// Funciones auxiliares
-
-function getWeatherEmoji(weatherCode) {
-  if (weatherCode === 0) return '☀️';
-  if (weatherCode <= 3) return '⛅';
-  if (weatherCode <= 48) return '🌫️';
-  if (weatherCode <= 67) return '🌧️';
-  if (weatherCode <= 77) return '🌨️';
-  if (weatherCode <= 82) return '🌧️';
-  if (weatherCode <= 86) return '🌨️';
-  if (weatherCode <= 99) return '⛈️';
-  return '🌤️';
-}
-
-function decodeHTML(html) {
-  const entities = {
-    '&quot;': '"',
-    '&#039;': "'",
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&apos;': "'",
-  };
-  return html.replace(/&[#\w]+;/g, (entity) => entities[entity] || entity);
-}
-
-export default {
-  handleTikTokDownload,
-  handleInstagramDownload,
-  handleFacebookDownload,
-  handleTwitterDownload,
-  handlePinterestDownload,
-  handleMusicDownload,
-  handleVideoDownload,
-  handleSpotifySearch,
-  handleTranslate,
-  handleWeather,
-  handleQuote,
-  handleFact,
-  handleTriviaCommand,
-  handleMemeCommand,
-};
