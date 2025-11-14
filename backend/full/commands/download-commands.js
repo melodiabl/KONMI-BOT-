@@ -20,10 +20,16 @@ import {
 import logger from '../config/logger.js';
 import { buildQuickReplyFlow } from '../utils/flows.js';
 
+function getMention(ctx) {
+  return `${ctx.usuarioNumber}@s.whatsapp.net`;
+}
+
 /**
  * Comando /tiktok - Descarga videos de TikTok
  */
-export async function handleTikTokDownload(url, usuario) {
+export async function handleTikTokDownload(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const url = args.join(' ');
   try {
     if (!url || !url.includes('tiktok.com')) {
       return {
@@ -56,8 +62,8 @@ return [
       success: true,
       type: 'video',
       video: result.video,
-      caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.description || result.title || 'Sin descripción'}\n🎵 *Música:* ${result.music || 'N/A'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      caption: `📹 *TikTok Descargado*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.description || result.title || 'Sin descripción'}\n🎵 *Música:* ${result.music || 'N/A'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
       quoted: true,
       viewOnce: true,
       info: {
@@ -80,7 +86,9 @@ return [
 /**
  * Comando /instagram - Descarga contenido de Instagram
  */
-export async function handleInstagramDownload(url, usuario) {
+export async function handleInstagramDownload(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const url = args.join(' ');
   try {
     if (!url || !url.includes('instagram.com')) {
       return {
@@ -98,7 +106,7 @@ export async function handleInstagramDownload(url, usuario) {
       };
     }
 
-    const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.caption || 'Sin descripción'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`;
+    const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* ${result.author || 'Desconocido'}\n📝 *Descripción:* ${result.caption || 'Sin descripción'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`;
 
     const flow = buildQuickReplyFlow({ header: '📸 Instagram', body: result.caption || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/instagram ${url}` } ] })
     return [
@@ -109,7 +117,7 @@ export async function handleInstagramDownload(url, usuario) {
       video: result.video,
       url: result.url,
       caption,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      mentions: [getMention(ctx)],
       quoted: true,
       viewOnce: true,
       info: {
@@ -132,7 +140,9 @@ export async function handleInstagramDownload(url, usuario) {
 /**
  * Comando /facebook - Descarga videos de Facebook
  */
-export async function handleFacebookDownload(url, usuario) {
+export async function handleFacebookDownload(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const url = args.join(' ');
   try {
     if (!url || !url.includes('facebook.com')) {
       return {
@@ -156,8 +166,8 @@ export async function handleFacebookDownload(url, usuario) {
       success: true,
       type: 'video',
       video: result.video,
-      caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'Sin título'}\n⏱️ *Duración:* ${result.duration || 'N/A'}\n👤 *Autor:* ${result.author || 'Desconocido'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      caption: `📹 *Facebook Video*\n\n📝 *Título:* ${result.title || 'Sin título'}\n⏱️ *Duración:* ${result.duration || 'N/A'}\n👤 *Autor:* ${result.author || 'Desconocido'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
       quoted: true,
       viewOnce: true,
       info: {
@@ -180,7 +190,9 @@ export async function handleFacebookDownload(url, usuario) {
 /**
  * Comando /twitter - Descarga contenido de Twitter/X
  */
-export async function handleTwitterDownload(url, usuario) {
+export async function handleTwitterDownload(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const url = args.join(' ');
   try {
     if (!url || (!url.includes('twitter.com') && !url.includes('x.com'))) {
       return {
@@ -198,7 +210,7 @@ export async function handleTwitterDownload(url, usuario) {
       };
     }
 
-    const caption = `🐦 *Twitter/X ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* @${result.author || 'Desconocido'}\n📝 *Tweet:* ${result.text || 'Sin texto'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`;
+    const caption = `🐦 *Twitter/X ${result.type === 'video' ? 'Video' : 'Imagen'}*\n\n👤 *Autor:* @${result.author || 'Desconocido'}\n📝 *Tweet:* ${result.text || 'Sin texto'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`;
 
     const flow = buildQuickReplyFlow({ header: '🐦 Twitter/X', body: result.text || 'Descarga lista', footer:'Acciones rápidas', buttons:[ { text:'🎬 Video', command:`/video ${url}` }, { text:'🎵 Audio', command:`/music ${url}` }, { text:'🔁 Reintentar', command:`/twitter ${url}` } ] })
     return [
@@ -208,7 +220,7 @@ export async function handleTwitterDownload(url, usuario) {
       video: result.video,
       image: result.image,
       caption,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      mentions: [getMention(ctx)],
       quoted: true,
       viewOnce: true,
       info: {
@@ -231,7 +243,9 @@ export async function handleTwitterDownload(url, usuario) {
 /**
  * Comando /pinterest - Descarga imágenes de Pinterest
  */
-export async function handlePinterestDownload(url, usuario) {
+export async function handlePinterestDownload(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const url = args.join(' ');
   try {
     if (!url || !url.includes('pinterest.com')) {
       return {
@@ -253,8 +267,8 @@ export async function handlePinterestDownload(url, usuario) {
       success: true,
       type: 'image',
       image: result.image,
-      caption: `📌 *Pinterest*\n\n📝 *Título:* ${result.title || 'Sin título'}\n📄 *Descripción:* ${result.description || 'Sin descripción'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      caption: `📌 *Pinterest*\n\n📝 *Título:* ${result.title || 'Sin título'}\n📄 *Descripción:* ${result.description || 'Sin descripción'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
       info: {
         title: result.title,
         description: result.description,
@@ -273,7 +287,9 @@ export async function handlePinterestDownload(url, usuario) {
 /**
  * Comando /music - Busca y descarga música de YouTube
  */
-export async function handleMusicDownload(query, usuario) {
+export async function handleMusicDownload(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const query = args.join(' ');
   try {
     if (!query) {
       return {
@@ -322,8 +338,8 @@ export async function handleMusicDownload(query, usuario) {
           provider: downloadResult.provider,
           cover_url: cover,
         },
-        caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${title}\n📶 *Calidad:* ${downloadResult.quality || 'N/A'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${downloadResult.provider}`,
-        mentions: [`${usuario}@s.whatsapp.net`],
+        caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${title}\n📶 *Calidad:* ${downloadResult.quality || 'N/A'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${downloadResult.provider}`,
+        mentions: [getMention(ctx)],
       };
     }
 
@@ -344,8 +360,8 @@ export async function handleMusicDownload(query, usuario) {
             provider: sp.provider,
             cover_url: sp.cover_url || null,
           },
-          caption: `🎶 *Spotify*\n\n📌 *Título:* ${sp.title}\n👤 *Artista:* ${sp.artists}\n💽 *Álbum:* ${sp.album}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${sp.provider}`,
-          mentions: [`${usuario}@s.whatsapp.net`],
+          caption: `🎶 *Spotify*\n\n📌 *Título:* ${sp.title}\n👤 *Artista:* ${sp.artists}\n💽 *Álbum:* ${sp.album}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${sp.provider}`,
+          mentions: [getMention(ctx)],
         };
       }
       const yt = await searchYouTubeMusic(input);
@@ -384,8 +400,8 @@ export async function handleMusicDownload(query, usuario) {
               provider: dl.provider,
               cover_url: cover,
             },
-            caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n📶 *Calidad:* ${dl.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${dl.provider}`,
-            mentions: [`${usuario}@s.whatsapp.net`],
+            caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n📶 *Calidad:* ${dl.quality}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${dl.provider}`,
+            mentions: [getMention(ctx)],
           };
         }
       }
@@ -436,8 +452,8 @@ export async function handleMusicDownload(query, usuario) {
         provider: downloadResult.provider,
         cover_url: cover,
       },
-      caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${downloadResult.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${downloadResult.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      caption: `🎵 *Música Descargada*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${downloadResult.quality}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${downloadResult.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleMusicDownload:', error);
@@ -451,7 +467,9 @@ export async function handleMusicDownload(query, usuario) {
 /**
  * Comando /video - Busca y descarga videos de YouTube
  */
-export async function handleVideoDownload(query, usuario) {
+export async function handleVideoDownload(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const query = args.join(' ');
   try {
     if (!query) {
       return {
@@ -501,8 +519,8 @@ export async function handleVideoDownload(query, usuario) {
           provider: dl.provider,
           cover_url: cover,
         },
-        caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${dl.title || 'Video'}\n📶 *Calidad:* ${dl.quality || 'N/A'}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${dl.provider}`,
-        mentions: [`${usuario}@s.whatsapp.net`],
+        caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${dl.title || 'Video'}\n📶 *Calidad:* ${dl.quality || 'N/A'}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${dl.provider}`,
+        mentions: [getMention(ctx)],
       };
     }
 
@@ -534,8 +552,8 @@ export async function handleVideoDownload(query, usuario) {
         provider: dl.provider,
         cover_url: cover,
       },
-      caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${dl.quality}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${dl.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      caption: `🎬 *Video Descargado*\n\n📌 *Título:* ${video.title}\n👤 *Canal:* ${video.author}\n⏱️ *Duración:* ${video.duration}\n👁️ *Vistas:* ${video.views?.toLocaleString() || 'N/A'}\n📶 *Calidad:* ${dl.quality}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${dl.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleVideoDownload:', error);
@@ -549,7 +567,9 @@ export async function handleVideoDownload(query, usuario) {
 /**
  * Comando /spotify - Busca música en Spotify
  */
-export async function handleSpotifySearch(query, usuario) {
+export async function handleSpotifySearch(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const query = args.join(' ');
   try {
     if (!query) {
       return {
@@ -601,8 +621,8 @@ export async function handleSpotifySearch(query, usuario) {
         provider: result.provider,
         url: result.url || undefined,
       },
-      caption: `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n⏱️ *Duración:* ${duration}:${seconds}\n📅 *Lanzamiento:* ${result.release_date}${linkLine}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      caption: `🎶 *Spotify*\n\n📌 *Título:* ${result.title}\n👤 *Artista:* ${result.artists}\n💽 *Álbum:* ${result.album}\n⏱️ *Duración:* ${duration}:${seconds}\n📅 *Lanzamiento:* ${result.release_date}${linkLine}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleSpotifySearch:', error);
@@ -616,7 +636,10 @@ export async function handleSpotifySearch(query, usuario) {
 /**
  * Comando /translate - Traduce texto
  */
-export async function handleTranslate(text, targetLang = 'es', usuario) {
+export async function handleTranslate(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const text = args.slice(0, -1).join(' ');
+  const targetLang = args.slice(-1)[0] || 'es';
   try {
     if (!text) {
       return {
@@ -636,8 +659,8 @@ export async function handleTranslate(text, targetLang = 'es', usuario) {
 
     return {
       success: true,
-      message: `🌐 *Traducción*\n\n📝 *Original:* ${text}\n\n✅ *Traducido:* ${result.translatedText}\n\n🔤 *Idioma detectado:* ${result.detectedLanguage || 'Desconocido'}\n🎯 *Idioma destino:* ${targetLang}\n\n👤 Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      message: `🌐 *Traducción*\n\n📝 *Original:* ${text}\n\n✅ *Traducido:* ${result.translatedText}\n\n🔤 *Idioma detectado:* ${result.detectedLanguage || 'Desconocido'}\n🎯 *Idioma destino:* ${targetLang}\n\n👤 Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleTranslate:', error);
@@ -651,7 +674,9 @@ export async function handleTranslate(text, targetLang = 'es', usuario) {
 /**
  * Comando /weather - Obtiene el clima
  */
-export async function handleWeather(city, usuario) {
+export async function handleWeather(ctx) {
+  const { args, usuarioNumber } = ctx;
+  const city = args.join(' ');
   try {
     if (!city) {
       return {
@@ -673,8 +698,8 @@ export async function handleWeather(city, usuario) {
 
     return {
       success: true,
-      message: `${weatherEmoji} *Clima en ${result.city}*\n\n🌡️ *Temperatura:* ${result.temperature}°C\n💧 *Humedad:* ${result.humidity}%\n💨 *Viento:* ${result.windSpeed} km/h\n${result.description ? `☁️ *Estado:* ${result.description}\n` : ''}${result.feelsLike ? `🌡️ *Sensación térmica:* ${result.feelsLike}°C\n` : ''}📍 *País:* ${result.country}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      message: `${weatherEmoji} *Clima en ${result.city}*\n\n🌡️ *Temperatura:* ${result.temperature}°C\n💧 *Humedad:* ${result.humidity}%\n💨 *Viento:* ${result.windSpeed} km/h\n${result.description ? `☁️ *Estado:* ${result.description}\n` : ''}${result.feelsLike ? `🌡️ *Sensación térmica:* ${result.feelsLike}°C\n` : ''}📍 *País:* ${result.country}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleWeather:', error);
@@ -688,7 +713,8 @@ export async function handleWeather(city, usuario) {
 /**
  * Comando /quote - Obtiene una frase inspiradora
  */
-export async function handleQuote(usuario) {
+export async function handleQuote(ctx) {
+  const { usuarioNumber } = ctx;
   try {
     const result = await getRandomQuote();
 
@@ -701,8 +727,8 @@ export async function handleQuote(usuario) {
 
     return {
       success: true,
-      message: `💭 *Frase del día*\n\n"${result.quote}"\n\n✍️ *— ${result.author || 'Anónimo'}*\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      message: `💭 *Frase del día*\n\n"${result.quote}"\n\n✍️ *— ${result.author || 'Anónimo'}*\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleQuote:', error);
@@ -716,7 +742,8 @@ export async function handleQuote(usuario) {
 /**
  * Comando /fact - Obtiene un dato curioso
  */
-export async function handleFact(usuario) {
+export async function handleFact(ctx) {
+  const { usuarioNumber } = ctx;
   try {
     const result = await getRandomFact();
 
@@ -729,8 +756,8 @@ export async function handleFact(usuario) {
 
     return {
       success: true,
-      message: `🤓 *Dato curioso*\n\n${result.fact}\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      message: `🤓 *Dato curioso*\n\n${result.fact}\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleFact:', error);
@@ -744,7 +771,8 @@ export async function handleFact(usuario) {
 /**
  * Comando /trivia - Obtiene una pregunta de trivia
  */
-export async function handleTriviaCommand(usuario) {
+export async function handleTriviaCommand(ctx) {
+  const { usuarioNumber } = ctx;
   try {
     const result = await getTrivia();
 
@@ -759,8 +787,8 @@ export async function handleTriviaCommand(usuario) {
 
     return {
       success: true,
-      message: `🎯 *Trivia*\n\n❓ *Pregunta:* ${decodeHTML(result.question)}\n\n📚 *Categoría:* ${result.category}\n⭐ *Dificultad:* ${result.difficulty}\n\n*Opciones:*\n${allAnswers.map((ans, i) => `${String.fromCharCode(65 + i)}) ${decodeHTML(ans)}`).join('\n')}\n\n💡 *Respuesta correcta:* ||${decodeHTML(result.correct_answer)}||\n\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      message: `🎯 *Trivia*\n\n❓ *Pregunta:* ${decodeHTML(result.question)}\n\n📚 *Categoría:* ${result.category}\n⭐ *Dificultad:* ${result.difficulty}\n\n*Opciones:*\n${allAnswers.map((ans, i) => `${String.fromCharCode(65 + i)}) ${decodeHTML(ans)}`).join('\n')}\n\n💡 *Respuesta correcta:* ||${decodeHTML(result.correct_answer)}||\n\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleTriviaCommand:', error);
@@ -774,7 +802,8 @@ export async function handleTriviaCommand(usuario) {
 /**
  * Comando /meme - Obtiene un meme aleatorio
  */
-export async function handleMemeCommand(usuario) {
+export async function handleMemeCommand(ctx) {
+  const { usuarioNumber } = ctx;
   try {
     const result = await getRandomMeme();
 
@@ -789,8 +818,8 @@ export async function handleMemeCommand(usuario) {
       success: true,
       type: 'image',
       image: result.image,
-      caption: `😂 *Meme aleatorio*\n\n📝 *Título:* ${result.title || 'Sin título'}\n${result.subreddit ? `📂 *De:* r/${result.subreddit}\n` : ''}${result.author ? `👤 *Por:* u/${result.author}\n` : ''}\n✅ Solicitado por: @${usuario}\n🔧 Proveedor: ${result.provider}`,
-      mentions: [`${usuario}@s.whatsapp.net`],
+      caption: `😂 *Meme aleatorio*\n\n📝 *Título:* ${result.title || 'Sin título'}\n${result.subreddit ? `📂 *De:* r/${result.subreddit}\n` : ''}${result.author ? `👤 *Por:* u/${result.author}\n` : ''}\n✅ Solicitado por: @${usuarioNumber}\n🔧 Proveedor: ${result.provider}`,
+      mentions: [getMention(ctx)],
     };
   } catch (error) {
     logger.error('Error en handleMemeCommand:', error);

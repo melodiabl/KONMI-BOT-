@@ -19,7 +19,17 @@ async function extractTargetFromContext(message){
   return null
 }
 
-export async function warn({ sock, remoteJid, usuario, args, message }){
+function requireGroupAdmin(handler){
+  return async (ctx) => {
+    const { isGroup, isOwner, isAdmin } = ctx
+    if (!isGroup) return { success:true, message:'ℹ️ Este comando solo funciona en grupos', quoted:true }
+    if (!isOwner && !isAdmin) return { success:true, message:'⛔ Solo administradores del grupo u owner pueden usar este comando.', quoted:true }
+    return handler(ctx)
+  }
+}
+
+
+export const warn = requireGroupAdmin(async ({ sock, remoteJid, usuario, args, message })=>{
   await ensureWarningsTable()
   const mentioned = await extractTargetFromContext(message)
   let target = mentioned
@@ -31,15 +41,15 @@ export async function warn({ sock, remoteJid, usuario, args, message }){
   if (row) await db('group_warnings').where({ group_id: remoteJid, user }).update({ count, updated_at: new Date().toISOString() })
   else await db('group_warnings').insert({ group_id: remoteJid, user, count, updated_at: new Date().toISOString() })
   return { success:true, message:`⚠️ Advertencia para @${user}. Total: ${count}`, mentions:[`${user}@s.whatsapp.net`], quoted:true }
-}
+})
 
-export async function unwarn({ remoteJid, args }){
+export const unwarn = requireGroupAdmin(async ({ remoteJid, args })=>{
   await ensureWarningsTable()
   const user = onlyDigits((args||[])[0]||'')
   if (!user) return { success:true, message:'ℹ️ Uso: /unwarn <numero_sin_+>', quoted:true }
   await db('group_warnings').where({ group_id: remoteJid, user }).del()
   return { success:true, message:`♻️ Advertencias reseteadas para +${user}`, quoted:true }
-}
+})
 
 export async function warns({ remoteJid }){
   await ensureWarningsTable()
@@ -51,4 +61,3 @@ export async function warns({ remoteJid }){
 }
 
 export default { warn, unwarn, warns }
-
