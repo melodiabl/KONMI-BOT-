@@ -1,95 +1,116 @@
 // commands/group-settings.js
-import { setGroupConfig, getGroupBool, getGroupNumber, getGroupConfig } from '../utils/group-config.js'
+// Configuración por grupo: antilink, slowmode, welcome
 
-const requireGroupAdmin = (handler) => async (ctx) => {
-  if (!ctx.isGroup) return { message: 'ℹ️ Este comando solo funciona en grupos' };
-  if (!ctx.isAdmin && !ctx.isOwner) return { message: '⛔ Solo admins o el owner pueden usar este comando' };
-  return handler(ctx);
-};
+import { setGroupConfig, getGroupBool, getGroupNumber, getGroupConfig } from '../utils/group-config.js'
+import { isGroupAdmin as _isGroupAdmin } from '../utils/identity.js'
+
+function onlyDigits(v) { return String(v||'').replace(/\D/g,'') }
+
+const isGroupAdmin = _isGroupAdmin
+
+function requireGroupAdmin(handler){
+  return async (ctx) => {
+    const { isGroup, usuario, remoteJid, sock } = ctx
+    if (!isGroup) return { success:true, message:'ℹ️ Este comando solo funciona en grupos', quoted:true }
+    const ok = await isGroupAdmin(sock, remoteJid, usuario)
+    if (!ok) return { success:true, message:'⛔ Solo administradores del grupo u owner pueden usar este comando.', quoted:true }
+    return handler(ctx)
+  }
+}
 
 export const antilink = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const on = String(args[0] || '').toLowerCase();
-  if (!['on', 'off'].includes(on)) return { message: 'ℹ️ Uso: /antilink on|off' };
-  await setGroupConfig(remoteJid, 'antilink', on === 'on');
-  return { message: `🔗 Antilink: ${on === 'on' ? 'ON' : 'OFF'}` };
-});
+  const on = String((args||[])[0]||'').toLowerCase()
+  if (!['on','off','true','false','1','0'].includes(on))
+    return { success:true, message:'ℹ️ Uso: /antilink on|off', quoted:true }
+  const val = ['on','true','1'].includes(on)
+  await setGroupConfig(remoteJid, 'antilink', val)
+  return { success:true, message:`🔗 Antilink: ${val ? 'ON' : 'OFF'}`, quoted:true }
+})
 
 export const antilinkmode = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const mode = String(args[0] || '').toLowerCase();
-  if (!['warn', 'kick'].includes(mode)) return { message: 'ℹ️ Uso: /antilinkmode warn|kick' };
-  await setGroupConfig(remoteJid, 'antilink_mode', mode);
-  return { message: `🔧 Antilink mode: ${mode.toUpperCase()}` };
-});
+  const mode = String((args||[])[0]||'').toLowerCase()
+  if (!['warn','kick'].includes(mode)) return { success:true, message:'ℹ️ Uso: /antilinkmode warn|kick', quoted:true }
+  await setGroupConfig(remoteJid, 'antilink_mode', mode)
+  return { success:true, message:`🔧 Antilink mode: ${mode.toUpperCase()}`, quoted:true }
+})
 
 export const slowmode = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const n = Number(args[0] || 0);
-  if (!Number.isFinite(n) || n < 0) return { message: 'ℹ️ Uso: /slowmode [segundos] (0 para desactivar)' };
-  await setGroupConfig(remoteJid, 'slowmode_s', Math.floor(n));
-  return { message: `🐢 Slowmode: ${Math.floor(n)}s` };
-});
+  const n = Number((args||[])[0]||0)
+  if (!Number.isFinite(n) || n < 0) return { success:true, message:'ℹ️ Uso: /slowmode [segundos] (0 para desactivar)', quoted:true }
+  await setGroupConfig(remoteJid, 'slowmode_s', Math.floor(n))
+  return { success:true, message:`🐢 Slowmode: ${Math.floor(n)}s`, quoted:true }
+})
 
 export const antiflood = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const on = String(args[0] || '').toLowerCase();
-  if (!['on', 'off'].includes(on)) return { message: 'ℹ️ Uso: /antiflood on|off' };
-  await setGroupConfig(remoteJid, 'antiflood_on', on === 'on');
-  return { message: `🚫 Anti-flood: ${on === 'on' ? 'ON' : 'OFF'}` };
-});
+  const on = String((args||[])[0]||'').toLowerCase()
+  if (!['on','off','true','false','1','0'].includes(on)) return { success:true, message:'ℹ️ Uso: /antiflood on|off', quoted:true }
+  const val = ['on','true','1'].includes(on)
+  await setGroupConfig(remoteJid, 'antiflood_on', val)
+  return { success:true, message:`🚫 Anti-flood: ${val?'ON':'OFF'}`, quoted:true }
+})
 
 export const antifloodmode = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const mode = String(args[0] || '').toLowerCase();
-  if (!['warn', 'kick'].includes(mode)) return { message: 'ℹ️ Uso: /antifloodmode warn|kick' };
-  await setGroupConfig(remoteJid, 'antiflood_mode', mode);
-  return { message: `🚫 Anti-flood mode: ${mode.toUpperCase()}` };
-});
+  const mode = String((args||[])[0]||'').toLowerCase()
+  if (!['warn','kick'].includes(mode)) return { success:true, message:'ℹ️ Uso: /antifloodmode warn|kick', quoted:true }
+  await setGroupConfig(remoteJid, 'antiflood_mode', mode)
+  return { success:true, message:`🚫 Anti-flood mode: ${mode.toUpperCase()}`, quoted:true }
+})
 
 export const antifloodrate = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const n = Number(args[0] || 5);
-  if (!Number.isFinite(n) || n <= 0) return { message: 'ℹ️ Uso: /antifloodrate [mensajes/10s] (ej 5)' };
-  await setGroupConfig(remoteJid, 'antiflood_rate', Math.floor(n));
-  return { message: `🚫 Anti-flood rate: ${Math.floor(n)}/10s` };
-});
+  const n = Number((args||[])[0]||5)
+  if (!Number.isFinite(n) || n <= 0) return { success:true, message:'ℹ️ Uso: /antifloodrate [mensajes/10s] (ej 5)', quoted:true }
+  await setGroupConfig(remoteJid, 'antiflood_rate', Math.floor(n))
+  return { success:true, message:`🚫 Anti-flood rate: ${Math.floor(n)}/10s`, quoted:true }
+})
 
 export const welcome = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const on = String(args[0] || '').toLowerCase();
-  if (!['on', 'off'].includes(on)) return { message: 'ℹ️ Uso: /welcome on|off' };
-  await setGroupConfig(remoteJid, 'welcome_on', on === 'on');
-  return { message: `👋 Welcome: ${on === 'on' ? 'ON' : 'OFF'}` };
-});
+  const on = String((args||[])[0]||'').toLowerCase()
+  if (!['on','off','true','false','1','0'].includes(on))
+    return { success:true, message:'ℹ️ Uso: /welcome on|off', quoted:true }
+  const val = ['on','true','1'].includes(on)
+  await setGroupConfig(remoteJid, 'welcome_on', val)
+  return { success:true, message:`👋 Welcome: ${val ? 'ON' : 'OFF'}`, quoted:true }
+})
 
 export const setwelcome = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const text = args.join(' ').trim();
-  if (!text) return { message: 'ℹ️ Uso: /setwelcome [texto]' };
-  await setGroupConfig(remoteJid, 'welcome_text', text);
-  return { message: '✅ Mensaje de bienvenida guardado' };
-});
+  const text = (args||[]).join(' ').trim()
+  if (!text) return { success:true, message:'ℹ️ Uso: /setwelcome [texto]', quoted:true }
+  await setGroupConfig(remoteJid, 'welcome_text', text)
+  return { success:true, message:'✅ Mensaje de bienvenida guardado', quoted:true }
+})
 
-export async function settings({ remoteJid }) {
-  const [al, sm, wo, wt, mode] = await Promise.all([
-    getGroupBool(remoteJid, 'antilink', false),
-    getGroupNumber(remoteJid, 'slowmode_s', 0),
-    getGroupBool(remoteJid, 'welcome_on', false),
-    getGroupConfig(remoteJid, 'welcome_text', 'Bienvenido @user a @group'),
-    getGroupConfig(remoteJid, 'antilink_mode', 'warn'),
-  ]);
-  const msg = `⚙️ Ajustes del grupo\n• Antilink: ${al ? 'ON' : 'OFF'}\n• Antilink Mode: ${mode}\n• Slowmode: ${sm}s\n• Welcome: ${wo ? 'ON' : 'OFF'}\n• Msg: ${wt}`;
-  return { message: msg };
+export async function settings({ remoteJid }){
+  const al = await getGroupBool(remoteJid, 'antilink', false)
+  const sm = await getGroupNumber(remoteJid, 'slowmode_s', 0)
+  const wo = await getGroupBool(remoteJid, 'welcome_on', false)
+  const wt = await getGroupConfig(remoteJid, 'welcome_text', 'Bienvenido @user a @group')
+  const mode = await getGroupConfig(remoteJid, 'antilink_mode', 'warn')
+  const msg = `⚙️ Ajustes del grupo
+• Antilink: ${al?'ON':'OFF'}
+• Antilink Mode: ${mode}
+• Slowmode: ${sm}s
+• Welcome: ${wo?'ON':'OFF'}
+• Msg: ${wt}`
+  return { success:true, message: msg, quoted:true }
 }
 
 export const rules = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const on = String(args[0] || 'show').toLowerCase();
-  if (['on', 'off'].includes(on)) {
-    await setGroupConfig(remoteJid, 'rules_on', on === 'on');
-    return { message: `📜 Rules: ${on === 'on' ? 'ON' : 'OFF'}` };
+  const on = String((args||[])[0]||'show').toLowerCase()
+  if (on === 'on' || on === 'off') {
+    const val = on==='on'
+    await setGroupConfig(remoteJid, 'rules_on', val)
+    return { success:true, message:`📜 Rules: ${val?'ON':'OFF'}`, quoted:true }
   }
-  const text = await getGroupConfig(remoteJid, 'rules_text', 'Reglas: respeta a todos, no spam, no links.');
-  return { message: `📜 Reglas del grupo\n\n${text}` };
-});
+  // Mostrar
+  const text = await getGroupConfig(remoteJid, 'rules_text', 'Reglas: respeta a todos, no spam, no links.')
+  return { success:true, message: `📜 Reglas del grupo\n\n${text}`, quoted:true }
+})
 
 export const setrules = requireGroupAdmin(async ({ remoteJid, args }) => {
-  const text = args.join(' ').trim();
-  if (!text) return { message: 'ℹ️ Uso: /setrules [texto]' };
-  await setGroupConfig(remoteJid, 'rules_text', text);
-  return { message: '✅ Reglas guardadas' };
-});
+  const text = (args||[]).join(' ').trim()
+  if (!text) return { success:true, message:'ℹ️ Uso: /setrules [texto]', quoted:true }
+  await setGroupConfig(remoteJid, 'rules_text', text)
+  return { success:true, message:'✅ Reglas guardadas', quoted:true }
+})
 
 export default { antilink, slowmode, welcome, setwelcome, settings }

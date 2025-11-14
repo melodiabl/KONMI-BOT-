@@ -5,12 +5,20 @@ import { spawn } from 'child_process'
 import { isSuperAdmin } from '../global-config.js'
 import { listRuntimeSubbots, stopSubbotRuntime } from '../lib/subbots.js'
 
-export async function update(ctx) {
-  const { isOwner, usuario } = ctx;
+function onlyDigits(v) { return String(v||'').replace(/\D/g,'') }
+
+function isOwner(usuario) {
   try {
-    const allowed = isOwner || isSuperAdmin(usuario);
+    const owner = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '')
+    return owner && onlyDigits(usuario) === owner
+  } catch { return false }
+}
+
+export async function update({ usuario }) {
+  try {
+    const allowed = isOwner(usuario) || (()=>{ try { return isSuperAdmin(usuario) } catch { return false } })()
     if (!allowed) {
-      return { message: '⛔ Solo el owner puede ejecutar /update' };
+      return { success: false, message: '⛔ Solo el owner puede ejecutar /update', quoted: true }
     }
 
     // Intentar detener subbots si hay en ejecución (best-effort)

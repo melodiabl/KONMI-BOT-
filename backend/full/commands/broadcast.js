@@ -1,10 +1,13 @@
 // commands/broadcast.js — Envío masivo a grupos autorizados (owner)
 import db from '../db.js'
 
-export async function broadcast(ctx){
-  const { sock, isOwner, args } = ctx;
-  if (!isOwner) return { message:'⛔ Solo el OWNER puede usar /broadcast' };
-  const text = (args||[]).join(' ').trim();
+function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
+async function isOwner(usuario){ try { const o = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER||''); return o && onlyDigits(usuario)===o } catch { return false } }
+
+export async function broadcast({ sock, usuario, args }){
+  const ok = await isOwner(usuario)
+  if (!ok) return { success:true, message:'⛔ Solo el OWNER puede usar /broadcast', quoted:true }
+  const text = (args||[]).join(' ').trim()
   if (!text) return { success:true, message:'ℹ️ Uso: /broadcast [mensaje]', quoted:true }
   try {
     let groups = []
