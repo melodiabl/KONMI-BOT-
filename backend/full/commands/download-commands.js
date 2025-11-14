@@ -296,12 +296,6 @@ export async function handleSpotifySearch(ctx) {
             caption: caption,
         });
 
-        let audioBuffer = null;
-        try {
-            const ytResult = await searchYouTubeMusic(`${result.title} ${result.artists}`);
-            if (ytResult.success && ytResult.results.length) {
-                const dlResult = await downloadYouTube(ytResult.results[0].url, 'audio');
-                if (dlResult.success) audioBuffer = dlResult.download;
         // Intentar descargar el audio desde YouTube como fallback
         let audioUrl = null;
         try {
@@ -325,19 +319,6 @@ export async function handleSpotifySearch(ctx) {
             logger.error('Error en el fallback de Spotify a YouTube:', e);
         }
 
-        const response = {
-            caption,
-            mentions: [sender]
-        };
-
-        if (audioBuffer) {
-            response.type = 'audio';
-            response.audio = audioBuffer;
-        } else {
-            response.type = 'image';
-            response.image = { url: result.cover_url };
-        }
-        return response;
         if (audioUrl) {
             await reply({
                 audio: { url: audioUrl },
