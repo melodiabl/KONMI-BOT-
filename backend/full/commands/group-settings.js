@@ -2,18 +2,12 @@
 // Configuración por grupo: antilink, slowmode, welcome
 
 import { setGroupConfig, getGroupBool, getGroupNumber, getGroupConfig } from '../utils/group-config.js'
-import { isGroupAdmin as _isGroupAdmin } from '../utils/identity.js'
-
-function onlyDigits(v) { return String(v||'').replace(/\D/g,'') }
-
-const isGroupAdmin = _isGroupAdmin
 
 function requireGroupAdmin(handler){
   return async (ctx) => {
-    const { isGroup, usuario, remoteJid, sock } = ctx
+    const { isGroup, isOwner, isAdmin } = ctx
     if (!isGroup) return { success:true, message:'ℹ️ Este comando solo funciona en grupos', quoted:true }
-    const ok = await isGroupAdmin(sock, remoteJid, usuario)
-    if (!ok) return { success:true, message:'⛔ Solo administradores del grupo u owner pueden usar este comando.', quoted:true }
+    if (!isOwner && !isAdmin) return { success:true, message:'⛔ Solo administradores del grupo u owner pueden usar este comando.', quoted:true }
     return handler(ctx)
   }
 }

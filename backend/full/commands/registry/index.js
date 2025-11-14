@@ -315,34 +315,34 @@ register([
   { command: '/pedidos', handler: (ctx) => pedidoCmd.pedidos(ctx), category: 'pedidos', description: 'Ver pedidos disponibles' },
 
   // Media y descargas
-  { command: '/video', handler: ({ args, usuario }) => handleVideoDownload((args || []).join(' ').trim(), usuario), category: 'media', description: 'Descargar videos desde múltiples fuentes' },
-  { command: '/music', handler: ({ args, usuario }) => handleMusicDownload((args || []).join(' ').trim(), usuario), category: 'media', description: 'Descargar música en MP3' },
+  { command: '/video', handler: (ctx) => handleVideoDownload(ctx), category: 'media', description: 'Descargar videos desde múltiples fuentes' },
+  { command: '/music', handler: (ctx) => handleMusicDownload(ctx), category: 'media', description: 'Descargar música en MP3' },
   { command: '/musica', aliasOf: '/music', category: 'media' },
   { command: '/youtube', aliasOf: '/video', category: 'media' },
-  { command: '/spotify', handler: ({ args, usuario }) => handleSpotifySearch((args || []).join(' ').trim(), usuario), category: 'media', description: 'Buscar música en Spotify' },
+  { command: '/spotify', handler: (ctx) => handleSpotifySearch(ctx), category: 'media', description: 'Buscar música en Spotify' },
   { command: '/spot', aliasOf: '/spotify', category: 'media' },
   { command: '/download', aliasOf: '/video', category: 'media' },
   { command: '/dl', aliasOf: '/video', category: 'media' },
   { command: '/descargar', aliasOf: '/video', category: 'media' },
-  { command: '/tiktok', handler: ({ args, usuario }) => handleTikTokDownload((args || []).join(' ').trim(), usuario), category: 'media', description: 'Descargar videos de TikTok' },
+  { command: '/tiktok', handler: (ctx) => handleTikTokDownload(ctx), category: 'media', description: 'Descargar videos de TikTok' },
   { command: '/tt', aliasOf: '/tiktok', category: 'media' },
-  { command: '/tiktoksearch', handler: ({ args, usuario }) => {
-    const query = (args || []).join(' ').trim()
+  { command: '/tiktoksearch', handler: (ctx) => {
+    const query = (ctx.args || []).join(' ').trim();
     if (!query) {
-      return { success: false, message: '❌ Uso: /tiktoksearch <texto o URL>\n\nPega un enlace directo o usa /video <consulta>.' }
+      return { success: false, message: '❌ Uso: /tiktoksearch <texto o URL>\n\nPega un enlace directo o usa /video <consulta>.' };
     }
     if (/tiktok\.com/i.test(query)) {
-      return handleTikTokDownload(query, usuario)
+      return handleTikTokDownload(ctx);
     }
-    return { success: false, message: '🔎 Aún no tengo buscador de TikTok por texto. Pega un enlace o usa /video.' }
+    return { success: false, message: '🔎 Aún no tengo buscador de TikTok por texto. Pega un enlace o usa /video.' };
   }, category: 'media', description: 'Guía para descargar desde TikTok' },
-  { command: '/instagram', handler: ({ args, usuario }) => handleInstagramDownload((args || []).join(' ').trim(), usuario), category: 'media', description: 'Descargar reels y publicaciones de Instagram' },
+  { command: '/instagram', handler: (ctx) => handleInstagramDownload(ctx), category: 'media', description: 'Descargar reels y publicaciones de Instagram' },
   { command: '/ig', aliasOf: '/instagram', category: 'media' },
-  { command: '/facebook', handler: ({ args, usuario }) => handleFacebookDownload((args || []).join(' ').trim(), usuario), category: 'media', description: 'Descargar videos de Facebook' },
+  { command: '/facebook', handler: (ctx) => handleFacebookDownload(ctx), category: 'media', description: 'Descargar videos de Facebook' },
   { command: '/fb', aliasOf: '/facebook', category: 'media' },
-  { command: '/twitter', handler: ({ args, usuario }) => handleTwitterDownload((args || []).join(' ').trim(), usuario), category: 'media', description: 'Descargar multimedia de Twitter/X' },
+  { command: '/twitter', handler: (ctx) => handleTwitterDownload(ctx), category: 'media', description: 'Descargar multimedia de Twitter/X' },
   { command: '/x', aliasOf: '/twitter', category: 'media' },
-  { command: '/pinterest', handler: ({ args, usuario }) => handlePinterestDownload((args || []).join(' ').trim(), usuario), category: 'media', description: 'Descargar ideas desde Pinterest' },
+  { command: '/pinterest', handler: (ctx) => handlePinterestDownload(ctx), category: 'media', description: 'Descargar ideas desde Pinterest' },
 
   // Imágenes y utilidades creativas
   { command: '/image', handler: (ctx) => images.imageFromPrompt(ctx), category: 'utils', description: 'Generar imagen con IA' },
@@ -351,13 +351,13 @@ register([
   { command: '/bratvd', handler: (ctx) => images.bratvd(ctx), category: 'utils', description: 'Generar sticker estilo BRAT VD' },
 
   // Diversión
-  { command: '/quote', handler: ({ usuario }) => handleQuote(usuario), category: 'fun', description: 'Frase inspiradora aleatoria' },
+  { command: '/quote', handler: (ctx) => handleQuote(ctx), category: 'fun', description: 'Frase inspiradora aleatoria' },
   { command: '/frase', aliasOf: '/quote', category: 'fun' },
-  { command: '/fact', handler: ({ usuario }) => handleFact(usuario), category: 'fun', description: 'Dato curioso del día' },
+  { command: '/fact', handler: (ctx) => handleFact(ctx), category: 'fun', description: 'Dato curioso del día' },
   { command: '/dato', aliasOf: '/fact', category: 'fun' },
-  { command: '/trivia', handler: ({ usuario }) => handleTriviaCommand(usuario), category: 'fun', description: 'Pregunta de trivia aleatoria' },
-  { command: '/meme', handler: ({ usuario }) => handleMemeCommand(usuario), category: 'fun', description: 'Memes al instante' },
-  { command: '/joke', handler: ({ usuario }) => handleFact(usuario), category: 'fun', description: 'Chiste corto' },
+  { command: '/trivia', handler: (ctx) => handleTriviaCommand(ctx), category: 'fun', description: 'Pregunta de trivia aleatoria' },
+  { command: '/meme', handler: (ctx) => handleMemeCommand(ctx), category: 'fun', description: 'Memes al instante' },
+  { command: '/joke', handler: (ctx) => handleFact(ctx), category: 'fun', description: 'Chiste corto' },
   { command: '/chiste', aliasOf: '/joke', category: 'fun' },
 
   // Información del sistema
@@ -403,14 +403,10 @@ register([
   { command: '/stats', aliasOf: '/estadisticas', category: 'files' },
 
   // Utilidades varias
-  { command: '/translate', handler: ({ args, usuario }) => {
-    const text = (args || []).slice(0, -1).join(' ').trim()
-    const target = (args || []).slice(-1)[0] || 'es'
-    return handleTranslate(text, target, usuario)
-  }, category: 'utils', description: 'Traducir textos a otro idioma' },
-  { command: '/weather', handler: ({ args, usuario }) => handleWeather((args || []).join(' ').trim(), usuario), category: 'utils', description: 'Consultar el clima' },
+  { command: '/translate', handler: (ctx) => handleTranslate(ctx), category: 'utils', description: 'Traducir textos a otro idioma' },
+  { command: '/weather', handler: (ctx) => handleWeather(ctx), category: 'utils', description: 'Consultar el clima' },
   { command: '/clima', aliasOf: '/weather', category: 'utils' },
-  { command: '/short', handler: ({ args, usuario }) => utils.shortUrl((args || []).join(' ').trim(), usuario), category: 'utils', description: 'Acortar enlaces largos' },
+  { command: '/short', handler: (ctx) => utils.shortUrl(ctx), category: 'utils', description: 'Acortar enlaces largos' },
   { command: '/acortar', aliasOf: '/short', category: 'utils' },
   { command: '/tts', handler: (ctx) => utils.tts(ctx), category: 'utils', description: 'Texto a voz en varios idiomas' },
   { command: '/calc', handler: (ctx) => utilmath.calc(ctx), category: 'utils', description: 'Calculadora avanzada' },
