@@ -718,94 +718,72 @@ export function getBotStatus() {
 }
 
 /* ===== Handler exportado para integraciones externas (subbots/handlers) ===== */
-export async function handleMessage(message, customSock = null, prefix = '') {
+export async function handleMessage(message, customSock = null, prefix = '', runtimeContext = {}) {
   try {
     const s = customSock || sock
     if (!s || !message || !message.key) return
     const remoteJid = message.key.remoteJid
     if (!remoteJid) return
     const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
-    // Normalizar identidad del emisor: para fromMe, usar siempre el JID del bot
-    const normalizeDigits = (jid) => {
-      try {
-        let s = String(jid || '')
-        const at = s.indexOf('@'); if (at > 0) s = s.slice(0, at)
-        const colon = s.indexOf(':'); if (colon > 0) s = s.slice(0, colon)
-        return s.replace(/\D/g, '')
-      } catch { return String(jid||'').replace(/\D/g,'') }
-    }
+
+    // ---- START: Construcción de CTX unificado ----
+    const normalizeDigits = (jid) => String(jid||'').split('@')[0].split(':')[0].replace(/\D/g,'')
     const fromMe = !!message?.key?.fromMe
-    let usuarioRaw = ''
+    const botNumber = normalizeDigits(s.user?.id)
+
+    let usuario, usuarioRaw, participant, participantNumber, usuarioNumber
     if (fromMe) {
-      usuarioRaw = s?.user?.id || ''
-    } else if (isGroup) {
-      // En grupos, identificar SIEMPRE al emisor real; nunca caer al ID del bot.
-      usuarioRaw = message?.key?.participant || message?.participant || ''
+      usuario = s.user.id
+      usuarioNumber = botNumber
     } else {
-      usuarioRaw = message?.key?.remoteJid || ''
-    }
-    // Evitar falsos positivos en grupos: no caer al ID del bot si no se detecta participant
-    let usuario = usuarioRaw
-    if (!usuario) {
-      if (!isGroup) {
-        usuario = message?.key?.remoteJid || s?.user?.id || ''
-      } else {
-        usuario = ''
-      }
+      participant = message.key.participant || message.participant
+      usuario = isGroup ? participant : remoteJid
+      usuarioNumber = normalizeDigits(usuario)
     }
 
-    // Logs enriquecidos (grupo/privado/owner/command)
-    try {
-      const full = String(process.env.WHATSAPP_FULL_LOGS || process.env.FULL_LOGS || 'true').toLowerCase() !== 'false'
-      if (full) {
-        const body = (
-          message?.message?.conversation
-          || message?.message?.extendedTextMessage?.text
-          || message?.message?.imageMessage?.caption
-          || message?.message?.videoMessage?.caption
-          || ''
-        ).trim()
-        const userDigits = normalizeDigits(usuario)
-        const ownerDigits = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '')
-        const isOwner = ownerDigits && userDigits === ownerDigits
-        if (isGroup) {
-          logger.whatsapp?.groupMessage?.(body || '(no-text)', remoteJid, userDigits, { fromMe: !!message?.key?.fromMe, owner: isOwner })
-        } else {
-          logger.whatsapp?.privateMessage?.(body || '(no-text)', userDigits, { fromMe: !!message?.key?.fromMe, owner: isOwner })
-        }
-        // Si parece comando, log detallado
-        if (/^[\/!.]/.test(body)) {
-          const cmd = body.split(/\s+/)[0]
-          logger.whatsapp?.command?.(cmd, userDigits, isGroup ? remoteJid : null, { owner: isOwner })
-        }
-      }
-    } catch {}
+    const ownerNumber = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '')
+    const isOwner = ownerNumber && (usuarioNumber === ownerNumber)
 
-    // Política fromMe
-    try {
-      if (message.key.fromMe) {
+    let isAdmin = false
+    let isBotAdmin = false
+    let groupMetadata = null
+    if (isGroup) {
+      try {
+        groupMetadata = await s.groupMetadata(remoteJid)
+        const participantInfo = (groupMetadata.participants || []).find(p => normalizeDigits(p.id) === usuarioNumber)
+        isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin')
+        const botInfo = (groupMetadata.participants || []).find(p => normalizeDigits(p.id) === botNumber)
+        isBotAdmin = !!botInfo && (botInfo.admin === 'admin' || botInfo.admin === 'superadmin')
+      } catch {}
+    }
+
+    const ctx = {
+      sock: s,
+      message,
+      remoteJid,
+      usuario,
+      isGroup,
+      fromMe,
+      botNumber,
+      usuarioNumber,
+      isOwner,
+      isAdmin,
+      isBotAdmin,
+      groupMetadata,
+      ...runtimeContext
+    }
+    // ---- END: Construcción de CTX unificado ----
+
+    // Política fromMe (revisada)
+    if (fromMe) {
         const m = message.message || {}
-        const txt = (m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || '').trim()
-        // Detectar selecciones interactivas como comandos aunque no tengan prefijo
-        const btnId = m.buttonsResponseMessage?.selectedButtonId
-          || m.templateButtonReplyMessage?.selectedId
-          || m.buttonReplyMessage?.selectedButtonId
-        const rowId = m.listResponseMessage?.singleSelectReply?.selectedRowId
-          || m.listResponseMessage?.singleSelectReply?.selectedId
-          || m.interactiveResponseMessage?.listResponseMessage?.singleSelectReply?.selectedRowId
-        let nfId = null
-        try { const pj = m.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson; if (pj) { const p = JSON.parse(pj); nfId = p?.id || p?.command || p?.rowId || p?.row_id || null } } catch {}
-        const hasInteractive = !!(btnId || rowId || nfId)
-        const isCommand = txt.startsWith('/') || txt.startsWith('!') || txt.startsWith('.') || hasInteractive
-        const mode = String(process.env.FROMME_MODE || process.env.ALLOW_FROM_ME || 'commands').toLowerCase()
-        // Si el texto está vacío, asumimos que puede ser una respuesta interactiva no estandar y permitimos
-        const allow = (mode === 'all' || mode === 'true') || (mode === 'commands' && (isCommand || txt.length === 0))
-        if (!allow) {
-          try { const traceEv = String(process.env.DEBUG_WA_EVENTS || process.env.LOG_CONSOLE_TRACE || 'false').toLowerCase() === 'true'; if (traceEv) console.log(`[wa] skip fromMe (mode=${mode}) text='${txt}' interactive=${hasInteractive}`) } catch {}
+        const txt = (m.conversation || m.extendedTextMessage?.text || '').trim()
+        const isCmd = /^[\/!.]/.test(txt) || m.buttonsResponseMessage || m.templateButtonReplyMessage || m.listResponseMessage
+        const mode = String(process.env.FROMME_MODE || 'commands').toLowerCase()
+        if (!(mode === 'all' || (mode === 'commands' && isCmd))) {
           return
         }
-      }
-    } catch {}
+    }
 
     // Auto read opcional
     try {
@@ -815,73 +793,38 @@ export async function handleMessage(message, customSock = null, prefix = '') {
       }
     } catch {}
 
-    // Despacho al router
+    // Despacho al router con CTX unificado
     try {
       let dispatch = null
       try {
         const mod = await import(routerPath)
         dispatch = mod?.dispatch || mod?.default?.dispatch || mod?.default
-      } catch {}
-      if (!dispatch) {
+      } catch {
         const mod = await import('./commands/router.js')
         dispatch = mod?.dispatch || mod?.default?.dispatch || mod?.default
       }
+
       if (typeof dispatch === 'function') {
-        const trace = String(process.env.LOG_CONSOLE_TRACE || 'true').toLowerCase() === 'true'
-        let jidLabel = remoteJid
-        if (isGroup) {
-          try {
-            if (!groupSubjectCache.has(remoteJid)) {
-              const meta = await s.groupMetadata(remoteJid).catch(()=>null)
-              groupSubjectCache.set(remoteJid, (meta && meta.subject) ? meta.subject : remoteJid)
-            }
-            const name = groupSubjectCache.get(remoteJid) || remoteJid
-            jidLabel = name + ' (' + remoteJid + ')'
-          } catch {}
-        }
-        if (trace) logger.info(`➡️ dispatch start | chat=${jidLabel} | user=${String(usuario).split("@")[0]} | group=${isGroup}`)
+        const handled = await dispatch(ctx)
 
-        const handled = await dispatch({ sock: s, message, remoteJid, usuario, isGroup })
-        if (trace) logger.info(`✅ dispatch done | chat=${jidLabel} | handled=${handled === true}`)
+        // Fallback de respuesta (revisado)
         const replyFallback = String(process.env.REPLY_ON_UNMATCHED || 'false').toLowerCase() === 'true'
-        const fromMe = !!message?.key?.fromMe
         if (replyFallback && handled !== true && !fromMe) {
-          try {
-            // Fallback solo en privado, o en grupos si hay mención al bot, + anti-spam por chat.
-            const pv = !isGroup
-            let mentionedBot = false
-            try { mentionedBot = !!(message?.message?.extendedTextMessage?.contextInfo?.mentionedJid||[]).includes(s?.user?.id) } catch {}
-            const eligible = pv || mentionedBot
-            if (eligible) {
-              global.__fallbackTs = global.__fallbackTs || new Map()
-              const k = remoteJid
-              const now = Date.now()
-              const last = global.__fallbackTs.get(k) || 0
-              if (now - last > 60000) {
+          const isMentioned = (message?.message?.extendedTextMessage?.contextInfo?.mentionedJid || []).includes(s.user.id)
+          if (!isGroup || isMentioned) {
+             global.__fallbackTs = global.__fallbackTs || new Map()
+             if ((Date.now() - (global.__fallbackTs.get(remoteJid) || 0)) > 60000) {
                 await safeSend(s, remoteJid, { text: '👋 Envíame un comando. Usa /menu o /help' }, { quoted: message })
-                global.__fallbackTs.set(k, now)
-              }
-            }
-          } catch (e) {
-            logger.warn(`fallback reply failed: ${e?.message || e}`)
+                global.__fallbackTs.set(remoteJid, Date.now())
+             }
           }
         }
-
-        // Ack opcional tras dispatch (debug). Habilitar con ACK_AFTER_DISPATCH=true
-        try {
-          const ack = String(process.env.ACK_AFTER_DISPATCH || 'false').toLowerCase() === 'true'
-          if (ack && handled === true) {
-            await safeSend(s, remoteJid, { text: '✅' }, { quoted: message })
-          }
-        } catch {}
       }
     } catch (e) {
-      try {
-        logger.warn(`[handleMessage] router failed: ${e?.message || e}`)
-      } catch {}
+      logger.warn(`[handleMessage] router failed: ${e?.message || e}`)
     }
   } catch (err) {
-    try { logger.error(`[handleMessage] error: ${err?.message || String(err)}`) } catch {}
+    logger.error(`[handleMessage] error: ${err?.message || String(err)}`)
   }
 }
 
