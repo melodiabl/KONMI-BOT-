@@ -1,5 +1,5 @@
 // commands/registry/index.js
-// Registro centralizado de comandos con categorías, alias y descripciones con emojis
+// Registro centralizado de comandos. Refactorizado para un /help unificado.
 
 import {
   handleTikTokDownload,
@@ -47,6 +47,7 @@ import * as utils from '../utils.js'
 import * as utilmath from '../util-math.js'
 import * as votes from '../votes.js'
 import * as logsCmd from '../logs.js'
+import * as polls from '../polls.js'
 
 import { promotionalLinks } from '../../config/links.js'
 import { getTheme } from '../../utils/theme.js'
@@ -136,115 +137,84 @@ function buildCategoryIndex() {
 }
 
 async function buildHelp(ctx) {
-  const theme = getTheme()
-  const categories = buildCategoryIndex()
-  const selected = (ctx?.args?.[0] || '').toLowerCase()
-  if (selected && categories.has(selected)) {
-    const entries = categories.get(selected)
-    const meta = getCategoryMeta(selected)
+  const theme = getTheme();
+  const categories = buildCategoryIndex();
+  const selectedCategory = (ctx?.args?.[0] || '').toLowerCase();
+
+  // Si se pide una categoría específica, mostrar solo esa.
+  if (selectedCategory && categories.has(selectedCategory)) {
+    const entries = categories.get(selectedCategory);
+    const meta = getCategoryMeta(selectedCategory);
     const lines = entries.map((entry) => {
-      const aliasSuffix = entry.aliasOf ? ' (alias)' : ''
-      const desc = entry.description ? ` → ${entry.description}` : ''
-      return `${meta.emoji} ${entry.command}${aliasSuffix}${desc}`
-    })
-    const summary = [
-      theme.header('KONMI BOT'),
-      `${meta.emoji} ${theme.accent} ${meta.label}`,
-      '',
-      lines.join('\n') || 'Sin comandos registrados en esta categoría.',
-      '',
-      theme.footer(),
-    ].join('\n')
-    return [
-      { success: true, message: summary, quoted: true },
-      {
-        type: 'buttons',
-        text: '¿Qué deseas hacer ahora?',
-        footer: 'KONMI BOT',
-        buttons: [
-          { text: '⬅️ Volver al menú', command: '/help' },
-          { text: '🏠 Menú interactivo', command: '/menu' },
-          { text: '🧪 SelfTest', command: '/selftest' },
-        ],
-        quoted: true,
-      },
-    ]
+      const aliasSuffix = entry.aliasOf ? ` (alias de ${entry.aliasOf})` : '';
+      const desc = entry.description ? ` - ${entry.description}` : '';
+      return `› *${entry.command}*${aliasSuffix}${desc}`;
+    }).join('\n');
+
+    const message = `${meta.emoji} *${meta.label}*\n\n${lines || 'No hay comandos en esta categoría.'}`;
+
+    return {
+      type: 'buttons',
+      text: message,
+      footer: 'Usa /help para volver al menú principal.',
+      buttons: [{ buttonId: '/help', buttonText: { displayText: '⬅️ Volver' }, type: 1 }],
+    };
   }
 
-  const orderedCategories = Array.from(categories.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-  const sectionRows = orderedCategories.map(([key, entries]) => {
-    const meta = getCategoryMeta(key)
+  // Si no, construir el mensaje de lista unificado.
+  const orderedCategories = Array.from(categories.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+  const categoryRows = orderedCategories.map(([key, entries]) => {
+    const meta = getCategoryMeta(key);
     return {
       title: `${meta.emoji} ${meta.label}`,
-      description: `${entries.length} comando(s)`,
-      id: `/help ${key}`,
-    }
-  })
+      description: `${entries.length} comando(s) disponible(s)`,
+      rowId: `/help ${key}`,
+    };
+  });
 
-  const sections = []
-  if (sectionRows.length) {
+  const sections = [];
+
+  if (categoryRows.length) {
     sections.push({
-      title: `${theme.accent} Categorías disponibles`,
-      rows: sectionRows,
-    })
+      title: "🔎 Elige una categoría para ver sus comandos",
+      rows: categoryRows,
+    });
   }
-  if (Array.isArray(promotionalLinks) && promotionalLinks.length) {
-    sections.push({
-      title: '🌐 Comunidad',
-      rows: promotionalLinks.map((link, idx) => ({
-        title: link.text || `Enlace ${idx + 1}`,
-        description: link.url || '',
-        id: link.url ? `url|${link.url}` : `/noop`,
-      })),
-    })
+
+  const quickAccessRows = [
+    { title: '🤖 Mis Sub-bots', description: 'Gestiona tus bots vinculados', rowId: '/mybots' },
+    { title: '⚙️ Ajustes del Grupo', description: 'Configuraciones rápidas (admins)', rowId: '/settings' },
+    { title: '📈 Estado del Bot', description: 'Verifica si el bot está operativo', rowId: '/status' },
+  ];
+  sections.push({ title: "⚡ Accesos Rápidos", rows: quickAccessRows });
+
+  if (promotionalLinks && promotionalLinks.length > 0) {
+      const communityRows = promotionalLinks.map(link => ({
+          title: `🌐 ${link.text}`,
+          description: link.url || 'Enlace a la comunidad',
+          rowId: `url|${link.url}`
+      }));
+      sections.push({ title: "🤝 Comunidad", rows: communityRows });
   }
-  sections.push({
-    title: '⚡ Accesos rápidos',
-    rows: [
-      { title: '📋 Ver comandos recientes', description: 'Top de comandos usados', id: '/topcmd' },
-      { title: '🧾 Ver mis subbots', description: 'Gestiona tus subbots vinculados', id: '/mybots' },
-      { title: '🛠️ Configuración del bot', description: 'Ajustes rápidos', id: '/settings' },
-    ],
-  })
 
-  const summaryLines = orderedCategories.map(([key, entries]) => {
-    const meta = getCategoryMeta(key)
-    return `${meta.emoji} ${meta.label}: ${entries.length}`
-  })
-  const summary = [
-    theme.header('KONMI BOT'),
-    `${theme.accent} ${theme.strings.helpTitle}`,
-    '',
-    summaryLines.join('\n'),
-    '',
-    '✨ Usa el menú para explorar una categoría o envía `/help <categoría>`',
-    theme.footer(),
-  ].join('\n')
+  const mainText = [
+    `*¡Hola, @${ctx.sender.split('@')[0]}!* 👋`,
+    "Soy Konmi Bot, tu asistente personal.",
+    "Aquí tienes todas las categorías de comandos disponibles. Selecciona una para ver los detalles.",
+  ].join('\n\n');
 
-  return [
-    {
-      type: 'list',
-      text: `${theme.accent} ${theme.strings.helpTitle}`,
-      buttonText: `${theme.accent} ${theme.strings.viewOptions}`,
-      sections,
-      footer: 'KONMI BOT',
-      quoted: true,
-    },
-    { success: true, message: summary, quoted: true },
-    {
-      type: 'buttons',
-      text: 'Accesos directos',
-      footer: 'KONMI BOT',
-      buttons: [
-        { text: '🎛️ Panel', command: '/config' },
-        { text: '🤖 Mis Subbots', command: '/mybots' },
-        { text: '🏠 Menú', command: '/menu' },
-      ],
-      quoted: true,
-    },
-  ]
+  return {
+    type: 'list',
+    text: mainText,
+    title: '📋 Menú Principal de Ayuda',
+    buttonText: 'Ver Categorías',
+    footer: 'Konmi Bot v3.0 | Elige una opción de la lista',
+    sections,
+    mentions: [ctx.sender],
+  };
 }
+
 
 register([
   // Inteligencia Artificial
@@ -295,6 +265,7 @@ register([
   { command: '/settings', handler: (ctx) => groupSettings.settings(ctx), category: 'group', description: 'Panel de configuración del grupo' },
   { command: '/rules', handler: (ctx) => groupSettings.rules(ctx), category: 'group', description: 'Mostrar reglas del grupo' },
   { command: '/setrules', handler: (ctx) => groupSettings.setrules(ctx), category: 'group', description: 'Actualizar reglas del grupo' },
+  { command: '/poll', handler: (ctx) => polls.poll(ctx), category: 'group', description: 'Crear una encuesta nativa' }, // Actualizado
 
   // Sistema y mantenimiento
   { command: '/cleansession', handler: () => system.cleanSession(), category: 'system', description: 'Borrar sesión local de WhatsApp' },
@@ -435,7 +406,6 @@ register([
   { command: '/help', handler: (ctx) => buildHelp(ctx), category: 'info', description: 'Mostrar ayuda por categorías' },
   { command: '/ayuda', aliasOf: '/help', category: 'info' },
   { command: '/comandos', aliasOf: '/help', category: 'info' },
-  { command: '/poll', handler: (ctx) => demo.poll(ctx), category: 'demo', description: 'Crear una encuesta rápida' },
   { command: '/location', handler: (ctx) => demo.location(ctx), category: 'demo', description: 'Enviar ubicación de prueba' },
   { command: '/contact', handler: (ctx) => demo.contact(ctx), category: 'demo', description: 'Compartir contacto de ejemplo' },
   { command: '/buttons', handler: (ctx) => demo.buttons(ctx), category: 'demo', description: 'Demostración de botones' },

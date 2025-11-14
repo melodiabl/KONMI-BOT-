@@ -1,70 +1,65 @@
 // commands/admin.js
+// Refactorizado para usar el objeto de contexto (ctx) unificado y permisos centralizados.
+
 import { getTheme } from '../utils/theme.js';
 import { setPrimaryOwner } from '../global-config.js';
 
-function requireOwner(handler) {
-  return async (ctx) => {
-    if (!ctx.isOwner) {
-      return { success: true, message: '⛔ Este comando solo puede ser usado por el owner del bot.', quoted: true };
-    }
-    return handler(ctx);
-  };
-}
-
-export async function ownerInfo({ isOwner, usuarioNumber }) {
+export async function ownerInfo(ctx) {
   const th = getTheme();
-  const roles = isOwner ? ['owner'] : [];
-  const msg = `${th.header('TU PERFIL')}\n👤 +${usuarioNumber}\n🔖 Roles: ${roles.join(', ') || 'ninguno'}\n${th.footer()}`;
-  return { success: true, message: msg, quoted: true };
+  const roles = ctx.isOwner ? ['owner'] : [];
+  const msg = `${th.header('TU PERFIL')}\n👤 +${ctx.usuarioNumber}\n🔖 Roles: ${roles.join(', ') || 'ninguno'}\n${th.footer()}`;
+  return { success: true, message: msg };
 }
 
-export async function checkOwner({ isOwner }) {
-  return { success: true, message: isOwner ? '✅ Tienes rol de owner' : '⛔ No eres owner', quoted: true };
-}
-
-export const setOwner = requireOwner(async ({ args }) => {
-  const numero = String(args?.[0] || '').replace(/\D/g, '');
-  const nombre = args?.slice(1).join(' ') || 'Owner';
-  if (!numero) {
-    return { success: true, message: 'ℹ️ Uso: /setowner <numero> <nombre>', quoted: true };
+export async function checkOwner(ctx) {
+  if (!ctx.isOwner) {
+    return { success: false, message: '⛔ No tienes el rol de owner.' };
   }
+  return { success: true, message: '✅ Tienes el rol de owner.' };
+}
+
+export async function setOwner(ctx) {
+  if (!ctx.isOwner) {
+    return { success: false, message: '⛔ Este comando solo puede ser usado por el owner del bot.' };
+  }
+
+  const numero = String(ctx.args?.[0] || '').replace(/\D/g, '');
+  const nombre = ctx.args?.slice(1).join(' ') || 'Owner';
+
+  if (!numero) {
+    return { success: false, message: 'ℹ️ Uso: /setowner <número> <nombre>' };
+  }
+
   setPrimaryOwner(numero, nombre);
-  return { success: true, message: `✅ Owner principal configurado: ${nombre} (+${numero})`, quoted: true };
-});
-
-export async function debugMe({ isOwner, usuarioNumber }) {
-  return { success: true, message: `👤 +${usuarioNumber}\n🔖 Roles: ${isOwner ? 'owner' : 'ninguno'}`, quoted: true };
+  return { success: true, message: `✅ Owner principal configurado: ${nombre} (+${numero})` };
 }
 
-export async function debugFull(ctx) {
-  return ownerInfo(ctx);
-}
-
-export async function testAdmin({ isOwner }) {
-  return { success: true, message: isOwner ? '✅ Admin OK' : '⛔ No admin', quoted: true };
-}
-
-export async function debugBot({ sock, remoteJid, usuarioNumber, isGroup, isBotAdmin, isOwner }) {
+export async function debugBot(ctx) {
   try {
     const th = getTheme();
-    const botNumber = String(sock?.user?.id || '').replace(/\D/g, '');
+    const botNumber = String(ctx.sock?.user?.id || '').replace(/\D/g, '');
     const envOwner = String(process.env.OWNER_WHATSAPP_NUMBER || '').replace(/\D/g, '');
-    const roles = isOwner ? ['owner'] : [];
+    const roles = ctx.isOwner ? ['owner'] : [];
 
     const body = [
-      `🤖 Debug Bot`,
-      `• Bot JID: ${sock?.user?.id || '(n/a)'}`,
+      `🤖 Debug del Bot`,
+      `• Bot JID: ${ctx.sock?.user?.id || '(n/a)'}`,
       `• Número Base: +${botNumber || '(n/a)'}`,
       `• Owner (env): +${envOwner || '(n/a)'}`,
-      `• Tú: +${usuarioNumber} ${roles.length ? `(${roles.join(', ')})` : ''}`,
-      isGroup ? `• Bot Admin en grupo: ${isBotAdmin ? 'Sí' : 'No'}` : null,
+      `• Tú: +${ctx.usuarioNumber} ${roles.length ? `(${roles.join(', ')})` : ''}`,
+      ctx.isGroup ? `• Bot Admin en grupo: ${ctx.isBotAdmin ? 'Sí' : 'No'}` : null,
     ].filter(Boolean).join('\n');
 
     const msg = `${th.header('KONMI BOT')}\n${body}\n${th.footer()}`;
-    return { success: true, message: msg, quoted: true };
+    return { success: true, message: msg };
   } catch (e) {
-    return { success: false, message: `⚠️ Error en /debugbot: ${e?.message || e}`, quoted: true };
+    return { success: false, message: `⚠️ Error en /debugbot: ${e?.message || e}` };
   }
 }
 
-export default { ownerInfo, checkOwner, setOwner, debugMe, debugFull, testAdmin, debugBot };
+// Alias y otros comandos de debug
+export const testAdmin = checkOwner;
+export const debugMe = ownerInfo;
+export const debugFull = ownerInfo;
+
+export default { ownerInfo, checkOwner, setOwner, debugBot, testAdmin, debugMe, debugFull };
