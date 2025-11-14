@@ -1,4 +1,4 @@
-﻿// handler.js
+// handler.js
 import './config.js';
 // Handler principal para logica de aportes, media, pedidos y proveedores
 
@@ -137,8 +137,10 @@ export async function routeCommand(ctx) {
       let result = null;
       try {
         result = await entry.handler(params);
+        await sock.sendMessage(ctx.remoteJid, { react: { text: '✅', key: ctx.key } })
       } catch (e) {
         await safeSend(ctx.sock, ctx.remoteJid, `⚠️ Error ejecutando comando: ${e?.message || e}`);
+        await sock.sendMessage(ctx.remoteJid, { react: { text: '⚠️', key: ctx.key } })
         return { handled: true };
       }
       await deliverResult(ctx.sock, ctx.remoteJid, result);
@@ -234,17 +236,38 @@ async function safeSend(sock, jid, text) {
   try { await sock.sendMessage(jid, { text }); } catch {}
 }
 
-// Enviar resultados heterogéneos de comandos (texto / imagen / video)
+// Enviar resultados heterogéneos de comandos (texto / imagen / video / botones / listas)
 async function deliverResult(sock, jid, result) {
   try {
     if (!result) return;
+    // Manejo de errores explícito
     if (result.success === false && result.message) {
-      // Soportar menciones también en respuestas de texto
       if (result.mentions && Array.isArray(result.mentions)) {
         await sock.sendMessage(jid, { text: result.message, mentions: result.mentions });
       } else {
         await safeSend(sock, jid, result.message);
       }
+      return;
+    }
+    // Mensaje de Botones (Buttons Message)
+    if (result.type === 'buttons' && result.buttons) {
+      await sock.sendMessage(jid, {
+        text: result.text,
+        footer: result.footer,
+        buttons: result.buttons,
+        headerType: result.headerType || 1,
+      });
+      return;
+    }
+    // Mensaje de Lista (List Message)
+    if (result.type === 'list' && result.sections) {
+      await sock.sendMessage(jid, {
+        text: result.text,
+        footer: result.footer,
+        title: result.title,
+        buttonText: result.buttonText,
+        sections: result.sections,
+      });
       return;
     }
     // Media: sticker
@@ -298,6 +321,9 @@ async function deliverResult(sock, jid, result) {
       }
       return;
     }
+    // Si no es un mensaje de texto, no enviar '✅ Listo'
+    if (result.type) return;
+
     // Fallback generico
     await safeSend(sock, jid, '✅ Listo');
   } catch (e) {
@@ -2001,4 +2027,3 @@ export async function handleDebugAdmin(usuario, grupo) {
     };
   }
 }
-
