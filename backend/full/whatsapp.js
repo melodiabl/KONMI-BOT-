@@ -40,12 +40,13 @@ const pickCustomFromEnv = () => {
 let __loaded = null
 async function loadBaileys() {
   if (__loaded) return __loaded
-  const picks = []
-  try { if (process?.env?.BAILEYS_MODULE) picks.push(process.env.BAILEYS_MODULE) } catch {}
-  // Preferimos el paquete oficial estable primero
-  picks.push('@whiskeysockets/baileys', 'baileys')
-  // Alternativas/forks en orden descendente
-  picks.push('@itsukichan/baileys', '@vkazee/baileys', 'baileys-mod')
+  // Corregido: Priorizar y usar el nombre de paquete correcto del fork itsukichan
+  const picks = ['@itsukichan/baileys']
+  try {
+    if (process?.env?.BAILEYS_MODULE && process.env.BAILEYS_MODULE !== '@itsukichan/baileys') {
+      picks.unshift(process.env.BAILEYS_MODULE);
+    }
+  } catch {}
 
   let lastErr = null
   for (const name of picks) {
