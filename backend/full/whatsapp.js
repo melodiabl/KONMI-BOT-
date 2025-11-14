@@ -242,7 +242,8 @@ export async function connectToWhatsApp(
     } catch { return ['Chrome', 'Ubuntu', '1.0.0'] }
   })() || ['Chrome', 'Ubuntu', '1.0.0']
 
-  const wantPair = !!doPairing
+  const customPairingCode = pickCustomFromEnv()
+  const wantPair = !!doPairing || !!customPairingCode
   pairingTargetNumber = wantPair ? onlyDigits(phoneNumber || process.env.PAIR_NUMBER) : null
   authMethod = wantPair ? 'pairing' : 'qr'
 
@@ -270,7 +271,12 @@ export async function connectToWhatsApp(
     // compat forks
     emitOwnMessages: true,
     mobile: false,
-    getMessage: async () => null
+    getMessage: async () => null,
+    // Opciones para Pairing Code
+    usePairingCode: wantPair,
+    phoneNumber: pairingTargetNumber,
+    // Opciones para Custom Pairing Code (itsukichan/baileys)
+    customPairingCode: customPairingCode,
   })
 
   // Guardado de sesión VAINILLA (sin backup/patch de creds)
