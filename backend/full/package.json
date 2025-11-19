@@ -23,7 +23,7 @@
     "dependencies": {
         "@google/generative-ai": "^0.21.0",
         "baileys": "github:nstar-y/bail",
-        "@whiskeysockets/baileys"
+        "@whiskeysockets/baileys": "^6.7.9",
         "axios": "^1.11.0",
         "baileys-mod": "github:nstar-y/bail",
         "bcryptjs": "^2.4.3",
