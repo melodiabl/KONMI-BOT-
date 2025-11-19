@@ -1,11 +1,15 @@
 // commands/stickers.js — utilidades de stickers robustecidas con Sharp (lazy) y FFmpeg
-import { downloadContentFromMessage } from '@itsukichan/baileys'
+import { downloadContentFromMessage } from '@whiskeysockets/baileys'
 import ffmpeg from 'fluent-ffmpeg'
+import ffmpegInstaller from 'ffmpeg-static' // <--- IMPORTACIÓN AGREGADA
 import axios from 'axios'
 import { tmpdir } from 'os'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
+
+// <--- CONFIGURACIÓN AGREGADA: Vincula el ejecutable al sistema
+ffmpeg.setFfmpegPath(ffmpegInstaller) 
 
 // Función para ejecutar comandos de forma asíncrona
 const execAsync = (command) => {
@@ -99,9 +103,6 @@ export async function sticker(ctx) {
       await fs.unlink(tempOutputPath);
     }
 
-    // Aunque sharp/ffmpeg crean el webp, el envío se hace con el buffer.
-    // La metadata se podría inyectar con librerías como `node-webpmux` si se quisiera más control.
-    // Por ahora, la conversión robusta es la prioridad.
     return {
       type: 'sticker',
       sticker: stickerBuffer,
@@ -175,7 +176,8 @@ export async function toimg({ sock, message }) {
         const tempOutputPath = path.join(tmpdir(), `sticker_output_${Date.now()}.gif`);
         await fs.writeFile(tempInputPath, stickerBuffer);
 
-        await execAsync(`ffmpeg -i ${tempInputPath} ${tempOutputPath}`);
+        // Usamos el path del instalador también aquí para asegurar que funcione el exec
+        await execAsync(`"${ffmpegInstaller}" -i ${tempInputPath} ${tempOutputPath}`);
 
         const gifBuffer = await fs.readFile(tempOutputPath);
 
