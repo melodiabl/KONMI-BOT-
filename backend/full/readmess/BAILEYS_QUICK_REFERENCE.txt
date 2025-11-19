@@ -1,0 +1,157 @@
+═══════════════════════════════════════════════════════════════════════════════
+  BAILEYS - REFERENCIA RÁPIDA DE COMANDOS
+═══════════════════════════════════════════════════════════════════════════════
+
+🎬 MEDIA (8 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /sendimage [URL]           → Enviar imagen desde URL
+  /sendvideo [URL] [caption] → Enviar video desde URL
+  /sendaudio [URL]           → Enviar audio desde URL
+  /sendgif [URL] [caption]   → Enviar GIF
+  /senddoc [URL] [nombre]    → Enviar documento
+  /sendcontact [nombre] [tel]→ Enviar contacto
+  /sendlocation [lat] [lon]  → Enviar ubicación
+  /downloadmedia             → Descargar media de mensaje
+
+✏️ CONTROL DE MENSAJES (8 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /editmsg [texto]           → Editar mensaje (responder)
+  /delmsg                    → Eliminar mensaje (responder)
+  /reactmsg [emoji]          → Reaccionar (responder)
+  /removereact               → Remover reacción (responder)
+  /pinmsg [24h|7d|30d]       → Fijar mensaje (responder)
+  /unpinmsg                  → Desfijar (responder)
+  /starmsg                   → Marcar como favorito (responder)
+  /unstarmsg                 → Desmarcar (responder)
+
+🎯 MENSAJES INTERACTIVOS (5 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /poll "¿Pregunta?" "Op1" "Op2" [...]  → Crear encuesta
+  /multipoll [max] "¿Q?" "Op1" "Op2"    → Encuesta multi-selección
+  /list [título] [Op1|Op2|...]          → Crear lista interactiva
+  /forward                               → Reenviar mensaje
+  /viewonce                              → Mensaje que desaparece
+
+👤 PERFIL & CONTACTOS (9 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /getprofile [jid]          → Obtener info de usuario
+  /getpfp [jid]              → Descargar foto de perfil
+  /setname [nuevo nombre]    → Cambiar tu nombre
+  /setstatus [estado]        → Cambiar tu estado (bio)
+  /setpfp [URL]              → Cambiar tu foto
+  /delpfp                    → Remover tu foto
+  /business [jid]            → Ver perfil de negocio
+  /presence [jid]            → Ver si está en línea
+  /checkuser [jid]           → Verificar si existe
+
+🔒 PRIVACIDAD (10 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /block [jid]               → Bloquear usuario
+  /unblock [jid]             → Desbloquear
+  /blocklist                 → Ver bloqueados
+  /privacysettings           → Ver todas las privacidades
+  /privacy_lastseen [all|contacts|none]     → Última conexión
+  /privacy_online [all|contacts|none]       → Estado en línea
+  /privacy_pfp [all|contacts|none]          → Foto de perfil
+  /privacy_status [all|contacts|none]       → Estado (bio)
+  /privacy_receipts [all|contacts|none]     → Confirmación de lectura
+  /privacy_groupadd [all|contacts|none]     → Agregar a grupos
+
+👥 GRUPOS AVANZADO (18 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /makegroupfor [nombre] [jid1] [jid2]     → Crear grupo
+  /groupinfo2                               → Info detallada
+  /leavegrp                                 → Salir
+  /groupname [nuevo nombre]                 → Cambiar nombre
+  /groupdesc [descripción]                  → Cambiar descripción
+  /grouppfp [URL]                           → Cambiar foto
+  /delpfpgroup                              → Remover foto
+  /announce                                 → Modo solo admins
+  /noannounce                               → Desactivar
+  /lockgrp                                  → Bloquear grupo
+  /unlockgrp                                → Desbloquear
+  /invitecode                               → Obtener código
+  /revokeinvite                             → Revocar código
+  /joingroupcode [código]                   → Unirse con código
+  /ephemeral [0|1|7|30|90]                  → Mensajes efímeros
+  /requests                                 → Ver solicitudes
+  /approvereq [jid]                         → Aprobar
+  /rejectreq [jid]                          → Rechazar
+
+📢 BROADCAST & HISTORIAS (8 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /makelist [nombre]                       → Crear lista
+  /addtolist [nombre] [jid1] [jid2]        → Agregar contactos
+  /broadcast [nombre] [mensaje]             → Enviar a lista
+  /story [texto]                            → Compartir en historias
+  /storymedia [URL] [caption]               → Media en historias
+  /mybcasts                                 → Ver mis listas
+  /dellist [nombre]                         → Eliminar lista
+  /listmembers [nombre]                     → Ver miembros
+
+💬 GESTIÓN DE CHATS (13 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /mutechat [8h|7d|30d|forever]             → Silenciar chat
+  /unmutechat                               → Desilenciar
+  /archivechat                              → Archivar
+  /unarchivechat                            → Desarchivar
+  /readchat                                 → Marcar como leído
+  /unreadchat                               → Marcar no leído
+  /deletechat                               → Eliminar conversación
+  /pinchat                                  → Fijar chat
+  /unpinchat                                → Desfijar
+  /clearchat                                → Limpiar para ti
+  /autodisappear [0|1|7|30|90]              → Desaparición automática
+  /nodisappear                              → Deshabilitar
+  /readmsg                                  → Marcar msg como leído
+
+👀 PRESENCIA & ESTADO (11 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /online                                   → Mostrar en línea
+  /offline                                  → Mostrar desconectado
+  /typing                                   → Mostrar escribiendo
+  /recording                                → Mostrar grabando
+  /paused                                   → Mostrar pausado
+  /getpresence [jid]                        → Ver estado de usuario
+  /subscribepresence [jid]                  → Monitorear
+  /unsubscribepresence [jid]                → Dejar de monitorear
+  /getstatus [jid]                          → Obtener texto de estado
+  /simulatyping                             → Simular escritura
+  /simularecording                          → Simular grabación
+
+📞 LLAMADAS (8 comandos)
+─────────────────────────────────────────────────────────────────────────────
+  /rejectcall [callId] [from]               → Rechazar llamada
+  /blockcaller [jid]                        → Bloquear al que llama
+  /enablecallblock                          → Rechazar todo
+  /disablecallblock                         → Permitir llamadas
+  /addcallblacklist [jid]                   → Agregar a lista negra
+  /removecallblacklist [jid]                → Remover
+  /callblocklist                            → Ver lista negra
+  /callstats                                → Ver estadísticas
+
+═══════════════════════════════════════════════════════════════════════════════
+  TOTALES: 96 COMANDOS | 10 CATEGORÍAS | 10 MÓDULOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Notas:
+  • [parámetro] = obligatorio
+  • [parámetro|opciones] = elige una opción
+  • Responder a un mensaje = el comando actúa sobre ese mensaje
+  • JID = formato: numero@s.whatsapp.net o grupo@g.us
+  • URL = enlace completo a archivo web
+
+Archivos creados:
+  ✓ commands/media.js
+  ✓ commands/message-control.js
+  ✓ commands/interactive.js
+  ✓ commands/profile.js
+  ✓ commands/privacy.js
+  ✓ commands/group-advanced.js
+  ✓ commands/broadcast.js (actualizado)
+  ✓ commands/chat-management.js
+  ✓ commands/presence.js
+  ✓ commands/calls.js
+  ✓ commands/registry/index.js (actualizado)
+
+═══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,238 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║             KONMI BOT - UI INTERACTIVE QUICK REFERENCE                      ║
+║          Botones, Listas, Todo-lists y Copiar Funcional en WhatsApp         ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 COMANDO: /copy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Copia código al portapapeles del móvil de forma fácil
+
+SINTAXIS:
+  /copy [código]
+
+EJEMPLOS:
+  /copy npm install axios
+  /copy const x = 5;
+  /copy git clone https://github.com/user/repo
+  /copy SELECT * FROM users WHERE id = 1;
+
+RESULTADO:
+  ✓ Código enviado en bloque formateado
+  ✓ Usuario puede seleccionar y copiar
+  ✓ Se mantiene en memoria 1 hora
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔘 COMANDO: /buttons
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Crea botones interactivos con comandos personalizados
+
+SINTAXIS:
+  /buttons [título] [botón1:comando1] [botón2:comando2] [botón3:comando3]
+
+EJEMPLOS:
+  /buttons "Menú" "Perfil:/profile" "Ayuda:/help" "Status:/status"
+  /buttons "Opciones" "Sí:/yes" "No:/no" "Quizás:/maybe"
+  /buttons "Descargas" "Video:/video" "Música:/music" "Audio:/audio"
+
+CARACTERÍSTICAS:
+  • Hasta 3 botones por mensaje
+  • Cada botón ejecuta un comando
+  • Compatible con todos los comandos del bot
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ COMANDO: /todo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Crea lista de tareas interactiva con checkboxes
+
+SINTAXIS:
+  /todo [nombre] [tarea1] [tarea2] [tarea3] ...
+
+EJEMPLOS:
+  /todo "Mi Lista" "Comprar comida" "Llamar a Juan" "Terminar proyecto"
+  /todo "Trabajo" "Email al cliente" "Revisar código" "Hacer backup"
+  /todo "Fin de Semana" "Limpiar casa" "Comprar groceries" "Ejercicio"
+
+CARACTERÍSTICAS:
+  ☐ Checkboxes visuales
+  ☑️ Marcar completadas
+  📊 Contador de progreso
+  🔄 Editar dinámicamente
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 COMANDO: /todo-mark [id] [número]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Marca una tarea como completada
+
+SINTAXIS:
+  /todo-mark [lista-id] [número-tarea]
+
+EJEMPLO:
+  /todo-mark todo_5xxxx_1234567890 1
+
+RESULTADO:
+  ☑️ Tarea marcada como hecha
+  📊 Contador de completadas se actualiza
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↩️ COMANDO: /todo-unmark [id] [número]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Desmarca una tarea completada
+
+SINTAXIS:
+  /todo-unmark [lista-id] [número-tarea]
+
+EJEMPLO:
+  /todo-unmark todo_5xxxx_1234567890 1
+
+RESULTADO:
+  ☐ Tarea vuelve al estado sin completar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🗑️ COMANDO: /todo-delete [id] [número]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Elimina una tarea de la lista
+
+SINTAXIS:
+  /todo-delete [lista-id] [número-tarea]
+
+EJEMPLO:
+  /todo-delete todo_5xxxx_1234567890 2
+
+RESULTADO:
+  ✓ Tarea eliminada
+  ✓ Lista se re-numera automáticamente
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+➕ COMANDO: /todo-add [id] [tarea]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Agrega una nueva tarea a la lista
+
+SINTAXIS:
+  /todo-add [lista-id] [nueva-tarea]
+
+EJEMPLO:
+  /todo-add todo_5xxxx_1234567890 "Nueva tarea importante"
+
+RESULTADO:
+  ✓ Nueva tarea agregada
+  ✓ Se renumera la lista automáticamente
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📱 COMANDO: /menucat
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Menú interactivo por categorías
+
+SINTAXIS:
+  /menucat
+
+CATEGORÍAS:
+  🎯 Inicio
+     → Menú principal
+     → Ayuda
+
+  📥 Descargas
+     → Videos (YouTube, TikTok, etc.)
+     → Música (Spotify, SoundCloud, etc.)
+     → Audio
+
+  🤖 Sub-bots
+     → Generar código
+     → Generar QR
+     → Ver mis sub-bots
+
+  🛠️ Utilidades
+     → Estado del bot
+     → Ping/Latencia
+     → Crear stickers
+
+  👑 Administración (solo propietario)
+     → Panel admin
+     → Anuncios globales
+     → Ver todos los bots
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📖 COMANDO: /helpcat
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ayuda organizada por categorías
+
+SINTAXIS:
+  /helpcat
+
+RESULTADO:
+  • Lista todos los comandos por categoría
+  • Describe qué hace cada comando
+  • Muestra cómo usarlos
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                         FLUJO DE USO TÍPICO                                 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+ESCENARIO 1: Soporte Técnico
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Usuario escribe: "¿Cómo inicio el bot?"
+2. Bot responde: /copy npm run dev
+3. Usuario selecciona y copia el comando
+4. Usuario lo pega en su terminal
+
+ESCENARIO 2: Gestor de Proyectos
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Bot: /todo "Sprint 1" "Diseño UI" "API Backend" "Testing"
+2. Usuario: /todo-mark [id] 1  (después de completar diseño)
+3. Usuario: /todo-add [id] "Deploy a producción"
+4. Bot: [actualiza lista mostrando progreso]
+
+ESCENARIO 3: Sistema de Menú
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Usuario: /menu
+2. Bot: /buttons "KONMI" "Menú:/menucat" "Ayuda:/helpcat"
+3. Usuario selecciona: "Menú"
+4. Bot: /menucat [envía categorías]
+5. Usuario selecciona: "Sub-bots"
+6. Bot: /buttons "Sub-bots" "Código:/code" "QR:/qr" "Ver bots:/mybots"
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                           ERRORES COMUNES                                   ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+❌ INCORRECTO                          ✅ CORRECTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/copy                                  /copy npm install
+/buttons "Menú"                        /buttons "Menú" "Op1:/cmd1" "Op2:/cmd2"
+/todo "Lista"                          /todo "Lista" "Tarea 1" "Tarea 2"
+/copy "npm install"                    /copy npm install
+/todo-mark id 10                       /todo-mark id 1   (número entre 1-5)
+/buttons Menú Op:/op                   /buttons "Menú" "Op:/op"
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                         CARACTERÍSTICAS TÉCNICAS                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+✓ Integración nativa con Baileys/WhiskeySockets
+✓ Sin librerías externas adicionales
+✓ Almacenamiento en memoria (hasta 1 hora)
+✓ Compatible con todos los tipos de chats (privados, grupos)
+✓ Soporte para propietarios (admin controls)
+✓ Emojis y caracteres especiales soportados
+✓ Respuestas inline con contexto
+✓ Errores informativos y útiles
+✓ Integración con el registry de comandos
+✓ Manejo de contexto normalizado
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                           INFORMACIÓN EXTRA                                 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+• Los IDs de listas se generan automáticamente: todo_[usuario]_[timestamp]
+• Las listas expiran después de 1 hora sin uso
+• Máximo 3 botones por mensaje interactivo
+• No hay límite de tareas en una lista
+• Las categorías se adaptan si eres propietario
+• Todos los comandos incluyen validación y manejo de errores
+• Respuestas personalizadas para cada situación
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Última actualización: 2025-01-19
+Módulo: ui-interactive.js
+Versión: 1.0
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

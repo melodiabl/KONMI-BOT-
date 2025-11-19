@@ -1,0 +1,5 @@
+services:
+  backend:
+    environment:
+      AUTH_PREFERRED_PHONE: "595974154768"
+      AUTH_DEFAULT_METHOD: "pairing"
