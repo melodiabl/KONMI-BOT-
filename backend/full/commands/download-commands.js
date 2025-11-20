@@ -24,17 +24,31 @@ import { createProgressNotifier } from '../utils/progress-notifier.js';
  * Comando /tiktok - Descarga videos de TikTok
  */
 export async function handleTikTokDownload(ctx) {
-  const { args, sender } = ctx;
+  const { args, sender, sock, remoteJid, message } = ctx;
   const url = args.join(' ');
   if (!url || !url.includes('tiktok.com')) {
     return { success: false, message: '❌ Uso incorrecto: /tiktok [URL]' };
   }
 
+  const progress = createProgressNotifier({
+    resolveSocket: () => Promise.resolve(sock),
+    chatId: remoteJid,
+    quoted: message,
+    title: 'Descargando TikTok',
+    icon: '📹'
+  });
+
   try {
+    progress.update(10, 'Conectando con TikTok...');
     const result = await downloadTikTok(url);
+
     if (!result.success || !result.video) {
+      progress.fail('No se pudo descargar el video. Verifica la URL.');
       return { success: false, message: '⚠️ No se pudo descargar el video de TikTok. Verifica la URL.' };
     }
+
+    progress.update(80, 'Procesando video...');
+    progress.complete('Descarga completada');
 
     return {
       type: 'video',
@@ -44,6 +58,7 @@ export async function handleTikTokDownload(ctx) {
     };
   } catch (error) {
     logger.error('Error en handleTikTokDownload:', error);
+    progress.fail(`Error: ${error.message}`);
     return { success: false, message: `⚠️ Error al descargar TikTok: ${error.message}` };
   }
 }
@@ -52,17 +67,31 @@ export async function handleTikTokDownload(ctx) {
  * Comando /instagram - Descarga contenido de Instagram
  */
 export async function handleInstagramDownload(ctx) {
-  const { args, sender } = ctx;
+  const { args, sender, sock, remoteJid, message } = ctx;
   const url = args.join(' ');
   if (!url || !url.includes('instagram.com')) {
     return { success: false, message: '❌ Uso incorrecto: /instagram [URL]' };
   }
 
+  const progress = createProgressNotifier({
+    resolveSocket: () => Promise.resolve(sock),
+    chatId: remoteJid,
+    quoted: message,
+    title: 'Descargando Instagram',
+    icon: '📸'
+  });
+
   try {
+    progress.update(10, 'Conectando con Instagram...');
     const result = await downloadInstagram(url);
+
     if (!result.success || (!result.image && !result.video)) {
+      progress.fail('No se pudo descargar el contenido. Verifica la URL.');
       return { success: false, message: '⚠️ No se pudo descargar el contenido de Instagram. Verifica la URL.' };
     }
+
+    progress.update(80, 'Procesando contenido...');
+    progress.complete('Descarga completada');
 
     const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram*\n\n👤 *Autor:* ${result.author || 'N/D'}\n📝 *Descripción:* ${result.caption || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
 
@@ -74,6 +103,7 @@ export async function handleInstagramDownload(ctx) {
     };
   } catch (error) {
     logger.error('Error en handleInstagramDownload:', error);
+    progress.fail(`Error: ${error.message}`);
     return { success: false, message: `⚠️ Error al descargar Instagram: ${error.message}` };
   }
 }
@@ -189,9 +219,15 @@ export async function handleMusicDownload(ctx) {
 
         await progress.complete('✅ Descarga completada');
 
+        // CORRECCIÓN: Detectar si es URL o Buffer
+        const audioData = downloadResult.download.url || downloadResult.download.buffer || downloadResult.download;
+        // Asignar mimetype explícito si es Buffer, ayuda a WhatsApp
+        const mimetype = (downloadResult.download.buffer || Buffer.isBuffer(audioData)) ? 'audio/mpeg' : undefined;
+
         return {
             type: 'audio',
-            audio: downloadResult.download.url,
+            audio: audioData,
+            mimetype: mimetype,
             caption: `*🎵 ${video.title}*\n\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
             mentions: [sender],
         };
@@ -242,9 +278,14 @@ export async function handleVideoDownload(ctx) {
 
         await progress.complete('✅ Descarga completada');
 
+        // CORRECCIÓN: Detectar si es URL o Buffer
+        const videoData = downloadResult.download.url || downloadResult.download.buffer || downloadResult.download;
+        const mimetype = (downloadResult.download.buffer || Buffer.isBuffer(videoData)) ? 'video/mp4' : undefined;
+
         return {
             type: 'video',
-            video: downloadResult.download.url,
+            video: videoData,
+            mimetype: mimetype,
             caption: `*🎬 ${video.title}*\n\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
             mentions: [sender],
         };
@@ -269,24 +310,32 @@ export async function handleSpotifySearch(ctx) {
         }
 
         let audioUrl = null;
+        let audioBuffer = null;
+
         try {
             const ytResult = await searchYouTubeMusic(`${result.title} ${result.artists}`);
             if (ytResult.success && ytResult.results.length) {
                 const ytVideo = ytResult.results[0];
                 const dlResult = await downloadYouTube(ytVideo.url, 'audio', () => {});
-                if (dlResult.success) audioUrl = dlResult.download.url;
+                
+                if (dlResult.success) {
+                     // CORRECCIÓN: Manejar Buffer también en fallback de Spotify
+                     if (dlResult.download.url) audioUrl = dlResult.download.url;
+                     else if (dlResult.download.buffer) audioBuffer = dlResult.download.buffer;
+                     else audioUrl = dlResult.download;
+                }
             }
         } catch (e) {
             logger.error('Error en el fallback de Spotify a YouTube:', e);
         }
 
-        if (audioUrl) {
+        if (audioUrl || audioBuffer) {
             return {
                 type: 'spotify',
                 image: result.cover_url,
                 caption: `*${result.title}* - *${result.artists}*\n*Álbum:* ${result.album}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
-                audio: audioUrl,
-                mimetype: 'audio/mpeg',
+                audio: audioUrl || audioBuffer,
+                mimetype: audioBuffer ? 'audio/mpeg' : 'audio/mpeg',
                 mentions: [sender]
             };
         } else {

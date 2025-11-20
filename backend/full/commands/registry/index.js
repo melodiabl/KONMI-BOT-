@@ -69,7 +69,8 @@ const [
   downloadCmd, ai, admin, adminMenu, aporteCmd, botctl, broadcastOld, content, demo, diag, files, gextra,
   groupAdminX, groupCmd, groupSettings, images, maintenance, menu, mod, pairing, pedidoCmd, promo,
   stickers, subbots, sysInfo, system, utils, utilmath, votes, logsCmd, polls,
-  media, messageControl, interactive, profile, privacy, groupAdvanced, broadcast, chatMgmt, presence, calls, uiInteractive
+  media, messageControl, interactive, profile, privacy, groupAdvanced, broadcast, chatMgmt, presence, calls, uiInteractive,
+  advancedFeatures, communityFeatures, privacyFeatures, performanceFeatures
 ] = await Promise.all([
   safeImport('../download-commands.js'),
   safeImport('../ai.js'),
@@ -113,6 +114,10 @@ const [
   safeImport('../presence.js'),
   safeImport('../calls.js'),
   safeImport('../ui-interactive.js'),
+  safeImport('../advanced-features.js'),
+  safeImport('../community-features.js'),
+  safeImport('../privacy-features.js'),
+  safeImport('../performance-features.js'),
 ])
 
 // Desestructuración de comandos de download-commands.js
@@ -379,7 +384,8 @@ register([
   { command: '/chiste', aliasOf: '/joke', category: 'fun' },
 
   // Información del sistema
-  { command: '/status', handler: () => sysInfo.status(), category: 'info', description: 'Estado resumido del bot' },
+  { command: '/status', handler: (ctx) => sysInfo.status(ctx), category: 'info', description: 'Estado resumido del bot' },
+  { command: '/status-full', handler: () => sysInfo.statusFull(), category: 'info', description: 'Estado completo del bot' },
   { command: '/runtime', handler: () => sysInfo.runtime(), category: 'info', description: 'Información de tiempo de ejecución' },
   { command: '/info', aliasOf: '/status', category: 'info' },
   { command: '/test', handler: ({ usuario }) => ({ success: true, message: `✅ Bot funcionando\n\n👤 ${usuario}\n🕒 ${new Date().toLocaleString('es-ES')}` }), category: 'info', description: 'Comprobar si el bot responde' },
@@ -388,10 +394,14 @@ register([
 
   // Pairing / QR
   { command: '/qr', handler: (ctx) => pairing.qr(ctx), category: 'pairing', description: 'Generar código QR para vincular' },
-  { command: '/code', handler: (ctx) => pairing.code(ctx), category: 'pairing', description: 'Generar código de emparejamiento' },
+  { command: '/code', handler: (ctx) => pairing.code(ctx), category: 'pairing', description: 'Generar código de emparejamiento para subbot' },
   { command: '/codigo', aliasOf: '/code', category: 'pairing' },
   { command: '/code_legacy', aliasOf: '/code', category: 'pairing' },
   { command: '/paircode', aliasOf: '/code', category: 'pairing' },
+  { command: '/maincode', handler: (ctx) => pairing.mainCode(ctx), category: 'pairing', description: 'Ver código de emparejamiento del bot principal (Owner)' },
+  { command: '/botcode', aliasOf: '/maincode', category: 'pairing' },
+  { command: '/requestcode', handler: (ctx) => pairing.requestMainBotPairingCode(ctx), category: 'pairing', description: 'Solicitar código de emparejamiento para el bot principal (Owner)' },
+  { command: '/pairmain', aliasOf: '/requestcode', category: 'pairing' },
   { command: '/bots', handler: (ctx) => subbots.all(ctx), category: 'pairing', description: 'Lista todos los subbots (Owner)' },
   { command: '/mybots', handler: (ctx) => subbots.mine(ctx), category: 'pairing', description: 'Ver tus subbots vinculados' },
   { command: '/mibots', aliasOf: '/mybots', category: 'pairing' },
@@ -567,6 +577,10 @@ register([
   { command: '/getstatus', handler: (ctx) => presence.getStatusText(ctx), category: 'presence', description: 'Obtener texto de estado' },
   { command: '/simulatyping', handler: (ctx) => presence.simulateTyping(ctx), category: 'presence', description: 'Simular escritura' },
   { command: '/simularecording', handler: (ctx) => presence.simulateRecording(ctx), category: 'presence', description: 'Simular grabación' },
+  { command: '/custompresence', handler: (ctx) => presence.setCustomPresence(ctx), category: 'presence', description: 'Establecer presencia personalizada' },
+  { command: '/broadcastpresence', handler: (ctx) => presence.broadcastPresence(ctx), category: 'presence', description: 'Enviar presencia a todos los chats' },
+  { command: '/monitorpresence', handler: (ctx) => presence.monitorPresence(ctx), category: 'presence', description: 'Monitorear presencia de usuario' },
+  { command: '/presenceinfo', handler: (ctx) => presence.getPresence(ctx), category: 'presence', description: 'Obtener información detallada de presencia' },
 
   // Call Management
   { command: '/rejectcall', handler: (ctx) => calls.rejectCall(ctx), category: 'calls', description: 'Rechazar una llamada' },
@@ -580,6 +594,7 @@ register([
 
   // UI Interactive - Botones, Listas y Todo-lists
   { command: '/copy', handler: (ctx) => uiInteractive.copyCode(ctx), category: 'ui', description: 'Copiar código al portapapeles' },
+  { command: '/handlecopy', handler: (ctx) => uiInteractive.handleCopyButton(ctx), category: 'ui', description: 'Manejar botón de copia' },
   { command: '/buttons', handler: (ctx) => uiInteractive.interactiveButtons(ctx), category: 'ui', description: 'Crear botones interactivos' },
   { command: '/todo', handler: (ctx) => uiInteractive.createTodoList(ctx), category: 'ui', description: 'Crear lista de tareas' },
   { command: '/todo-mark', handler: (ctx) => uiInteractive.markTodoItem(ctx), category: 'ui', description: 'Marcar tarea completada' },
@@ -588,6 +603,62 @@ register([
   { command: '/todo-add', handler: (ctx) => uiInteractive.addTodoItem(ctx), category: 'ui', description: 'Agregar tarea a lista' },
   { command: '/menucat', handler: (ctx) => uiInteractive.categorizedMenu(ctx), category: 'ui', description: 'Menú por categorías' },
   { command: '/helpcat', handler: (ctx) => uiInteractive.helpByCategory(ctx), category: 'ui', description: 'Ayuda por categorías' },
+
+  // Funcionalidades Avanzadas
+  { command: '/poll', handler: (ctx) => advancedFeatures.createPoll(ctx), category: 'interactive', description: 'Crear encuesta' },
+  { command: '/multipoll', handler: (ctx) => advancedFeatures.createMultiSelectPoll(ctx), category: 'interactive', description: 'Crear encuesta de selección múltiple' },
+  { command: '/viewonce', handler: (ctx) => advancedFeatures.createViewOnce(ctx), category: 'interactive', description: 'Crear mensaje que desaparece tras verlo' },
+  { command: '/forward', handler: (ctx) => advancedFeatures.forwardMessage(ctx), category: 'interactive', description: 'Reenviar mensaje' },
+  { command: '/addchatlabel', handler: (ctx) => advancedFeatures.addChatLabel(ctx), category: 'utils', description: 'Agregar etiqueta a chat' },
+  { command: '/addmessagelabel', handler: (ctx) => advancedFeatures.addMessageLabel(ctx), category: 'utils', description: 'Agregar etiqueta a mensaje' },
+  { command: '/business', handler: (ctx) => advancedFeatures.getBusinessProfile(ctx), category: 'info', description: 'Obtener perfil de negocio' },
+  { command: '/calllink', handler: (ctx) => advancedFeatures.createCallLink(ctx), category: 'utils', description: 'Crear enlace de llamada' },
+  { command: '/catalog', handler: (ctx) => advancedFeatures.getCatalog(ctx), category: 'info', description: 'Ver catálogo de productos' },
+  { command: '/collections', handler: (ctx) => advancedFeatures.getCollections(ctx), category: 'info', description: 'Ver colecciones del catálogo' },
+
+  // Funcionalidades de Comunidad
+  { command: '/createcommunity', handler: (ctx) => communityFeatures.createCommunity(ctx), category: 'group', description: 'Crear nueva comunidad' },
+  { command: '/createcommunitygroup', handler: (ctx) => communityFeatures.createCommunityGroup(ctx), category: 'group', description: 'Crear grupo en comunidad' },
+  { command: '/linkgroup', handler: (ctx) => communityFeatures.linkGroupToCommunity(ctx), category: 'group', description: 'Vincular grupo a comunidad' },
+  { command: '/unlinkgroup', handler: (ctx) => communityFeatures.unlinkGroupFromCommunity(ctx), category: 'group', description: 'Desvincular grupo de comunidad' },
+  { command: '/communityinfo', handler: (ctx) => communityFeatures.getCommunityInfo(ctx), category: 'info', description: 'Información de comunidad' },
+  { command: '/communityname', handler: (ctx) => communityFeatures.changeCommunityName(ctx), category: 'group', description: 'Cambiar nombre de comunidad' },
+  { command: '/communitydesc', handler: (ctx) => communityFeatures.changeCommunityDescription(ctx), category: 'group', description: 'Cambiar descripción de comunidad' },
+  { command: '/communityapproval', handler: (ctx) => communityFeatures.setCommunityApprovalMode(ctx), category: 'group', description: 'Modo de aprobación de comunidad' },
+  { command: '/communitymembermode', handler: (ctx) => communityFeatures.setCommunityMemberAddMode(ctx), category: 'group', description: 'Modo de adición de miembros' },
+  { command: '/communityephemeral', handler: (ctx) => communityFeatures.setCommunityEphemeral(ctx), category: 'group', description: 'Mensajes efímeros en comunidad' },
+  { command: '/communityrequests', handler: (ctx) => communityFeatures.getCommunityRequests(ctx), category: 'group', description: 'Ver solicitudes de unión' },
+  { command: '/approvereq', handler: (ctx) => communityFeatures.approveCommunityRequest(ctx), category: 'group', description: 'Aprobar solicitud de unión' },
+  { command: '/rejectreq', handler: (ctx) => communityFeatures.rejectCommunityRequest(ctx), category: 'group', description: 'Rechazar solicitud de unión' },
+
+  // Funcionalidades de Privacidad Avanzada
+  { command: '/privacysettings', handler: (ctx) => privacyFeatures.getPrivacySettings(ctx), category: 'privacy', description: 'Ver configuración de privacidad' },
+  { command: '/privacy_lastseen', handler: (ctx) => privacyFeatures.updateLastSeenPrivacy(ctx), category: 'privacy', description: 'Privacidad de última conexión' },
+  { command: '/privacy_online', handler: (ctx) => privacyFeatures.updateOnlinePrivacy(ctx), category: 'privacy', description: 'Privacidad de estado en línea' },
+  { command: '/privacy_pfp', handler: (ctx) => privacyFeatures.updateProfilePicturePrivacy(ctx), category: 'privacy', description: 'Privacidad de foto de perfil' },
+  { command: '/privacy_status', handler: (ctx) => privacyFeatures.updateStatusPrivacy(ctx), category: 'privacy', description: 'Privacidad de estado' },
+  { command: '/privacy_receipts', handler: (ctx) => privacyFeatures.updateReadReceiptsPrivacy(ctx), category: 'privacy', description: 'Privacidad de confirmación de lectura' },
+  { command: '/privacy_groupadd', handler: (ctx) => privacyFeatures.updateGroupAddPrivacy(ctx), category: 'privacy', description: 'Privacidad de agregar a grupos' },
+  { command: '/blocklist', handler: (ctx) => privacyFeatures.getBlockList(ctx), category: 'privacy', description: 'Ver usuarios bloqueados' },
+  { command: '/block', handler: (ctx) => privacyFeatures.blockUser(ctx), category: 'privacy', description: 'Bloquear usuario' },
+  { command: '/unblock', handler: (ctx) => privacyFeatures.unblockUser(ctx), category: 'privacy', description: 'Desbloquear usuario' },
+  { command: '/addcontact', handler: (ctx) => privacyFeatures.addContact(ctx), category: 'profile', description: 'Agregar contacto' },
+  { command: '/editcontact', handler: (ctx) => privacyFeatures.editContact(ctx), category: 'profile', description: 'Editar contacto' },
+  { command: '/addquickreply', handler: (ctx) => privacyFeatures.addQuickReply(ctx), category: 'utils', description: 'Agregar respuesta rápida' },
+  { command: '/editquickreply', handler: (ctx) => privacyFeatures.editQuickReply(ctx), category: 'utils', description: 'Editar respuesta rápida' },
+
+  // Funcionalidades adicionales de mensajes
+  { command: '/readmsg', handler: (ctx) => messageControl.readMessage(ctx), category: 'message', description: 'Marcar mensaje como leído' },
+
+  // Funcionalidades de Rendimiento y Optimización
+  { command: '/cleandirty', handler: (ctx) => performanceFeatures.cleanDirtyBits(ctx), category: 'system', description: 'Limpiar datos sucios para mejorar rendimiento' },
+  { command: '/perfstats', handler: (ctx) => performanceFeatures.getPerformanceStats(ctx), category: 'system', description: 'Estadísticas de rendimiento del bot' },
+  { command: '/forcegc', handler: (ctx) => performanceFeatures.forceGC(ctx), category: 'system', description: 'Forzar garbage collection' },
+  { command: '/connectionhealth', handler: (ctx) => performanceFeatures.getConnectionHealth(ctx), category: 'system', description: 'Estado detallado de conexión' },
+  { command: '/optimizesessions', handler: (ctx) => performanceFeatures.optimizeSessions(ctx), category: 'system', description: 'Optimizar caché de sesiones' },
+  { command: '/connecteddevices', handler: (ctx) => performanceFeatures.getConnectedDevices(ctx), category: 'system', description: 'Ver dispositivos conectados' },
+  { command: '/cleargroupcache', handler: (ctx) => performanceFeatures.clearGroupCache(ctx), category: 'system', description: 'Limpiar caché de grupos' },
+  { command: '/messagehistory', handler: (ctx) => performanceFeatures.getMessageHistory(ctx), category: 'system', description: 'Obtener historial de mensajes (experimental)' },
 ])
 
 export function getCommandRegistry() {

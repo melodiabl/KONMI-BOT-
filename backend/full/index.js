@@ -1,9 +1,11 @@
-// index.js — Runner interactivo “original” (QR / Pairing), sin tocar/backup creds
+// index.js — Runner interactivo "original" (QR / Pairing), sin tocar/backup creds
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
+import config from './config.js';
+import app from './server.js';
 import {
   connectToWhatsApp,
   connectWithPairingCode,
@@ -87,6 +89,13 @@ async function main() {
       console.error('❌ Error al iniciar la conexión con Código QR:', e?.message || e);
     }
   }
+
+  // Start the web server
+  console.log(`\n🌐 Starting web server on port ${config.server.port}...`);
+  app.listen(config.server.port, config.server.host, () => {
+    console.log(`✅ Server running at http://${config.server.host}:${config.server.port}`);
+    console.log(`📊 Health check: http://${config.server.host}:${config.server.port}/api/health`);
+  });
 }
 
 process.on('unhandledRejection', (err) => console.error('UNHANDLED REJECTION:', err?.stack || err));

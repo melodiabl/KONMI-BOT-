@@ -186,3 +186,23 @@ export async function unstarMessage(ctx) {
     return { success: false, message: `❌ Error: ${error.message}` }
   }
 }
+
+// Marcar chat como leído
+export async function readMessage(ctx) {
+  const { quoted, remoteJid, sock } = ctx
+
+  if (!quoted || !quoted.key) {
+    return { success: false, message: '❌ Responde al mensaje' }
+  }
+
+  try {
+    await sock.chatModify({
+      read: true,
+      jid: remoteJid
+    }, remoteJid)
+    return { success: true, message: '✅ Mensaje marcado como leído' }
+  } catch (error) {
+    logger.error('Error marcando como leído:', error)
+    return { success: false, message: `❌ Error: ${error.message}` }
+  }
+}

@@ -32,33 +32,71 @@ export async function copyCode(ctx) {
   const { args, remoteJid, sock, sender } = ctx
 
   if (args.length === 0) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /copy [código]\n\nEjemplo: /copy npm install axios' 
+    return {
+      success: false,
+      message: '❌ Uso: /copy [código]\n\nEjemplo: /copy npm install axios'
     }
   }
 
   const code = args.join(' ')
   const codeId = `${sender}_${Date.now()}`
-  
+
   codeStorage.set(codeId, code)
 
   try {
+    // Send interactive message with copy button for mobile
+    const buttons = [
+      {
+        buttonId: `copy_${codeId}`,
+        buttonText: { displayText: '📋 Copiar al Portapapeles' },
+        type: 1
+      }
+    ]
+
     await sock.sendMessage(remoteJid, {
-      text: `📋 *CÓDIGO LISTO PARA COPIAR*\n\n\`\`\`\n${code}\n\`\`\`\n\n💡 _Selecciona y copia el código del bloque de arriba_\n\n✨ El código se mantendrá en memoria por 1 hora.`,
+      text: `📋 *CÓDIGO PARA COPIAR*\n\n\`\`\`\n${code}\n\`\`\`\n\n💡 _Presiona el botón abajo para copiar fácilmente_\n\n✨ El código se mantendrá disponible por 1 hora.`,
+      footer: 'KONMI BOT',
+      templateButtons: buttons
+    })
+
+    return { success: true, message: `✅ Código listo para copiar` }
+  } catch (error) {
+    logger.error('Error enviando código:', error)
+    return { success: false, message: `❌ Error: ${error.message}` }
+  }
+}
+
+export async function handleCopyButton(ctx) {
+  const { args, remoteJid, sock, sender } = ctx
+
+  if (args.length === 0) {
+    return { success: false, message: '❌ ID de código no proporcionado' }
+  }
+
+  const codeId = args[0].replace('copy_', '')
+  const code = codeStorage.get(codeId)
+
+  if (!code) {
+    return { success: false, message: '❌ Código expirado o no encontrado' }
+  }
+
+  try {
+    // Send the code in a format that's easy to copy on mobile
+    await sock.sendMessage(remoteJid, {
+      text: `📋 *CÓDIGO COPIADO*\n\n\`\`\`\n${code}\n\`\`\`\n\n✅ _Ahora puedes seleccionar y copiar el código fácilmente_`,
       contextInfo: {
         stanzaId: codeId,
         externalAdReply: {
-          title: '📋 Copiar Código',
+          title: '📋 Código Copiado',
           body: code.substring(0, 50) + (code.length > 50 ? '...' : ''),
           previewType: 'PHOTO'
         }
       }
     })
 
-    return { success: true, message: `✅ Código listo para copiar` }
+    return { success: true, message: '✅ Código enviado para copiar' }
   } catch (error) {
-    logger.error('Error enviando código:', error)
+    logger.error('Error manejando botón de copia:', error)
     return { success: false, message: `❌ Error: ${error.message}` }
   }
 }
@@ -495,6 +533,7 @@ export async function helpByCategory(ctx) {
 
 export default {
   copyCode,
+  handleCopyButton,
   interactiveButtons,
   createTodoList,
   markTodoItem,

@@ -163,7 +163,7 @@ export async function simulateRecording(ctx) {
 
   try {
     await sock.sendPresenceUpdate('recording', remoteJid)
-    
+
     setTimeout(async () => {
       try {
         await sock.sendPresenceUpdate('paused', remoteJid)
@@ -175,6 +175,129 @@ export async function simulateRecording(ctx) {
     return { success: true, message: '🎥 Simulando grabación...' }
   } catch (error) {
     logger.error('Error simulando grabación:', error)
+    return { success: false, message: `❌ Error: ${error.message}` }
+  }
+}
+
+// Funcionalidades avanzadas de presencia
+export async function setCustomPresence(ctx) {
+  const { args, remoteJid, sock } = ctx
+
+  const presenceType = args[0] || 'available'
+  const validTypes = ['available', 'unavailable', 'composing', 'recording', 'paused']
+
+  if (!validTypes.includes(presenceType)) {
+    return {
+      success: false,
+      message: `❌ Tipo de presencia inválido. Opciones: ${validTypes.join(', ')}`
+    }
+  }
+
+  try {
+    await sock.sendPresenceUpdate(presenceType, remoteJid)
+    return { success: true, message: `✅ Presencia cambiada a: ${presenceType}` }
+  } catch (error) {
+    logger.error('Error setting custom presence:', error)
+    return { success: false, message: `❌ Error: ${error.message}` }
+  }
+}
+
+export async function broadcastPresence(ctx) {
+  const { args, remoteJid, sock, isOwner } = ctx
+
+  if (!isOwner) {
+    return { success: false, message: '❌ Solo el owner puede hacer broadcast de presencia' }
+  }
+
+  const presenceType = args[0] || 'available'
+  const validTypes = ['available', 'unavailable']
+
+  if (!validTypes.includes(presenceType)) {
+    return {
+      success: false,
+      message: `❌ Tipo de presencia inválido para broadcast. Opciones: ${validTypes.join(', ')}`
+    }
+  }
+
+  try {
+    // Obtener todos los chats
+    const chats = await sock.store?.chats?.keys() || []
+    let successCount = 0
+
+    for (const chatId of chats) {
+      try {
+        await sock.sendPresenceUpdate(presenceType, chatId)
+        successCount++
+      } catch (error) {
+        // Ignorar errores individuales
+      }
+    }
+
+    return { success: true, message: `✅ Presencia ${presenceType} enviada a ${successCount} chats` }
+  } catch (error) {
+    logger.error('Error broadcasting presence:', error)
+    return { success: false, message: `❌ Error: ${error.message}` }
+  }
+}
+
+export async function monitorPresence(ctx) {
+  const { args, remoteJid, sock } = ctx
+
+  const jid = args[0]
+  const duration = parseInt(args[1]) || 30000 // 30 segundos por defecto
+
+  if (!jid) {
+    return { success: false, message: '❌ Uso: /monitorpresence [número/JID] [duración_ms]' }
+  }
+
+  try {
+    // Suscribirse a presencia
+    await sock.subscribePresence(jid)
+
+    // Monitorear por el tiempo especificado
+    setTimeout(async () => {
+      try {
+        const presence = await sock.getPresence(jid)
+        const statusMessage = presence ?
+          `📊 Estado actual: ${presence.lastKnownPresence || 'Desconocido'}` :
+          '❌ No se pudo obtener presencia'
+
+        await sock.sendMessage(remoteJid, {
+          text: `⏰ *Monitoreo de presencia finalizado*\n\n👤 Usuario: ${jid.split('@')[0]}\n${statusMessage}`
+        })
+      } catch (error) {
+        logger.error('Error finalizando monitoreo de presencia:', error)
+      }
+    }, duration)
+
+    return {
+      success: true,
+      message: `✅ Monitoreando presencia de ${jid.split('@')[0]} por ${duration}ms`
+    }
+  } catch (error) {
+    logger.error('Error monitoring presence:', error)
+    return { success: false, message: `❌ Error: ${error.message}` }
+  }
+}
+
+export async function getPresence(ctx) {
+  const { args, remoteJid, sock } = ctx
+
+  const jid = args[0] || remoteJid.replace('@g.us', '@s.whatsapp.net')
+
+  try {
+    const presence = await sock.getPresence(jid)
+    if (!presence) {
+      return { success: false, message: '❌ No se pudo obtener la presencia' }
+    }
+
+    let message = `👀 *Presencia de ${jid.split('@')[0]}*\n\n`
+    message += `📊 *Estado:* ${presence.lastKnownPresence || 'Desconocido'}\n`
+    message += `🕒 *Última vez:* ${presence.lastSeen ? new Date(presence.lastSeen * 1000).toLocaleString() : 'Nunca'}\n`
+
+    return { success: true, message }
+  } catch (error) {
+    logger.error('Error getting presence:', error)
     return { success: false, message: `❌ Error: ${error.message}` }
   }
 }

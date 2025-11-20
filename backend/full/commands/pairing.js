@@ -7,6 +7,7 @@ import {
   attachSubbotListeners,
   detachSubbotListeners,
 } from '../lib/subbots.js';
+import { getBotStatus } from '../whatsapp.js';
 
 function normalizeDigits(v) { return String(v || '').replace(/[^0-9]/g, '') }
 
@@ -256,5 +257,72 @@ export async function code(ctx) {
     });
   } catch (e) {
     return { success:false, message:`⚠️ Error generando code: ${e?.message||e}` };
+  }
+}
+
+export async function requestMainBotPairingCode(ctx) {
+  try {
+    const { isOwner, sock, remoteJid } = ctx || {};
+
+    if (!isOwner) {
+      return { success: false, message: '⛔ Solo el owner puede solicitar código de emparejamiento del bot principal.', quoted: true }
+    }
+
+    // Import the function to request pairing code for main bot
+    const { requestMainBotPairingCode: requestCode } = await import('../whatsapp.js');
+
+    const result = await requestCode();
+
+    if (result.success) {
+      return {
+        success: true,
+        message: `✅ Código de emparejamiento solicitado. Usa /maincode para verlo.`,
+        quoted: true
+      };
+    } else {
+      return {
+        success: false,
+        message: `❌ Error solicitando código: ${result.message}`,
+        quoted: true
+      };
+    }
+
+  } catch (e) {
+    return { success: false, message: `⚠️ Error solicitando código del bot principal: ${e?.message || e}`, quoted: true };
+  }
+}
+
+export async function mainCode(ctx) {
+  try {
+    const { isOwner, sock, remoteJid } = ctx || {};
+
+    if (!isOwner) {
+      return { success: false, message: '⛔ Solo el owner puede ver el código de emparejamiento del bot principal.', quoted: true }
+    }
+
+    const botStatus = getBotStatus();
+
+    if (!botStatus.pairingCode) {
+      return {
+        success: false,
+        message: '❌ No hay código de emparejamiento disponible. Usa /requestcode para generar uno nuevo.',
+        quoted: true
+      }
+    }
+
+    const codeMessage = `🔐 *CÓDIGO DE EMPAREJAMIENTO DEL BOT PRINCIPAL*\n\n` +
+      `📱 Número: ${botStatus.pairingNumber || 'N/A'}\n` +
+      `🔑 Código: \`${botStatus.pairingCode}\`\n` +
+      `⏰ Generado: ${botStatus.timestamp ? new Date(botStatus.timestamp).toLocaleString('es-ES') : 'N/A'}\n\n` +
+      `💡 *Instrucciones:*\n` +
+      `1. Ve a WhatsApp > Dispositivos vinculados\n` +
+      `2. Toca "Vincular un dispositivo"\n` +
+      `3. Ingresa el código de arriba\n\n` +
+      `⚠️ El código expira en 10 minutos.`;
+
+    return sendCopyableCode(botStatus.pairingCode, codeMessage);
+
+  } catch (e) {
+    return { success: false, message: `⚠️ Error obteniendo código del bot principal: ${e?.message || e}`, quoted: true };
   }
 }

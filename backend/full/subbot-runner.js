@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 // Importar el conector principal y el manejador de mensajes
 import { connectToWhatsApp, handleMessage } from './whatsapp.js';
 import { isBotGloballyActive, isBotActiveInGroup } from './subbot-manager.js';
+import qrcodeTerminal from 'qrcode-terminal';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,32 +43,40 @@ async function start() {
   try {
     const sock = await connectToWhatsApp(authDir, usePairing, TARGET);
 
+    vlog('Socket conectado, configurando listeners...');
+
+    let lastQR = null;
+
     // Re-enganchar los listeners de eventos para comunicar con el proceso principal
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
       vlog('Evento de conexión:', connection);
 
-      if (qr && !usePairing) {
-        // Emitir evento de QR para el panel
+      // Enviar QR cuando se genere (para modo QR)
+      if (qr && !usePairing && qr !== lastQR) {
+        lastQR = qr;
         try {
+          console.log(`\n╔═══════════════════════════════════════════════╗`);
+          console.log(`║   📱 QR CODE [SUBBOT ${CODE}] 📱              ║`);
+          console.log(`╚═══════════════════════════════════════════════╝\n`);
+          qrcodeTerminal.generate(qr, { small: true });
+          console.log(`\n✅ Código generado correctamente\n`);
+          
+          vlog('Generando QR...');
           const QRCode = await import('qrcode');
           const dataUrl = await QRCode.default.toDataURL(qr);
+          vlog('Enviando qr_ready event');
           process.send?.({ event: 'qr_ready', data: { qrCode: qr, qrImage: dataUrl.split(',')[1] } });
         } catch (e) {
+          vlog('Error generando QR:', e.message);
           process.send?.({ event: 'error', data: { message: 'Error generando QR', reason: e.message } });
         }
       }
 
-      // El nuevo whatsapp.js expone la info de pairing a través de un getter
-      const pairingInfo = sock.getCurrentPairingInfo ? sock.getCurrentPairingInfo() : null;
-      if (pairingInfo && pairingInfo.code) {
-         process.send?.({ event: 'pairing_code', data: { code: pairingInfo.code, displayCode: DISPLAY, targetNumber: TARGET } });
-      }
-
       if (connection === 'open') {
         const botNumber = sock.user?.id?.split(':')[0] || null;
+        vlog('Conectado, botNumber:', botNumber);
         process.send?.({ event: 'connected', data: { jid: sock.user?.id, number: `+${botNumber}`, digits: botNumber, displayName: DISPLAY } });
-        vlog('Conectado:', sock.user?.id);
       }
 
       if (connection === 'close') {
@@ -78,20 +87,26 @@ async function start() {
         const isLoggedOut = statusCode === 401 || /logged out/i.test(reason || '');
         if (isLoggedOut) {
           process.send?.({ event: 'logged_out', data: { reason } });
-          // En este caso sí terminamos; requiere re-login manual
           process.exit(0);
         } else {
-          // No terminar el proceso: dejar que connectToWhatsApp maneje la reconexión con backoff
           process.send?.({ event: 'disconnected', data: { reason, statusCode } });
         }
       }
+    });
+
+    // Escuchar evento de pairing code generado
+    sock.ev.on('pairing_code_ready', (data) => {
+      vlog('Evento pairing_code_ready recibido:', data);
+      process.send?.({ 
+        event: 'pairing_code', 
+        data: { code: data?.code, displayCode: DISPLAY, targetNumber: TARGET } 
+      });
     });
 
     // Re-enganchar el manejador de mensajes del bot principal
     sock.ev.on('messages.upsert', async ({ messages = [] }) => {
       for (const m of messages) {
         try {
-          // Aplicar la misma lógica de gateo que el bot principal
           const remoteJid = m.key?.remoteJid || '';
           const fromMe = !!m.key?.fromMe;
           const isGroup = remoteJid.endsWith('@g.us');
@@ -99,7 +114,6 @@ async function start() {
           if (!await isBotGloballyActive() && !fromMe) continue;
           if (isGroup && !await isBotActiveInGroup(CODE, remoteJid) && !fromMe) continue;
 
-          // Usar el handler centralizado, pasando el contexto del subbot
           const runtimeContext = {
             isSubbot: true,
             subbotCode: CODE,
@@ -113,6 +127,8 @@ async function start() {
         }
       }
     });
+
+    vlog('Listeners configurados correctamente');
 
   } catch (error) {
     console.error(`[SUBBOT ${CODE}] Error fatal al iniciar:`, error?.message || error);

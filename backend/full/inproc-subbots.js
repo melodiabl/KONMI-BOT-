@@ -146,8 +146,13 @@ export function registerSubbotListeners(code, listeners) {
   const stored = [];
   listeners.forEach(({ event, handler }) => {
     if (!event || typeof handler !== "function") return;
-    eventBus.on(event, handler);
-    stored.push({ event, handler });
+    const wrappedHandler = (payload) => {
+      if (payload?.subbot?.code === code) {
+        handler(payload);
+      }
+    };
+    eventBus.on(event, wrappedHandler);
+    stored.push({ event, handler, wrappedHandler });
   });
   listenersByCode.set(code, existing.concat(stored));
   return () => unregisterSubbotListeners(code);
@@ -158,13 +163,13 @@ export function unregisterSubbotListeners(code, predicate) {
   const items = listenersByCode.get(code);
   if (!items || items.length === 0) return;
   const remaining = [];
-  items.forEach(({ event, handler }) => {
+  items.forEach(({ event, handler, wrappedHandler }) => {
     const shouldRemove =
       typeof predicate === "function" ? predicate(event, handler) : true;
     if (shouldRemove) {
-      eventBus.off(event, handler);
+      eventBus.off(event, wrappedHandler || handler);
     } else {
-      remaining.push({ event, handler });
+      remaining.push({ event, handler, wrappedHandler });
     }
   });
   if (remaining.length === 0) listenersByCode.delete(code);
