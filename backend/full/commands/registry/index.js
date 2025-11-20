@@ -248,11 +248,10 @@ async function buildHelp(ctx) {
       sections.push({ title: "🤝 Comunidad", rows: communityRows });
   }
 
-  const who = (ctx && (ctx.sender || ctx.usuario || ctx.remoteJid)) || ''
-  const whoTag = typeof who === 'string' && who.includes('@') ? who.split('@')[0] : String(who)
   const mentionJid = (ctx && (ctx.fromMe ? ctx.remoteJid : (ctx.sender || ctx.usuario))) || undefined
+  const mentionNumber = mentionJid ? String(mentionJid).split('@')[0] : '';
   const mainText = [
-    `*¡Hola, @${whoTag}!* 👋`,
+    `*¡Hola, @${mentionNumber}!* 👋`,
     "Soy Konmi Bot, tu asistente personal.",
     "Aquí tienes todas las categorías de comandos disponibles. Selecciona una para ver los detalles.",
   ].join('\n\n');

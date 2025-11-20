@@ -39,16 +39,16 @@ export async function handleTikTokDownload(ctx) {
   });
 
   try {
-    progress.update(10, 'Conectando con TikTok...');
+    await progress.update(10, 'Conectando con TikTok...');
     const result = await downloadTikTok(url);
 
     if (!result.success || !result.video) {
-      progress.fail('No se pudo descargar el video. Verifica la URL.');
+      await progress.fail('No se pudo descargar el video. Verifica la URL.');
       return { success: false, message: '⚠️ No se pudo descargar el video de TikTok. Verifica la URL.' };
     }
 
-    progress.update(80, 'Procesando video...');
-    progress.complete('Descarga completada');
+    await progress.update(80, 'Procesando video...');
+    await progress.complete('Descarga completada');
 
     return {
       type: 'video',
@@ -82,16 +82,16 @@ export async function handleInstagramDownload(ctx) {
   });
 
   try {
-    progress.update(10, 'Conectando con Instagram...');
+    await progress.update(10, 'Conectando con Instagram...');
     const result = await downloadInstagram(url);
 
     if (!result.success || (!result.image && !result.video)) {
-      progress.fail('No se pudo descargar el contenido. Verifica la URL.');
+      await progress.fail('No se pudo descargar el contenido. Verifica la URL.');
       return { success: false, message: '⚠️ No se pudo descargar el contenido de Instagram. Verifica la URL.' };
     }
 
-    progress.update(80, 'Procesando contenido...');
-    progress.complete('Descarga completada');
+    await progress.update(80, 'Procesando contenido...');
+    await progress.complete('Descarga completada');
 
     const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram*\n\n👤 *Autor:* ${result.author || 'N/D'}\n📝 *Descripción:* ${result.caption || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
 
@@ -204,11 +204,11 @@ export async function handleMusicDownload(ctx) {
         });
 
         let lastProgress = 0;
-        const downloadResult = await downloadYouTube(video.url, 'audio', (info) => {
+        const downloadResult = await downloadYouTube(video.url, 'audio', async (info) => {
             const percent = Math.floor(info?.percent || 0);
             if (percent > lastProgress) {
                 lastProgress = percent;
-                progress.update(percent, `Descargando: ${info?.speed || 'N/A'}\nTotal: ${info?.total || 'N/A'}`);
+                await progress.update(percent, `Descargando: ${info?.speed || 'N/A'}\nTotal: ${info?.total || 'N/A'}`);
             }
         });
 
@@ -263,11 +263,11 @@ export async function handleVideoDownload(ctx) {
         });
 
         let lastProgress = 0;
-        const downloadResult = await downloadYouTube(video.url, 'video', (info) => {
+        const downloadResult = await downloadYouTube(video.url, 'video', async (info) => {
             const percent = Math.floor(info?.percent || 0);
             if (percent > lastProgress) {
                 lastProgress = percent;
-                progress.update(percent, `Descargando: ${info?.speed || 'N/A'}\nTotal: ${info?.total || 'N/A'}`);
+                await progress.update(percent, `Descargando: ${info?.speed || 'N/A'}\nTotal: ${info?.total || 'N/A'}`);
             }
         });
 

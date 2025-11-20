@@ -100,20 +100,23 @@ export function createProgressNotifier({
   }
 
   return {
-    update(percent, status, options = {}) {
+    async update(percent, status, options = {}) {
       ensureSpinner();
-      return send(percent, status, options);
+      await send(percent, status, options);
+      return messageRef;
     },
-    complete(status = 'Completado ', options = {}) {
+    async complete(status = 'Completado ', options = {}) {
       finished = true;
       stopSpinner();
-      return send(100, status, options);
+      await send(100, status, options);
+      return messageRef;
     },
-    fail(reason = 'Error', options = {}) {
+    async fail(reason = 'Error', options = {}) {
       const message = reason.startsWith('') ? reason : ` ${reason}`;
       finished = true;
       stopSpinner();
-      return send(lastPercent || 0, message, options);
+      await send(lastPercent || 0, message, options);
+      return messageRef;
     }
   };
 }
