@@ -1,53 +1,22 @@
-# Node modules
+# Dependencies
 node_modules/
-frontend-panel/node_modules/
 
-# Development files
-.git/
-.gitignore
-README.md
-*.md
-
-# Development tools
-.vscode/
-.idea/
+# Auth sessions and storage (mounted at runtime)
+storage/baileys_full/
+storage/subbots/
+storage/logs/
+auth-sessions/
 
 # Logs
 *.log
 logs/
-backend/full/logs/
-backend/lite/logs/
 
-# Environment files
+# Temp
+.temp/
+.tmp/
+cache/
+
+# Env
 .env.local
 .env.development
 .env.test
-
-# Build artifacts
-frontend-panel/dist/
-build/
-
-# Test files
-**/*.test.js
-**/*.spec.js
-coverage/
-
-# Temporary files
-.tmp/
-temp/
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Development scripts
-start-frontend.bat
-test-*.js
-
-# Backup files
-*_backup.*

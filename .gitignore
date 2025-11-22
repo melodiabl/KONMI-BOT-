@@ -38,4 +38,44 @@ pgdata/
 backend/full/storage/
 frontend-panel-backup-*/
 **/*.sqlite
+storage/baileys_full # Node & dependencies
+node_modules/
+**/node_modules/
+
+# Env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+all_cookies.txt
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+panel-dist/
+coverage/
+.nyc_output/
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor settings (keep tracked ones as needed)
+.idea/
+
+# Project-specific sensitive data
+pgdata/
+backend/full/storage/
+frontend-panel-backup-*/
+**/*.sqlite
 storage/baileys_full
