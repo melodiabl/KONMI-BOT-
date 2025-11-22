@@ -2,9 +2,9 @@
 // Router simplificado y estable: parsea comandos, invoca registry y entrega respuestas con safeSend
 
 import logger from '../config/logger.js'
-import antibanMiddleware from '../utils/anti-ban-middleware.js'
-import antibanSystem from '../utils/anti-ban.js'
-import { getGroupBool } from '../utils/group-config.js'
+import antibanMiddleware from '../utils/utils/anti-ban-middleware.js'
+import antibanSystem from '../utils/utils/anti-ban.js'
+import { getGroupBool } from '../utils/utils/group-config.js'
 import fs from 'fs'
 import path from 'path'
 import { pathToFileURL, fileURLToPath } from 'url' // <-- añadí fileURLToPath aquí

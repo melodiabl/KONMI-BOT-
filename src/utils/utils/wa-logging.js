@@ -3,8 +3,8 @@
 // Registra: texto, media (imagen/video/audio/document), sticker, interacciones (botón/lista/flow),
 // comandos ejecutados y eventos de sistema.
 
-import db from '../db.js'
-import logger from '../config/logger.js'
+import db from '../../database/db.js'
+import logger from '../../config/logger.js'
 
 const toStr = (v) => {
   try { if (v == null) return ''; if (typeof v === 'string') return v; return JSON.stringify(v) } catch { return String(v) }

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { connectToWhatsApp } from './whatsapp.js';
+import { connectToWhatsApp } from '../../whatsapp.js';
 
 async function test() {
   try {

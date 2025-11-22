@@ -1,7 +1,7 @@
 // commands/bot-control.js
 // Activar/desactivar bot en grupos
 
-import { setGroupConfig, getGroupBool } from '../utils/group-config.js'
+import { setGroupConfig, getGroupBool } from '../utils/utils/group-config.js'
 
 export async function bot(ctx) {
   const { isOwner, isAdmin, remoteJid, args } = ctx

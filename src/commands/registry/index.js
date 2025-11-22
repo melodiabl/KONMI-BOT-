@@ -1,5 +1,5 @@
-import { promotionalLinks } from '../../config/links.js'
-import { getTheme } from '../../utils/theme.js'
+import { promotionalLinks } from '../../config/config/links.js'
+import { getTheme } from '../../utils/utils/theme.js'
 
 const registry = new Map()
 
@@ -249,9 +249,28 @@ async function buildHelp(ctx) {
   }
 
   const mentionJid = (ctx && (ctx.fromMe ? ctx.remoteJid : (ctx.sender || ctx.usuario))) || undefined
-  const mentionNumber = mentionJid ? String(mentionJid).split('@')[0] : '';
+  const resolveDisplayName = () => {
+    try {
+      // Intentar nombre de grupo si es un grupo y el usuario existe en participantes
+      if (ctx?.isGroup && ctx?.groupMetadata && Array.isArray(ctx.groupMetadata.participants)) {
+        const p = ctx.groupMetadata.participants.find((x) => x?.id === (ctx.sender || ctx.usuario));
+        if (p?.notify) return p.notify;
+        if (p?.name) return p.name;
+      }
+      // Intentar nombre en el propio contexto (algunos handlers lo agregan)
+      if (ctx?.pushName) return ctx.pushName;
+      if (ctx?.usuarioName) return ctx.usuarioName;
+      // Fallback al número
+      const num = (ctx?.sender || ctx?.usuario || '').toString().split('@')[0];
+      return num || 'usuario';
+    } catch (e) {
+      const num = (ctx?.sender || ctx?.usuario || '').toString().split('@')[0];
+      return num || 'usuario';
+    }
+  };
+  const displayName = resolveDisplayName();
   const mainText = [
-    `*¡Hola, @${mentionNumber}!* 👋`,
+    `*¡Hola, ${displayName}!* 👋`,
     "Soy Konmi Bot, tu asistente personal.",
     "Aquí tienes todas las categorías de comandos disponibles. Selecciona una para ver los detalles.",
   ].join('\n\n');

@@ -1,7 +1,7 @@
 // utils/group-config.js
 // Configuración por grupo usando tabla bot_config (clave/valor)
 
-import db from '../db.js'
+import db from '../../database/db.js'
 
 async function ensureConfigTable() {
   try {

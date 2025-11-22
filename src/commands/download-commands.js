@@ -16,9 +16,9 @@ import {
   getRandomFact,
   getTrivia,
   getRandomMeme,
-} from '../utils/api-providers.js';
+} from '../utils/utils/api-providers.js';
 import logger from '../config/logger.js';
-import { createProgressNotifier } from '../utils/progress-notifier.js';
+import { createProgressNotifier } from '../utils/utils/progress-notifier.js';
 
 /**
  * Comando /tiktok - Descarga videos de TikTok

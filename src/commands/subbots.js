@@ -1,5 +1,5 @@
 // commands/subbots.js — usa el manager unificado para evitar desajustes de esquema
-import { listUserSubbots } from '../subbot-manager.js'
+import { listUserSubbots } from '../services/subbot-manager.js'
 
 function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
 function normalizeDigits(userOrJid){

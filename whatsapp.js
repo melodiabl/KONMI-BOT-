@@ -6,7 +6,7 @@ import pino from 'pino'
 import QRCode from 'qrcode'
 import qrTerminal from 'qrcode-terminal'
 import { fileURLToPath, pathToFileURL } from 'url'
-import logger from './config/logger.js'
+import logger from './src/config/logger.js'
 import { setPrimaryOwner } from './src/config/global-config.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -161,7 +161,7 @@ const controlSet = new Set([
   '/start', '/stop'
 ])
 
-let routerPath = './commands/router.js';
+let routerPath = './src/commands/router.js';
 export function setMessageRouterModulePath(p) {
   routerPath = String(p || routerPath);
 }
@@ -290,9 +290,9 @@ export async function connectToWhatsApp(
 
   savedAuthPath = path.resolve(authPath)
   fs.mkdirSync(savedAuthPath, { recursive: true })
-  
+
   const { state, saveCreds } = await useMultiFileAuthState(savedAuthPath)
-  
+
   const waVersion = await resolveWaVersion(fetchLatestBaileysVersion)
   const browser = Browsers.macOS('Chrome');
 
@@ -302,7 +302,7 @@ export async function connectToWhatsApp(
   const isRegistered = !!state?.creds?.registered;
 
   let wantPair = usePairingCode || authMethod === 'pairing';
-  
+
   // Si ya está registrado y no se fuerza pairing, usar sesión existente
   if (wantPair && isRegistered && !usePairingCode) {
     console.log('ℹ️ Sesión existente detectada. Usando credenciales guardadas.');
@@ -412,9 +412,9 @@ export async function connectToWhatsApp(
         }
 
         pairingCodeRequestedForSession = true;
-        
+
         await sleep(2000); // Delay más largo para asegurar estabilidad
-        
+
         try {
           const number = onlyDigits(pairingTargetNumber);
           if (!number) {
@@ -429,14 +429,14 @@ export async function connectToWhatsApp(
           }
 
           infoLog(`📲 Solicitando código de vinculación para +${number} con código personalizado "${CUSTOM_PAIRING_CODE}"...`);
-          
+
           // *** USAR CÓDIGO PERSONALIZADO KONMIBOT ***
           const code = await sock.requestPairingCode(number, CUSTOM_PAIRING_CODE);
-          
+
           if (code) {
             const formatted = String(code).toUpperCase().replace(/[-\s]/g, '');
             const grouped = (formatted.match(/.{1,4}/g) || [formatted]).join('-');
-            
+
             currentPairingCode = grouped;
             currentPairingNumber = number;
             currentPairingGeneratedAt = new Date();
@@ -494,6 +494,15 @@ export async function connectToWhatsApp(
         } catch (e) {
           logger.error(`Error setting primary owner: ${e.message}`);
         }
+        // Auto-start subbots after main bot connects
+        try {
+          const mod = await import('./src/services/subbot-manager.js');
+          const clean = await mod.cleanOrphanSubbots?.().catch(() => 0);
+          const restored = await mod.restoreActiveSubbots?.().catch(() => 0);
+          infoLog(`♻️ Subbots auto-start: restaurados=${restored||0}, limpieza=${clean||0}`);
+        } catch (e) {
+          console.warn('[autostart-subbots] failed:', e?.message || e);
+        }
         return;
       }
 
@@ -519,7 +528,7 @@ export async function connectToWhatsApp(
         connectionStatus = 'reconnecting';
         const backoff = 3000; // Aumentar tiempo de espera
         infoLog(`⚠️ Conexión cerrada (status ${status || '?'}: ${msg || 'sin detalles'}). Reintentando en ${backoff}ms...`);
-        
+
         setTimeout(() => {
           connectToWhatsApp(savedAuthPath, false, null).catch((e) => {
             console.error('[reconnect] fallo al reconectar:', e && (e.message || e));
@@ -539,11 +548,11 @@ export async function connectToWhatsApp(
       let mgr = null
       const ensureMgr = async () => {
         if (mgr) return mgr
-        try { mgr = await import('./subbot-manager.js') } catch (e) { console.error('[ensureMgr] import failed:', e && (e.message || e)); mgr = null }
+try { mgr = await import('./src/services/subbot-manager.js') } catch (e) { console.error('[ensureMgr] import failed:', e && (e.message || e)); mgr = null }
         return mgr
       }
       const ignoreGating = String(process.env.BOT_IGNORE_GATING || 'true').toLowerCase() === 'true'
-      
+
       for (const m of messages) {
         try {
           // Logging detallado
@@ -619,7 +628,7 @@ export async function connectToWhatsApp(
           }
 
           try {
-            const { logIncomingMessage } = await import('./utils/wa-logging.js');
+const { logIncomingMessage } = await import('./src/utils/utils/wa-logging.js');
             await logIncomingMessage(m);
           } catch (e) {
             console.warn('[wa-logging] logIncomingMessage failed:', e && (e.message || e));
@@ -628,7 +637,7 @@ export async function connectToWhatsApp(
           const isGroup = remoteJid.endsWith('@g.us');
           if (isGroup && !fromMe) {
             try {
-              const { getGroupBool, getGroupNumber, getGroupConfig } = await import('./utils/group-config.js');
+              const { getGroupBool, getGroupNumber, getGroupConfig } = await import('./src/utils/utils/group-config.js');
               const body = rawText;
 
               const slow = await getGroupNumber(remoteJid, 'slowmode_s', 0);
@@ -707,7 +716,7 @@ export async function connectToWhatsApp(
         const { id: jid, action, participants } = ev;
         if (!jid || !Array.isArray(participants) || participants.length === 0) return;
 
-        const { getGroupBool, getGroupConfig } = await import('./utils/group-config.js');
+        const { getGroupBool, getGroupConfig } = await import('./src/utils/utils/group-config.js');
         const welcomeOn = await getGroupBool(jid, 'welcome_on', false);
         if (!welcomeOn) return;
 
@@ -732,10 +741,10 @@ export async function connectToWhatsApp(
   }
 
   // Adjuntar método personalizado
-  try { 
+  try {
     sock.getCurrentPairingInfo = getCurrentPairingInfo;
     console.log('✅ Método getCurrentPairingInfo adjuntado');
-  } catch (e) { 
+  } catch (e) {
     console.warn('[attach] setting getCurrentPairingInfo failed:', e && (e.message || e));
   }
 
@@ -763,7 +772,7 @@ export async function connectWithPairingCode(phoneNumber, authPath = null) {
   authMethod = 'pairing'
 
   console.log(`🔐 Usando código personalizado: ${CUSTOM_PAIRING_CODE}`)
-  
+
   return await connectToWhatsApp(effective, true, normalized)
 }
 
@@ -865,7 +874,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   } catch {
     senderNumber = onlyDigits(sender || '');
   }
-  
+
   let ownerNumber = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '');
   if (!ownerNumber && botNumber) {
     ownerNumber = botNumber;
@@ -887,6 +896,16 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     }
   }
 
+  // Propagate display name for UI messages (DM and groups)
+  const pushName = message?.pushName || null;
+  let usuarioName = null;
+  try {
+    if (isGroup && groupMetadata && Array.isArray(groupMetadata.participants)) {
+      const p = groupMetadata.participants.find((x) => x?.id === sender);
+      usuarioName = p?.notify || p?.name || null;
+    }
+  } catch (e) {}
+
   const ctx = {
     sock: s,
     message,
@@ -902,6 +921,8 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     isAdmin,
     isBotAdmin,
     groupMetadata,
+    pushName,
+    usuarioName,
     ...runtimeContext,
   };
 

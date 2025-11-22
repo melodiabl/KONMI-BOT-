@@ -1,4 +1,4 @@
-import { buildQuickReplyFlow } from '../utils/flows.js'
+import { buildQuickReplyFlow } from '../utils/utils/flows.js'
 import { sendCopyableCode, sendInteractiveButtons } from './ui-interactive.js'
 
 import {
@@ -7,39 +7,65 @@ import {
   attachSubbotListeners,
   detachSubbotListeners,
 } from '../lib/subbots.js';
-import { getBotStatus } from '../whatsapp.js';
+import { getBotStatus } from '../../whatsapp.js';
 
 function normalizeDigits(v) { return String(v || '').replace(/[^0-9]/g, '') }
 
-function extractPhoneNumber(ctx) {
-  const { usuarioNumber, senderNumber, sender, message } = ctx || {};
-  
-  let candidates = [];
-  
-  if (usuarioNumber) candidates.push(normalizeDigits(usuarioNumber));
-  if (senderNumber) candidates.push(normalizeDigits(senderNumber));
-  if (sender) {
-    if (typeof sender === 'string' && sender.includes('@')) {
-      candidates.push(sender.split('@')[0].replace(/\D/g, ''));
-    } else {
-      candidates.push(normalizeDigits(sender));
-    }
+async function extractPhoneNumber(ctx) {
+  const { usuarioNumber, senderNumber, sender, message, remoteJid, sock } = ctx || {};
+  const args = Array.isArray(ctx?.args) ? ctx.args : [];
+
+  const sanitize = (v) => String(v || '').replace(/\D/g, '');
+  const isE164Generic = (d) => {
+    const s = sanitize(d);
+    return s.length >= 8 && s.length <= 15;
+  };
+
+  const candidates = [];
+
+  // 1) Argumento opcional: debe venir en formato internacional (8-15 dígitos)
+  const argDigits = sanitize((args[0] || '').toString());
+  if (isE164Generic(argDigits)) candidates.push(argDigits);
+
+  // 2) Campos del contexto
+  if (isE164Generic(usuarioNumber)) candidates.push(sanitize(usuarioNumber));
+  if (isE164Generic(senderNumber)) candidates.push(sanitize(senderNumber));
+
+  // 3) Evitar LID como fuente directa; si no es LID, probar sender/participant
+  const isLidSender = typeof sender === 'string' && sender.includes('@lid');
+  if (sender && !isLidSender) {
+    const base = typeof sender === 'string' && sender.includes('@') ? sender.split('@')[0] : sender;
+    const d = sanitize(base);
+    if (isE164Generic(d)) candidates.push(d);
   }
+
   if (message?.key?.participant) {
     const part = message.key.participant;
-    if (typeof part === 'string' && part.includes('@')) {
-      candidates.push(part.split('@')[0].replace(/\D/g, ''));
-    } else {
-      candidates.push(normalizeDigits(part));
+    const isLidPart = typeof part === 'string' && part.includes('@lid');
+    if (!isLidPart) {
+      const base = typeof part === 'string' && part.includes('@') ? part.split('@')[0] : part;
+      const d = sanitize(base);
+      if (isE164Generic(d)) candidates.push(d);
     }
   }
-  
-  for (const phone of candidates) {
-    if (phone && phone.length >= 8) {
-      return phone;
+
+  // 4) Resolver con onWhatsApp para LID -> @s.whatsapp.net
+  try {
+    const isLidChat = typeof remoteJid === 'string' && remoteJid.includes('@lid');
+    if (isLidChat && sock && typeof sock.onWhatsApp === 'function' && sender) {
+      const res = await sock.onWhatsApp(sender);
+      const found = Array.isArray(res) && res.find(x => typeof x?.jid === 'string' && x.jid.endsWith('@s.whatsapp.net'));
+      if (found) {
+        const d = sanitize(found.jid.split('@')[0]);
+        if (isE164Generic(d)) candidates.push(d);
+      }
     }
+  } catch {}
+
+  // 5) Elegir el primero válido
+  for (const d of candidates) {
+    if (isE164Generic(d)) return d;
   }
-  
   return null;
 }
 
@@ -52,9 +78,9 @@ export async function qr(ctx) {
       return { success:false, message:'⛔ Solo el owner puede usar /qr (subbots).', quoted: true }
     }
     
-    const owner = extractPhoneNumber(ctx);
+    const owner = await extractPhoneNumber(ctx);
     if (!owner) {
-      return { success:false, message:'❌ No pude detectar tu número. Envíame un mensaje directo primero o escribe /whoami.' }
+      return { success:false, message:'❌ No pude detectar un número válido en formato internacional (8-15 dígitos). Usa /code <tu_numero_en_formato_internacional>.' }
     }
     
     const res = await generateSubbotQR(owner, { displayName: 'KONMI-BOT' });
@@ -123,9 +149,9 @@ export async function code(ctx) {
       return { success:false, message:'⛔ Solo el owner puede usar /code (subbots).', quoted: true }
     }
     
-    const phone = extractPhoneNumber(ctx);
+    const phone = await extractPhoneNumber(ctx);
     if (!phone) {
-      return { success:false, message:'❌ Número inválido. Debe tener al menos 8 dígitos. Envíame un DM primero o usa /whoami.' }
+      return { success:false, message:'❌ No pude detectar un número válido en formato internacional (8-15 dígitos). Usa /code <tu_numero_en_formato_internacional>.' }
     }
     
     const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT' });
@@ -176,42 +202,32 @@ export async function code(ctx) {
       }
     } catch {}
     
-    return await new Promise((resolve) => {
-      let detach = null;
-      const timeout = setTimeout(() => { try { detach?.() } catch {}; resolve({ success:false, message:'⏱️ Timeout esperando código (60s). Intenta nuevamente.' }) }, 60000);
-      try {
-        detach = attachSubbotListeners(codeValue, [{
-          event: 'pairing_code',
-          handler: (payload) => {
-            const data = payload?.data || payload;
-            const pairing = data?.pairingCode || data?.code;
-            if (pairing) {
-              try { clearTimeout(timeout); detach?.() } catch {}
-              const copyFlow = buildQuickReplyFlow({
-                header: '🔢 Código de vinculación',
-                body: `Código: ${pairing}`,
-                footer: 'Toca "Copiar código"',
-                buttons: [
-                  { text: '📋 Copiar código', copy: pairing },
-                  { text: '🤖 Mis Subbots', command: '/mybots' },
-                  { text: '🧾 QR Subbot', command: '/qr' },
-                  { text: '🏠 Menú', command: '/menu' },
-                ],
-              })
-              resolve([
-                { success:true, message:`✅ Código de vinculación\n\n🔢 Código: *${pairing}*\n📱 Número: +${phone}\n\nInstrucciones:\n1. WhatsApp > Dispositivos vinculados\n2. Vincular con número de teléfono\n3. Ingresa el código mostrado`, mentions: (phone ? [`${phone}@s.whatsapp.net`] : undefined), quoted: true, ephemeralDuration: 600 },
-                { type: 'content', content: sendCopyableCode(pairing, '🔢 *CÓDIGO DE VINCULACIÓN*\n📱 Tu número: +' + phone + '\n\n⏱️ Válido por 5 minutos'), quoted: true, ephemeralDuration: 600 },
-                { type: 'content', content: copyFlow, quoted: true, ephemeralDuration: 600 },
-                { type: 'buttons', text: 'Acciones rápidas', footer: 'KONMI BOT', buttons: [ { text: '🤖 Mis Subbots', command: '/mybots' }, { text: '🧾 QR Subbot', command: '/qr' }, { text: '🏠 Menú', command: '/menu' } ], quoted: true, ephemeralDuration: 300 }
-              ]);
-            }
-          }
-        }]);
-      } catch (e) {
-        clearTimeout(timeout);
-        resolve({ success:false, message:`⚠️ Error registrando listeners: ${e?.message||e}` });
-      }
+    // Enviar respuesta inmediata con el código, sin esperar eventos asíncronos
+    const pairing = codeValue;
+    const primary = {
+      success: true,
+      message: `✅ Código de vinculación\n\n🔢 Código: *${pairing}*\n📱 Número: +${phone}\n\nInstrucciones:\n1. WhatsApp > Dispositivos vinculados\n2. Vincular con número de teléfono\n3. Ingresa el código mostrado`,
+      mentions: (phone ? [`${phone}@s.whatsapp.net`] : undefined),
+      quoted: true,
+      ephemeralDuration: 600,
+    };
+
+    const copyContent = { type: 'content', content: sendCopyableCode(pairing, '🔢 *CÓDIGO DE VINCULACIÓN*\n📱 Tu número: +' + phone + '\n\n⏱️ Válido por 5 minutos'), quoted: true, ephemeralDuration: 600 };
+    const quickFlow = buildQuickReplyFlow({
+      header: '🔢 Código de vinculación',
+      body: `Código: ${pairing}`,
+      footer: 'Toca "Copiar código"',
+      buttons: [
+        { text: '📋 Copiar código', command: '/copy ' + pairing },
+        { text: '🤖 Mis Subbots', command: '/mybots' },
+        { text: '🧾 QR Subbot', command: '/qr' },
+        { text: '🏠 Menú', command: '/menu' },
+      ],
     });
+    const quickContent = { type: 'content', content: quickFlow, quoted: true, ephemeralDuration: 600 };
+    const buttonsContent = { type: 'buttons', text: 'Acciones rápidas', footer: 'KONMI BOT', buttons: [ { text: '📋 Copiar código', command: '/copy ' + pairing }, { text: '🤖 Mis Subbots', command: '/mybots' }, { text: '🧾 QR Subbot', command: '/qr' }, { text: '🏠 Menú', command: '/menu' } ], quoted: true, ephemeralDuration: 300 };
+
+    return [primary, copyContent, quickContent, buttonsContent];
   } catch (e) {
     return { success:false, message:`⚠️ Error generando code: ${e?.message||e}` };
   }
@@ -226,7 +242,7 @@ export async function requestMainBotPairingCode(ctx) {
     }
 
     // Import the function to request pairing code for main bot
-    const { requestMainBotPairingCode: requestCode } = await import('../whatsapp.js');
+    const { requestMainBotPairingCode: requestCode } = await import('../../whatsapp.js');
 
     const result = await requestCode();
 

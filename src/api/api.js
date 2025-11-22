@@ -40,6 +40,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+
 const SUBBOT_SORT_KEYS = ['updated_at', 'created_at', 'fecha_creacion', 'last_activity', 'last_check', 'id'];
 
 const normalizeBoolean = (value) => {
@@ -3477,19 +3478,12 @@ router.post('/usuarios', authenticateToken, authorizeRoles('admin', 'owner'), as
     if (!['owner', 'admin', 'colaborador', 'usuario', 'creador', 'moderador'].includes(rol)) {
       return res.status(400).json({ error: 'Rol no vlido' });
     }
-    let hashed;
-    try {
-      hashed = await bcrypt.hash(password, 10);
-    } catch (e) {
-      try {
-        const { createRequire } = await import('module');
-        const require = createRequire(import.meta.url);
-        const bcryptCjs = require('bcryptjs');
-        hashed = await bcryptCjs.hash(password, 10);
-      } catch (e2) {
-        return res.status(500).json({ error: 'No se pudo hashear password' });
-      }
-    }
+  let hashed;
+  try {
+    hashed = await bcrypt.hash(password, 10);
+  } catch (e) {
+    return res.status(500).json({ error: 'No se pudo hashear password' });
+  }
     const [id] = await db('usuarios').insert({
       username,
       password: hashed,
@@ -3517,20 +3511,13 @@ router.patch('/usuarios/:id', authenticateToken, authorizeRoles('admin', 'owner'
     if (typeof changes.password === 'string' && changes.password.trim() === '') {
       delete changes.password;
     }
-    if (changes.password) {
-      try {
-        changes.password = await bcrypt.hash(changes.password, 10);
-      } catch (e) {
-        try {
-          const { createRequire } = await import('module');
-          const require = createRequire(import.meta.url);
-          const bcryptCjs = require('bcryptjs');
-          changes.password = await bcryptCjs.hash(changes.password, 10);
-        } catch (e2) {
-          return res.status(500).json({ error: 'No se pudo hashear password' });
-        }
-      }
+  if (changes.password) {
+    try {
+      changes.password = await bcrypt.hash(changes.password, 10);
+    } catch (e) {
+      return res.status(500).json({ error: 'No se pudo hashear password' });
     }
+  }
     if (Object.keys(changes).length === 0) {
       return res.json({ success: true, message: 'Sin cambios aplicados' });
     }

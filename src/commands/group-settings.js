@@ -1,7 +1,7 @@
 // commands/group-settings.js
 // Configuración por grupo: antilink, slowmode, welcome
 
-import { setGroupConfig, getGroupBool, getGroupNumber, getGroupConfig } from '../utils/group-config.js'
+import { setGroupConfig, getGroupBool, getGroupNumber, getGroupConfig } from '../utils/utils/group-config.js'
 
 function requireGroupAdmin(handler){
   return async (ctx) => {

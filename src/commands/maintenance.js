@@ -2,7 +2,7 @@
 // Mantenimiento: update (owner/superadmin): notifica y programa reinicio suave
 
 import { spawn } from 'child_process'
-import { isSuperAdmin } from '../global-config.js'
+import { isSuperAdmin } from '../config/global-config.js'
 import { listRuntimeSubbots, stopSubbotRuntime } from '../lib/subbots.js'
 
 function onlyDigits(v) { return String(v||'').replace(/\D/g,'') }

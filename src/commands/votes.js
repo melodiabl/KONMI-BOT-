@@ -1,7 +1,7 @@
 // commands/votes.js
 // Votaciones básicas
 
-import db from '../db.js'
+import db from '../database/db.js'
 
 async function ensureTables(){
   try{

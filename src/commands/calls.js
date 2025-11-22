@@ -1,5 +1,5 @@
 import logger from '../config/logger.js'
-import db from '../db.js'
+import db from '../database/db.js'
 
 export async function rejectCall(ctx) {
   const { args, sock } = ctx

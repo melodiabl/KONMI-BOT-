@@ -1,6 +1,6 @@
 // commands/groups.js
 // Refactorizado para usar Buttons Messages nativos y lógica de permisos mejorada
-import db from '../db.js'
+import db from '../database/db.js'
 
 // --- FUNCIONES DE UTILIDAD ---
 const onlyDigits = (v) => String(v || '').replace(/[^0-9]/g, '')

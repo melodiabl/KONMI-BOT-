@@ -2,7 +2,7 @@
 // Estado del bot y del sistema
 
 import os from 'os';
-import { getConnectionStatus, getBotStatus } from '../whatsapp.js';
+import { getConnectionStatus, getBotStatus } from '../../whatsapp.js';
 import { sendInteractiveButtons } from './ui-interactive.js';
 
 function humanBytes(n) {

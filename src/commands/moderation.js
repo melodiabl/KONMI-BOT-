@@ -1,6 +1,6 @@
 // commands/moderation.js — sistema de advertencias por grupo, refactorizado para ctx unificado
 
-import db from '../db.js';
+import db from '../database/db.js';
 
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '');
 

@@ -20,7 +20,7 @@ export async function tagall(ctx){
   } catch { return { success:false, message:'⚠️ No pude mencionar a todos', quoted:true } }
 }
 
-import { getTheme } from '../utils/theme.js'
+import { getTheme } from '../utils/utils/theme.js'
 
 export async function groupinfo(ctx){
   const { sock, remoteJid } = ctx

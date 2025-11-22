@@ -1,8 +1,8 @@
 // commands/admin.js
 // Refactorizado para usar el objeto de contexto (ctx) unificado y permisos centralizados.
 
-import { getTheme } from '../utils/theme.js';
-import { setPrimaryOwner } from '../global-config.js';
+import { getTheme } from '../utils/utils/theme.js';
+import { setPrimaryOwner } from '../config/global-config.js';
 
 export async function ownerInfo(ctx) {
   const th = getTheme();

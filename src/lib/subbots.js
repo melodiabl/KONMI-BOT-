@@ -8,7 +8,7 @@ import {
   listActiveSubbots,
   registerSubbotListeners,
   unregisterSubbotListeners
-} from '../inproc-subbots.js';
+} from '../services/inproc-subbots.js';
 import {
   createSubbotWithPairing,
   createSubbotWithQr,
@@ -21,7 +21,7 @@ import {
   updateSubbotMetadata,
   syncAllRuntimeStates,
   cleanOrphanSubbots
-} from '../subbot-manager.js';
+} from '../services/subbot-manager.js';
 
 const SUBBOTS_DIR = path.join(process.cwd(), 'storage', 'subbots');
 

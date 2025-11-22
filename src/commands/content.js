@@ -1,8 +1,8 @@
 // commands/content.js
 // Contenido: manhwas, series, extra, ilustraciones, packs. Refactorizado para ctx.
 
-import db from '../db.js';
-import { processWhatsAppMedia } from '../file-manager.js';
+import db from '../database/db.js';
+import { processWhatsAppMedia } from '../services/file-manager.js';
 
 // --- Tablas ---
 async function ensureManhwasTable() {

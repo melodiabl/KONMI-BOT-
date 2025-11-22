@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Importar el conector principal y el manejador de mensajes
-import { connectToWhatsApp, handleMessage } from './whatsapp.js';
+import { connectToWhatsApp, handleMessage } from '../../whatsapp.js';
 import { isBotGloballyActive, isBotActiveInGroup } from './subbot-manager.js';
 import qrcodeTerminal from 'qrcode-terminal';
 

@@ -1,7 +1,7 @@
 // commands/images.js
 // Generación de imágenes a partir de texto (AI) y QR
 
-import fetch from '../utils/fetch.js';
+import fetch from '../utils/utils/fetch.js';
 
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, options);

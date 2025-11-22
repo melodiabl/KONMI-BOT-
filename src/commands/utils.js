@@ -1,6 +1,6 @@
 // commands/utils.js
 // Utilidades varias
-import fetch from '../utils/fetch.js'
+import fetch from '../utils/utils/fetch.js'
 
 export async function shortUrl(raw, usuario) {
   try {

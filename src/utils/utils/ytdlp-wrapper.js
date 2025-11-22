@@ -1,11 +1,8 @@
 import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
 import { buildYtDlpCookieArgs } from './cookies.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// dynamic import used later for compatibility
 
 function ensureDir(dir) {
   try { fs.mkdirSync(dir, { recursive: true }) } catch {}
@@ -32,95 +29,6 @@ function pickLatestFile(dir) {
   }
 }
 
-function getYtDlpPath() {
-  return process.env.YTDLP_PATH || process.env.YT_DLP_PATH || 'yt-dlp'
-}
-
-function resolveYtDlpCommand() {
-  try {
-    const envPath = process.env.YTDLP_PATH || process.env.YT_DLP_PATH
-    if (envPath && fs.existsSync(envPath)) {
-      const r = spawnSync(envPath, ['--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return { cmd: envPath, pre: [] }
-    }
-  } catch {}
-
-  // Local bundled binaries (useful on Windows / CI)
-  try {
-    const cwd = process.cwd()
-    const winLocal = path.join(cwd, 'backend', 'full', 'bin', 'yt-dlp.exe')
-    const nixLocal = path.join(cwd, 'backend', 'full', 'bin', 'yt-dlp')
-    const candidates = []
-    if (process.platform === 'win32' && fs.existsSync(winLocal)) candidates.push(winLocal)
-    if (process.platform !== 'win32' && fs.existsSync(nixLocal)) candidates.push(nixLocal)
-    for (const c of candidates) {
-      try {
-        const r = spawnSync(c, ['--version'], { encoding: 'utf8', windowsHide: true })
-        if (!r.error && r.status === 0) return { cmd: c, pre: [] }
-      } catch {}
-    }
-  } catch {}
-
-  const candidates = ['yt-dlp', 'yt']
-  for (const c of candidates) {
-    try {
-      const r = spawnSync(c, ['--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return { cmd: c, pre: [] }
-    } catch {}
-  }
-
-  const pyCandidates = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
-  for (const py of pyCandidates) {
-    try {
-      const r = spawnSync(py, ['-m', 'yt_dlp', '--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return { cmd: py, pre: ['-m', 'yt_dlp'] }
-    } catch {}
-  }
-
-  return null
-}
-
-function parseCookiesFromFile(filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8')
-    const lines = content.split(/\r?\n/)
-    const pairs = []
-    for (const rawLine of lines) {
-      const line = rawLine.trim()
-      if (!line || line.startsWith('#')) continue
-      const parts = line.split('\t')
-      if (parts.length >= 7) {
-        const name = parts[5]
-        const value = parts[6]
-        if (name) pairs.push(`${name}=${value}`)
-        continue
-      }
-      const eqIndex = line.indexOf('=')
-      if (eqIndex > 0) {
-        const name = line.slice(0, eqIndex).trim()
-        const value = line.slice(eqIndex + 1).trim()
-        if (name) pairs.push(`${name}=${value}`)
-      }
-    }
-    return pairs.length ? pairs.join('; ') : null
-  } catch {
-    return null
-  }
-}
-
-function normalizeCookieHeader(raw) {
-  if (!raw) return null
-  const tokens = String(raw)
-    .split(/;|\n|\r/)
-    .map((t) => t.trim())
-    .filter(Boolean)
-  return tokens.length ? tokens.join('; ') : null
-}
-
-function resolveCookiesArgsFromEnv() {
-  try { return buildYtDlpCookieArgs() } catch { return [] }
-}
-
 function hasCommand(cmd, args = ['--version']) {
   try {
     const r = spawnSync(cmd, args, { encoding: 'utf8', windowsHide: true })
@@ -138,7 +46,6 @@ function hasCommand(cmd, args = ['--version']) {
  * @param {boolean} [opts.audioOnly=true] - Extract audio only
  * @param {string} [opts.format] - yt-dlp -f format string (overrides audioOnly)
  * @param {function} [opts.onProgress] - Callback({ percent, status, downloaded, total, speed })
- * @param {string} [opts.ytDlpPath] - Custom yt-dlp path
  * @param {string} [opts.ffmpegPath] - Custom ffmpeg path
  * @param {string} [opts.outputTemplate] - Custom output template
  */
@@ -148,40 +55,14 @@ export async function downloadWithYtDlp({
   audioOnly = true,
   format,
   onProgress,
-  ytDlpPath,
   ffmpegPath,
   outputTemplate,
-  cookies, // ruta a cookies.txt (opcional)
-  cookiesHeader, // cadena 'name=value; ...' (opcional)
 } = {}) {
   if (!url) throw new Error('URL requerida para yt-dlp')
   if (!outDir) throw new Error('outDir requerido para yt-dlp')
 
   ensureDir(outDir)
 
-  let bin = ytDlpPath || getYtDlpPath()
-  let preArgs = []
-  let useModule = false
-  if (!ytDlpPath) {
-    const resolved = resolveYtDlpCommand()
-    if (!resolved) {
-      // Fallback a módulo yt-dlp-exec si el binario no está disponible
-      try {
-        const mod = await import('yt-dlp-exec')
-        const ytdlp = mod?.default || mod
-        if (ytdlp && typeof ytdlp.raw === 'function') {
-          useModule = true
-        } else {
-          throw new Error('yt-dlp-exec no expone raw')
-        }
-      } catch (e) {
-        throw new Error('yt-dlp no disponible. Instala yt-dlp o agrega a PATH.')
-      }
-    } else {
-      bin = resolved.cmd
-      preArgs = resolved.pre || []
-    }
-  }
   const args = []
   // Allow opting out from user/system yt-dlp config files which may conflict
   if (String(process.env.YTDLP_IGNORE_CONFIG || '').toLowerCase() === 'true') {
@@ -201,7 +82,7 @@ export async function downloadWithYtDlp({
 
   // Cookies from env or local defaults
   let __cookieArgs = []
-  try { __cookieArgs = resolveCookiesArgsFromEnv(); if (Array.isArray(__cookieArgs) && __cookieArgs.length) args.push(...__cookieArgs) } catch {}
+  try { __cookieArgs = buildYtDlpCookieArgs(); if (Array.isArray(__cookieArgs) && __cookieArgs.length) args.push(...__cookieArgs) } catch {}
 
   // Prefer mp3 audio when audioOnly
   if (format) {
@@ -307,14 +188,25 @@ export async function downloadWithYtDlp({
   // yt-dlp prints progress on stderr by default. We'll parse percent like `  12.3% `
   args.push(url)
 
-  let child
-  if (useModule) {
+  let child = null
+  try {
     const mod = await import('yt-dlp-exec')
     const ytdlp = mod?.default || mod
-    // yt-dlp-exec.raw acepta lista de argumentos y retorna ChildProcess
-    child = ytdlp.raw([...preArgs, ...args], { shell: false })
-  } else {
-    child = spawn(bin, [...preArgs, ...args], { windowsHide: true })
+    if (ytdlp && typeof ytdlp.raw === 'function') {
+      child = ytdlp.raw(args, { windowsHide: true })
+    }
+  } catch {}
+  if (!child) {
+    // Fallback: spawn binary directly (node_modules/.bin/yt-dlp or system yt-dlp)
+    const binCandidates = [
+      path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'yt-dlp.cmd' : 'yt-dlp'),
+    ]
+    let bin = null
+    for (const c of binCandidates) {
+      try { if (fs.existsSync(c)) { bin = c; break } } catch {}
+    }
+    if (!bin) bin = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+    child = spawn(bin, args, { windowsHide: true })
   }
 
   let lastPercent = 0

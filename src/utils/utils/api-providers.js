@@ -2,7 +2,7 @@
 // Utilidades para manejar múltiples APIs con fallback automático y formato unificado
 
 import axios from 'axios'
-import logger from '../config/logger.js'
+import logger from '../../config/logger.js'
 import { getSpotifyAccessToken } from './spotify-auth.js'
 import { buildYtDlpCookieArgs } from './cookies.js'
 import { downloadWithYtDlp } from './ytdlp-wrapper.js'

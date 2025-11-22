@@ -4,7 +4,7 @@
 import fs from 'fs'
 import path from 'path'
 import bcrypt from 'bcryptjs'
-import db from '../db.js'
+import db from '../database/db.js'
 
 export async function cleanSession() {
   let cleaned = 0
