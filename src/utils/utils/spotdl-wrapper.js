@@ -1,212 +1,146 @@
-import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import { play } from 'play-dl'
+import ytdl from 'ytdl-core'
 
 function ensureDir(dir) {
   try { fs.mkdirSync(dir, { recursive: true }) } catch {}
 }
 
-function pickLatestFile(dir, allowedExts = []) {
-  const files = fs.readdirSync(dir)
-  let latest = null
-  let latestMtime = 0
-  const filter = (f) => {
-    if (!allowedExts.length) return true
-    const ext = (f.split('.').pop() || '').toLowerCase()
-    return allowedExts.includes(ext)
-  }
-  for (const f of files) {
-    if (f.endsWith('.part') || f.endsWith('.tmp')) continue
-    if (!filter(f)) continue
-    const full = path.join(dir, f)
-    try {
-      const st = fs.statSync(full)
-      if (st.isFile() && st.mtimeMs > latestMtime) {
-        latest = full
-        latestMtime = st.mtimeMs
-      }
-    } catch {}
-  }
-  return latest
-}
-
 export async function downloadWithSpotdl({
   queryOrUrl,
   outDir,
-  spotdlPath = process.env.SPOTDL_PATH || 'spotdl',
   ffmpegPath = process.env.FFMPEG_PATH,
   onProgress,
   outputFormat = 'mp3',
 }) {
   ensureDir(outDir)
-  const args = []
-  // Output file template in the destination directory
-  const outTemplate = path.join(outDir, '{title}.{ext}')
-  args.push('--output', outTemplate)
-  // Format (spotdl v4 uses --format)
-  if (outputFormat) args.push('--format', outputFormat)
-  if (ffmpegPath) {
-    args.push('--ffmpeg', ffmpegPath)
+
+  if (typeof onProgress === 'function') {
+    onProgress({ percent: 10 })
   }
-  // Prefer audio providers (configurable). Default: piped first to avoid strict YT web clients
-  try {
-    const order = (process.env.SPOTDL_AUDIO_PROVIDERS || 'piped youtube youtube-music')
-      .split(/[\s,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (order.length) args.push('--audio', ...order)
-  } catch { args.push('--audio', 'piped', 'youtube', 'youtube-music') }
-  // Pass cookies to yt-dlp inside spotdl when available
-  try {
-    const skipCookies = String(process.env.SPOTDL_NO_YT_COOKIES || '').toLowerCase() === 'true'
-    if (!skipCookies) {
-      const envCookie = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE
-      const localCookies = [
-        path.join(outDir, '..', 'all_cookies.txt'),
-        path.join(outDir, '..', 'all_cookie.txt')
-      ]
-      const cookieFile = envCookie && fs.existsSync(envCookie)
-        ? envCookie
-        : (localCookies.find(p => { try { return fs.existsSync(p) } catch { return false } }) || null)
-      if (cookieFile) {
-        args.push('--cookie-file', cookieFile)
+
+  let stream
+  let info
+
+  if (queryOrUrl.includes('spotify.com')) {
+    try {
+      info = await play.spotify(queryOrUrl)
+      if (!info) throw new Error('No se pudo obtener información de Spotify')
+      
+      if (typeof onProgress === 'function') {
+        onProgress({ percent: 30 })
       }
-    }
-  } catch {}
-  // Query/URL at the end
-  args.push(queryOrUrl)
 
-  // Resolver binario de spotdl de forma adaptativa
-  let cmd = spotdlPath
-  let preArgs = []
-  const tryDetect = () => {
-    try {
-      if (process.env.SPOTDL_PATH && fs.existsSync(process.env.SPOTDL_PATH)) {
-        const r = spawnSync(process.env.SPOTDL_PATH, ['--version'], { encoding: 'utf8', windowsHide: true })
-        if (!r.error && r.status === 0) return { c: process.env.SPOTDL_PATH, p: [] }
+      const searchQuery = `${info.name} ${info.artist.name}`
+      const yt = await play.search(searchQuery, { limit: 1 })
+      if (!yt || yt.length === 0) {
+        throw new Error('No se encontró video en YouTube para esta canción')
       }
-    } catch {}
-    try {
-      const r = spawnSync('spotdl', ['--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return { c: 'spotdl', p: [] }
-    } catch {}
-    const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
-    for (const py of pyCands) {
-      try {
-        const r = spawnSync(py, ['-m', 'spotdl', '--version'], { encoding: 'utf8', windowsHide: true })
-        if (!r.error && r.status === 0) return { c: py, p: ['-m', 'spotdl'] }
-      } catch {}
-    }
-    return null
-  }
-  const works = (c, extra=[]) => {
-    try {
-      const r = spawnSync(c, [...extra, '--version'], { encoding: 'utf8', windowsHide: true })
-      return !r.error && r.status === 0
-    } catch { return false }
-  }
-  // Si SPOTDL_PATH no está definido o es 'spotdl', o si no funciona, detectar automáticamente
-  if (!spotdlPath || spotdlPath === 'spotdl' || !works(cmd, preArgs)) {
-    const found = tryDetect()
-    if (found) { cmd = found.c; preArgs = found.p }
-  }
 
-  // Map Spotify credentials from our env to what spotdl expects (spotipy)
-  const childEnv = { ...process.env }
-  try {
-    if (!childEnv.SPOTIPY_CLIENT_ID && process.env.SPOTIFY_CLIENT_ID) {
-      childEnv.SPOTIPY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID
-    }
-    if (!childEnv.SPOTIPY_CLIENT_SECRET && process.env.SPOTIFY_CLIENT_SECRET) {
-      childEnv.SPOTIPY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET
-    }
-  } catch {}
-  // Optional flags
-  try {
-    const threads = process.env.SPOTDL_THREADS && String(process.env.SPOTDL_THREADS).trim()
-    if (threads) args.push('--threads', threads)
-  } catch {}
-  try {
-    const wantUserAuth = String(process.env.SPOTDL_USER_AUTH || '').toLowerCase() === 'true'
-    if (wantUserAuth) args.push('--user-auth')
-  } catch {}
-
-  const child = spawn(cmd, [...preArgs, ...args], { windowsHide: true, env: childEnv })
-
-  let lastPercent = 0
-  const percentRe = /(\d{1,3})%/g
-
-  const parseProgress = (line) => {
-    try {
-      const matches = [...line.matchAll(percentRe)]
-      if (matches.length) {
-        const p = Math.max(0, Math.min(100, parseInt(matches[matches.length - 1][1], 10)))
-        if (typeof onProgress === 'function' && (p > lastPercent || p >= 100)) {
-          lastPercent = p
-          onProgress({ percent: p })
-        }
+      if (typeof onProgress === 'function') {
+        onProgress({ percent: 50 })
       }
-    } catch {}
+
+      stream = await yt[0].download()
+    } catch (e) {
+      throw new Error(`Error descargando de Spotify: ${e.message}`)
+    }
+  } else if (queryOrUrl.includes('youtube.com') || queryOrUrl.includes('youtu.be')) {
+    try {
+      if (typeof onProgress === 'function') {
+        onProgress({ percent: 30 })
+      }
+
+      stream = ytdl(queryOrUrl, {
+        quality: outputFormat === 'mp3' ? 'lowestaudio' : 'highest',
+        filter: 'audioonly'
+      })
+
+      info = await ytdl.getInfo(queryOrUrl)
+    } catch (e) {
+      throw new Error(`Error descargando de YouTube: ${e.message}`)
+    }
+  } else {
+    try {
+      if (typeof onProgress === 'function') {
+        onProgress({ percent: 20 })
+      }
+
+      const results = await play.search(queryOrUrl, { limit: 1 })
+      if (!results || results.length === 0) {
+        throw new Error('No se encontraron resultados para la búsqueda')
+      }
+
+      if (typeof onProgress === 'function') {
+        onProgress({ percent: 50 })
+      }
+
+      stream = await results[0].download()
+      info = results[0]
+    } catch (e) {
+      throw new Error(`Error en búsqueda: ${e.message}`)
+    }
   }
 
-  let stderr = ''
-  let stdout = ''
+  if (!stream) {
+    throw new Error('No se pudo obtener el stream de descarga')
+  }
 
-  child.stdout.on('data', (d) => {
-    const s = d.toString()
-    stdout += s
-    parseProgress(s)
-  })
-  child.stderr.on('data', (d) => {
-    const s = d.toString()
-    stderr += s
-    parseProgress(s)
-  })
+  const filename = (info?.name || info?.title || 'descarga').replace(/[^\w\s-]/g, '').substring(0, 100)
+  const filePath = path.join(outDir, `${filename}.${outputFormat}`)
 
-  await new Promise((resolve, reject) => {
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(stderr || `spotdl exited ${code}`))
+  if (typeof onProgress === 'function') {
+    onProgress({ percent: 60 })
+  }
+
+  return new Promise((resolve, reject) => {
+    const fileStream = fs.createWriteStream(filePath)
+    let totalSize = 0
+
+    stream.on('data', (chunk) => {
+      totalSize += chunk.length
+      if (typeof onProgress === 'function') {
+        const percent = Math.min(95, 60 + Math.floor((totalSize / 1024 / 1024) * 10))
+        onProgress({ percent })
+      }
     })
+
+    stream.on('error', (err) => {
+      try { fileStream.destroy() } catch {}
+      try { fs.unlinkSync(filePath) } catch {}
+      reject(new Error(`Error en el stream: ${err.message}`))
+    })
+
+    fileStream.on('error', (err) => {
+      try { stream.destroy() } catch {}
+      try { fs.unlinkSync(filePath) } catch {}
+      reject(new Error(`Error escribiendo archivo: ${err.message}`))
+    })
+
+    fileStream.on('finish', () => {
+      try {
+        const stat = fs.statSync(filePath)
+        if (stat.size < 20 * 1024) {
+          fs.unlinkSync(filePath)
+          reject(new Error('Archivo descargado muy pequeño'))
+        } else {
+          if (typeof onProgress === 'function') {
+            onProgress({ percent: 100 })
+          }
+          resolve({ success: true, filePath })
+        }
+      } catch (e) {
+        reject(e)
+      }
+    })
+
+    stream.pipe(fileStream)
   })
-
-  // Pick latest created file matching requested format
-  const filePath = pickLatestFile(outDir, [String(outputFormat).toLowerCase()])
-  if (!filePath) {
-    throw new Error('No se encontró ningún archivo generado por spotdl')
-  }
-  try {
-    const st = fs.statSync(filePath)
-    if (!st.isFile() || st.size < 20 * 1024) {
-      throw new Error('Archivo spotdl inválido o tamaño muy pequeño')
-    }
-  } catch (e) {
-    throw new Error('Archivo spotdl inválido')
-  }
-
-  return { success: true, filePath }
 }
 
 export default { downloadWithSpotdl }
 
 export function isSpotdlAvailable() {
-  try {
-    if (process.env.SPOTDL_PATH && fs.existsSync(process.env.SPOTDL_PATH)) {
-      const r = spawnSync(process.env.SPOTDL_PATH, ['--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return true
-    }
-  } catch {}
-  try {
-    const r = spawnSync('spotdl', ['--version'], { encoding: 'utf8', windowsHide: true })
-    if (!r.error && r.status === 0) return true
-  } catch {}
-  const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
-  for (const py of pyCands) {
-    try {
-      const r = spawnSync(py, ['-m', 'spotdl', '--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return true
-    } catch {}
-  }
-  return false
+  return true
 }

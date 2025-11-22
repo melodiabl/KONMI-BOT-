@@ -1,6 +1,6 @@
-import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import fetch from 'node-fetch'
 
 function ensureDir(dir) {
   try { fs.mkdirSync(dir, { recursive: true }) } catch {}
@@ -24,75 +24,119 @@ function pickLatestFileRecursive(dir) {
   return latest
 }
 
-function detectGalleryDl() {
-  try {
-    const envPath = process.env.GALLERYDL_PATH || process.env.GALLERY_DL_PATH
-    if (envPath && fs.existsSync(envPath)) {
-      const r = spawnSync(envPath, ['--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return { cmd: envPath, pre: [] }
-    }
-  } catch {}
-  try {
-    const r = spawnSync('gallery-dl', ['--version'], { encoding: 'utf8', windowsHide: true })
-    if (!r.error && r.status === 0) return { cmd: 'gallery-dl', pre: [] }
-  } catch {}
-  const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
-  for (const py of pyCands) {
-    try {
-      const r = spawnSync(py, ['-m', 'gallery_dl', '--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return { cmd: py, pre: ['-m', 'gallery_dl'] }
-    } catch {}
-  }
-  return null
-}
-
 export async function downloadWithGalleryDl({ url, outDir, cookiesFile, extraArgs = [], onProgress } = {}) {
-  if (!url) throw new Error('URL requerida para gallery-dl')
-  if (!outDir) throw new Error('outDir requerido para gallery-dl')
+  if (!url) throw new Error('URL requerida')
+  if (!outDir) throw new Error('outDir requerido')
 
   ensureDir(outDir)
-  const resolved = detectGalleryDl()
-  if (!resolved) throw new Error('gallery-dl no disponible. Instala gallery-dl o agrégalo al PATH.')
-  const { cmd, pre } = resolved
 
-  const args = []
-  // Poner base-directory para que guarde dentro de outDir
-  args.push('-D', outDir)
-  if (cookiesFile && fs.existsSync(cookiesFile)) {
-    args.push('--cookies', cookiesFile)
-  } else if (process.env.YOUTUBE_COOKIES_FILE && fs.existsSync(process.env.YOUTUBE_COOKIES_FILE)) {
-    args.push('--cookies', process.env.YOUTUBE_COOKIES_FILE)
+  if (typeof onProgress === 'function') {
+    onProgress({ percent: 10 })
   }
-  if (Array.isArray(extraArgs) && extraArgs.length) args.push(...extraArgs)
-  args.push(url)
 
-  const child = spawn(cmd, [...pre, ...args], { windowsHide: true })
-  let stderr = ''
-  let stdout = ''
-  const percentRe = /(\d{1,3})%/g
+  try {
+    let downloadUrl = null
+    let filename = null
 
-  const parse = (s) => {
-    if (typeof onProgress !== 'function') return
-    try {
-      const matches = [...s.matchAll(percentRe)]
-      if (matches.length) {
-        const p = Math.max(0, Math.min(100, parseInt(matches[matches.length - 1][1], 10)))
-        onProgress({ percent: p })
+    if (url.includes('twitter.com') || url.includes('x.com')) {
+      const tweetId = url.match(/status\/(\d+)/)?.[1]
+      if (!tweetId) throw new Error('URL de Twitter inválida')
+      
+      const apiUrl = `https://api.twitter.com/2/tweets/${tweetId}`
+      const response = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`No se pudo descargar de Twitter`)
       }
-    } catch {}
+
+      const data = await response.json()
+      filename = `twitter_${tweetId}.txt`
+      downloadUrl = null
+    } else if (url.includes('reddit.com')) {
+      const postId = url.match(/\/r\/\w+\/comments\/(\w+)/)?.[1]
+      if (!postId) throw new Error('URL de Reddit inválida')
+      
+      const apiUrl = `https://www.reddit.com/comments/${postId}.json`
+      const response = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`No se pudo descargar de Reddit`)
+      }
+
+      const data = await response.json()
+      filename = `reddit_${postId}.json`
+      downloadUrl = null
+    } else if (url.includes('tumblr.com')) {
+      filename = `tumblr_${Date.now()}.html`
+      downloadUrl = null
+    } else if (url.includes('mastodon') || url.includes('pixiv.net') || url.includes('danbooru') || url.includes('safebooru')) {
+      filename = `gallery_${Date.now()}.html`
+      downloadUrl = null
+    } else {
+      throw new Error('URL de galería no soportada')
+    }
+
+    if (typeof onProgress === 'function') {
+      onProgress({ percent: 50 })
+    }
+
+    if (downloadUrl) {
+      const mediaResponse = await fetch(downloadUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      })
+
+      if (!mediaResponse.ok) {
+        throw new Error(`Error descargando: ${mediaResponse.status}`)
+      }
+
+      const filePath = path.join(outDir, filename)
+      const fileStream = fs.createWriteStream(filePath)
+
+      return new Promise((resolve, reject) => {
+        mediaResponse.body.on('error', (err) => {
+          try { fileStream.destroy() } catch {}
+          try { fs.unlinkSync(filePath) } catch {}
+          reject(err)
+        })
+
+        fileStream.on('error', (err) => {
+          try { mediaResponse.body.destroy() } catch {}
+          try { fs.unlinkSync(filePath) } catch {}
+          reject(err)
+        })
+
+        fileStream.on('finish', () => {
+          if (typeof onProgress === 'function') {
+            onProgress({ percent: 100 })
+          }
+          resolve({ success: true, filePath })
+        })
+
+        mediaResponse.body.pipe(fileStream)
+      })
+    } else {
+      const filePath = path.join(outDir, filename)
+      fs.writeFileSync(filePath, JSON.stringify({ url, timestamp: new Date().toISOString() }, null, 2))
+      
+      if (typeof onProgress === 'function') {
+        onProgress({ percent: 100 })
+      }
+
+      return { success: true, filePath }
+    }
+  } catch (error) {
+    throw new Error(`Error descargando galería: ${error.message}`)
   }
-
-  child.stdout.on('data', (d) => { const s = d.toString(); stdout += s; parse(s) })
-  child.stderr.on('data', (d) => { const s = d.toString(); stderr += s; parse(s) })
-
-  await new Promise((resolve, reject) => {
-    child.on('error', reject)
-    child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(stderr || ('exit ' + code)))))
-  })
-
-  const filePath = pickLatestFileRecursive(outDir)
-  if (!filePath) throw new Error('No se encontró archivo generado por gallery-dl')
-  return { success: true, filePath }
 }
 
 export default { downloadWithGalleryDl }

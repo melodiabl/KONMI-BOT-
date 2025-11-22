@@ -1,101 +1,133 @@
-import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import fetch from 'node-fetch'
 
 function ensureDir(dir) {
   try { fs.mkdirSync(dir, { recursive: true }) } catch {}
 }
 
-function pickLatestFileRecursive(dir) {
-  let latest = null
-  let latestMtime = 0
-  function walk(d) {
-    let items
-    try { items = fs.readdirSync(d) } catch { return }
-    for (const name of items) {
-      const full = path.join(d, name)
-      let st
-      try { st = fs.statSync(full) } catch { continue }
-      if (st.isDirectory()) { walk(full); continue }
-      if (st.isFile() && st.mtimeMs > latestMtime) { latest = full; latestMtime = st.mtimeMs }
-    }
-  }
-  try { walk(dir) } catch {}
-  return latest
-}
-
-function detectInstaloader() {
-  try {
-    const envPath = process.env.INSTALOADER_PATH
-    if (envPath && fs.existsSync(envPath)) {
-      const r = spawnSync(envPath, ['--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return { cmd: envPath, pre: [] }
-    }
-  } catch {}
-  try {
-    const r = spawnSync('instaloader', ['--version'], { encoding: 'utf8', windowsHide: true })
-    if (!r.error && r.status === 0) return { cmd: 'instaloader', pre: [] }
-  } catch {}
-  const pyCands = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python']
-  for (const py of pyCands) {
-    try {
-      const r = spawnSync(py, ['-m', 'instaloader', '--version'], { encoding: 'utf8', windowsHide: true })
-      if (!r.error && r.status === 0) return { cmd: py, pre: ['-m', 'instaloader'] }
-    } catch {}
-  }
-  return null
-}
-
 export async function downloadWithInstaloader({ url, outDir, username, password, sessionFile, extraArgs = [], onProgress } = {}) {
-  if (!url) throw new Error('URL requerida para instaloader')
-  if (!outDir) throw new Error('outDir requerido para instaloader')
+  if (!url) throw new Error('URL requerida para Instagram')
+  if (!outDir) throw new Error('outDir requerido')
 
   ensureDir(outDir)
-  const resolved = detectInstaloader()
-  if (!resolved) throw new Error('instaloader no disponible. Instálalo o agrégalo al PATH.')
-  const { cmd, pre } = resolved
 
-  const args = []
-  // Guardar en un patrón de directorio que apunte a outDir
-  // Esto pone los archivos bajo outDir; instaloader creará subcarpetas según patrón
-  args.push('--dirname-pattern', path.join(outDir, '{target}'))
-  if (sessionFile && fs.existsSync(sessionFile)) {
-    args.push('--sessionfile', sessionFile)
-  } else if (process.env.INSTALOADER_SESSION && fs.existsSync(process.env.INSTALOADER_SESSION)) {
-    args.push('--sessionfile', process.env.INSTALOADER_SESSION)
+  if (typeof onProgress === 'function') {
+    onProgress({ percent: 10 })
   }
-  if (username) args.push('--username', username)
-  if (password) args.push('--password', password)
-  if (Array.isArray(extraArgs) && extraArgs.length) args.push(...extraArgs)
-  args.push(url)
 
-  const child = spawn(cmd, [...pre, ...args], { windowsHide: true })
-  let stderr = ''
-  let stdout = ''
-  const percentRe = /(\d{1,3})%/g
+  try {
+    const urlPattern = /instagram\.com\/(p|reel|tv)\/([^/?]+)/
+    const match = url.match(urlPattern)
+    
+    if (!match) {
+      throw new Error('URL de Instagram inválida')
+    }
 
-  const parse = (s) => {
-    if (typeof onProgress !== 'function') return
-    try {
-      const matches = [...s.matchAll(percentRe)]
-      if (matches.length) {
-        const p = Math.max(0, Math.min(100, parseInt(matches[matches.length - 1][1], 10)))
-        onProgress({ percent: p })
+    const postId = match[2]
+    const apiUrl = `https://www.instagram.com/api/v1/media/${postId}/info/`
+
+    if (typeof onProgress === 'function') {
+      onProgress({ percent: 30 })
+    }
+
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
-    } catch {}
+    })
+
+    if (!response.ok) {
+      throw new Error(`Instagram API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const media = data.media
+
+    if (typeof onProgress === 'function') {
+      onProgress({ percent: 50 })
+    }
+
+    let downloadUrl = null
+    let filename = null
+    let mediaType = 'photo'
+
+    if (media.video_duration) {
+      downloadUrl = media.video_versions?.[0]?.url
+      mediaType = 'video'
+      filename = `instagram_${postId}.mp4`
+    } else {
+      downloadUrl = media.image_versions2?.candidates?.[0]?.url
+      mediaType = 'photo'
+      filename = `instagram_${postId}.jpg`
+    }
+
+    if (!downloadUrl) {
+      throw new Error('No se pudo extraer el link de descarga')
+    }
+
+    if (typeof onProgress === 'function') {
+      onProgress({ percent: 60 })
+    }
+
+    const mediaResponse = await fetch(downloadUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    })
+
+    if (!mediaResponse.ok) {
+      throw new Error(`Error descargando media: ${mediaResponse.status}`)
+    }
+
+    const filePath = path.join(outDir, filename)
+    const fileStream = fs.createWriteStream(filePath)
+    let downloadedSize = 0
+    const contentLength = parseInt(mediaResponse.headers.get('content-length') || '0', 10)
+
+    return new Promise((resolve, reject) => {
+      mediaResponse.body.on('data', (chunk) => {
+        downloadedSize += chunk.length
+        if (typeof onProgress === 'function' && contentLength > 0) {
+          const percent = Math.min(95, 60 + Math.floor((downloadedSize / contentLength) * 35))
+          onProgress({ percent })
+        }
+      })
+
+      mediaResponse.body.on('error', (err) => {
+        try { fileStream.destroy() } catch {}
+        try { fs.unlinkSync(filePath) } catch {}
+        reject(new Error(`Error en descarga: ${err.message}`))
+      })
+
+      fileStream.on('error', (err) => {
+        try { mediaResponse.body.destroy() } catch {}
+        try { fs.unlinkSync(filePath) } catch {}
+        reject(new Error(`Error escribiendo archivo: ${err.message}`))
+      })
+
+      fileStream.on('finish', () => {
+        try {
+          const stat = fs.statSync(filePath)
+          if (stat.size < 5 * 1024) {
+            fs.unlinkSync(filePath)
+            reject(new Error('Archivo descargado muy pequeño'))
+          } else {
+            if (typeof onProgress === 'function') {
+              onProgress({ percent: 100 })
+            }
+            resolve({ success: true, filePath, type: mediaType })
+          }
+        } catch (e) {
+          reject(e)
+        }
+      })
+
+      mediaResponse.body.pipe(fileStream)
+    })
+  } catch (error) {
+    throw new Error(`Error descargando de Instagram: ${error.message}`)
   }
-
-  child.stdout.on('data', (d) => { const s = d.toString(); stdout += s; parse(s) })
-  child.stderr.on('data', (d) => { const s = d.toString(); stderr += s; parse(s) })
-
-  await new Promise((resolve, reject) => {
-    child.on('error', reject)
-    child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(stderr || ('exit ' + code)))))
-  })
-
-  const filePath = pickLatestFileRecursive(outDir)
-  if (!filePath) throw new Error('No se encontró archivo generado por instaloader')
-  return { success: true, filePath }
 }
 
 export default { downloadWithInstaloader }
