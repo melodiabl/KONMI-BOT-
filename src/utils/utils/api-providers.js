@@ -10,6 +10,9 @@ import { tmpdir } from 'os';
 import { join as pathJoin, basename } from 'path';
 import { mkdir, rm, readdir, stat } from 'fs/promises';
 import ffmpegPath from 'ffmpeg-static'; // <--- Importado
+import ytdl from 'ytdl-core'
+import { Readable } from 'stream'
+import { createWriteStream } from 'fs'
 
 /**
  * Axios por defecto
@@ -690,9 +693,74 @@ export async function downloadWithFallback(type, param, options = {}, onProgress
   throw new Error('Todos los proveedores fallaron:\n' + errors.join('\n'))
 }
 
+/**
+ * Descarga audio/video de YouTube usando ytdl-core directamente como Buffer
+ */
+async function downloadYouTubeAsBuffer(videoUrl, type = 'audio', onProgress) {
+  try {
+    const info = await ytdl.getInfo(videoUrl);
+    let chosen;
+    
+    if (type === 'audio') {
+      try {
+        chosen = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
+      } catch (_) {
+        chosen = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)?.[0];
+      }
+    } else {
+      try {
+        chosen = ytdl.chooseFormat(info.formats, { quality: 'highest' });
+      } catch (_) {
+        chosen = (info.formats || []).filter((f) => f.hasVideo)?.[0];
+      }
+    }
+
+    if (!chosen?.url) {
+      throw new Error('No se encontró formato válido');
+    }
+
+    const stream = ytdl.downloadFromInfo(info, { format: chosen });
+    const chunks = [];
+
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk) => {
+        chunks.push(chunk);
+        if (typeof onProgress === 'function') {
+          onProgress({ percent: (chunks.length % 100) });
+        }
+      });
+
+      stream.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        resolve({
+          success: true,
+          download: buffer,
+          quality: chosen.quality,
+          title: info.videoDetails?.title,
+          duration: info.videoDetails?.lengthSeconds
+        });
+      });
+
+      stream.on('error', (err) => {
+        reject(new Error('Error descargando: ' + err.message));
+      });
+    });
+  } catch (error) {
+    logger.error('Error en downloadYouTubeAsBuffer:', error.message);
+    throw error;
+  }
+}
+
 // Exportaciones
 export async function searchYouTubeMusic(query) { return downloadWithFallback('youtubeSearch', query) }
-export async function downloadYouTube(url, type = 'audio', onProgress) { return downloadWithFallback('youtube', url, { type }, onProgress) }
+export async function downloadYouTube(url, type = 'audio', onProgress) {
+  try {
+    return await downloadYouTubeAsBuffer(url, type, onProgress);
+  } catch (error) {
+    logger.warn('ytdl-core falló, intentando fallback:', error.message);
+    return downloadWithFallback('youtube', url, { type }, onProgress);
+  }
+}
 export async function downloadTikTok(url) { return downloadWithFallback('tiktok', url) }
 export async function downloadInstagram(url) { return downloadWithFallback('instagram', url) }
 export async function downloadFacebook(url) { return downloadWithFallback('facebook', url) }

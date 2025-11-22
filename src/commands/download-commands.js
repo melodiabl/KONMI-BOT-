@@ -1,6 +1,7 @@
 // commands/download-commands.js
 // Comandos de descarga refactorizados para usar el contexto (ctx) unificado.
 
+import axios from 'axios';
 import {
   downloadTikTok,
   downloadInstagram,
@@ -207,43 +208,48 @@ export async function handleMusicDownload(ctx) {
             animate: true
         });
 
-        let lastUpdate = 0;
-        const downloadResult = await downloadYouTube(video.url, 'audio', (info) => {
-            if (typeof progress?.update === 'function') {
-                const percent = Math.floor(Math.min(99, info?.percent || 0));
-                const now = Date.now();
-                
-                if (now - lastUpdate > 500) {
-                    lastUpdate = now;
-                    const details = [];
-                    if (info?.speed) details.push(`📊 Vel: ${info.speed}`);
-                    if (info?.total) details.push(`📦 Total: ${info.total}`);
-                    if (info?.eta) details.push(`⏱️  ETA: ${info.eta}`);
-                    
-                    progress.update(percent, 'Descargando audio...', { 
-                        details: details.length ? details : undefined 
-                    }).catch(() => {});
+        try {
+            await progress.update(5, 'Conectando...');
+            const downloadResult = await downloadYouTube(video.url, 'audio', (info) => {
+                if (typeof progress?.update === 'function') {
+                    const percent = Math.floor(Math.min(95, (info?.percent || 0) + 5));
+                    progress.update(percent, 'Descargando audio...').catch(() => {});
                 }
+            });
+
+            if (!downloadResult.success || !downloadResult.download) {
+                await progress.fail('⚠️ No se pudo descargar el audio');
+                return { success: false, message: '⚠️ Error al descargar el audio.' };
             }
-        });
 
-        if (!downloadResult.success || !downloadResult.download) {
-            await progress.fail('⚠️ No se pudo descargar el audio');
-            return { success: false, message: '⚠️ Error al descargar el audio.' };
+            await progress.complete('✅ Descarga completada');
+
+            let audioBuffer = null;
+            
+            if (Buffer.isBuffer(downloadResult.download)) {
+                audioBuffer = downloadResult.download;
+            } else if (downloadResult.download?.url && typeof downloadResult.download.url === 'string') {
+                const res = await axios.get(downloadResult.download.url, { responseType: 'arraybuffer', timeout: 30000 });
+                audioBuffer = res.data;
+            } else if (typeof downloadResult.download === 'string') {
+                const res = await axios.get(downloadResult.download, { responseType: 'arraybuffer', timeout: 30000 });
+                audioBuffer = res.data;
+            } else {
+                return { success: false, message: '⚠️ Formato de audio no válido.' };
+            }
+
+            return {
+                type: 'audio',
+                audio: audioBuffer,
+                mimetype: 'audio/mpeg',
+                caption: `*🎵 ${video.title}*\n\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+                mentions: [sender],
+            };
+        } catch (innerErr) {
+            logger.error('Error en descarga de audio:', innerErr.message);
+            await progress.fail(`⚠️ Error: ${innerErr.message}`);
+            throw innerErr;
         }
-
-        await progress.complete('✅ Descarga completada');
-
-        const audioData = downloadResult.download.url || downloadResult.download.buffer || downloadResult.download;
-        const mimetype = (downloadResult.download.buffer || Buffer.isBuffer(audioData)) ? 'audio/mpeg' : undefined;
-
-        return {
-            type: 'audio',
-            audio: audioData,
-            mimetype: mimetype,
-            caption: `*🎵 ${video.title}*\n\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
-            mentions: [sender],
-        };
 
     } catch (e) {
         logger.error(`Error en handleMusicDownload: ${e.message}`);
@@ -275,43 +281,48 @@ export async function handleVideoDownload(ctx) {
             animate: true
         });
 
-        let lastUpdate = 0;
-        const downloadResult = await downloadYouTube(video.url, 'video', (info) => {
-            if (typeof progress?.update === 'function') {
-                const percent = Math.floor(Math.min(99, info?.percent || 0));
-                const now = Date.now();
-                
-                if (now - lastUpdate > 500) {
-                    lastUpdate = now;
-                    const details = [];
-                    if (info?.speed) details.push(`📊 Vel: ${info.speed}`);
-                    if (info?.total) details.push(`📦 Total: ${info.total}`);
-                    if (info?.eta) details.push(`⏱️  ETA: ${info.eta}`);
-                    
-                    progress.update(percent, 'Descargando video...', { 
-                        details: details.length ? details : undefined 
-                    }).catch(() => {});
+        try {
+            await progress.update(5, 'Conectando...');
+            const downloadResult = await downloadYouTube(video.url, 'video', (info) => {
+                if (typeof progress?.update === 'function') {
+                    const percent = Math.floor(Math.min(95, (info?.percent || 0) + 5));
+                    progress.update(percent, 'Descargando video...').catch(() => {});
                 }
+            });
+
+            if (!downloadResult.success || !downloadResult.download) {
+                await progress.fail('⚠️ No se pudo descargar el video');
+                return { success: false, message: '⚠️ Error al descargar el video.' };
             }
-        });
 
-        if (!downloadResult.success || !downloadResult.download) {
-            await progress.fail('⚠️ No se pudo descargar el video');
-            return { success: false, message: '⚠️ Error al descargar el video.' };
+            await progress.complete('✅ Descarga completada');
+
+            let videoBuffer = null;
+            
+            if (Buffer.isBuffer(downloadResult.download)) {
+                videoBuffer = downloadResult.download;
+            } else if (downloadResult.download?.url && typeof downloadResult.download.url === 'string') {
+                const res = await axios.get(downloadResult.download.url, { responseType: 'arraybuffer', timeout: 60000 });
+                videoBuffer = res.data;
+            } else if (typeof downloadResult.download === 'string') {
+                const res = await axios.get(downloadResult.download, { responseType: 'arraybuffer', timeout: 60000 });
+                videoBuffer = res.data;
+            } else {
+                return { success: false, message: '⚠️ Formato de video no válido.' };
+            }
+
+            return {
+                type: 'video',
+                video: videoBuffer,
+                mimetype: 'video/mp4',
+                caption: `*🎬 ${video.title}*\n\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
+                mentions: [sender],
+            };
+        } catch (innerErr) {
+            logger.error('Error en descarga de video:', innerErr.message);
+            await progress.fail(`⚠️ Error: ${innerErr.message}`);
+            throw innerErr;
         }
-
-        await progress.complete('✅ Descarga completada');
-
-        const videoData = downloadResult.download.url || downloadResult.download.buffer || downloadResult.download;
-        const mimetype = (downloadResult.download.buffer || Buffer.isBuffer(videoData)) ? 'video/mp4' : undefined;
-
-        return {
-            type: 'video',
-            video: videoData,
-            mimetype: mimetype,
-            caption: `*🎬 ${video.title}*\n\n*Canal:* ${video.author}\n*Duración:* ${video.duration}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
-            mentions: [sender],
-        };
 
     } catch (e) {
         logger.error(`Error en handleVideoDownload: ${e.message}`);
@@ -332,7 +343,6 @@ export async function handleSpotifySearch(ctx) {
             return { success: false, message: `😕 No encontré resultados para "${query}" en Spotify.` };
         }
 
-        let audioUrl = null;
         let audioBuffer = null;
 
         try {
@@ -342,23 +352,36 @@ export async function handleSpotifySearch(ctx) {
                 const dlResult = await downloadYouTube(ytVideo.url, 'audio', () => {});
                 
                 if (dlResult.success) {
-                     // CORRECCIÓN: Manejar Buffer también en fallback de Spotify
-                     if (dlResult.download.url) audioUrl = dlResult.download.url;
-                     else if (dlResult.download.buffer) audioBuffer = dlResult.download.buffer;
-                     else audioUrl = dlResult.download;
+                    if (Buffer.isBuffer(dlResult.download)) {
+                        audioBuffer = dlResult.download;
+                    } else if (dlResult.download?.url && typeof dlResult.download.url === 'string') {
+                        try {
+                            const res = await axios.get(dlResult.download.url, { responseType: 'arraybuffer', timeout: 30000 });
+                            audioBuffer = res.data;
+                        } catch (err) {
+                            logger.error('Error descargando audio de Spotify:', err.message);
+                        }
+                    } else if (typeof dlResult.download === 'string') {
+                        try {
+                            const res = await axios.get(dlResult.download, { responseType: 'arraybuffer', timeout: 30000 });
+                            audioBuffer = res.data;
+                        } catch (err) {
+                            logger.error('Error descargando audio de Spotify:', err.message);
+                        }
+                    }
                 }
             }
         } catch (e) {
             logger.error('Error en el fallback de Spotify a YouTube:', e);
         }
 
-        if (audioUrl || audioBuffer) {
+        if (audioBuffer) {
             return {
-                type: 'spotify',
+                type: 'audio',
                 image: result.cover_url,
                 caption: `*${result.title}* - *${result.artists}*\n*Álbum:* ${result.album}\n\n✅ Solicitado por: @${sender.split('@')[0]}`,
-                audio: audioUrl || audioBuffer,
-                mimetype: audioBuffer ? 'audio/mpeg' : 'audio/mpeg',
+                audio: audioBuffer,
+                mimetype: 'audio/mpeg',
                 mentions: [sender]
             };
         } else {
