@@ -5,6 +5,7 @@ import axios from 'axios'
 import logger from '../config/logger.js'
 import { getSpotifyAccessToken } from './spotify-auth.js'
 import { buildYtDlpCookieArgs } from './cookies.js'
+import { downloadWithYtDlp } from './ytdlp-wrapper.js'
 import { tmpdir } from 'os';
 import { join as pathJoin, basename } from 'path';
 import { mkdir, rm, readdir, stat } from 'fs/promises';
@@ -514,143 +515,102 @@ async function doRequest(provider, url, body, extraCtx) {
     } catch (e) { throw new Error('ytdl-core url falló: ' + (e?.message || e)) }
   }
 
-  // Proveedor local: yt-dlp-exec (CORREGIDO)
+  // Proveedor local: yt-dlp con soporte para progreso en tiempo real
   if (provider?.method === 'LOCAL__YTDLP_URL') {
     let tempDir = null;
     try {
         const onProgress = extraCtx?.onProgress;
         const want = (extraCtx && (extraCtx.__ytdlpType || extraCtx.type)) || 'audio';
         const isAudioDownload = want === 'audio';
-        const isVideoDownload = want === 'video'; // <--- Nuevo check
+        const isVideoDownload = want === 'video';
+        const isUrlOnly = !isAudioDownload && !isVideoDownload;
 
-        // Configuración de carpeta temporal
-        if (isAudioDownload || isVideoDownload) { // <--- Incluir video
+        // Configuración de carpeta temporal para descargas
+        if (isAudioDownload || isVideoDownload) {
             tempDir = pathJoin(tmpdir(), `konmi-dl-${Date.now()}-${Math.random().toString(16).slice(2)}`);
             await mkdir(tempDir, { recursive: true });
         }
 
-        let ytdlp;
+        // Solo usar downloadWithYtDlp si es descarga de audio o video
+        if (isAudioDownload || isVideoDownload) {
+            try {
+                const downloadResult = await downloadWithYtDlp({
+                    url,
+                    outDir: tempDir,
+                    audioOnly: isAudioDownload,
+                    format: undefined,
+                    onProgress: (info) => {
+                        if (typeof onProgress === 'function') {
+                            onProgress({
+                                percent: info?.percent || 0,
+                                status: info?.status || 'descargando',
+                                downloaded: info?.downloaded || 0,
+                                total: info?.total || 0,
+                                speed: info?.speed || 'N/A',
+                                eta: info?.eta || ''
+                            });
+                        }
+                    },
+                    ffmpegPath: ffmpegPath
+                });
+
+                if (downloadResult?.success && downloadResult?.filePath) {
+                    return {
+                        data: {
+                            __local: true,
+                            success: true,
+                            download: { url: downloadResult.filePath, isLocal: true },
+                            tempDir: tempDir
+                        },
+                        status: 200
+                    };
+                }
+                throw new Error('yt-dlp no retornó archivo válido');
+            } catch (error) {
+                // Fallback a yt-dlp-exec si downloadWithYtDlp falla
+                console.warn('downloadWithYtDlp falló, intentando yt-dlp-exec:', error?.message);
+            }
+        }
+
+        // Fallback para URLs solo (sin descarga local) usando yt-dlp-exec
         try {
             const execMod = await import('yt-dlp-exec');
-            ytdlp = execMod.default || execMod;
-        } catch (_) { ytdlp = null; }
+            const ytdlp = execMod.default || execMod;
 
-        const __cookieArgs = (() => { try { return buildYtDlpCookieArgs() } catch { return [] } })()
-        const __hasCookies = Array.isArray(__cookieArgs) && __cookieArgs.length > 0
-        const __envExt = process.env.YTDLP_EXTRACTOR_ARGS || ''
-        const __dynExtractor = __hasCookies
-            ? (!__envExt || /player_client=android/i.test(__envExt) ? 'youtube:player_client=web_safari' : __envExt)
-            : (__envExt || 'youtube:player_client=android')
+            const optsBase = {
+                noWarnings: true,
+                preferFreeFormats: false,
+                retries: 1,
+                quiet: true,
+                dumpSingleJson: true
+            };
 
-        const optsBase = {
-            noWarnings: true,
-            preferFreeFormats: false,
-            retries: 1,
-            quiet: true,
-            userAgent: YTDLP_USER_AGENT,
-            extractorArgs: __dynExtractor,
-            ffmpegLocation: ffmpegPath // <--- CRUCIAL: Usar ffmpeg-static
-        };
-
-        if (isAudioDownload) {
-            optsBase.printJson = true;
-            optsBase.output = pathJoin(tempDir, '%(title)s.%(ext)s');
-            optsBase.extractAudio = true;
-            optsBase.audioFormat = 'mp3';
-            optsBase.embedThumbnail = true;
-        } else if (isVideoDownload) { // <--- NUEVA LÓGICA PARA DESCARGA DE VIDEO
-            optsBase.printJson = true;
-            optsBase.output = pathJoin(tempDir, '%(title)s.%(ext)s');
-            optsBase.recodeVideo = 'mp4'; // Para forzar un contenedor MP4
-        } else {
-            // Caso por defecto (solo URL, no descarga local)
-            optsBase.dumpSingleJson = true;
-        }
-        
-        // Manejo de cookies opcional
-        try {
-            const fsMod = await import('fs');
-            const fs = fsMod.default || fsM;
-            const cookieFile = process.env.YOUTUBE_COOKIES_FILE || process.env.YT_COOKIES_FILE;
-            if (cookieFile && (fs.existsSync?.(cookieFile) || fs.default?.existsSync?.(cookieFile))) {
-                optsBase.cookies = cookieFile;
-            } else if (process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES) {
-                optsBase.addHeader = [`Cookie: ${process.env.YOUTUBE_COOKIES || process.env.YT_COOKIES}`];
-            }
-        } catch {}
-
-
-        let info;
-        
-        // Formatos corregidos y mejorados
-        const formatCandidates = isAudioDownload
-            ? ['bestaudio[ext=m4a]/bestaudio/best']
-            : ['bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best']; // <-- Mejor combinación para video/audio
-
-        if (ytdlp) {
-            let lastErrExec;
-            for (const fmt of formatCandidates) {
-                try {
-                    info = await ytdlp(url, { ...optsBase, format: fmt });
-                    if (info) break;
-                } catch (e) {
-                    lastErrExec = e;
-                    const msg = String(e?.message || e || '');
-                    // Si el error es por formato no disponible, intentamos el siguiente candidato
-                    if (/Requested format is not available|no such format|No video formats|Requested format/i.test(msg)) {
-                        continue;
-                    }
-                    throw e; // Si es otro error, lo lanzamos
+            if (ytdlp) {
+                const info = await ytdlp(url, optsBase);
+                let chosenUrl = null;
+                if (Array.isArray(info?.requested_downloads) && info.requested_downloads.length) {
+                    chosenUrl = info.requested_downloads[0]?.url || null;
+                }
+                if (!chosenUrl && Array.isArray(info?.requested_formats)) {
+                    chosenUrl = info.requested_formats[0]?.url || null;
+                }
+                if (chosenUrl) {
+                    return {
+                        data: {
+                            __local: true,
+                            success: true,
+                            download: chosenUrl,
+                            title: info?.title
+                        },
+                        status: 200
+                    };
                 }
             }
-            if (!info && lastErrExec) throw lastErrExec;
-        } else {
-            // Fallback si no está el paquete yt-dlp-exec
-            throw new Error('Se requiere el paquete "yt-dlp-exec" instalado para esta función.');
+        } catch (_) {
+            // Ignorar fallback silenciosamente si falla
         }
 
-        if (isAudioDownload || isVideoDownload) { // <--- Si se descargó localmente
-            let filePath = info?._filename || info?.filename;
-            
-            // Fallback: Buscar archivo en carpeta temp si el JSON no trae el nombre correcto
-            if (!filePath || (filePath && !(await fileExists(filePath)))) {
-                try {
-                    const files = await readdir(tempDir);
-                    const targetExt = isAudioDownload ? '.mp3' : '.mp4';
-                    // Buscamos el archivo que termine en la extensión target
-                    const targetFile = files.find(f => f.endsWith(targetExt));
-                    if (targetFile) filePath = pathJoin(tempDir, targetFile);
-                } catch (err) {}
-            }
-
-            if (filePath) {
-                //logger.info(`✅ Descarga exitosa con yt-dlp: ${filePath}`);
-                return {
-                    data: {
-                        __local: true,
-                        success: true,
-                        download: { url: filePath, isLocal: true },
-                        title: info?.title,
-                        quality: info?.quality,
-                        tempDir: tempDir
-                    },
-                    status: 200
-                };
-            }
-            throw new Error('No se pudo obtener la ruta del archivo descargado (Audio/Video).');
-        }
-
-        // Si no fue una descarga local (dumpSingleJson=true), devolvemos URL
-        let chosenUrl = null;
-        if (Array.isArray(info?.requested_downloads) && info.requested_downloads.length) {
-            chosenUrl = info.requested_downloads[0]?.url || null;
-        }
-        if (!chosenUrl && Array.isArray(info?.requested_formats)) {
-            chosenUrl = info.requested_formats[0]?.url || null;
-        }
-        if (!chosenUrl && info?.url) chosenUrl = info.url;
-        
-        return { data: { __local: true, success: Boolean(chosenUrl), download: { url: chosenUrl }, title: info?.title, quality: info?.quality }, status: 200 };
+        throw new Error('No se pudo descargar el contenido (ambos métodos fallaron)');
 
     } catch (e) {
         if (tempDir) { try { await rm(tempDir, { recursive: true, force: true }); } catch {} }

@@ -94,14 +94,25 @@ async function start() {
       }
     });
 
-    // Escuchar evento de pairing code generado
-    sock.ev.on('pairing_code_ready', (data) => {
-      vlog('Evento pairing_code_ready recibido:', data);
-      process.send?.({ 
-        event: 'pairing_code', 
-        data: { code: data?.code, displayCode: DISPLAY, targetNumber: TARGET } 
+    // Escuchar evento de pairing code generado - Baileys emite 'pairing_code' o 'pairing_code_ready'
+    if (usePairing) {
+      sock.ev.on('pairing_code', (pairingCode) => {
+        vlog('Evento pairing_code recibido:', pairingCode);
+        process.send?.({ 
+          event: 'pairing_code', 
+          data: { pairingCode, code: pairingCode, displayCode: DISPLAY, targetNumber: TARGET } 
+        });
       });
-    });
+      
+      sock.ev.on('pairing_code_ready', (data) => {
+        vlog('Evento pairing_code_ready recibido:', data);
+        const code = data?.code || data?.pairingCode || data;
+        process.send?.({ 
+          event: 'pairing_code', 
+          data: { pairingCode: code, code, displayCode: DISPLAY, targetNumber: TARGET } 
+        });
+      });
+    }
 
     // Re-enganchar el manejador de mensajes del bot principal
     sock.ev.on('messages.upsert', async ({ messages = [] }) => {

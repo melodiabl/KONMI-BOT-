@@ -35,20 +35,22 @@ export async function handleTikTokDownload(ctx) {
     chatId: remoteJid,
     quoted: message,
     title: 'Descargando TikTok',
-    icon: '📹'
+    icon: '📹',
+    barLength: 20,
+    animate: true
   });
 
   try {
-    await progress.update(10, 'Conectando con TikTok...');
+    await progress.update(5, 'Conectando con TikTok...');
     const result = await downloadTikTok(url);
 
     if (!result.success || !result.video) {
-      await progress.fail('No se pudo descargar el video. Verifica la URL.');
+      await progress.fail('⚠️ URL inválida o video no disponible');
       return { success: false, message: '⚠️ No se pudo descargar el video de TikTok. Verifica la URL.' };
     }
 
-    await progress.update(80, 'Procesando video...');
-    await progress.complete('Descarga completada');
+    await progress.update(95, 'Procesando...');
+    await progress.complete('✅ Descarga completada');
 
     return {
       type: 'video',
@@ -58,7 +60,7 @@ export async function handleTikTokDownload(ctx) {
     };
   } catch (error) {
     logger.error('Error en handleTikTokDownload:', error);
-    progress.fail(`Error: ${error.message}`);
+    await progress.fail(`⚠️ Error: ${error.message}`);
     return { success: false, message: `⚠️ Error al descargar TikTok: ${error.message}` };
   }
 }
@@ -78,20 +80,22 @@ export async function handleInstagramDownload(ctx) {
     chatId: remoteJid,
     quoted: message,
     title: 'Descargando Instagram',
-    icon: '📸'
+    icon: '📸',
+    barLength: 20,
+    animate: true
   });
 
   try {
-    await progress.update(10, 'Conectando con Instagram...');
+    await progress.update(5, 'Conectando con Instagram...');
     const result = await downloadInstagram(url);
 
     if (!result.success || (!result.image && !result.video)) {
-      await progress.fail('No se pudo descargar el contenido. Verifica la URL.');
+      await progress.fail('⚠️ URL inválida o contenido no disponible');
       return { success: false, message: '⚠️ No se pudo descargar el contenido de Instagram. Verifica la URL.' };
     }
 
-    await progress.update(80, 'Procesando contenido...');
-    await progress.complete('Descarga completada');
+    await progress.update(95, 'Procesando...');
+    await progress.complete('✅ Descarga completada');
 
     const caption = `${result.type === 'video' ? '🎥' : '📸'} *Instagram*\n\n👤 *Autor:* ${result.author || 'N/D'}\n📝 *Descripción:* ${result.caption || 'N/D'}\n\n✅ Solicitado por: @${sender.split('@')[0]}`;
 
@@ -103,7 +107,7 @@ export async function handleInstagramDownload(ctx) {
     };
   } catch (error) {
     logger.error('Error en handleInstagramDownload:', error);
-    progress.fail(`Error: ${error.message}`);
+    await progress.fail(`⚠️ Error: ${error.message}`);
     return { success: false, message: `⚠️ Error al descargar Instagram: ${error.message}` };
   }
 }
@@ -203,25 +207,34 @@ export async function handleMusicDownload(ctx) {
             animate: true
         });
 
-        let lastProgress = 0;
-        const downloadResult = await downloadYouTube(video.url, 'audio', async (info) => {
-            const percent = Math.floor(info?.percent || 0);
-            if (percent > lastProgress) {
-                lastProgress = percent;
-                await progress.update(percent, `Descargando: ${info?.speed || 'N/A'}\nTotal: ${info?.total || 'N/A'}`);
+        let lastUpdate = 0;
+        const downloadResult = await downloadYouTube(video.url, 'audio', (info) => {
+            if (typeof progress?.update === 'function') {
+                const percent = Math.floor(Math.min(99, info?.percent || 0));
+                const now = Date.now();
+                
+                if (now - lastUpdate > 500) {
+                    lastUpdate = now;
+                    const details = [];
+                    if (info?.speed) details.push(`📊 Vel: ${info.speed}`);
+                    if (info?.total) details.push(`📦 Total: ${info.total}`);
+                    if (info?.eta) details.push(`⏱️  ETA: ${info.eta}`);
+                    
+                    progress.update(percent, 'Descargando audio...', { 
+                        details: details.length ? details : undefined 
+                    }).catch(() => {});
+                }
             }
         });
 
         if (!downloadResult.success || !downloadResult.download) {
-            await progress.fail('No se pudo descargar el audio');
+            await progress.fail('⚠️ No se pudo descargar el audio');
             return { success: false, message: '⚠️ Error al descargar el audio.' };
         }
 
         await progress.complete('✅ Descarga completada');
 
-        // CORRECCIÓN: Detectar si es URL o Buffer
         const audioData = downloadResult.download.url || downloadResult.download.buffer || downloadResult.download;
-        // Asignar mimetype explícito si es Buffer, ayuda a WhatsApp
         const mimetype = (downloadResult.download.buffer || Buffer.isBuffer(audioData)) ? 'audio/mpeg' : undefined;
 
         return {
@@ -262,23 +275,33 @@ export async function handleVideoDownload(ctx) {
             animate: true
         });
 
-        let lastProgress = 0;
-        const downloadResult = await downloadYouTube(video.url, 'video', async (info) => {
-            const percent = Math.floor(info?.percent || 0);
-            if (percent > lastProgress) {
-                lastProgress = percent;
-                await progress.update(percent, `Descargando: ${info?.speed || 'N/A'}\nTotal: ${info?.total || 'N/A'}`);
+        let lastUpdate = 0;
+        const downloadResult = await downloadYouTube(video.url, 'video', (info) => {
+            if (typeof progress?.update === 'function') {
+                const percent = Math.floor(Math.min(99, info?.percent || 0));
+                const now = Date.now();
+                
+                if (now - lastUpdate > 500) {
+                    lastUpdate = now;
+                    const details = [];
+                    if (info?.speed) details.push(`📊 Vel: ${info.speed}`);
+                    if (info?.total) details.push(`📦 Total: ${info.total}`);
+                    if (info?.eta) details.push(`⏱️  ETA: ${info.eta}`);
+                    
+                    progress.update(percent, 'Descargando video...', { 
+                        details: details.length ? details : undefined 
+                    }).catch(() => {});
+                }
             }
         });
 
         if (!downloadResult.success || !downloadResult.download) {
-            await progress.fail('No se pudo descargar el video');
+            await progress.fail('⚠️ No se pudo descargar el video');
             return { success: false, message: '⚠️ Error al descargar el video.' };
         }
 
         await progress.complete('✅ Descarga completada');
 
-        // CORRECCIÓN: Detectar si es URL o Buffer
         const videoData = downloadResult.download.url || downloadResult.download.buffer || downloadResult.download;
         const mimetype = (downloadResult.download.buffer || Buffer.isBuffer(videoData)) ? 'video/mp4' : undefined;
 
