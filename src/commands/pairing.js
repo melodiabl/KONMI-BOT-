@@ -23,15 +23,19 @@ async function extractPhoneNumber(ctx) {
 
   const candidates = [];
 
-  // 1) Argumento opcional: debe venir en formato internacional (8-15 dígitos)
+  // 1) Argumento: debe venir en formato internacional (8-15 dígitos)
   const argDigits = sanitize((args[0] || '').toString());
   if (isE164Generic(argDigits)) candidates.push(argDigits);
 
-  // 2) Campos del contexto
-  if (isE164Generic(usuarioNumber)) candidates.push(sanitize(usuarioNumber));
-  if (isE164Generic(senderNumber)) candidates.push(sanitize(senderNumber));
+  // 2) senderNumber es la fuente más confiable del usuario actual
+  const senderNum = sanitize(senderNumber);
+  if (isE164Generic(senderNum)) candidates.push(senderNum);
 
-  // 3) Evitar LID como fuente directa; si no es LID, probar sender/participant
+  // 3) Otros campos del contexto
+  const usuarioNum = sanitize(usuarioNumber);
+  if (isE164Generic(usuarioNum)) candidates.push(usuarioNum);
+
+  // 4) Extraer de sender directo
   const isLidSender = typeof sender === 'string' && sender.includes('@lid');
   if (sender && !isLidSender) {
     const base = typeof sender === 'string' && sender.includes('@') ? sender.split('@')[0] : sender;
@@ -39,8 +43,9 @@ async function extractPhoneNumber(ctx) {
     if (isE164Generic(d)) candidates.push(d);
   }
 
+  // 5) Extraer de participante del mensaje
   if (message?.key?.participant) {
-    const part = message.key.participant;
+    const part = message.key?.participant;
     const isLidPart = typeof part === 'string' && part.includes('@lid');
     if (!isLidPart) {
       const base = typeof part === 'string' && part.includes('@') ? part.split('@')[0] : part;
@@ -49,7 +54,7 @@ async function extractPhoneNumber(ctx) {
     }
   }
 
-  // 4) Resolver con onWhatsApp para LID -> @s.whatsapp.net
+  // 6) Resolver LID con onWhatsApp -> @s.whatsapp.net
   try {
     const isLidChat = typeof remoteJid === 'string' && remoteJid.includes('@lid');
     if (isLidChat && sock && typeof sock.onWhatsApp === 'function' && sender) {
@@ -62,7 +67,7 @@ async function extractPhoneNumber(ctx) {
     }
   } catch {}
 
-  // 5) Elegir el primero válido
+  // 7) Elegir el primero válido
   for (const d of candidates) {
     if (isE164Generic(d)) return d;
   }
@@ -151,7 +156,10 @@ export async function code(ctx) {
     
     const phone = await extractPhoneNumber(ctx);
     if (!phone) {
-      return { success:false, message:'❌ No pude detectar un número válido en formato internacional (8-15 dígitos). Usa /code <tu_numero_en_formato_internacional>.' }
+      const hint = Array.isArray(ctx?.args) && ctx.args.length ? 
+        '❌ El número proporcionado no es válido. Debe tener 8-15 dígitos (formato internacional sin el +).' :
+        '❌ No pude detectar tu número de WhatsApp. Por favor, proporciona tu número: /code <tu_numero>';
+      return { success:false, message:hint }
     }
     
     const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT' });

@@ -161,15 +161,18 @@ function getCategoryMeta(category) {
 
 function normalizeContext(ctx = {}) {
   const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
+  const senderNum = ctx.senderNumber || onlyDigits(ctx.sender || '')
   return {
     ...ctx,
-    usuarioNumber: ctx.usuarioNumber || ctx.senderNumber || onlyDigits(ctx.sender || ''),
+    senderNumber: senderNum,
+    usuarioNumber: ctx.usuarioNumber || senderNum,
     usuario: ctx.usuario || ctx.sender || '',
     botNumber: ctx.botNumber || onlyDigits(ctx.botJid || ''),
     isAdmin: !!ctx.isAdmin,
     isBotAdmin: !!ctx.isBotAdmin,
     isGroup: !!ctx.isGroup,
     isOwner: !!ctx.isOwner,
+    args: Array.isArray(ctx?.args) ? ctx.args : [],
   }
 }
 

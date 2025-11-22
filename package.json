@@ -31,8 +31,6 @@
         "@itsukichan/baileys": "^7.3.2",
         "@whiskeysockets/baileys": "^6.7.9",
         "axios": "^1.11.0",
-        "baileys": "github:nstar-y/bail",
-        "baileys-mod": "github:nstar-y/bail",
         "bcryptjs": "^2.4.3",
         "better-sqlite3": "^12.4.1",
         "chalk": "^5.3.0",
