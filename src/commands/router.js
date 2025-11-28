@@ -762,7 +762,7 @@ export async function dispatch(ctx = {}) {
         if (registry) console.log('[registry] precargado OK')
         else console.warn('[registry] módulo cargado pero no devolvió registry (getCommandRegistry missing)')
       } catch (impErr) {
-        console.error('⚠️ ERROR CRÍTICO AL CARGAR EL REGISTRO DE COMANDOS:', impErr?.message || impErr)
+        console.error('⚠️ ERROR CRÍTICO AL GAR EL REGISTRO DE COMANDOS:', impErr?.message || impErr)
       }
     }
   } catch (e) {
