@@ -6,7 +6,7 @@ function requireGroupAdmin(handler){
     if (!isGroup) return { success:true, message:'ℹ️ Este comando solo funciona en grupos', quoted:true }
     if (!isOwner && !isAdmin) return { success:true, message:'⛔ Solo administradores del grupo u owner pueden usar este comando.', quoted:true }
 
-    // Si el usuario tiene permisos (Owner/Admin), verificamos los del Bot.
+    // ESTA VERIFICACIÓN BLOQUEA EL COMANDO si el BOT no es ADMINISTRADOR DEL GRUPO.
     if (!isBotAdmin) return { success:true, message:'⛔ El bot no es administrador del grupo. Otórgale admin para ejecutar este comando.', quoted:true }
 
     return handler(ctx)
@@ -14,7 +14,7 @@ function requireGroupAdmin(handler){
 }
 
 // ==========================================================
-// ✅ CORRECCIÓN: Manejo de errores explícito en groupSettingUpdate
+// ✅ CORRECCIÓN: Manejo de errores explícito y mensajes claros
 // ==========================================================
 
 export const muteall = requireGroupAdmin(async ({ sock, remoteJid, args }) => {
@@ -23,10 +23,12 @@ export const muteall = requireGroupAdmin(async ({ sock, remoteJid, args }) => {
   const val = ['on','true','1'].includes(on)
 
   try {
+    // groupSettingUpdate requiere que el BOT sea admin de grupo
     await sock.groupSettingUpdate(remoteJid, val ? 'announcement' : 'not_announcement')
     return { success:true, message:`🔇 Solo admins pueden enviar mensajes: ${val?'ON':'OFF'}`, quoted:true }
   } catch (e) {
     console.error('[muteall] Error al cambiar setting:', e)
+    // Mensaje de fallo si la API de Baileys rechazó la acción
     return { success:false, message:'❌ *Fallo al cambiar ajuste*. Verifica que el BOT sea *ADMINISTRADOR* del grupo.', quoted:true }
   }
 })
