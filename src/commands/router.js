@@ -306,10 +306,6 @@ async function sendResult(sock, jid, result, ctx) {
     return
   }
   const opts = buildSendOptions(result)
-
-  // ============================================================
-  // ELIMINADO: Fallback a DM (ahora targetJid es siempre jid)
-  // ============================================================
   const targetJid = jid
 
   if (typeof result === 'string') { await safeSend(sock, targetJid, { text: result }, opts); return }
@@ -509,6 +505,30 @@ export async function dispatch(ctx = {}) {
   const { sock, remoteJid, isGroup } = ctx
   if (!sock || !remoteJid) return false
 
+  // ============================================================
+  // LÓGICA FROM-ME / OWNER / SENDER
+  // ============================================================
+  const isFromMe = ctx.message?.key?.fromMe || false
+
+  // Calcular el Sender ID real
+  let senderId = ''
+  if (isFromMe) {
+    // Si viene de mí, el sender soy yo (sock.user.id)
+    senderId = normalizeDigits(sock.user?.id || '')
+    // Si viene de mí, soy Owner automáticamente
+    ctx.isOwner = true
+  } else {
+    // Si viene de otro, usamos el sender normal
+    senderId = normalizeDigits(ctx.sender || ctx.senderNumber || ctx.message?.key?.participant || '')
+  }
+
+  // Actualizar el contexto con el senderId correcto
+  ctx.sender = `${senderId}@s.whatsapp.net`
+  ctx.senderNumber = senderId
+  ctx.usuario = `${senderId}@s.whatsapp.net` // Unificar usuario también
+
+  // ============================================================
+
   if (isGroup) {
     const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
     if (!botEnabled) {
@@ -524,7 +544,7 @@ export async function dispatch(ctx = {}) {
 
   if (traceEnabled()) {
     const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
-    console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${ctx.senderNumber || ctx.sender || '?'} | Owner: ${ctx.isOwner}`)
+    console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${senderId} | Owner: ${ctx.isOwner}`)
   }
 
   if (!command) {
@@ -546,15 +566,20 @@ export async function dispatch(ctx = {}) {
       }
     } catch {}
   }
+
+  // FromMe: Permitir comandos sin prefijo si se desea,
+  // pero ya manejamos fromMe al inicio, así que aquí solo es lógica extra.
   try {
-    const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'false').toLowerCase() === 'true'
-    if (!command && allowNoPrefix && ctx?.message?.key?.fromMe) {
+    const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'true').toLowerCase() === 'true'
+    if (!command && allowNoPrefix && isFromMe) {
       const parts = String(text || '').trim().split(/\s+/).filter(Boolean)
       if (parts.length) command = `/${(parts.shift() || '').toLowerCase()}`
     }
   } catch {}
+
+  // Palabras clave sin prefijo (help, menu)
   try {
-    if (!command && !ctx?.message?.key?.fromMe) {
+    if (!command && !isFromMe) { // Evitamos que el bot responda a su propio texto "menu" si no es comando explicito
       const raw = String(text || '').trim().toLowerCase()
       const list = String(process.env.ALLOW_NO_PREFIX_WORDS || 'help,menu,ayuda,comandos').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
       const first = raw.split(/\s+/)[0] || ''
@@ -563,6 +588,7 @@ export async function dispatch(ctx = {}) {
       }
     }
   } catch {}
+
   if (!command) {
     if (/^url\|/i.test(text)) {
       const url = text.split('|')[1] || ''
@@ -633,30 +659,23 @@ export async function dispatch(ctx = {}) {
   console.log(`[DEBUG] Found registry entry for ${command}:`, !!entry)
 
   // ============================================================
-  // AGREGADO: Verificación de permisos de Admin antes de ejecutar
+  // Verificación de Admin usando senderId corregido
   // ============================================================
   if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
     try {
-      // 1. Obtener metadatos (usando caché si es posible)
       const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
       const participants = groupMeta?.participants || []
 
-      // 2. Normalizar el ID del remitente
-      const senderId = normalizeDigits(ctx.sender || ctx.senderNumber || ctx.message?.key?.participant || '')
-
-      // 3. Buscar al remitente en la lista
+      // Buscar participante usando el senderId calculado arriba (que ya maneja fromMe)
       const participant = participants.find(p => normalizeDigits(p.id) === senderId)
 
-      // 4. Verificar flag
       if (!isAdminFlag(participant)) {
         console.log(`[router] Bloqueado comando ${command} por falta de privilegios admin. User: ${senderId}`)
         await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
-        return true // Detenemos la ejecución
+        return true
       }
     } catch (errCheck) {
       console.error('[router] Error verificando admins:', errCheck)
-      // En caso de error crítico al verificar, por seguridad se puede denegar o permitir según política.
-      // Aquí optamos por loguear y continuar (o podrías denegar).
     }
   }
 
