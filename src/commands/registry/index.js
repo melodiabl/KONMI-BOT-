@@ -70,7 +70,7 @@ const [
   groupAdminX, groupCmd, groupSettings, images, maintenance, menu, mod, pairing, pedidoCmd, promo,
   stickers, subbots, sysInfo, system, utils, utilmath, votes, logsCmd, polls,
   media, messageControl, interactive, profile, privacy, groupAdvanced, broadcast, chatMgmt, presence, calls, uiInteractive,
-  advancedFeatures, communityFeatures, privacyFeatures, performanceFeatures
+  advancedFeatures, communityFeatures, privacyFeatures, performanceFeatures, games
 ] = await Promise.all([
   safeImport('../download-commands.js'),
   safeImport('../ai.js'),
@@ -118,6 +118,7 @@ const [
   safeImport('../community-features.js'),
   safeImport('../privacy-features.js'),
   safeImport('../performance-features.js'),
+  safeImport('../games.js'),
 ])
 
 // Desestructuración de comandos de download-commands.js
@@ -137,6 +138,7 @@ const CATEGORY_META = {
   demo: { emoji: '🧪', label: 'Demos' },
   files: { emoji: '🗂️', label: 'Archivos' },
   fun: { emoji: '🎉', label: 'Diversión' },
+  games: { emoji: '🎮', label: 'Juegos' },
   group: { emoji: '👥', label: 'Administración de grupos' },
   info: { emoji: 'ℹ️', label: 'Información' },
   interactive: { emoji: '🎯', label: 'Mensajes Interactivos' },
@@ -403,6 +405,9 @@ register([
   { command: '/meme', handler: (ctx) => handleMemeCommand(ctx), category: 'fun', description: 'Memes al instante' },
   { command: '/joke', handler: (ctx) => handleFact(ctx), category: 'fun', description: 'Chiste corto' },
   { command: '/chiste', aliasOf: '/joke', category: 'fun' },
+
+  // Games
+  { command: '/rps', handler: (ctx) => games.rps(ctx), category: 'games', description: 'Jugar piedra, papel o tijeras' },
 
   // Información del sistema
   { command: '/status', handler: (ctx) => sysInfo.status(ctx), category: 'info', description: 'Estado resumido del bot' },
