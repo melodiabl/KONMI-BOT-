@@ -324,9 +324,11 @@ function createInteractiveMessage(data) {
   }
 
   // Envolver SIEMPRE en viewOnceMessage para compatibilidad total en grupos
+  // CORRECCIÓN CLAVE: Añadir 'text: " "' para estabilizar el payload de viewOnceMessage.
   return {
     viewOnceMessage: {
       message: {
+        text: ' ', // <--- **Línea de Corrección**
         interactiveMessage
       }
     }
