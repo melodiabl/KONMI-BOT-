@@ -248,7 +248,7 @@ function summarizePayload(p) {
 
 
 // Función auxiliar para construir el payload interactivo moderno (Native Flow en ViewOnce)
-function createInteractiveMessage(data) {
+function createInteractiveMessage(data, isGroup = true) {
   const { body, footer, title, buttons, sections, mentions } = data
 
   // Estructura del encabezado (Header) para Native Flow
@@ -323,12 +323,17 @@ function createInteractiveMessage(data) {
     })
   }
 
-  // Envolver SIEMPRE en viewOnceMessage para compatibilidad total en grupos
-  // CORRECCIÓN CLAVE: Añadir 'text: " "' para estabilizar el payload de viewOnceMessage.
+  // LÓGICA DE SEPARACIÓN: Si no es un grupo, enviamos solo el interactiveMessage
+  if (!isGroup) {
+      // Para chats privados, enviar directamente el interactiveMessage (más estable)
+      return { interactiveMessage }
+  }
+
+  // Para grupos, envolver SIEMPRE en viewOnceMessage
   return {
     viewOnceMessage: {
       message: {
-        text: ' ', // <--- **Línea de Corrección**
+        text: ' ', // Añadir texto de relleno para estabilidad en ViewOnce
         interactiveMessage
       }
     }
@@ -518,7 +523,7 @@ async function sendResult(sock, jid, result, ctx) {
   }
 
   /* ============================================================
-     NUEVA LÓGICA DE BOTONES (Native Flow Moderno)
+     LÓGICA DE BOTONES (Native Flow Moderno)
      ============================================================ */
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
     const payload = createInteractiveMessage({
@@ -527,7 +532,7 @@ async function sendResult(sock, jid, result, ctx) {
       title: result.header || result.title,
       buttons: result.buttons,
       mentions: result.mentions // CRUCIAL: Pasar las menciones
-    })
+    }, ctx.isGroup) // <--- PASAMOS isGroup AQUÍ
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
@@ -543,7 +548,7 @@ async function sendResult(sock, jid, result, ctx) {
   }
 
   /* ============================================================
-     NUEVA LÓGICA DE LISTAS (Convertido a Single Select Native)
+     LÓGICA DE LISTAS (Convertido a Single Select Native)
      ============================================================ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
     // Mapeo de secciones (debe ser estricto para Native Flow)
@@ -564,7 +569,7 @@ async function sendResult(sock, jid, result, ctx) {
       buttonText: result.buttonText || 'Ver Opciones',
       sections: nativeSections,
       mentions: result.mentions // CRUCIAL: Pasar las menciones
-    })
+    }, ctx.isGroup) // <--- PASAMOS isGroup AQUÍ
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
@@ -573,7 +578,7 @@ async function sendResult(sock, jid, result, ctx) {
     lines.push(result.text || 'Menú')
     for (const sec of result.sections) {
       lines.push(`\n— ${sec.title || ''}`)
-      for (const row of (sec.rows || [])) lines.push(`• ${row.title} -> ${row.rowId}`)
+      for (const row of (sec.rows || [])) lines.push(`• ${row.title} → ${row.rowId}`) // Usamos → para evitar parsing erróneo
     }
     await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
     return
@@ -650,6 +655,24 @@ export async function dispatch(ctx = {}) {
 
   const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
 
+  // INICIO DE LA CORRECCIÓN: Bloqueo de auto-reprocesamiento de Fallback
+  if (isFromMe) {
+    // Verificar si el mensaje fromMe es una respuesta de botón/lista (Interactive Reply) o solo texto plano.
+    // Si es solo texto plano, es el fallback que causa el loop.
+    const isInteractiveReply = !!(ctx.message?.message?.buttonsResponseMessage ||
+                                 ctx.message?.message?.listResponseMessage ||
+                                 ctx.message?.message?.templateButtonReplyMessage ||
+                                 ctx.message?.message?.interactiveResponseMessage ||
+                                 ctx.message?.message?.interactiveMessage);
+
+    if (!isInteractiveReply) {
+        // Si no es una respuesta interactiva, ignoramos el mensaje para romper el loop.
+        if (traceEnabled()) console.log(`[router] IGNORANDO: Mensaje fromMe no interactivo (probablemente fallback).`)
+        return false;
+    }
+  }
+  // FIN DE LA CORRECCIÓN
+
   const parsed = parseCommand(text)
   let command = parsed.command
   const args = parsed.args || []
@@ -679,8 +702,8 @@ export async function dispatch(ctx = {}) {
     } catch {}
   }
 
-  // FromMe: Permitir comandos sin prefijo si se desea,
-  // pero ya manejamos fromMe al inicio, así que aquí solo es lógica extra.
+  // FromMe: Se mantiene la lógica para comandos sin prefijo en fromMe (en caso de que sea necesario para algún flujo),
+  // pero ya está blindada por la corrección anterior.
   try {
     const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'true').toLowerCase() === 'true'
     if (!command && allowNoPrefix && isFromMe) {
@@ -688,6 +711,7 @@ export async function dispatch(ctx = {}) {
       if (parts.length) command = `/${(parts.shift() || '').toLowerCase()}`
     }
   } catch {}
+
 
   // Palabras clave sin prefijo (help, menu)
   try {
