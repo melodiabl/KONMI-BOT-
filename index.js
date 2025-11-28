@@ -1,24 +1,81 @@
-// index.js — Runner interactivo "original" (QR / Pairing), sin tocar/backup creds
-import 'dotenv/config';
-import fs from 'fs';
-import path from 'path';
-import readline from 'readline';
-import { fileURLToPath } from 'url';
-import config from './src/config/config.js';
-import app from './server.js';
+// index.js — Runner con verificación automática de dotenv + fix ARM64
+
+import fs from "fs";
+import os from "os";
+import { execSync } from "child_process";
+import path from "path";
+import readline from "readline";
+import { fileURLToPath } from "url";
+
+// ======================================
+// 1. VERIFICAR SI DOTENV ESTÁ INSTALADO
+// ======================================
+
+console.log("🔍 Verificando dependencia dotenv...");
+
+let dotenvExists = false;
+
+try {
+    require.resolve("dotenv");
+    dotenvExists = true;
+    console.log("✔ dotenv encontrado.");
+} catch (e) {
+    console.log("⚠ dotenv NO encontrado. Instalando...");
+    try {
+        execSync("npm install dotenv", { stdio: "inherit" });
+        dotenvExists = true;
+        console.log("✔ dotenv instalado correctamente.");
+    } catch (err) {
+        console.error("❌ Error instalando dotenv:", err);
+    }
+}
+
+// Cargar dotenv SOLO si existe
+if (dotenvExists) {
+    console.log("⚙ Cargando dotenv...");
+    await import("dotenv/config");
+}
+
+// ======================================
+// 2. FIX PARA ARM64 — OMITIR CHROMIUM
+// ======================================
+
+const arch = os.arch();
+
+if (arch === "arm64") {
+    console.log("🛑 ARM64 detectado — omitiendo Chromium/Puppeteer...");
+
+    process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true";
+    process.env.PUPPETEER_SKIP_DOWNLOAD = "true";
+    process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium";
+
+    console.log("✔ Variables aplicadas (sin Chromium).");
+}
+
+// ======================================
+// 3. CARGAR EL BOT NORMALMENTE
+// ======================================
+
+import config from "./src/config/config.js";
+import app from "./server.js";
+
 import {
-  connectToWhatsApp,
-  connectWithPairingCode,
-  getConnectionStatus,
-  clearWhatsAppSession,
-} from './whatsapp.js';
+    connectToWhatsApp,
+    connectWithPairingCode,
+    getConnectionStatus,
+    clearWhatsAppSession,
+} from "./whatsapp.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ask = (q) => new Promise((res) => rl.question(q, (ans) => res((ans || '').trim())));
-const onlyDigits = (v) => String(v || '').replace(/\D/g, '');
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+const ask = (q) => new Promise((res) => rl.question(q, (ans) => res((ans || "").trim())));
+const onlyDigits = (v) => String(v || "").replace(/\D/g, "");
 
 function printBanner() {
   console.log('\n🤖 KONMI BOT 🤖\n');
