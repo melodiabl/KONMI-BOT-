@@ -1,6 +1,5 @@
 // commands/router.js
-// Router corregido: mantiene toda la lógica interactiva original pero SIN DM fallback.
-// Responde siempre en el JID de origen (grupo o privado).
+// Router simplificado y estable: parsea comandos, invoca registry y entrega respuestas con safeSend
 
 import logger from '../config/logger.js'
 import antibanMiddleware from '../utils/utils/anti-ban-middleware.js'
@@ -8,7 +7,7 @@ import antibanSystem from '../utils/utils/anti-ban.js'
 import { getGroupBool } from '../utils/utils/group-config.js'
 import fs from 'fs'
 import path from 'path'
-import { pathToFileURL, fileURLToPath } from 'url' // <-- añadí fileURLToPath aquí
+import { pathToFileURL, fileURLToPath } from 'url'
 
 /* ========================
    Compatibilidad ESM: __dirname
@@ -24,7 +23,10 @@ function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
 function normalizeDigits(userOrJid){
   try{ let s=String(userOrJid||''); const at=s.indexOf('@'); if(at>0) s=s.slice(0,at); const col=s.indexOf(':'); if(col>0) s=s.slice(0,col); return s.replace(/\D/g,'') }catch{ return onlyDigits(userOrJid) }
 }
+
+// Verifica si un participante tiene flag de admin
 function isAdminFlag(p){ try { return !!(p && ((p.admin==='admin'||p.admin==='superadmin')||p.admin===true||p.isAdmin===true||p.isSuperAdmin===true||(typeof p.privilege==='string'&&/admin/i.test(p.privilege)))) } catch { return false } }
+
 async function isBotAdminInGroup(sock, groupJid){
   try{ const meta = await antibanSystem.queryGroupMetadata(sock, groupJid); const bot = normalizeDigits(sock?.user?.id||''); const me = (meta?.participants||[]).find(x=> normalizeDigits(x?.id||x?.jid)===bot ); return isAdminFlag(me) } catch { return false }
 }
@@ -113,59 +115,42 @@ function extractText(message) {
         || obj.interactiveResponseMessage?.listResponseMessage?.singleSelectReply?.selectedRowId
       if (rowId) return String(rowId).trim()
 
-      // Handle interactiveResponseMessage (from quick_reply button selections)
+      // Handle interactiveResponseMessage
       if (obj.interactiveResponseMessage) {
         const intRes = obj.interactiveResponseMessage
-
-        // Try nativeFlowResponseMessage (quick_reply buttons)
         if (intRes?.nativeFlowResponseMessage?.paramsJson) {
           try {
             const params = JSON.parse(intRes.nativeFlowResponseMessage.paramsJson)
             const id = params?.id || params?.command || params?.rowId || params?.row_id
-            if (id && typeof id === 'string') {
-              return String(id).trim()
-            }
+            if (id && typeof id === 'string') return String(id).trim()
           } catch {}
         }
-
-        // Try listResponseMessage
         if (intRes?.listResponseMessage?.singleSelectReply?.selectedRowId) {
           const rowId = intRes.listResponseMessage.singleSelectReply.selectedRowId
-          if (rowId && typeof rowId === 'string') {
-            return String(rowId).trim()
-          }
+          if (rowId && typeof rowId === 'string') return String(rowId).trim()
         }
       }
 
-      // Handle interactiveMessage (from list/button selections)
+      // Handle interactiveMessage
       if (obj.interactiveMessage) {
         const interMsg = obj.interactiveMessage
-
-        // Try to extract from various nested locations in priority order
         const selectedRowId = interMsg?.replyMessage?.selectedRowId
           || interMsg?.selectedRowId
           || interMsg?.body?.selectedDisplayText
           || interMsg?.nativeFlowResponseMessage?.selectedRowId
 
-        if (selectedRowId && typeof selectedRowId === 'string') {
-          return String(selectedRowId).trim()
-        }
+        if (selectedRowId && typeof selectedRowId === 'string') return String(selectedRowId).trim()
 
-        // Also try selectedDisplayText
         const displayText = interMsg?.replyMessage?.selectedDisplayText
           || interMsg?.body?.selectedDisplayText
-        if (displayText && typeof displayText === 'string') {
-          return String(displayText).trim()
-        }
+        if (displayText && typeof displayText === 'string') return String(displayText).trim()
 
-        // Try parsing paramsJson from nativeFlowMessage (when it's a response)
         const nativeFlowMsg = obj.interactiveMessage?.nativeFlowMessage
         if (nativeFlowMsg && Array.isArray(nativeFlowMsg.buttons)) {
           for (const btn of nativeFlowMsg.buttons) {
             if (btn.buttonParamsJson) {
               try {
                 const params = JSON.parse(btn.buttonParamsJson)
-                // Check if this has response data
                 if (params?.selectedButtonId || params?.response) {
                   const id = params.selectedButtonId || params.response?.selectedRowId
                   if (id) return String(id).trim()
@@ -175,7 +160,6 @@ function extractText(message) {
           }
         }
 
-        // Try parsing paramsJson if it exists
         const paramsJson = obj.interactiveMessage?.nativeFlowResponseMessage?.paramsJson
         if (paramsJson && typeof paramsJson === 'string') {
           try {
@@ -189,10 +173,8 @@ function extractText(message) {
       return ''
     }
     const m = message?.message || {}
-    // intento directo
     let out = pick(m)
     if (out) return out
-    // wrappers comunes
     const inner = m.viewOnceMessage?.message || m.ephemeralMessage?.message || m.documentWithCaptionMessage?.message || null
     if (inner) {
       out = pick(inner)
@@ -216,34 +198,24 @@ function parseCommand(text) {
   const prefixes = Array.from(new Set(((process.env.CMD_PREFIXES || '/!.#?$~').split('')).concat(['/','!','.'])))
   const s = raw.replace(/^\s+/, '')
 
-  // Handle button IDs that are already command-like (e.g., "/help", "btn_1")
   if (s.startsWith('/')) {
     const parts = s.slice(1).trim().split(/\s+/)
     return { command: `/${(parts.shift() || '').toLowerCase()}`, args: parts }
   }
 
-  // Handle prefixed commands
   if (prefixes.includes(s[0])) {
     const parts = s.slice(1).trim().split(/\s+/)
     const token = (parts.shift() || '').toLowerCase().replace(/^[\/.!#?$~]+/, '')
     return { command: `/${token}`, args: parts }
   }
 
-  // Handle direct button IDs that might be commands without prefix
   if (s.includes('/') || s.startsWith('btn_') || s.startsWith('copy_') || s.startsWith('todo_')) {
-    // If it looks like a command path, treat it as such
-    if (s.startsWith('btn_')) {
-      return { command: '', args: [] } // Button IDs without command info
-    }
-    // Handle special button commands
-    if (s.startsWith('copy_')) {
-      return { command: '/handlecopy', args: [s] }
-    }
+    if (s.startsWith('btn_')) return { command: '', args: [] }
+    if (s.startsWith('copy_')) return { command: '/handlecopy', args: [s] }
     if (s.startsWith('todo_')) {
-      // Parse todo commands like todo_mark_listid or todo_add_listid
       const parts = s.split('_')
       if (parts.length >= 3) {
-        const action = parts[1] // mark, unmark, delete, add
+        const action = parts[1]
         const listId = parts.slice(2).join('_')
         return { command: `/todo-${action}`, args: [listId] }
       }
@@ -280,7 +252,7 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   try { const o = { ...(opts||{}) }; if (o.quoted) delete o.quoted; await sock.sendMessage(jid, payload, o); return true } catch (err) { e2 = err }
   try { if (traceEnabled()) console.warn('[router.send] failed:', summarizePayload(payload), e1?.message || e1, '|', e2?.message || e2) } catch {}
   if (!silentOnFail) {
-    try { await sock.sendMessage(jid, { text: '⚠️ No pude enviar respuesta. Usa /help' }); } catch {}
+    // try { await sock.sendMessage(jid, { text: '⚠️ No pude enviar respuesta. Usa /help' }); } catch {}
   }
   return false
 }
@@ -289,7 +261,6 @@ function toMediaInput(value) {
   if (!value) return null
   if (Buffer.isBuffer(value)) return value
   if (typeof value === 'string') {
-    // dataURL base64 → Buffer, o URL/http
     if (value.startsWith('data:')) {
       try { const b = value.split(',')[1] || ''; return Buffer.from(b, 'base64') } catch { return null }
     }
@@ -330,20 +301,20 @@ function buildVCard(contact = {}) {
 async function sendResult(sock, jid, result, ctx) {
   console.log(`[DEBUG] sendResult called with result:`, result ? 'present' : 'null', 'type:', result?.type || 'text')
   if (!result) {
-    // Fallback seguro si el handler no devolvió nada
     console.log(`[DEBUG] No result provided, sending fallback...`)
     await safeSend(sock, jid, { text: '✅' }, undefined)
     return
   }
-  // Evitar quoted=true por compatibilidad; solo aceptar objeto explícito
   const opts = buildSendOptions(result)
 
-  // IMPORTANT CHANGE: NO DM FALLBACK — siempre responder en el mismo JID
+  // ============================================================
+  // ELIMINADO: Fallback a DM (ahora targetJid es siempre jid)
+  // ============================================================
   const targetJid = jid
 
   if (typeof result === 'string') { await safeSend(sock, targetJid, { text: result }, opts); return }
   if (result.message) { await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts); return }
-  // Reacciones y presencia
+
   if (result.type === 'reaction' && result.emoji) {
     const key = result.key || result.quoted?.key || ctx?.message?.key
     try { if (key) await sock.sendMessage(targetJid, { react: { text: result.emoji, key } }, opts) } catch {}
@@ -479,7 +450,6 @@ async function sendResult(sock, jid, result, ctx) {
     await safeSend(sock, targetJid, { text: plain.join('\n') }, opts);
     return;
   }
-  // Lista interactiva - Formato nativo de @itsukichan/baileys
   if (result.type === 'list' && Array.isArray(result.sections)) {
     const mapSections = (result.sections || []).map((sec) => ({
       title: sec.title || undefined,
@@ -490,7 +460,6 @@ async function sendResult(sock, jid, result, ctx) {
       })),
     }))
 
-    // Formato correcto para @itsukichan/baileys: listMessage
     const listPayload = {
       text: result.text || result.description || '📋 Menú disponible',
       buttonText: result.buttonText || 'Ver opciones',
@@ -503,7 +472,6 @@ async function sendResult(sock, jid, result, ctx) {
       return
     }
 
-    // Fallback a texto si falla la lista
     const lines = []
     lines.push(result.text || 'Menú')
     for (const sec of result.sections) {
@@ -513,11 +481,9 @@ async function sendResult(sock, jid, result, ctx) {
     await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
     return
   }
-  // Contenido crudo (interactiveMessage / nativeFlow)
   if (result.type === 'content' && result.content && typeof result.content === 'object') {
     const payload = { ...result.content }
     try { if (payload.viewOnceMessage?.message?.interactiveMessage) payload.viewOnceMessage.message.interactiveMessage.contextInfo = { ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo||{}), mentionedJid: result.mentions } } catch {}
-    // Si falla Native Flow, degradar a texto con botones simples
     if (!(await safeSend(sock, targetJid, payload, opts, true))) {
       try {
         const body = payload?.viewOnceMessage?.message?.interactiveMessage?.body?.text || 'Opciones'
@@ -536,7 +502,6 @@ async function sendResult(sock, jid, result, ctx) {
     }
     return
   }
-  // fallback
   await safeSend(sock, targetJid, { text: result.text || '✅ Listo' }, opts)
 }
 
@@ -544,11 +509,10 @@ export async function dispatch(ctx = {}) {
   const { sock, remoteJid, isGroup } = ctx
   if (!sock || !remoteJid) return false
 
-  // Check if bot is enabled in this group
   if (isGroup) {
     const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
     if (!botEnabled) {
-      return false // Bot is disabled in this group, don't process commands
+      return false
     }
   }
 
@@ -563,8 +527,6 @@ export async function dispatch(ctx = {}) {
     console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${ctx.senderNumber || ctx.sender || '?'} | Owner: ${ctx.isOwner}`)
   }
 
-  // Si el texto viene de una selección de lista pero no tiene prefijo,
-  // interpretar el primer token como comando (ej: "help ai" -> /help ai)
   if (!command) {
     try {
       const msg = ctx.message?.message || {}
@@ -584,7 +546,6 @@ export async function dispatch(ctx = {}) {
       }
     } catch {}
   }
-  // fromMe sin prefijo → habilitable por env
   try {
     const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'false').toLowerCase() === 'true'
     if (!command && allowNoPrefix && ctx?.message?.key?.fromMe) {
@@ -592,26 +553,21 @@ export async function dispatch(ctx = {}) {
       if (parts.length) command = `/${(parts.shift() || '').toLowerCase()}`
     }
   } catch {}
-  // Palabras sin prefijo comunes (help/menu) → habilitable por env
-  // Pero NO procesar mensajes propios para evitar bucles infinitos
   try {
     if (!command && !ctx?.message?.key?.fromMe) {
       const raw = String(text || '').trim().toLowerCase()
       const list = String(process.env.ALLOW_NO_PREFIX_WORDS || 'help,menu,ayuda,comandos').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
       const first = raw.split(/\s+/)[0] || ''
       if (first && list.includes(first)) {
-        // Mapear todas a /help para unificar UI
         command = '/help'
       }
     }
   } catch {}
   if (!command) {
-    // Acciones directas: url|https://...
     if (/^url\|/i.test(text)) {
       const url = text.split('|')[1] || ''
       if (url) { await safeSend(sock, remoteJid, { text: url }); return true }
     }
-    // No-op
     return false
   }
 
@@ -619,13 +575,11 @@ export async function dispatch(ctx = {}) {
 
   let registry = null
   try {
-    // Attempt to use cached registry first (global var)
     if (global.__COMMAND_REGISTRY && global.__COMMAND_REGISTRY.timestamp) {
       registry = global.__COMMAND_REGISTRY.registry || null
     } else {
-      // Preload registry with retries and cache it
       try {
-        const registryModulePath = path.resolve(__dirname, './registry/index.js') // <-- usa __dirname (definido arriba)
+        const registryModulePath = path.resolve(__dirname, './registry/index.js')
         console.log('[registry] attempting to preload registry module:', registryModulePath)
         const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 4, timeoutMs: 20000, backoffMs: 1500 })
         const get = mod?.getCommandRegistry
@@ -634,8 +588,7 @@ export async function dispatch(ctx = {}) {
         if (registry) console.log('[registry] precargado OK')
         else console.warn('[registry] módulo cargado pero no devolvió registry (getCommandRegistry missing)')
       } catch (impErr) {
-        console.error('⚠️ ERROR CRÍTICO AL CARGAR EL REGISTRO DE COMANDOS. CAUSA DEL MODO DE EMERGENCIA:', impErr?.message || impErr)
-        console.error('Stack Trace:', impErr?.stack || impErr)
+        console.error('⚠️ ERROR CRÍTICO AL CARGAR EL REGISTRO DE COMANDOS:', impErr?.message || impErr)
       }
     }
   } catch (e) {
@@ -645,7 +598,6 @@ export async function dispatch(ctx = {}) {
 
   if (!registry || !registry.has(command)) {
     console.log(`[DEBUG] Command ${command} not found in registry, checking lazy fallbacks...`)
-    // Fallback directo para comandos críticos si el registry falla
     const lazy = new Map()
     lazy.set('/debugbot', async (ctx) => (await import('./admin.js')).debugBot(ctx))
     lazy.set('/admins', async (ctx) => (await import('./groups.js')).admins(ctx))
@@ -679,6 +631,35 @@ export async function dispatch(ctx = {}) {
 
   const entry = registry.get(command)
   console.log(`[DEBUG] Found registry entry for ${command}:`, !!entry)
+
+  // ============================================================
+  // AGREGADO: Verificación de permisos de Admin antes de ejecutar
+  // ============================================================
+  if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
+    try {
+      // 1. Obtener metadatos (usando caché si es posible)
+      const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
+      const participants = groupMeta?.participants || []
+
+      // 2. Normalizar el ID del remitente
+      const senderId = normalizeDigits(ctx.sender || ctx.senderNumber || ctx.message?.key?.participant || '')
+
+      // 3. Buscar al remitente en la lista
+      const participant = participants.find(p => normalizeDigits(p.id) === senderId)
+
+      // 4. Verificar flag
+      if (!isAdminFlag(participant)) {
+        console.log(`[router] Bloqueado comando ${command} por falta de privilegios admin. User: ${senderId}`)
+        await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
+        return true // Detenemos la ejecución
+      }
+    } catch (errCheck) {
+      console.error('[router] Error verificando admins:', errCheck)
+      // En caso de error crítico al verificar, por seguridad se puede denegar o permitir según política.
+      // Aquí optamos por loguear y continuar (o podrías denegar).
+    }
+  }
+
   const params = { ...ctx, text, command, args, fecha: new Date().toISOString() }
   try {
     console.log(`[DEBUG] Executing registry command ${command}...`)
@@ -688,7 +669,6 @@ export async function dispatch(ctx = {}) {
     )
     console.log(`[DEBUG] Registry command executed, result type:`, typeof result, 'keys:', result ? Object.keys(result) : 'null')
 
-    // Add reaction based on success/failure
     const isSuccess = result?.success !== false && !result?.error;
     const reactionEmoji = isSuccess ? '✅' : '❌';
 
@@ -705,7 +685,6 @@ export async function dispatch(ctx = {}) {
     else await sendResult(sock, remoteJid, result, ctx)
     console.log(`[DEBUG] Result sent successfully`)
 
-    // Add delivery confirmation for media commands
     if (isSuccess && (result?.type === 'video' || result?.type === 'image' || result?.type === 'audio' || result?.type === 'sticker')) {
       try {
         await sock.sendMessage(remoteJid, {
@@ -719,7 +698,6 @@ export async function dispatch(ctx = {}) {
     return true
   } catch (e) {
     console.log(`[DEBUG] Registry command failed:`, e?.message || e)
-    // Add failure reaction
     try {
       await sock.sendMessage(remoteJid, {
         react: { text: '❌', key: ctx.message.key }
@@ -734,4 +712,3 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
-}
