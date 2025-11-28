@@ -1,5 +1,5 @@
 // commands/stickers.js — utilidades de stickers robustecidas con Sharp (lazy) y FFmpeg
-import { downloadContentFromMessage } from '@whiskeysockets/baileys'
+import { downloadContentFromMessage } from '@itsukichan/baileys'
 import ffmpeg from 'fluent-ffmpeg'
 import ffmpegInstaller from 'ffmpeg-static' // <--- IMPORTACIÓN AGREGADA
 import axios from 'axios'
@@ -9,7 +9,7 @@ import path from 'path'
 import { exec } from 'child_process'
 
 // <--- CONFIGURACIÓN AGREGADA: Vincula el ejecutable al sistema
-ffmpeg.setFfmpegPath(ffmpegInstaller) 
+ffmpeg.setFfmpegPath(ffmpegInstaller)
 
 // Función para ejecutar comandos de forma asíncrona
 const execAsync = (command) => {
