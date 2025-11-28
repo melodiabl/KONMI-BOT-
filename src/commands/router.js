@@ -247,7 +247,8 @@ function summarizePayload(p) {
 }
 
 
-// Función auxiliar para construir el payload interactivo moderno (Native Flow en ViewOnce)
+// Función auxiliar para construir el payload interactivo moderno (Native Flow)
+// Usa isGroup para decidir entre interactiveMessage (privado) o viewOnceMessage (grupo).
 function createInteractiveMessage(data, isGroup = true) {
   const { body, footer, title, buttons, sections, mentions } = data
 
@@ -269,7 +270,7 @@ function createInteractiveMessage(data, isGroup = true) {
     }
   }
 
-  // CRUCIAL: Añadir contextInfo para menciones/quoted (necesario en grupos)
+  // CRUCIAL: Añadir contextInfo para menciones/quoted
   if (mentions && mentions.length > 0) {
     interactiveMessage.contextInfo = { mentionedJid: mentions }
   }
@@ -531,8 +532,8 @@ async function sendResult(sock, jid, result, ctx) {
       footer: result.footer,
       title: result.header || result.title,
       buttons: result.buttons,
-      mentions: result.mentions // CRUCIAL: Pasar las menciones
-    }, ctx.isGroup) // <--- PASAMOS isGroup AQUÍ
+      mentions: result.mentions
+    }, ctx.isGroup) // <--- PASAMOS ctx.isGroup AQUÍ
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
@@ -568,8 +569,8 @@ async function sendResult(sock, jid, result, ctx) {
       title: result.title,
       buttonText: result.buttonText || 'Ver Opciones',
       sections: nativeSections,
-      mentions: result.mentions // CRUCIAL: Pasar las menciones
-    }, ctx.isGroup) // <--- PASAMOS isGroup AQUÍ
+      mentions: result.mentions
+    }, ctx.isGroup) // <--- PASAMOS ctx.isGroup AQUÍ
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
@@ -592,6 +593,13 @@ async function sendResult(sock, jid, result, ctx) {
             payload.viewOnceMessage.message.interactiveMessage.contextInfo = {
                 ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo || {}),
                 mentionedJid: result.mentions
+            }
+        }
+        // Si no es un grupo y el contenido está envuelto en viewOnceMessage, intentamos desempaquetarlo para privados.
+        if (!ctx.isGroup && payload.viewOnceMessage) {
+            if (payload.viewOnceMessage.message?.interactiveMessage) {
+                 const unwrapped = { interactiveMessage: payload.viewOnceMessage.message.interactiveMessage }
+                 if (await safeSend(sock, targetJid, unwrapped, opts, true)) return
             }
         }
     } catch {}
@@ -623,29 +631,27 @@ export async function dispatch(ctx = {}) {
   if (!sock || !remoteJid) return false
 
   // ============================================================
-  // LÓGICA FROM-ME / OWNER / SENDER (Detección Owner)
+  // LÓGICA FROM-ME / OWNER / SENDER
   // ============================================================
   const isFromMe = ctx.message?.key?.fromMe || false
 
   // Calcular el Sender ID real
   let senderId = ''
   if (isFromMe) {
-    // Si viene de mí, el sender soy yo (sock.user.id)
     senderId = normalizeDigits(sock.user?.id || '')
-    // Si viene de mí, soy Owner automáticamente
     ctx.isOwner = true
   } else {
-    // Si viene de otro, usamos el sender normal
     senderId = normalizeDigits(ctx.sender || ctx.senderNumber || ctx.message?.key?.participant || '')
   }
 
-  // Actualizar el contexto con el senderId correcto
+  // Actualizar el contexto
   ctx.sender = `${senderId}@s.whatsapp.net`
   ctx.senderNumber = senderId
-  ctx.usuario = `${senderId}@s.whatsapp.net` // Unificar usuario también
+  ctx.usuario = `${senderId}@s.whatsapp.net`
 
   // ============================================================
-
+  // FILTRO GENERAL Y DETECCIÓN DE TEXTO
+  // ============================================================
   if (isGroup) {
     const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
     if (!botEnabled) {
@@ -655,33 +661,37 @@ export async function dispatch(ctx = {}) {
 
   const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
 
-  // INICIO DE LA CORRECCIÓN: Bloqueo de auto-reprocesamiento de Fallback
+  // 1. Detección de comando principal (DEBE IR ANTES DEL FILTRO FROM-ME)
+  const parsed = parseCommand(text)
+  let command = parsed.command
+  const args = parsed.args || []
+
+  // 2. CORRECCIÓN CRUCIAL (Filtro Anti-Loop)
   if (isFromMe) {
-    // Verificar si el mensaje fromMe es una respuesta de botón/lista (Interactive Reply) o solo texto plano.
-    // Si es solo texto plano, es el fallback que causa el loop.
+    // Verificar si el mensaje fromMe es una respuesta de botón/lista (Interactive Reply).
     const isInteractiveReply = !!(ctx.message?.message?.buttonsResponseMessage ||
                                  ctx.message?.message?.listResponseMessage ||
                                  ctx.message?.message?.templateButtonReplyMessage ||
                                  ctx.message?.message?.interactiveResponseMessage ||
                                  ctx.message?.message?.interactiveMessage);
 
-    if (!isInteractiveReply) {
-        // Si no es una respuesta interactiva, ignoramos el mensaje para romper el loop.
-        if (traceEnabled()) console.log(`[router] IGNORANDO: Mensaje fromMe no interactivo (probablemente fallback).`)
+    // Si NO es una respuesta interactiva (el texto de fallback),
+    // Y NO se detectó un comando explícito (ej: /help, .help),
+    // ENTONCES lo ignoramos (para romper el loop).
+    if (!isInteractiveReply && !command) {
+        if (traceEnabled()) console.log(`[router] IGNORANDO: Mensaje fromMe no interactivo y sin comando explícito (probablemente texto de fallback).`);
         return false;
     }
+    // Si es una respuesta interactiva O es un comando explícito, el bot continúa.
   }
-  // FIN DE LA CORRECCIÓN
-
-  const parsed = parseCommand(text)
-  let command = parsed.command
-  const args = parsed.args || []
+  // FIN DE CORRECCIÓN
 
   if (traceEnabled()) {
     const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
     console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${senderId} | Owner: ${ctx.isOwner}`)
   }
 
+  // 3. Detección de comando secundaria (para botones/listas sin prefijo)
   if (!command) {
     try {
       const msg = ctx.message?.message || {}
@@ -702,8 +712,7 @@ export async function dispatch(ctx = {}) {
     } catch {}
   }
 
-  // FromMe: Se mantiene la lógica para comandos sin prefijo en fromMe (en caso de que sea necesario para algún flujo),
-  // pero ya está blindada por la corrección anterior.
+  // 4. Lógica de comandos sin prefijo (fromMe y palabras clave)
   try {
     const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'true').toLowerCase() === 'true'
     if (!command && allowNoPrefix && isFromMe) {
@@ -713,9 +722,8 @@ export async function dispatch(ctx = {}) {
   } catch {}
 
 
-  // Palabras clave sin prefijo (help, menu)
   try {
-    if (!command && !isFromMe) { // Evitamos que el bot responda a su propio texto "menu" si no es comando explicito
+    if (!command && !isFromMe) {
       const raw = String(text || '').trim().toLowerCase()
       const list = String(process.env.ALLOW_NO_PREFIX_WORDS || 'help,menu,ayuda,comandos').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
       const first = raw.split(/\s+/)[0] || ''
@@ -725,6 +733,7 @@ export async function dispatch(ctx = {}) {
     }
   } catch {}
 
+  // 5. Salida si no hay comando
   if (!command) {
     if (/^url\|/i.test(text)) {
       const url = text.split('|')[1] || ''
@@ -732,6 +741,10 @@ export async function dispatch(ctx = {}) {
     }
     return false
   }
+
+  // ============================================================
+  // EJECUCIÓN DEL COMANDO
+  // ============================================================
 
   console.log(`[DEBUG] Command found: ${command}, checking registry...`)
 
@@ -794,15 +807,11 @@ export async function dispatch(ctx = {}) {
   const entry = registry.get(command)
   console.log(`[DEBUG] Found registry entry for ${command}:`, !!entry)
 
-  // ============================================================
-  // Verificación de Admin usando senderId corregido
-  // ============================================================
+  // Verificación de Admin
   if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
     try {
       const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
       const participants = groupMeta?.participants || []
-
-      // Buscar participante usando el senderId calculado arriba (que ya maneja fromMe)
       const participant = participants.find(p => normalizeDigits(p.id) === senderId)
 
       if (!isAdminFlag(participant)) {
@@ -867,3 +876,4 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
+
