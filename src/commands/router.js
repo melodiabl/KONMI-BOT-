@@ -642,7 +642,7 @@ export async function dispatch(ctx = {}) {
   let senderId = ''
   if (isFromMe) {
     senderId = normalizeDigits(sock.user?.id || '')
-    ctx.isOwner = true
+    ctx.isOwner = true // <--- Esto asegura que el bot es Owner
   } else {
     senderId = normalizeDigits(ctx.sender || ctx.senderNumber || ctx.message?.key?.participant || '')
   }
@@ -808,23 +808,28 @@ export async function dispatch(ctx = {}) {
   console.log(`[DEBUG] Found registry entry for ${command}:`, !!entry)
 
   // ============================================================
-  // Verificación de Admin
+  // Verificación de Admin (CORREGIDA)
   // ============================================================
   if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
-    try {
-      const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
-      const participants = groupMeta?.participants || []
+    // ✅ CORRECCIÓN: Si el mensaje es del Owner (el bot fromMe), se permite.
+    if (ctx.isOwner) {
+      console.log(`[router] Bypass de admin para ${command}: es el Owner (Bot itself).`)
+    } else {
+      try {
+        const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
+        const participants = groupMeta?.participants || []
 
-      // Buscar participante usando el senderId calculado
-      const participant = participants.find(p => normalizeDigits(p.id) === senderId)
+        // Buscar participante usando el senderId calculado
+        const participant = participants.find(p => normalizeDigits(p.id) === senderId)
 
-      if (!isAdminFlag(participant)) {
-        console.log(`[router] Bloqueado comando ${command} por falta de privilegios admin. User: ${senderId}`)
-        await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
-        return true
+        if (!isAdminFlag(participant)) {
+          console.log(`[router] Bloqueado comando ${command} por falta de privilegios admin. User: ${senderId}`)
+          await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
+          return true
+        }
+      } catch (errCheck) {
+        console.error('[router] Error verificando admins:', errCheck)
       }
-    } catch (errCheck) {
-      console.error('[router] Error verificando admins:', errCheck)
     }
   }
 
