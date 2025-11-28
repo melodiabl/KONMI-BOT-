@@ -1,5 +1,9 @@
 // whatsapp.js – QR y Pairing Code funcionales con código personalizado KONMIBOT
 import 'dotenv/config'
+// =========================================================================
+// ✅ DIAGNÓSTICO: Esto te ayudará a confirmar si TRACE_ROUTER=true está cargado.
+console.log('✅ DIAGNÓSTICO TRACE_ROUTER:', process.env.TRACE_ROUTER);
+// =========================================================================
 import fs from 'fs'
 import path from 'path'
 import pino from 'pino'
@@ -304,25 +308,29 @@ export async function connectToWhatsApp(
   let wantPair = usePairingCode || authMethod === 'pairing';
 
   // Si ya está registrado y no se fuerza pairing, usar sesión existente
-  if (wantPair && isRegistered && !usePairingCode) {
+  if (isRegistered) { // Simplificado: si está registrado, no queremos pairing/QR a menos que se fuerce
     console.log('ℹ️ Sesión existente detectada. Usando credenciales guardadas.');
     wantPair = false;
   }
 
-  // Sin número válido, degradar a QR
-  if (wantPair && !runtimeNumber) {
+  // ⚠️ TRUCO: Si no está registrado, pero queremos QR/Pairing y no hay número, obligar a QR.
+  if (wantPair && !isRegistered && !runtimeNumber) {
     console.log('⚠️ No se proporcionó número de teléfono. Cambiando a modo QR.');
     wantPair = false;
   }
 
+  // Establecer el método final de autenticación
   pairingTargetNumber = wantPair ? runtimeNumber : null;
   authMethod = wantPair ? 'pairing' : 'qr';
+
+  // Si está registrado, forzar el uso de credenciales y no generar QR/Pairing
+  const finalAuthMethod = isRegistered ? 'existing_session' : authMethod;
 
   const QUIET = String(process.env.QUIET_LOGS || 'false').toLowerCase() === 'true';
   const infoLog = (...a) => { if (!QUIET) console.log(...a) };
 
-  infoLog(`📱 Modo de autenticación: ${authMethod.toUpperCase()}`);
-  if (wantPair) infoLog(`📞 Número objetivo: +${pairingTargetNumber}`);
+  infoLog(`📱 Modo de autenticación: ${finalAuthMethod.toUpperCase()}`);
+  if (finalAuthMethod === 'pairing') infoLog(`📞 Número objetivo: +${pairingTargetNumber}`);
 
   // Resetear flag si se fuerza pairing
   if (usePairingCode) {
@@ -337,7 +345,7 @@ export async function connectToWhatsApp(
   sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: !wantPair,
+    printQRInTerminal: finalAuthMethod === 'qr', // Solo imprimir QR si el método es QR
     browser,
     version: waVersion,
     markOnlineOnConnect: false,
@@ -349,6 +357,8 @@ export async function connectToWhatsApp(
     emitOwnMessages: true,
     mobile: false,
     getMessage: async () => null,
+    // Si ya está registrado, no solicitar código de emparejamiento por defecto
+    shouldSyncHistory: !isRegistered
   })
 
   // ============ VALIDAR SOCKET ============
@@ -396,17 +406,17 @@ export async function connectToWhatsApp(
   try {
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr, isNewLogin } = update || {};
+      const isAuthenticated = !!state?.creds?.registered || connection === 'open';
 
-      // Generar QR (solo si no estamos en modo pairing)
-      if (qr && !wantPair) {
+      // Generar QR (solo si no estamos en modo pairing Y NO ESTAMOS AUTENTICADOS)
+      if (qr && finalAuthMethod === 'qr' && !isAuthenticated) {
         qrCode = qr;
         await saveQrArtifacts(qr, path.join(savedAuthPath, 'qr'));
         infoLog('🟩 QR code generado - Escanea con tu WhatsApp');
       }
 
-      // Solicitar Pairing Code con KONMIBOT (solo una vez por sesión)
-      if (wantPair && !pairingCodeRequestedForSession && !!pairingTargetNumber) {
-        // Esperar a que la conexión esté lista
+      // Solicitud de Pairing Code (solo si el método es pairing Y NO ESTAMOS AUTENTICADOS)
+      if (finalAuthMethod === 'pairing' && !pairingCodeRequestedForSession && !!pairingTargetNumber && !isAuthenticated) {
         if (connection !== 'open' && connection !== 'connecting') {
           return;
         }
@@ -417,14 +427,9 @@ export async function connectToWhatsApp(
 
         try {
           const number = onlyDigits(pairingTargetNumber);
-          if (!number) {
-            infoLog('❌ Número inválido para vinculación.');
-            return;
-          }
-
+          if (!number) { infoLog('❌ Número inválido para vinculación.'); return; }
           if (typeof sock.requestPairingCode !== 'function') {
             infoLog('⚠️ La versión de Baileys no soporta códigos de emparejamiento.');
-            infoLog('📦 Instala: npm install @itsukichan/baileys@latest');
             return;
           }
 
@@ -449,7 +454,7 @@ export async function connectToWhatsApp(
               console.log(`║  📞 Número: +${number.padEnd(30)} ║`);
               console.log(`║  🔐 Código: ${grouped.padEnd(30)} ║`);
               console.log(`║  🎯 Custom: ${CUSTOM_PAIRING_CODE.padEnd(30)} ║`);
-              console.log(`║  ⏰ Válido por 10 minutos               ║`);
+              console.log('║  ⏰ Válido por 10 minutos               ║');
               console.log('╠═══════════════════════════════════════╣');
               console.log('║  📱 En tu teléfono:                    ║');
               console.log('║  1. WhatsApp > Dispositivos vinculados  ║');
@@ -511,29 +516,36 @@ export async function connectToWhatsApp(
         const err = lastDisconnect?.error;
         const status = err?.output?.statusCode || err?.code;
         const msg = err?.message || '';
-        const wasRegistered = !!state?.creds?.registered;
+
+        // ❌ LOGOUT DEFINITIVO (no se debe reintentar, se requiere login manual)
+        // DisconnectReason.loggedOut (401), o si el código HTTP es 401/403 (Unauthorized/Forbidden)
+        const shouldReconnect = status !== DisconnectReason.loggedOut && status !== 401 && status !== 403;
+
+        connectionStatus = shouldReconnect ? 'reconnecting' : 'disconnected';
 
         if (status === 428) {
           connectionStatus = 'waiting_pairing';
           infoLog('⏳ Esperando que ingreses el código de vinculación en tu teléfono...');
-          return;
+          return; // No reintentar, estamos esperando el código.
         }
 
-        if (status === DisconnectReason?.loggedOut && wasRegistered) {
-          connectionStatus = 'disconnected';
-          infoLog('❌ Sesión cerrada (loggedOut). Por favor inicia sesión de nuevo.');
-          return;
+        if (shouldReconnect) {
+          // ✅ AUTO-RECONEXIÓN: Reintento por desconexión transitoria
+          const backoff = 5000; // 5 segundos de espera (puedes aumentar si tienes muchos reintentos)
+          infoLog(`⚠️ Conexión cerrada (status ${status || '?'}: ${msg || 'sin detalles'}). Auto-reintentando en ${backoff}ms...`);
+
+          setTimeout(() => {
+            connectToWhatsApp(savedAuthPath, false, null).catch((e) => {
+              console.error('[reconnect] fallo al reconectar:', e && (e.message || e));
+            });
+          }, backoff);
+        } else {
+          // ❌ Sesión terminada permanentemente
+          infoLog('❌ Sesión cerrada permanentemente (LoggedOut/401/403). Por favor, inicia sesión de nuevo.');
+          qrCode = null;
+          qrCodeImage = null;
         }
-
-        connectionStatus = 'reconnecting';
-        const backoff = 3000; // Aumentar tiempo de espera
-        infoLog(`⚠️ Conexión cerrada (status ${status || '?'}: ${msg || 'sin detalles'}). Reintentando en ${backoff}ms...`);
-
-        setTimeout(() => {
-          connectToWhatsApp(savedAuthPath, false, null).catch((e) => {
-            console.error('[reconnect] fallo al reconectar:', e && (e.message || e));
-          });
-        }, backoff);
+        return; // Detener el flujo del evento 'close'
       }
     });
     console.log('✅ Evento connection.update registrado');
@@ -832,7 +844,7 @@ export async function requestMainBotPairingCode() {
       console.log(`║  📞 Número: +${normalizedNumber.padEnd(30)} ║`);
       console.log(`║  🔐 Código: ${grouped.padEnd(30)} ║`);
       console.log(`║  🎯 Custom: ${CUSTOM_PAIRING_CODE.padEnd(30)} ║`);
-      console.log(`║  ⏰ Válido por 10 minutos               ║`);
+      console.log('║  ⏰ Válido por 10 minutos               ║');
       console.log('╠═══════════════════════════════════════╣');
       console.log('║  📱 En tu teléfono:                    ║');
       console.log('║  1. WhatsApp > Dispositivos vinculados  ║');
