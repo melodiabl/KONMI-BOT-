@@ -2,6 +2,14 @@
 // Generación de imágenes a partir de texto (AI) y QR
 
 import fetch from '../utils/utils/fetch.js';
+import Jimp from 'jimp';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from 'ffmpeg-static';
+import { tmpdir } from 'os';
+import { promises as fs } from 'fs';
+import path from 'path';
+
+ffmpeg.setFfmpegPath(ffmpegInstaller);
 
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, options);
@@ -12,14 +20,9 @@ async function fetchJson(url, options = {}) {
 export async function imageFromPrompt({ args }) {
   const prompt = (args || []).join(' ').trim();
   if (!prompt) return { success: true, message: 'ℹ️ Uso: /image [prompt]\nEjemplo: /image gato astronauta estilo sticker', quoted: true };
-  // Proveedores sencillos (sin claves): Pollinations y Vreden
+  // Proveedores sencillos (sin claves): Pollinations
   const providers = [
     async () => ({ type: 'image', image: { url: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ' digital sticker illustration')}` }, caption: `🖼️ ${prompt}` }),
-    async () => {
-      const data = await fetchJson(`https://api.vreden.my.id/api/texttoimg?prompt=${encodeURIComponent(prompt)}`);
-      if (data?.status && data?.data?.url) return { type: 'image', image: { url: data.data.url }, caption: `🖼️ ${prompt}`, quoted: true };
-      throw new Error('Proveedor inválido');
-    },
   ];
   const errors = [];
   for (const exec of providers) {
@@ -28,34 +31,97 @@ export async function imageFromPrompt({ args }) {
   return { success: false, message: `⚠️ No se pudo generar imagen (${errors.join(' | ')})`, quoted: true };
 }
 
-// Nota: /qrtexto removido a solicitud. Se mantiene solo /qr para subbots.
+async function generateBratStyleImage(text) {
+    const image = new Jimp(512, 512, '#FFFFFF');
+    const font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+    image.print(
+        font,
+        0,
+        0,
+        {
+            text,
+            alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
+            alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE,
+        },
+        image.getWidth(),
+        image.getHeight()
+    );
+    return await image.getBufferAsync(Jimp.MIME_PNG);
+}
 
-export async function brat({ args, usuario }) {
+async function generateAnimatedBratStyleImage(text) {
+    const frames = [];
+    const tempDir = await fs.mkdtemp(path.join(tmpdir(), 'brat-'));
+
+    for (let i = 0; i <= 10; i++) {
+        const opacity = Math.sin(Math.PI * i / 10);
+        const image = new Jimp(512, 512, '#FFFFFF');
+        const font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+        const textImage = new Jimp(512, 512, 0x0);
+        textImage.print(font, 0, 0, {
+            text,
+            alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
+            alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE,
+        }, textImage.getWidth(), textImage.getHeight());
+        textImage.opacity(opacity);
+        image.composite(textImage, 0, 0);
+        const framePath = path.join(tempDir, `frame-${i}.png`);
+        await image.writeAsync(framePath);
+        frames.push(framePath);
+    }
+
+    const outputPath = path.join(tempDir, 'output.webp');
+    await new Promise((resolve, reject) => {
+        ffmpeg()
+            .input(path.join(tempDir, 'frame-%d.png'))
+            .inputOptions(['-framerate', '10'])
+            .outputOptions(['-vcodec', 'libwebp', '-loop', '0', '-s', '512:512'])
+            .toFormat('webp')
+            .save(outputPath)
+            .on('end', resolve)
+            .on('error', reject);
+    });
+
+    const stickerBuffer = await fs.readFile(outputPath);
+    await fs.rm(tempDir, { recursive: true, force: true });
+    return stickerBuffer;
+}
+
+
+export async function brat({ args }) {
   const text = (args || []).join(' ').trim();
   if (!text) return { success: true, message: 'ℹ️ Uso: /brat [texto]\nEjemplo: /brat Hola mundo', quoted: true };
   try {
-    const res = await fetch(`https://api.vreden.my.id/api/brat?text=${encodeURIComponent(text)}`);
-    const data = await res.json().catch(()=>null);
-    if (data?.status && data?.data?.url) {
-      return { success: true, type: 'sticker', sticker: { url: data.data.url }, caption: `🎨 BRAT\n📝 ${text}`, message: `🎨 *BRAT - Sticker*\n\n📝 **Texto:** "${text}"\n🎭 **Estilo:** BRAT`, quoted: true };
-    }
-    return { success: true, message: `⚠️ No se pudo generar el sticker: "${text}"`, quoted: true };
-  } catch {
+    const imageBuffer = await generateBratStyleImage(text);
+    return {
+        success: true,
+        type: 'sticker',
+        sticker: imageBuffer,
+        caption: `🎨 BRAT\n📝 ${text}`,
+        message: `🎨 *BRAT - Sticker*\n\n📝 **Texto:** "${text}"\n🎭 **Estilo:** BRAT`,
+        quoted: true
+    };
+  } catch(e) {
+    console.error(e)
     return { success: false, message: '⚠️ Error generando sticker BRAT.', quoted: true };
   }
 }
 
-export async function bratvd({ args, usuario }) {
-  const text = (args || []).join(' ').trim();
-  if (!text) return { success: true, message: 'ℹ️ Uso: /bratvd [texto]\nEjemplo: /bratvd Hola mundo', quoted: true };
-  try {
-    const res = await fetch(`https://api.vreden.my.id/api/bratvd?text=${encodeURIComponent(text)}`);
-    const data = await res.json().catch(()=>null);
-    if (data?.status && data?.data?.url) {
-      return { success: true, type: 'sticker', sticker: { url: data.data.url }, caption: `🎨 BRAT VD\n📝 ${text}`, quoted: true };
+export async function bratvd({ args }) {
+    const text = (args || []).join(' ').trim();
+    if (!text) return { success: true, message: 'ℹ️ Uso: /bratvd [texto]\nEjemplo: /bratvd Hola mundo', quoted: true };
+    try {
+        const imageBuffer = await generateAnimatedBratStyleImage(text);
+        return {
+            success: true,
+            type: 'sticker',
+            sticker: imageBuffer,
+            caption: `🎨 BRAT VD\n📝 ${text}`,
+            message: `🎨 *BRAT - Sticker Animado*\n\n📝 **Texto:** "${text}"\n🎭 **Estilo:** BRAT VD`,
+            quoted: true
+        };
+    } catch(e) {
+        console.error(e)
+        return { success: false, message: '⚠️ Error generando sticker BRAT animado.', quoted: true };
     }
-    return { success: true, message: `⚠️ No se pudo generar el sticker animado: "${text}"`, quoted: true };
-  } catch {
-    return { success: false, message: '⚠️ Error generando sticker animado BRAT.', quoted: true };
-  }
 }
