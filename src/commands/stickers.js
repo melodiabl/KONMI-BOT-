@@ -50,6 +50,7 @@ export async function sticker(ctx) {
   try {
     const stream = await downloadContentFromMessage(media, mediaType);
     const chunks = [];
+    // ✅ CRÍTICO: Asegurarse de descargar todo el stream a un buffer antes de continuar.
     for await (const chunk of stream) {
       chunks.push(chunk);
     }
@@ -70,6 +71,7 @@ export async function sticker(ctx) {
       if (!sharp) {
         return { success: false, message: '⚠️ Falta dependencia "sharp" para crear stickers desde imagen. Instala con: npm i sharp', quoted: true }
       }
+      // Sharp maneja la transparencia con el objeto { alpha: 0 }
       stickerBuffer = await sharp(mediaBuffer)
         .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .webp()
@@ -83,7 +85,8 @@ export async function sticker(ctx) {
         ffmpeg(tempInputPath)
           .outputOptions([
             '-vcodec', 'libwebp',
-            '-vf', "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,fps=15, pad=512:512:-1:-1:color=0x00000000",
+            // 💡 CORRECCIÓN CLAVE: Cambiado 'color=0x00000000' a 'color=black@0.0'
+            '-vf', "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,fps=15, pad=512:512:-1:-1:color=black@0.0",
             '-loop', '0',
             '-ss', '00:00:00.0',
             '-t', '00:00:07.0', // Duración máxima de 7 segundos
@@ -95,7 +98,10 @@ export async function sticker(ctx) {
           .toFormat('webp')
           .save(tempOutputPath)
           .on('end', resolve)
-          .on('error', reject);
+          .on('error', (err) => {
+             console.error('FFmpeg Error:', err.message);
+             reject(new Error(`FFmpeg exited with code ${err.code}: ${err.message}`));
+          });
       });
 
       stickerBuffer = await fs.readFile(tempOutputPath);
@@ -161,6 +167,7 @@ export async function toimg({ sock, message }) {
   try {
     const stream = await downloadContentFromMessage(stickerMessage, 'sticker');
     const chunks = [];
+    // ✅ CRÍTICO: Asegurarse de descargar todo el stream a un buffer antes de continuar.
     for await (const chunk of stream) {
       chunks.push(chunk);
     }
@@ -170,7 +177,6 @@ export async function toimg({ sock, message }) {
     // Usamos Sharp (si está disponible) para una conversión más segura a PNG
     if (stickerMessage.isAnimated) {
         // Para stickers animados, necesitamos webp-js o similar para decodificar frames.
-        // Por simplicidad, por ahora solo manejaremos la conversión de stickers estáticos.
         // Una alternativa es usar ffmpeg para convertir webp animado a gif o mp4.
         const tempInputPath = path.join(tmpdir(), `sticker_input_${Date.now()}.webp`);
         const tempOutputPath = path.join(tmpdir(), `sticker_output_${Date.now()}.gif`);
