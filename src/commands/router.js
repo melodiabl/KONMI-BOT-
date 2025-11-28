@@ -631,7 +631,7 @@ export async function dispatch(ctx = {}) {
   if (!sock || !remoteJid) return false
 
   // ============================================================
-  // LÓGICA FROM-ME / OWNER / SENDER
+  // LÓGICA FROM-ME / OWNER / SENDER (Detección Owner)
   // ============================================================
   const isFromMe = ctx.message?.key?.fromMe || false
 
@@ -644,14 +644,13 @@ export async function dispatch(ctx = {}) {
     senderId = normalizeDigits(ctx.sender || ctx.senderNumber || ctx.message?.key?.participant || '')
   }
 
-  // Actualizar el contexto
+  // Actualizar el contexto con el senderId correcto
   ctx.sender = `${senderId}@s.whatsapp.net`
   ctx.senderNumber = senderId
   ctx.usuario = `${senderId}@s.whatsapp.net`
 
   // ============================================================
-  // FILTRO GENERAL Y DETECCIÓN DE TEXTO
-  // ============================================================
+
   if (isGroup) {
     const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
     if (!botEnabled) {
@@ -666,7 +665,9 @@ export async function dispatch(ctx = {}) {
   let command = parsed.command
   const args = parsed.args || []
 
-  // 2. CORRECCIÓN CRUCIAL (Filtro Anti-Loop)
+  // 2. ⚠️ CORRECCIÓN CRÍTICA: FILTRO ANTI-LOOP DE FALLBACK
+  // Este bloque previene que el bot procese sus propios mensajes de texto de fallback
+  // PERO permite los comandos explícitos que inician con prefijo (/help, .menu, etc.).
   if (isFromMe) {
     // Verificar si el mensaje fromMe es una respuesta de botón/lista (Interactive Reply).
     const isInteractiveReply = !!(ctx.message?.message?.buttonsResponseMessage ||
@@ -675,16 +676,16 @@ export async function dispatch(ctx = {}) {
                                  ctx.message?.message?.interactiveResponseMessage ||
                                  ctx.message?.message?.interactiveMessage);
 
-    // Si NO es una respuesta interactiva (el texto de fallback),
+    // Si NO es una respuesta interactiva (el texto de fallback que causa loop),
     // Y NO se detectó un comando explícito (ej: /help, .help),
-    // ENTONCES lo ignoramos (para romper el loop).
+    // ENTONCES lo ignoramos.
     if (!isInteractiveReply && !command) {
         if (traceEnabled()) console.log(`[router] IGNORANDO: Mensaje fromMe no interactivo y sin comando explícito (probablemente texto de fallback).`);
         return false;
     }
     // Si es una respuesta interactiva O es un comando explícito, el bot continúa.
   }
-  // FIN DE CORRECCIÓN
+  // FIN DE CORRECCIÓN CRÍTICA
 
   if (traceEnabled()) {
     const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
@@ -807,11 +808,15 @@ export async function dispatch(ctx = {}) {
   const entry = registry.get(command)
   console.log(`[DEBUG] Found registry entry for ${command}:`, !!entry)
 
+  // ============================================================
   // Verificación de Admin
+  // ============================================================
   if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
     try {
       const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
       const participants = groupMeta?.participants || []
+
+      // Buscar participante usando el senderId calculado
       const participant = participants.find(p => normalizeDigits(p.id) === senderId)
 
       if (!isAdminFlag(participant)) {
