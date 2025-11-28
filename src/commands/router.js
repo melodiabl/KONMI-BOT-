@@ -234,7 +234,8 @@ function summarizePayload(p) {
   try {
     if (!p || typeof p !== 'object') return typeof p
     const keys = Object.keys(p)
-    if (p.viewOnceMessage?.message?.interactiveMessage) return 'interactiveMessage'
+    if (p.viewOnceMessage?.message?.interactiveMessage) return 'viewOnceMessage/interactiveMessage' // Detalle el payload para debug
+    if (p.interactiveMessage) return 'interactiveMessage' // Detalle el payload para debug
     if (p.listMessage) return 'listMessage'
     if (p.templateButtons) return 'templateButtons'
     if (p.image) return 'image'
@@ -253,6 +254,7 @@ function createInteractiveMessage(data, isGroup = true) {
   const { body, footer, title, buttons, sections, mentions } = data
 
   // Estructura del encabezado (Header) para Native Flow
+  // AVISO: Evita títulos muy largos o con caracteres especiales, ya que son el punto más débil de Native Flow.
   let header = undefined
   if (title) {
     header = {
@@ -334,7 +336,7 @@ function createInteractiveMessage(data, isGroup = true) {
   return {
     viewOnceMessage: {
       message: {
-        interactiveMessage // ✅ CORRECCIÓN DE ESTABILIDAD: Quité el 'text: " "' para evitar fallos de formato en ViewOnce
+        interactiveMessage // ✅ OK para grupos (viewOnceMessage)
       }
     }
   }
@@ -358,13 +360,14 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   } catch (err) { e2 = err }
 
   try {
-    // ⚠️ CRUCIAL: Esta línea mostrará el error que causa el fallback
+    // ⚠️ CRUCIAL: Muestra el error exacto de la librería
     if (traceEnabled()) console.warn('[router.send] failed:', summarizePayload(payload), e1?.message || e1, '|', e2?.message || e2)
   } catch {}
 
-  // Intento 3: Fallback a texto plano si falla el interactivo complejo (viewOnceMessage)
+  // Intento 3: Fallback a texto plano si falla el interactivo complejo
   if (!silentOnFail && (payload.viewOnceMessage || payload.interactiveMessage || payload.buttonsMessage)) {
      try {
+         // Si falla, enviamos el mensaje de diagnóstico y no el menú en texto plano.
          await sock.sendMessage(jid, { text: '⚠️ No se pudo cargar el menú/botones. Tu app podría estar desactualizada o el formato no es compatible.' }, opts);
      } catch {}
   }
@@ -533,7 +536,7 @@ async function sendResult(sock, jid, result, ctx) {
       title: result.header || result.title,
       buttons: result.buttons,
       mentions: result.mentions
-    }, ctx.isGroup) // <--- PASAMOS ctx.isGroup AQUÍ
+    }, ctx.isGroup)
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
@@ -570,7 +573,7 @@ async function sendResult(sock, jid, result, ctx) {
       buttonText: result.buttonText || 'Ver Opciones',
       sections: nativeSections,
       mentions: result.mentions
-    }, ctx.isGroup) // <--- PASAMOS ctx.isGroup AQUÍ
+    }, ctx.isGroup)
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
@@ -777,6 +780,7 @@ export async function dispatch(ctx = {}) {
     lazy.set('/bot', async (ctx) => (await import('./bot-control.js')).bot(ctx))
     lazy.set('/help', async (ctx) => {
       const keys = Array.from(lazy.keys()).sort()
+      // En el fallback simple, devolvemos texto. Los comandos reales deben devolver el objeto { type: 'buttons', ... }
       const text = '📋 Comandos disponibles\n\n' + keys.map(k => `• ${k}`).join('\n')
       return { success: true, message: text, quoted: true }
     })
