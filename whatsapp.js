@@ -54,7 +54,7 @@ async function loadBaileys() {
         fetchLatestBaileysVersion: M?.fetchLatestBaileysVersion || mod?.fetchLatestBaileysVersion,
         Browsers: M?.Browsers || mod?.Browsers,
         DisconnectReason: M?.DisconnectReason || mod?.DisconnectReason,
-        jidDecode: M?.jidDecode || mod?.jidDecode,
+        jidDecode: M?.jidDecode || mod?.jidDecode, // Aseguramos que jidDecode esté disponible
         loadedName: name,
       };
       if (!api.makeWASocket || !api.useMultiFileAuthState) {
@@ -121,7 +121,6 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
       return mod
     } catch (err) {
       console.error(`[import-helper] import failed attempt ${attempt}/${retries} for ${resolvedPath}:`, err && (err.message || err))
-      // log file size if possible
       try {
         if (resolvedPath.startsWith('file://')) {
           const filePath = new URL(resolvedPath).pathname
@@ -147,7 +146,7 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
 
 /* ===== Variables globales ===== */
 let sock = null
-let jidDecode;
+let jidDecode; // <-- Variable para almacenar la función jidDecode de Baileys
 const groupSubjectCache = new Map()
 let connectionStatus = 'disconnected'
 let qrCode = null
@@ -311,8 +310,8 @@ export async function connectToWhatsApp(
   phoneNumber = null
 ) {
   const baileysAPI = await loadBaileys();
-  const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason } = baileysAPI;
-  jidDecode = baileysAPI.jidDecode;
+  const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason, jidDecode: baileyJidDecode } = baileysAPI;
+  jidDecode = baileyJidDecode; // Almacenar la función jidDecode
 
   savedAuthPath = path.resolve(authPath)
   fs.mkdirSync(savedAuthPath, { recursive: true })
@@ -322,30 +321,25 @@ export async function connectToWhatsApp(
   const waVersion = await resolveWaVersion(fetchLatestBaileysVersion)
   const browser = Browsers.macOS('Chrome');
 
-  // Determinar modo: QR o Pairing
   const envPairNumber = sanitizePhoneNumberInput(process.env.PAIR_NUMBER);
   let runtimeNumber = sanitizePhoneNumberInput(phoneNumber || pairingTargetNumber || envPairNumber);
   const isRegistered = !!state?.creds?.registered;
 
   let wantPair = usePairingCode || authMethod === 'pairing';
 
-  // Si ya está registrado y no se fuerza pairing, usar sesión existente
-  if (isRegistered) { // Simplificado: si está registrado, no queremos pairing/QR a menos que se fuerce
+  if (isRegistered) {
     console.log('ℹ️ Sesión existente detectada. Usando credenciales guardadas.');
     wantPair = false;
   }
 
-  // ⚠️ TRUCO: Si no está registrado, pero queremos QR/Pairing y no hay número, obligar a QR.
   if (wantPair && !isRegistered && !runtimeNumber) {
     console.log('⚠️ No se proporcionó número de teléfono. Cambiando a modo QR.');
     wantPair = false;
   }
 
-  // Establecer el método final de autenticación
   pairingTargetNumber = wantPair ? runtimeNumber : null;
   authMethod = wantPair ? 'pairing' : 'qr';
 
-  // Si está registrado, forzar el uso de credenciales y no generar QR/Pairing
   const finalAuthMethod = isRegistered ? 'existing_session' : authMethod;
 
   const QUIET = String(process.env.QUIET_LOGS || 'false').toLowerCase() === 'true';
@@ -354,20 +348,19 @@ export async function connectToWhatsApp(
   infoLog(`📱 Modo de autenticación: ${finalAuthMethod.toUpperCase()}`);
   if (finalAuthMethod === 'pairing') infoLog(`📞 Número objetivo: +${pairingTargetNumber}`);
 
-  // Resetear flag si se fuerza pairing
   if (usePairingCode) {
     pairingCodeRequestedForSession = false;
   }
 
   connectionStatus = 'connecting';
   await teardownSocket();
-  await sleep(500); // Aumentar delay para estabilidad
+  await sleep(500);
 
   // ============ CREAR SOCKET ============
   sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: finalAuthMethod === 'qr', // Solo imprimir QR si el método es QR
+    printQRInTerminal: finalAuthMethod === 'qr',
     browser,
     version: waVersion,
     markOnlineOnConnect: false,
@@ -379,7 +372,6 @@ export async function connectToWhatsApp(
     emitOwnMessages: true,
     mobile: false,
     getMessage: async () => null,
-    // Si ya está registrado, no solicitar código de emparejamiento por defecto
     shouldSyncHistory: !isRegistered
   })
 
@@ -390,8 +382,6 @@ export async function connectToWhatsApp(
 
   if (!sock.ev || typeof sock.ev.on !== 'function') {
     console.error('❌ Socket creado pero ev.on no está disponible');
-    console.error('Socket keys:', Object.keys(sock));
-    console.error('sock.ev:', sock.ev);
     throw new Error('Socket event emitter not properly initialized');
   }
 
@@ -430,22 +420,19 @@ export async function connectToWhatsApp(
       const { connection, lastDisconnect, qr, isNewLogin } = update || {};
       const isAuthenticated = !!state?.creds?.registered || connection === 'open';
 
-      // Generar QR (solo si no estamos en modo pairing Y NO ESTAMOS AUTENTICADOS)
       if (qr && finalAuthMethod === 'qr' && !isAuthenticated) {
         qrCode = qr;
         await saveQrArtifacts(qr, path.join(savedAuthPath, 'qr'));
         infoLog('🟩 QR code generado - Escanea con tu WhatsApp');
       }
 
-      // Solicitud de Pairing Code (solo si el método es pairing Y NO ESTAMOS AUTENTICADOS)
       if (finalAuthMethod === 'pairing' && !pairingCodeRequestedForSession && !!pairingTargetNumber && !isAuthenticated) {
         if (connection !== 'open' && connection !== 'connecting') {
           return;
         }
 
         pairingCodeRequestedForSession = true;
-
-        await sleep(2000); // Delay más largo para asegurar estabilidad
+        await sleep(2000);
 
         try {
           const number = onlyDigits(pairingTargetNumber);
@@ -457,7 +444,6 @@ export async function connectToWhatsApp(
 
           infoLog(`📲 Solicitando código de vinculación para +${number} con código personalizado "${CUSTOM_PAIRING_CODE}"...`);
 
-          // *** USAR CÓDIGO PERSONALIZADO KONMIBOT ***
           const code = await sock.requestPairingCode(number, CUSTOM_PAIRING_CODE);
 
           if (code) {
@@ -500,7 +486,7 @@ export async function connectToWhatsApp(
         connectionStatus = 'connected';
         qrCode = null;
         qrCodeImage = null;
-        pairingCodeRequestedForSession = false; // Reset siempre al conectar
+        pairingCodeRequestedForSession = false;
         infoLog('✅ Bot conectado exitosamente');
 
         try {
@@ -521,7 +507,7 @@ export async function connectToWhatsApp(
         } catch (e) {
           logger.error(`Error setting primary owner: ${e.message}`);
         }
-        // Auto-start subbots after main bot connects
+
         try {
           const mod = await import('./src/services/subbot-manager.js');
           const clean = await mod.cleanOrphanSubbots?.().catch(() => 0);
@@ -539,8 +525,6 @@ export async function connectToWhatsApp(
         const status = err?.output?.statusCode || err?.code;
         const msg = err?.message || '';
 
-        // ❌ LOGOUT DEFINITIVO (no se debe reintentar, se requiere login manual)
-        // DisconnectReason.loggedOut (401), o si el código HTTP es 401/403 (Unauthorized/Forbidden)
         const shouldReconnect = status !== DisconnectReason.loggedOut && status !== 401 && status !== 403;
 
         connectionStatus = shouldReconnect ? 'reconnecting' : 'disconnected';
@@ -548,12 +532,11 @@ export async function connectToWhatsApp(
         if (status === 428) {
           connectionStatus = 'waiting_pairing';
           infoLog('⏳ Esperando que ingreses el código de vinculación en tu teléfono...');
-          return; // No reintentar, estamos esperando el código.
+          return;
         }
 
         if (shouldReconnect) {
-          // ✅ AUTO-RECONEXIÓN: Reintento por desconexión transitoria
-          const backoff = 5000; // 5 segundos de espera (puedes aumentar si tienes muchos reintentos)
+          const backoff = 5000;
           infoLog(`⚠️ Conexión cerrada (status ${status || '?'}: ${msg || 'sin detalles'}). Auto-reintentando en ${backoff}ms...`);
 
           setTimeout(() => {
@@ -562,12 +545,11 @@ export async function connectToWhatsApp(
             });
           }, backoff);
         } else {
-          // ❌ Sesión terminada permanentemente
           infoLog('❌ Sesión cerrada permanentemente (LoggedOut/401/403). Por favor, inicia sesión de nuevo.');
           qrCode = null;
           qrCodeImage = null;
         }
-        return; // Detener el flujo del evento 'close'
+        return;
       }
     });
     console.log('✅ Evento connection.update registrado');
@@ -589,27 +571,27 @@ try { mgr = await import('./src/services/subbot-manager.js') } catch (e) { conso
 
       for (const m of messages) {
         try {
-          // Logging detallado
-          try {
-            const id = m?.key?.id;
-            const fromMe = !!m?.key?.fromMe;
-            const remoteJid = m?.key?.remoteJid || '';
-            const msg = m?.message || {};
-            const rawText = (
-              msg?.conversation ||
-              msg?.extendedTextMessage?.text ||
-              msg?.imageMessage?.caption ||
-              msg?.videoMessage?.caption ||
-              ''
-            ).trim();
+          // Logging detallado (Opcional, desactivar para producción)
+          // try {
+          //   const id = m?.key?.id;
+          //   const fromMe = !!m?.key?.fromMe;
+          //   const remoteJid = m?.key?.remoteJid || '';
+          //   const msg = m?.message || {};
+          //   const rawText = (
+          //     msg?.conversation ||
+          //     msg?.extendedTextMessage?.text ||
+          //     msg?.imageMessage?.caption ||
+          //     msg?.videoMessage?.caption ||
+          //     ''
+          //   ).trim();
 
-            console.log('--- mensaje entrante ---');
-            console.log('id:', id, 'fromMe:', fromMe, 'remoteJid:', remoteJid);
-            console.log('message types:', Object.keys(msg).join(', '));
-            console.log('rawText:', rawText.slice(0, 300));
-          } catch (e) {
-            console.error('Error logging incoming message:', e && (e.message || e));
-          }
+          //   console.log('--- mensaje entrante ---');
+          //   console.log('id:', id, 'fromMe:', fromMe, 'remoteJid:', remoteJid);
+          //   console.log('message types:', Object.keys(msg).join(', '));
+          //   console.log('rawText:', rawText.slice(0, 30));
+          // } catch (e) {
+          //   console.error('Error logging incoming message:', e && (e.message || e));
+          // }
 
           const id = m?.key?.id
           if (id && processedMessageIds.has(id)) continue
@@ -885,6 +867,9 @@ export async function requestMainBotPairingCode() {
   }
 }
 
+// ==========================================================
+// ✅ FUNCIÓN CORREGIDA: handleMessage (JID Normalization)
+// ==========================================================
 export async function handleMessage(message, customSock = null, prefix = '', runtimeContext = {}) {
   const s = customSock || sock;
   if (!s || !message || !message.key) return;
@@ -894,13 +879,32 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 
   const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us');
   const fromMe = !!message?.key?.fromMe;
-  const botJid = s.user?.id;
+
+  // CORRECCIÓN CRUCIAL: Normalizar botJid a la forma estándar (number@s.whatsapp.net)
+  // para que la verificación de administrador sea correcta.
+  const botJidRaw = s.user?.id;
+  let botJid = botJidRaw;
+
+  if (botJidRaw && typeof jidDecode === 'function') {
+    try {
+      const decoded = jidDecode(botJidRaw);
+      if (decoded && decoded.user && decoded.server) {
+        // Reconstruir el JID normalizado, e.g., 595974154768@s.whatsapp.net
+        botJid = `${decoded.user}@${decoded.server}`;
+      }
+    } catch (e) {
+      // Fallback
+    }
+  }
+
   let botNumber = null;
   try {
+    // Usamos el botJid normalizado para obtener el número base
     botNumber = botJid ? jidDecode(botJid).user : null;
   } catch {
     botNumber = onlyDigits(botJid || '');
   }
+
   const sender = isGroup ? message.key.participant || remoteJid : remoteJid;
   let senderNumber = null;
   try {
@@ -916,13 +920,15 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const isOwner = !!(ownerNumber && senderNumber && senderNumber === ownerNumber);
 
   let isAdmin = false;
-  let isBotAdmin = false;
+  let isBotAdmin = false; // <-- Esto debe ser TRUE si es admin
   let groupMetadata = null;
   if (isGroup) {
     try {
       groupMetadata = await s.groupMetadata(remoteJid);
       const participantInfo = (groupMetadata.participants || []).find((p) => p.id === sender);
       isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin');
+
+      // ✅ VERIFICACIÓN CORRECTA: Comparamos con el botJid NORMALIZADO
       const botInfo = (groupMetadata.participants || []).find((p) => p.id === botJid);
       isBotAdmin = !!botInfo && (botInfo.admin === 'admin' || botInfo.admin === 'superadmin');
     } catch (e) {
@@ -1017,6 +1023,9 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     logger.warn(`[handleMessage] router failed: ${e?.message || e}`);
   }
 }
+// ==========================================================
+// FIN DE FUNCIÓN handleMessage CORREGIDA
+// ==========================================================
 
 export async function clearWhatsAppSession(dirPath = null) {
   try {
