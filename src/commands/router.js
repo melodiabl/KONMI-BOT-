@@ -634,7 +634,7 @@ export async function dispatch(ctx = {}) {
   if (!sock || !remoteJid) return false
 
   // ============================================================
-  // LÓGICA FROM-ME / OWNER / SENDER (Detección Owner) - ✅ CORREGIDO
+  // LÓGICA FROM-ME / OWNER / SENDER (Detección Owner)
   // ============================================================
   const isFromMe = ctx.message?.key?.fromMe || false
 
@@ -642,16 +642,9 @@ export async function dispatch(ctx = {}) {
   let senderId = ''
   if (isFromMe) {
     senderId = normalizeDigits(sock.user?.id || '')
-    // ✅ CRÍTICO: Si el mensaje es del propio bot, forzar estatus de Owner y Admin
-    ctx.isOwner = true
-    ctx.isAdmin = true // Esto asegura que el requireGroupAdmin se salte el chequeo de permisos de usuario.
+    ctx.isOwner = true // <--- Esto asegura que el bot es Owner
   } else {
     senderId = normalizeDigits(ctx.sender || ctx.senderNumber || ctx.message?.key?.participant || '')
-    // Si no es fromMe, verificar si es el Owner configurado (desde env)
-    const ownerNumber = normalizeDigits(process.env.OWNER_NUMBER || '')
-    if (senderId === ownerNumber) {
-        ctx.isOwner = true
-    }
   }
 
   // Actualizar el contexto con el senderId correcto
@@ -694,7 +687,7 @@ export async function dispatch(ctx = {}) {
 
   if (traceEnabled()) {
     const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
-    console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${senderId} | Owner: ${ctx.isOwner} | Admin(forced): ${ctx.isAdmin}`)
+    console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${senderId} | Owner: ${ctx.isOwner}`)
   }
 
   // 3. Detección de comando secundaria (para botones/listas sin prefijo)
@@ -815,12 +808,12 @@ export async function dispatch(ctx = {}) {
   console.log(`[DEBUG] Found registry entry for ${command}:`, !!entry)
 
   // ============================================================
-  // Verificación de Admin
+  // Verificación de Admin (CORREGIDA)
   // ============================================================
   if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
-    // ✅ CRÍTICO: Si el mensaje es del Owner (el bot fromMe), se permite.
+    // ✅ CORRECCIÓN: Si el mensaje es del Owner (el bot fromMe), se permite.
     if (ctx.isOwner) {
-      console.log(`[router] Bypass de admin para ${command}: es el Owner (Bot itself) o un Owner configurado.`)
+      console.log(`[router] Bypass de admin para ${command}: es el Owner (Bot itself).`)
     } else {
       try {
         const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
@@ -834,8 +827,6 @@ export async function dispatch(ctx = {}) {
           await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
           return true
         }
-        // Si la verificación pasa, forzar ctx.isAdmin a true para el comando
-        ctx.isAdmin = true
       } catch (errCheck) {
         console.error('[router] Error verificando admins:', errCheck)
       }
