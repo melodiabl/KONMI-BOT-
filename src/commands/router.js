@@ -246,13 +246,119 @@ function summarizePayload(p) {
   } catch { return 'payload' }
 }
 
+
+// Función auxiliar para construir el payload interactivo moderno (Native Flow en ViewOnce)
+function createInteractiveMessage(data) {
+  const { body, footer, title, buttons, sections, mentions } = data
+
+  // Estructura del encabezado (Header) para Native Flow
+  let header = undefined
+  if (title) {
+    header = {
+      title: title,
+      hasMediaAttachment: false // Clave: indica que no hay media adjunta
+    }
+  }
+
+  let interactiveMessage = {
+    body: { text: body || ' ' },
+    footer: { text: footer || ' ' },
+    header: header,
+    nativeFlowMessage: {
+      buttons: []
+    }
+  }
+
+  // CRUCIAL: Añadir contextInfo para menciones/quoted (necesario en grupos)
+  if (mentions && mentions.length > 0) {
+    interactiveMessage.contextInfo = { mentionedJid: mentions }
+  }
+
+  // CASO 1: LISTA (Sections) -> Se convierte en un botón "single_select"
+  if (sections && sections.length > 0) {
+    const listButton = {
+      name: 'single_select',
+      buttonParamsJson: JSON.stringify({
+        title: data.buttonText || 'Ver opciones',
+        sections: sections
+      })
+    }
+    interactiveMessage.nativeFlowMessage.buttons.push(listButton)
+  }
+  // CASO 2: BOTONES NORMALES (Buttons) -> quick_reply o cta_url/copy
+  else if (buttons && buttons.length > 0) {
+    interactiveMessage.nativeFlowMessage.buttons = buttons.map(btn => {
+      const displayText = btn.text || btn.displayText || 'Acción'
+
+      // Botón de URL
+      if (btn.url) {
+        return {
+          name: 'cta_url',
+          buttonParamsJson: JSON.stringify({
+            display_text: displayText,
+            url: btn.url,
+            merchant_url: btn.url // Campo redundante a veces requerido
+          })
+        }
+      }
+      // Botón de Copiar (si lo usas)
+      if (btn.copyCode) {
+         return {
+          name: 'cta_copy',
+          buttonParamsJson: JSON.stringify({
+            display_text: displayText,
+            id: btn.id || btn.command,
+            copy_code: btn.copyCode
+          })
+        }
+      }
+      // Botón normal (Quick Reply)
+      return {
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+          display_text: displayText,
+          id: btn.id || btn.command || ''
+        })
+      }
+    })
+  }
+
+  // Envolver SIEMPRE en viewOnceMessage para compatibilidad total en grupos
+  return {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage
+      }
+    }
+  }
+}
+
 async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   let e1 = null, e2 = null
-  try { await sock.sendMessage(jid, payload, opts); return true } catch (err) { e1 = err }
-  try { const o = { ...(opts||{}) }; if (o.quoted) delete o.quoted; await sock.sendMessage(jid, payload, o); return true } catch (err) { e2 = err }
-  try { if (traceEnabled()) console.warn('[router.send] failed:', summarizePayload(payload), e1?.message || e1, '|', e2?.message || e2) } catch {}
-  if (!silentOnFail) {
-    // try { await sock.sendMessage(jid, { text: '⚠️ No pude enviar respuesta. Usa /help' }); } catch {}
+
+  // Intento 1: Envío normal
+  try {
+    await sock.sendMessage(jid, payload, opts);
+    return true
+  } catch (err) { e1 = err }
+
+  // Intento 2: Sin quoted (a veces el quoted viejo rompe el envío)
+  try {
+    const o = { ...(opts||{}) };
+    if (o.quoted) delete o.quoted;
+    await sock.sendMessage(jid, payload, o);
+    return true
+  } catch (err) { e2 = err }
+
+  try {
+    if (traceEnabled()) console.warn('[router.send] failed:', summarizePayload(payload), e1?.message || e1, '|', e2?.message || e2)
+  } catch {}
+
+  // Intento 3: Fallback a texto plano si falla el interactivo complejo (viewOnceMessage)
+  if (!silentOnFail && (payload.viewOnceMessage || payload.interactiveMessage || payload.buttonsMessage)) {
+     try {
+         await sock.sendMessage(jid, { text: '⚠️ No se pudo cargar el menú/botones. Tu app podría estar desactualizada o el formato no es compatible.' }, opts);
+     } catch {}
   }
   return false
 }
@@ -408,66 +514,59 @@ async function sendResult(sock, jid, result, ctx) {
     }
     return
   }
+
+  /* ============================================================
+     NUEVA LÓGICA DE BOTONES (Native Flow Moderno)
+     ============================================================ */
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
-    const buttonList = result.buttons;
-
-    const interactiveButtons = buttonList.map((b) => {
-      const text = b.text || b.title || b.displayText || 'Acción';
-      const id = b.command || b.id || b.url || b.buttonId || 'noop';
-      if (b.url) {
-        return { name: "cta_url", buttonParamsJson: JSON.stringify({ display_text: text, url: b.url }) };
-      }
-      return { name: "quick_reply", buttonParamsJson: JSON.stringify({ display_text: text, id: id }) };
-    });
-
-    const interactivePayload = {
-      text: result.text || result.caption || 'Opciones',
-      title: result.header || result.title,
+    const payload = createInteractiveMessage({
+      body: result.text || result.caption || 'Opciones',
       footer: result.footer,
-      interactiveButtons,
-      mentions: result.mentions
-    };
-    if (await safeSend(sock, targetJid, interactivePayload, opts, true)) return;
+      title: result.header || result.title,
+      buttons: result.buttons,
+      mentions: result.mentions // CRUCIAL: Pasar las menciones
+    })
 
-    const templateButtons = buttonList.map((b, i) => {
-      const text = b.text || b.title || b.displayText || 'Acción';
-      if (b.url) return { index: i + 1, urlButton: { displayText: text, url: b.url } };
-      return { index: i + 1, quickReplyButton: { displayText: text, id: b.command || b.id || b.buttonId || '/noop' } };
-    });
-    const legacyPayload = { text: result.text || result.caption || ' ', footer: result.footer, templateButtons, mentions: result.mentions };
-    if (await safeSend(sock, targetJid, legacyPayload, opts, true)) return;
+    if (await safeSend(sock, targetJid, payload, opts, true)) return
 
+    // Fallback a texto plano si falla Native Flow
     const plain = [result.text || result.caption || 'Opciones:'];
-    for (const b of buttonList) {
+    for (const b of result.buttons) {
       const label = b.text || b.title || b.displayText || 'Acción';
-      const cmd = b.command || b.id || b.url || b.buttonId || '';
+      const cmd = b.command || b.id || b.url || '';
       plain.push(`• ${label}${cmd ? ` → ${cmd}` : ''}`);
     }
     await safeSend(sock, targetJid, { text: plain.join('\n') }, opts);
     return;
   }
+
+  /* ============================================================
+     NUEVA LÓGICA DE LISTAS (Convertido a Single Select Native)
+     ============================================================ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
-    const mapSections = (result.sections || []).map((sec) => ({
-      title: sec.title || undefined,
-      rows: (sec.rows || []).map((r) => ({
+    // Mapeo de secciones (debe ser estricto para Native Flow)
+    const nativeSections = result.sections.map(s => ({
+      title: s.title || 'Sección',
+      rows: (s.rows || []).map(r => ({
+        header: r.title || r.text || '',
         title: r.title || r.text || 'Opción',
-        description: r.description || undefined,
-        rowId: r.rowId || r.id || r.command || r.url || r.text || 'noop',
-      })),
+        description: r.description || '',
+        id: r.rowId || r.id || r.command || r.url || 'noop'
+      }))
     }))
 
-    const listPayload = {
-      text: result.text || result.description || '📋 Menú disponible',
-      buttonText: result.buttonText || 'Ver opciones',
-      sections: mapSections,
-      title: result.title || '📋 Menú',
+    const payload = createInteractiveMessage({
+      body: result.text || result.description || 'Menú',
       footer: result.footer,
-    }
+      title: result.title,
+      buttonText: result.buttonText || 'Ver Opciones',
+      sections: nativeSections,
+      mentions: result.mentions // CRUCIAL: Pasar las menciones
+    })
 
-    if (await safeSend(sock, targetJid, listPayload, opts)) {
-      return
-    }
+    if (await safeSend(sock, targetJid, payload, opts, true)) return
 
+    // Fallback a texto plano
     const lines = []
     lines.push(result.text || 'Menú')
     for (const sec of result.sections) {
@@ -477,10 +576,21 @@ async function sendResult(sock, jid, result, ctx) {
     await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
     return
   }
+
   if (result.type === 'content' && result.content && typeof result.content === 'object') {
     const payload = { ...result.content }
-    try { if (payload.viewOnceMessage?.message?.interactiveMessage) payload.viewOnceMessage.message.interactiveMessage.contextInfo = { ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo||{}), mentionedJid: result.mentions } } catch {}
+    // Asegurar contexto de menciones para payloads ViewOnce/Interactive pre-construidos
+    try {
+        if (result.mentions && payload.viewOnceMessage?.message?.interactiveMessage) {
+            payload.viewOnceMessage.message.interactiveMessage.contextInfo = {
+                ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo || {}),
+                mentionedJid: result.mentions
+            }
+        }
+    } catch {}
+
     if (!(await safeSend(sock, targetJid, payload, opts, true))) {
+      // Fallback si el contenido raw falla
       try {
         const body = payload?.viewOnceMessage?.message?.interactiveMessage?.body?.text || 'Opciones'
         const buttons = payload?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage?.buttons || []
@@ -506,7 +616,7 @@ export async function dispatch(ctx = {}) {
   if (!sock || !remoteJid) return false
 
   // ============================================================
-  // LÓGICA FROM-ME / OWNER / SENDER
+  // LÓGICA FROM-ME / OWNER / SENDER (Detección Owner)
   // ============================================================
   const isFromMe = ctx.message?.key?.fromMe || false
 
