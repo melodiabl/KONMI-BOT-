@@ -58,7 +58,7 @@ if (arch === "arm64") {
 // ======================================
 
 // ❌ CORRECCIÓN 1: Se corrigió la ruta del archivo de configuración
-import config from "./src/config/index.js";
+import config from "./src/config/config.js";
 import app from "./server.js";
 
 // ✅ CORRECCIÓN 2: Se añaden checkSessionState y sanitizePhoneNumberInput para reconexión automática
