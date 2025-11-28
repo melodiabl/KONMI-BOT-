@@ -85,8 +85,8 @@ export async function sticker(ctx) {
         ffmpeg(tempInputPath)
           .outputOptions([
             '-vcodec', 'libwebp',
-            // 💡 CORRECCIÓN CLAVE: Cambiado 'color=0x00000000' a 'color=black@0.0'
-            '-vf', "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,fps=15, pad=512:512:-1:-1:color=black@0.0",
+            // ✅ CORRECCIÓN CLAVE: Se eliminó el espacio entre ',pad'
+            '-vf', "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,fps=15,pad=512:512:-1:-1:color=black@0.0",
             '-loop', '0',
             '-ss', '00:00:00.0',
             '-t', '00:00:07.0', // Duración máxima de 7 segundos
@@ -100,7 +100,8 @@ export async function sticker(ctx) {
           .on('end', resolve)
           .on('error', (err) => {
              console.error('FFmpeg Error:', err.message);
-             reject(new Error(`FFmpeg exited with code ${err.code}: ${err.message}`));
+             // Usamos el mensaje original de fluent-ffmpeg para evitar el 'code undefined'
+             reject(new Error(`FFmpeg exited: ${err.message}`));
           });
       });
 
