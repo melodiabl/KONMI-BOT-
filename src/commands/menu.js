@@ -23,27 +23,26 @@ export async function menu(ctx) {
 }
 
 export async function help(ctx) {
-  // Import registry at runtime to avoid circular dependency
-  const registryMod = await import('./registry/index.js')
-  const registry = registryMod.default
-  const getCommandRegistry = registryMod.getCommandRegistry
-  
-  // Get categories from registry
-  const buildCategoryIndex = registry.buildCategoryIndex || (() => {
+  try {
+    // Import registry at runtime to avoid circular dependency
+    const registryMod = await import('./registry/index.js')
+    const getCommandRegistry = registryMod.getCommandRegistry
+
     const reg = getCommandRegistry()
-    const map = new Map()
+    const categories = {}
+
+    // Group commands by category
     for (const [command, meta] of reg.entries()) {
       const category = (meta.category || 'otros').toLowerCase()
-      if (!map.has(category)) map.set(category, [])
-      map.get(category).push({ command, ...meta })
+      if (!categories[category]) categories[category] = []
+      categories[category].push({ command, ...meta })
     }
-    for (const [, entries] of map.entries()) {
-      entries.sort((a, b) => a.command.localeCompare(b.command))
+
+    // Sort commands within each category
+    for (const cat in categories) {
+      categories[cat].sort((a, b) => a.command.localeCompare(b.command))
     }
-    return map
-  })
-  
-  const getCategoryMeta = registry.getCategoryMeta || ((category) => {
+
     const CATEGORY_META = {
       ai: { emoji: '🤖', label: 'Inteligencia Artificial' },
       aportes: { emoji: '📦', label: 'Aportes' },
@@ -69,42 +68,38 @@ export async function help(ctx) {
       utils: { emoji: '🛠️', label: 'Utilidades' },
       otros: { emoji: '✨', label: 'Otros' },
     }
-    const key = (category || 'otros').toLowerCase()
-    return CATEGORY_META[key] || { emoji: '✨', label: 'Otros' }
-  })
-  
-  const categories = buildCategoryIndex()
-  const sections = []
 
-  // Convert registry categories to list sections
-  for (const [categoryKey, commands] of categories.entries()) {
-    const meta = getCategoryMeta(categoryKey)
-    const rows = commands.slice(0, 10).map(cmd => ({ // Limit to 10 per category for performance
-      title: cmd.command,
-      description: cmd.description.substring(0, 60) + (cmd.description.length > 60 ? '...' : ''),
-      rowId: cmd.command
-    }))
+    let message = '🤖 *KONMI BOT - Comandos Disponibles*\n\n';
 
-    if (rows.length > 0) {
-      sections.push({
-        title: `${meta.emoji} ${meta.label}`,
-        rows: rows
-      })
+    for (const [categoryKey, commands] of Object.entries(categories)) {
+      const meta = CATEGORY_META[categoryKey] || { emoji: '✨', label: 'Otros' };
+      message += `*${meta.emoji} ${meta.label}:*\n`;
+
+      for (const cmd of commands) {
+        const desc = cmd.description ? ` - ${cmd.description}` : '';
+        message += `• \`${cmd.command}\`${desc}\n`;
+      }
+      message += '\n';
     }
+
+    message += '📞 *Soporte:* Contacta al administrador\n';
+    message += '🔗 *Web:* https://konmi.ai\n\n';
+    message += '⚡ *Versión:* 2.0.0';
+
+    return {
+      success: true,
+      message: message,
+      quoted: true
+    };
+
+  } catch (error) {
+    console.error('Error generando ayuda:', error);
+    return {
+      success: false,
+      message: '⚠️ Error al generar la ayuda. Intenta más tarde.',
+      quoted: true
+    };
   }
-
-  // Add a special section for quick access
-  sections.unshift({
-    title: '⚡ Acceso Rápido',
-    rows: [
-      { title: '/menu', description: 'Volver al menú principal', rowId: '/menu' },
-      { title: '/help', description: 'Mostrar esta ayuda', rowId: '/help' },
-      { title: '/helpcat', description: 'Ayuda por categorías detallada', rowId: '/helpcat' },
-      { title: '/status', description: 'Estado del bot', rowId: '/status' },
-    ]
-  })
-
-  return sendCategorizedList('📋 *AYUDA COMPLETA*\n\nSelecciona una categoría para ver todos los comandos disponibles', sections)
 }
 
 export default { menu, help }
