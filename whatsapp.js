@@ -16,13 +16,16 @@ import { setPrimaryOwner } from './src/config/global-config.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+// RUTA SEGURA FORZADA: Usaremos 'session_data/baileys_full' por defecto si no hay AUTH_DIR en .env
+const DEFAULT_AUTH_DIR = path.join(__dirname, 'session_data', 'baileys_full');
+
 /* ===== Código personalizado KONMIBOT ===== */
 const CUSTOM_PAIRING_CODE = 'KONMIBOT'
 
 /* ===== Utils mínimas ===== */
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
-const sanitizePhoneNumberInput = (v) => {
+export const sanitizePhoneNumberInput = (v) => { // <-- EXPORTADO para index.js
   const digits = onlyDigits(v)
   return digits || null
 }
@@ -171,7 +174,26 @@ export function setMessageRouterModulePath(p) {
 }
 const processedMessageIds = new Set()
 
-/* ===== Getters ===== */
+/* ===== Getters y Chequeo de Sesión ===== */
+
+/**
+ * Verifica si existen credenciales guardadas en la ruta de autenticación.
+ * @param {string} [authPath] - Ruta donde se guardan las credenciales.
+ * @returns {object} Estado de la sesión.
+ */
+export async function checkSessionState(authPath = null) { // <-- EXPORTADO para index.js
+    // Usa la ruta especificada, o la ruta del ENV, o la ruta segura por defecto
+    const effectivePath = authPath || path.resolve(process.env.AUTH_DIR || DEFAULT_AUTH_DIR);
+
+    const credsPath = path.join(effectivePath, 'creds.json');
+    const hasCreds = fs.existsSync(credsPath);
+
+    if (hasCreds) {
+        return { hasCreds: true, authPath: effectivePath };
+    }
+    return { hasCreds: false, authPath: effectivePath };
+}
+
 export const getSocket = () => sock
 export const getQRCode = () => qrCode
 export const getQRCodeImage = () => qrCodeImage
@@ -284,7 +306,7 @@ async function saveQrArtifacts(qr, outDir) {
 
 /* ===== Conexión principal ===== */
 export async function connectToWhatsApp(
-  authPath = (process.env.AUTH_DIR || path.join(__dirname, 'storage', 'baileys_full')),
+  authPath = (process.env.AUTH_DIR || DEFAULT_AUTH_DIR), // <-- USA RUTA SEGURA CORREGIDA
   usePairingCode = false,
   phoneNumber = null
 ) {
@@ -768,7 +790,7 @@ export async function connectWithPairingCode(phoneNumber, authPath = null) {
   const normalized = sanitizePhoneNumberInput(phoneNumber || pairingTargetNumber)
   if (!normalized) throw new Error('Numero invalido para pairing.')
 
-  const baseDir = authPath || savedAuthPath || (process.env.AUTH_DIR || path.join(__dirname, 'storage', 'baileys_full'))
+  const baseDir = authPath || savedAuthPath || (process.env.AUTH_DIR || DEFAULT_AUTH_DIR)
   const effective = path.resolve(baseDir)
 
   try {
@@ -999,7 +1021,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 export async function clearWhatsAppSession(dirPath = null) {
   try {
     await teardownSocket();
-    const base = dirPath || savedAuthPath || process.env.AUTH_DIR || path.join(__dirname, 'storage', 'baileys_full');
+    const base = dirPath || savedAuthPath || process.env.AUTH_DIR || DEFAULT_AUTH_DIR;
     const abs = path.resolve(base);
     if (abs && fs.existsSync(abs)) {
       fs.rmSync(abs, { recursive: true, force: true });

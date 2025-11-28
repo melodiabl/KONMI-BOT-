@@ -1,4 +1,4 @@
-// index.js — Runner con verificación automática de dotenv + fix ARM64
+// index.js — Runner con verificación automática de dotenv + fix ARM64 + Fix de Sesión
 
 import fs from "fs";
 import os from "os";
@@ -6,6 +6,8 @@ import { execSync } from "child_process";
 import path from "path";
 import readline from "readline";
 import { fileURLToPath } from "url";
+import { clearWhatsAppSession, connectToWhatsApp, connectWithPairingCode, checkSessionState, sanitizePhoneNumberInput } from "./whatsapp.js";
+import config from './src/config/index.js';
 
 // ======================================
 // 1. VERIFICAR SI DOTENV ESTÁ INSTALADO
@@ -47,104 +49,99 @@ if (arch === "arm64") {
 
     process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true";
     process.env.PUPPETEER_SKIP_DOWNLOAD = "true";
-    process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium";
+    process.env.PUPPETEER_EXECUTABLE_PATH = "";
+    process.env.CHROME_BIN = "";
 
     console.log("✔ Variables aplicadas (sin Chromium).");
+} else {
+    console.log("ℹ️ Arquitectura no ARM64. El bot intentará descargar Chromium si es necesario.");
 }
 
 // ======================================
-// 3. CARGAR EL BOT NORMALMENTE
+// 3. MAIN RUNNER
 // ======================================
-
-import config from "./src/config/config.js";
-import app from "./server.js";
-
-import {
-    connectToWhatsApp,
-    connectWithPairingCode,
-    getConnectionStatus,
-    clearWhatsAppSession,
-} from "./whatsapp.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
-
-const ask = (q) => new Promise((res) => rl.question(q, (ans) => res((ans || "").trim())));
-const onlyDigits = (v) => String(v || "").replace(/\D/g, "");
-
-function printBanner() {
-  console.log('\n🤖 KONMI BOT 🤖\n');
-  console.log('🔐 Sistema de Autenticación\n');
-}
-
-function printMenu() {
-  console.log('╔════════════════════════════════════════╗');
-  console.log('║   🔐 SELECCIÓN DE AUTENTICACIÓN        ║');
-  console.log('╠════════════════════════════════════════╣');
-  console.log('║ 1) 📱 Código QR (recomendado)          ║');
-  console.log('║ 2) 🔢 Pairing Code (código en el tel.) ║');
-  console.log('╚════════════════════════════════════════╝');
-}
-
 function dumpEnvPreview(authPath) {
-  const credsPath = path.join(authPath, 'creds.json');
-  const exists = fs.existsSync(credsPath);
-  console.log('─────────────────────────────────────────────');
-  console.log('📄 Directorio de Autenticación:', authPath);
-  console.log('💾 creds.json:', exists ? 'Existe ✅' : 'No existe ❌');
-  console.log('📦 Módulo Baileys:', process.env.BAILEYS_MODULE || '(por defecto)');
-  console.log('─────────────────────────────────────────────');
+  console.log('ℹ️ Sesión se guardará en:', authPath);
+  console.log('ℹ️ Para usar Pairing Code, la variable PHONE_NUMBER debe estar en .env');
+}
+
+function getSessionPath() {
+    // RUTA SEGURA: USAMOS 'session_data' COMO VALOR POR DEFECTO
+    return process.env.AUTH_DIR || path.join(__dirname, 'session_data');
 }
 
 async function main() {
-  printBanner();
-  printMenu();
+  // 1. Cargar configuración global antes de la conexión
+  await import('./src/config/global-config.js');
 
-  let method = await ask('Elige un método (1/2) [1]: ');
-  method = method || '1';
+  const authPath = getSessionPath();
+  const state = await checkSessionState(authPath);
 
-  const authPath = path.resolve(process.env.AUTH_DIR || path.join(__dirname, 'storage', 'baileys_full'));
+  const isRegistered = !!state?.creds?.registered;
+  const forceAuth = String(process.env.FORCE_AUTH || 'false').toLowerCase() === 'true';
 
-  if (method === '2') {
-    console.log('\nHas elegido: 🔢 Pairing Code\n');
-    dumpEnvPreview(authPath);
-
-    let phoneNumber = await ask('Ingresa tu número de WhatsApp en formato internacional (ej: 595974154768): ');
-    phoneNumber = onlyDigits(phoneNumber || process.env.PAIR_NUMBER);
-
-    if (!phoneNumber) {
-      console.log('❌ Número de teléfono inválido. Por favor, reinicia el script e inténtalo de nuevo.');
-      rl.close();
-      return;
-    }
-
-    console.log(`✅ Número proporcionado: +${phoneNumber}`);
-    console.log('⏳ Solicitando código de emparejamiento...');
-
-    try {
-      // Para pairing, usar SIEMPRE sesión limpia para evitar errores loggedOut
-      try {
-        await clearWhatsAppSession(authPath);
-      } catch {}
-      await connectWithPairingCode(phoneNumber, authPath);
-    } catch (e) {
-      console.error('❌ Error al iniciar la conexión con Pairing Code:', e?.message || e);
-    }
+  // 2. Comprobar si existe una sesión guardada y no está forzando una nueva
+  if (isRegistered && !forceAuth) {
+    console.log('✅ Sesión existente detectada. Conectando automáticamente...');
+    await connectToWhatsApp(authPath, false, null); // Conexión normal con credenciales guardadas
   } else {
-    console.log('\nHas elegido: 📱 Código QR\n');
-    dumpEnvPreview(authPath);
-    console.log('⏳ Generando código QR...');
+    // 3. Si no hay sesión o se forzó, mostrar menú de autenticación
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
 
-    try {
-      await connectToWhatsApp(authPath, false, null);
-    } catch (e) {
-      console.error('❌ Error al iniciar la conexión con Código QR:', e?.message || e);
+    console.log('\n🤖 KONMI BOT 🤖');
+    console.log('🔐 Sistema de Autenticación');
+    console.log('╔════════════════════════════════════════╗');
+    console.log('║   🔐 SELECCIÓN DE AUTENTICACIÓN         ║');
+    console.log('╠════════════════════════════════════════╣');
+    console.log('║ 1) 📱 Código QR (recomendado)          ║');
+    console.log('║ 2) 🔢 Pairing Code (código en el tel.) ║');
+    console.log('╚════════════════════════════════════════╝');
+
+    const answer = await new Promise(resolve => {
+      rl.question('Elige una opción (1 o 2): ', resolve);
+    });
+
+    if (answer.trim() === '2') {
+      console.log('\nHas elegido: 🔢 Pairing Code\n');
+      const phoneNumber = sanitizePhoneNumberInput(process.env.PHONE_NUMBER);
+      if (!phoneNumber) {
+        console.error('❌ Para usar Pairing Code, la variable PHONE_NUMBER debe estar configurada en .env o en el entorno.');
+        rl.close();
+        return;
+      }
+
+      console.log(`✅ Número proporcionado: +${phoneNumber}`);
+      console.log('⏳ Solicitando código de emparejamiento...');
+
+      try {
+        // Para pairing, usar SIEMPRE sesión limpia para evitar errores loggedOut
+        try {
+          await clearWhatsAppSession(authPath);
+        } catch {}
+        await connectWithPairingCode(phoneNumber, authPath);
+      } catch (e) {
+        console.error('❌ Error al iniciar la conexión con Pairing Code:', e?.message || e);
+      }
+    } else {
+      console.log('\nHas elegido: 📱 Código QR\n');
+      dumpEnvPreview(authPath);
+      console.log('⏳ Generando código QR...');
+
+      try {
+        await connectToWhatsApp(authPath, false, null);
+      } catch (e) {
+        console.error('❌ Error al iniciar la conexión con Código QR:', e?.message || e);
+      }
     }
+
+    rl.close(); // Cerrar la interfaz readline
   }
 
   // Start the web server
@@ -155,10 +152,9 @@ async function main() {
   });
 }
 
+import app from './src/server.js'; // Asegúrate de importar tu servidor
+
+main();
+
 process.on('unhandledRejection', (err) => console.error('UNHANDLED REJECTION:', err?.stack || err));
 process.on('uncaughtException', (err) => console.error('UNCAUGHT EXCEPTION:', err?.stack || err));
-
-main().catch((e) => {
-  console.error('Error en la ejecución principal:', e?.stack || e);
-  process.exit(1);
-});
