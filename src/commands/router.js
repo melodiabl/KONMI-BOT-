@@ -334,8 +334,7 @@ function createInteractiveMessage(data, isGroup = true) {
   return {
     viewOnceMessage: {
       message: {
-        text: ' ', // Añadir texto de relleno para estabilidad en ViewOnce
-        interactiveMessage
+        interactiveMessage // ✅ CORRECCIÓN DE ESTABILIDAD: Quité el 'text: " "' para evitar fallos de formato en ViewOnce
       }
     }
   }
@@ -359,6 +358,7 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   } catch (err) { e2 = err }
 
   try {
+    // ⚠️ CRUCIAL: Esta línea mostrará el error que causa el fallback
     if (traceEnabled()) console.warn('[router.send] failed:', summarizePayload(payload), e1?.message || e1, '|', e2?.message || e2)
   } catch {}
 
@@ -665,9 +665,7 @@ export async function dispatch(ctx = {}) {
   let command = parsed.command
   const args = parsed.args || []
 
-  // 2. ⚠️ CORRECCIÓN CRÍTICA: FILTRO ANTI-LOOP DE FALLBACK
-  // Este bloque previene que el bot procese sus propios mensajes de texto de fallback
-  // PERO permite los comandos explícitos que inician con prefijo (/help, .menu, etc.).
+  // 2. ✅ FILTRO ANTI-LOOP: Bloquea el autoprocesamiento de fallbacks de texto
   if (isFromMe) {
     // Verificar si el mensaje fromMe es una respuesta de botón/lista (Interactive Reply).
     const isInteractiveReply = !!(ctx.message?.message?.buttonsResponseMessage ||
@@ -676,16 +674,13 @@ export async function dispatch(ctx = {}) {
                                  ctx.message?.message?.interactiveResponseMessage ||
                                  ctx.message?.message?.interactiveMessage);
 
-    // Si NO es una respuesta interactiva (el texto de fallback que causa loop),
-    // Y NO se detectó un comando explícito (ej: /help, .help),
-    // ENTONCES lo ignoramos.
+    // Si NO es una respuesta interactiva, Y NO se detectó un comando explícito, ENTONCES lo ignoramos.
     if (!isInteractiveReply && !command) {
         if (traceEnabled()) console.log(`[router] IGNORANDO: Mensaje fromMe no interactivo y sin comando explícito (probablemente texto de fallback).`);
         return false;
     }
-    // Si es una respuesta interactiva O es un comando explícito, el bot continúa.
   }
-  // FIN DE CORRECCIÓN CRÍTICA
+  // FIN DE FILTRO ANTI-LOOP
 
   if (traceEnabled()) {
     const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
