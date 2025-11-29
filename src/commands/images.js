@@ -37,67 +37,156 @@ export async function imageFromPrompt({ args }) {
 }
 
 async function generateBratStyleImage(text) {
-    const image = new Jimp(512, 512, '#FFFFFF');
-    const font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
-    image.print(
-        font,
-        0,
-        0,
-        {
-            text,
-            alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
-            alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE,
-        },
-        image.getWidth(),
-        image.getHeight()
-    );
-    return await image.getBufferAsync(Jimp.MIME_PNG);
+    try {
+        // Crear imagen con fondo verde lima estilo BRAT
+        const width = 800;
+        const height = 800;
+        const image = new Jimp(width, height, '#8ACE00'); // Verde lima característico de BRAT
+
+        // Cargar fuente más grande
+        const font = await Jimp.loadFont(Jimp.FONT_SANS_128_BLACK);
+
+        // Calcular dimensiones del texto
+        const maxWidth = width - 100; // Margen
+        const maxHeight = height - 100;
+
+        // Imprimir texto centrado
+        image.print(
+            font,
+            50, // x offset
+            0, // y offset
+            {
+                text: text.toUpperCase(), // BRAT usa mayúsculas
+                alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
+                alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE,
+            },
+            maxWidth,
+            height
+        );
+
+        return await image.getBufferAsync(Jimp.MIME_PNG);
+    } catch (error) {
+        console.error('Error en generateBratStyleImage:', error);
+        throw error;
+    }
 }
 
 async function generateAnimatedBratStyleImage(text) {
     const frames = [];
-    const tempDir = await fs.mkdtemp(path.join(tmpdir(), 'brat-'));
+    let tempDir;
 
-    for (let i = 0; i <= 10; i++) {
-        const opacity = Math.sin(Math.PI * i / 10);
-        const image = new Jimp(512, 512, '#FFFFFF');
-        const font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
-        const textImage = new Jimp(512, 512, 0x0);
-        textImage.print(font, 0, 0, {
-            text,
-            alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
-            alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE,
-        }, textImage.getWidth(), textImage.getHeight());
-        textImage.opacity(opacity);
-        image.composite(textImage, 0, 0);
-        const framePath = path.join(tempDir, `frame-${i}.png`);
-        await image.writeAsync(framePath);
-        frames.push(framePath);
+    try {
+        tempDir = await fs.mkdtemp(path.join(tmpdir(), 'brat-'));
+        const width = 512;
+        const height = 512;
+        const totalFrames = 20;
+
+        // Generar frames con efecto de pulsación
+        for (let i = 0; i < totalFrames; i++) {
+            // Calcular escala con efecto de pulsación
+            const scale = 1 + Math.sin((i / totalFrames) * Math.PI * 2) * 0.1;
+            const currentWidth = Math.floor(width * scale);
+            const currentHeight = Math.floor(height * scale);
+
+            // Crear imagen base
+            const baseImage = new Jimp(width, height, '#8ACE00');
+            const textImage = new Jimp(currentWidth, currentHeight, '#8ACE00');
+
+            const font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+
+            // Imprimir texto en la imagen temporal
+            textImage.print(
+                font,
+                0,
+                0,
+                {
+                    text: text.toUpperCase(),
+                    alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
+                    alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE,
+                },
+                currentWidth,
+                currentHeight
+            );
+
+            // Centrar la imagen escalada en el canvas base
+            const x = Math.floor((width - currentWidth) / 2);
+            const y = Math.floor((height - currentHeight) / 2);
+
+            baseImage.composite(textImage, x, y);
+
+            const framePath = path.join(tempDir, `frame-${String(i).padStart(3, '0')}.png`);
+            await baseImage.writeAsync(framePath);
+            frames.push(framePath);
+        }
+
+        const outputPath = path.join(tempDir, 'output.webp');
+
+        // Crear sticker animado con ffmpeg
+        await new Promise((resolve, reject) => {
+            ffmpeg()
+                .input(path.join(tempDir, 'frame-%03d.png'))
+                .inputOptions(['-framerate', '15'])
+                .outputOptions([
+                    '-vcodec', 'libwebp',
+                    '-loop', '0',
+                    '-preset', 'default',
+                    '-an',
+                    '-vsync', '0',
+                    '-s', '512:512'
+                ])
+                .toFormat('webp')
+                .save(outputPath)
+                .on('end', () => {
+                    console.log('✅ Sticker animado generado exitosamente');
+                    resolve();
+                })
+                .on('error', (err) => {
+                    console.error('❌ Error en ffmpeg:', err);
+                    reject(err);
+                });
+        });
+
+        const stickerBuffer = await fs.readFile(outputPath);
+
+        // Limpiar archivos temporales
+        await fs.rm(tempDir, { recursive: true, force: true });
+
+        return stickerBuffer;
+    } catch (error) {
+        console.error('Error en generateAnimatedBratStyleImage:', error);
+        // Intentar limpiar en caso de error
+        if (tempDir) {
+            try {
+                await fs.rm(tempDir, { recursive: true, force: true });
+            } catch (cleanupError) {
+                console.error('Error limpiando archivos temporales:', cleanupError);
+            }
+        }
+        throw error;
     }
-
-    const outputPath = path.join(tempDir, 'output.webp');
-    await new Promise((resolve, reject) => {
-        ffmpeg()
-            .input(path.join(tempDir, 'frame-%d.png'))
-            .inputOptions(['-framerate', '10'])
-            .outputOptions(['-vcodec', 'libwebp', '-loop', '0', '-s', '512:512'])
-            .toFormat('webp')
-            .save(outputPath)
-            .on('end', resolve)
-            .on('error', reject);
-    });
-
-    const stickerBuffer = await fs.readFile(outputPath);
-    await fs.rm(tempDir, { recursive: true, force: true });
-    return stickerBuffer;
 }
 
 
 export async function brat({ args }) {
   const text = (args || []).join(' ').trim();
-  if (!text) return { success: true, message: 'ℹ️ Uso: /brat [texto]\nEjemplo: /brat Hola mundo', quoted: true };
+  if (!text) {
+    return {
+      success: true,
+      message: 'ℹ️ Uso: /brat [texto]\nEjemplo: /brat Hola mundo',
+      quoted: true
+    };
+  }
+
   try {
+    console.log('🎨 Generando sticker BRAT con texto:', text);
     const imageBuffer = await generateBratStyleImage(text);
+
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw new Error('Buffer de imagen vacío');
+    }
+
+    console.log('✅ Sticker BRAT generado, tamaño:', imageBuffer.length, 'bytes');
+
     return {
         success: true,
         type: 'sticker',
@@ -107,16 +196,35 @@ export async function brat({ args }) {
         quoted: true
     };
   } catch(e) {
-    console.error(e)
-    return { success: false, message: '⚠️ Error generando sticker BRAT.', quoted: true };
+    console.error('❌ Error generando sticker BRAT:', e);
+    return {
+      success: false,
+      message: `⚠️ Error generando sticker BRAT: ${e.message}`,
+      quoted: true
+    };
   }
 }
 
 export async function bratvd({ args }) {
     const text = (args || []).join(' ').trim();
-    if (!text) return { success: true, message: 'ℹ️ Uso: /bratvd [texto]\nEjemplo: /bratvd Hola mundo', quoted: true };
+    if (!text) {
+      return {
+        success: true,
+        message: 'ℹ️ Uso: /bratvd [texto]\nEjemplo: /bratvd Hola mundo',
+        quoted: true
+      };
+    }
+
     try {
+        console.log('🎨 Generando sticker BRAT VD animado con texto:', text);
         const imageBuffer = await generateAnimatedBratStyleImage(text);
+
+        if (!imageBuffer || imageBuffer.length === 0) {
+          throw new Error('Buffer de sticker animado vacío');
+        }
+
+        console.log('✅ Sticker BRAT VD generado, tamaño:', imageBuffer.length, 'bytes');
+
         return {
             success: true,
             type: 'sticker',
@@ -126,7 +234,11 @@ export async function bratvd({ args }) {
             quoted: true
         };
     } catch(e) {
-        console.error(e)
-        return { success: false, message: '⚠️ Error generando sticker BRAT animado.', quoted: true };
+        console.error('❌ Error generando sticker BRAT animado:', e);
+        return {
+          success: false,
+          message: `⚠️ Error generando sticker BRAT animado: ${e.message}`,
+          quoted: true
+        };
     }
 }
