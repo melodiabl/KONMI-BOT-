@@ -171,8 +171,7 @@ async function generateAnimatedBratStyleImage(text) {
                     '-an',
                     '-vsync', '0',
                     '-s', '512:512',
-                    '-pix_fmt', 'yuva420p',
-                    '-alpha_quality', '100'
+                    '-pix_fmt', 'yuva420p'
                 ])
                 .save(outputPath)
                 .on('end', resolve)
