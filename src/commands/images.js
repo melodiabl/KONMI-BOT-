@@ -40,52 +40,49 @@ async function generateBratStyleImage(text) {
     try {
         console.log('📝 Generando imagen BRAT con texto:', text);
 
-        // Crear imagen con fondo verde lima estilo BRAT
         const width = 512;
         const height = 512;
-        const bgColor = 0x8ACE00FF; // Verde lima característico de BRAT (con alpha)
-        const image = new Jimp(width, height, bgColor);
 
+        // Crear imagen con fondo verde BRAT (sin alpha para evitar transparencia)
+        const image = await new Jimp(width, height, 0x8ACE00);
         console.log('✅ Imagen base creada:', width, 'x', height);
 
-        // Cargar fuente (probar con diferentes tamaños)
-        let font;
-        try {
-            font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
-            console.log('✅ Fuente cargada: FONT_SANS_64_BLACK');
-        } catch (fontError) {
-            console.error('❌ Error cargando fuente 64:', fontError);
-            font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
-            console.log('✅ Fuente cargada (fallback): FONT_SANS_32_BLACK');
-        }
+        // Cargar fuente
+        const font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+        console.log('✅ Fuente cargada');
 
         // Texto en mayúsculas estilo BRAT
         const textUpper = text.toUpperCase();
-        console.log('📝 Texto procesado:', textUpper);
+        console.log('📝 Texto a renderizar:', textUpper);
 
-        // Medir el texto
-        const textWidth = Jimp.measureText(font, textUpper);
-        const textHeight = Jimp.measureTextHeight(font, textUpper, width - 100);
-        console.log('📏 Dimensiones del texto:', textWidth, 'x', textHeight);
-
-        // Calcular posición centrada
-        const x = Math.floor((width - textWidth) / 2);
-        const y = Math.floor((height - textHeight) / 2);
-        console.log('📍 Posición del texto: x=', x, ', y=', y);
-
-        // Imprimir texto
+        // Imprimir texto centrado
         image.print(
             font,
-            x,
-            y,
-            textUpper
+            0,
+            0,
+            {
+                text: textUpper,
+                alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
+                alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE
+            },
+            width,
+            height
         );
 
         console.log('✅ Texto impreso en la imagen');
 
+        // Asegurar que la imagen sea opaca (sin canal alpha)
+        image.opaque();
+        console.log('✅ Imagen hecha opaca');
+
         // Convertir a buffer PNG
         const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
         console.log('✅ Buffer PNG generado, tamaño:', buffer.length, 'bytes');
+
+        // Verificar que el buffer no esté vacío
+        if (!buffer || buffer.length === 0) {
+            throw new Error('Buffer PNG está vacío');
+        }
 
         return buffer;
     } catch (error) {
@@ -251,11 +248,61 @@ export async function brat(ctx) {
 
     console.log('✅ Sticker BRAT generado, tamaño:', imageBuffer.length, 'bytes');
 
+    // Convertir PNG a WebP para mejor compatibilidad con WhatsApp
+    let stickerBuffer = imageBuffer;
+    try {
+      console.log('🔄 Convirtiendo PNG a WebP...');
+      const webpPath = path.join(tmpdir(), `brat-${Date.now()}.webp`);
+      const pngPath = path.join(tmpdir(), `brat-${Date.now()}.png`);
+
+      // Guardar PNG temporal
+      await fs.writeFile(pngPath, imageBuffer);
+
+      // Convertir a WebP usando ffmpeg
+      await new Promise((resolve, reject) => {
+        ffmpeg(pngPath)
+          .outputOptions([
+            '-vcodec', 'libwebp',
+            '-vf', 'scale=512:512',
+            '-compression_level', '6',
+            '-q:v', '100',
+            '-preset', 'picture',
+            '-an',
+            '-vsync', '0'
+          ])
+          .toFormat('webp')
+          .save(webpPath)
+          .on('end', async () => {
+            console.log('✅ Conversión a WebP completada');
+            resolve();
+          })
+          .on('error', (err) => {
+            console.error('❌ Error en conversión WebP:', err);
+            reject(err);
+          });
+      });
+
+      // Leer WebP
+      stickerBuffer = await fs.readFile(webpPath);
+      console.log('✅ WebP leído, tamaño:', stickerBuffer.length, 'bytes');
+
+      // Limpiar archivos temporales
+      try {
+        await fs.unlink(pngPath);
+        await fs.unlink(webpPath);
+      } catch (cleanupError) {
+        console.warn('⚠️ No se pudieron eliminar archivos temporales:', cleanupError);
+      }
+    } catch (conversionError) {
+      console.warn('⚠️ No se pudo convertir a WebP, usando PNG:', conversionError.message);
+      // Continuar con PNG si la conversión falla
+    }
+
     // CRÍTICO: Enviar directamente usando sock si está disponible
     if (ctx.sock && ctx.remoteJid) {
       try {
         await ctx.sock.sendMessage(ctx.remoteJid, {
-          sticker: imageBuffer
+          sticker: stickerBuffer
         });
         console.log('✅ Sticker enviado directamente via sock');
         return { success: true, sent: true };
@@ -265,12 +312,11 @@ export async function brat(ctx) {
       }
     }
 
-    // Fallback: retornar buffer directo (sin toMediaInput)
+    // Fallback: retornar buffer directo
     return {
         success: true,
         type: 'sticker',
-        sticker: imageBuffer, // Buffer directo
-        // NO incluir 'message' para evitar que se envíe solo texto
+        sticker: stickerBuffer,
         quoted: true
     };
   } catch(e) {
