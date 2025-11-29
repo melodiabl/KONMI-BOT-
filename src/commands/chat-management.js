@@ -12,9 +12,9 @@ export async function muteChat(ctx) {
 
   const time = MUTE_TIMES[timeStr]
   if (!time && timeStr !== 'forever') {
-    return { 
-      success: false, 
-      message: `❌ Opciones: ${Object.keys(MUTE_TIMES).join(', ')}, forever` 
+    return {
+      success: false,
+      message: `❌ Opciones: ${Object.keys(MUTE_TIMES).join(', ')}, forever`
     }
   }
 
@@ -45,15 +45,7 @@ export async function archiveChat(ctx) {
   const { remoteJid, sock } = ctx
 
   try {
-    const lastMsg = await sock.loadMessage(remoteJid)
-    if (lastMsg) {
-      await sock.chatModify({ 
-        archive: true, 
-        lastMessages: [lastMsg] 
-      }, remoteJid)
-    } else {
-      await sock.chatModify({ archive: true }, remoteJid)
-    }
+    await sock.chatModify({ archive: true }, remoteJid)
     return { success: true, message: '📦 Chat archivado' }
   } catch (error) {
     logger.error('Error archivando chat:', error)
@@ -77,13 +69,7 @@ export async function markChatRead(ctx) {
   const { remoteJid, sock } = ctx
 
   try {
-    const lastMsg = await sock.loadMessage(remoteJid)
-    if (lastMsg) {
-      await sock.chatModify({ 
-        markRead: true, 
-        lastMessages: [lastMsg] 
-      }, remoteJid)
-    }
+    await sock.chatModify({ markRead: true }, remoteJid)
     return { success: true, message: '✅ Chat marcado como leído' }
   } catch (error) {
     logger.error('Error marcando chat leído:', error)
@@ -95,13 +81,7 @@ export async function markChatUnread(ctx) {
   const { remoteJid, sock } = ctx
 
   try {
-    const lastMsg = await sock.loadMessage(remoteJid)
-    if (lastMsg) {
-      await sock.chatModify({ 
-        markRead: false, 
-        lastMessages: [lastMsg] 
-      }, remoteJid)
-    }
+    await sock.chatModify({ markRead: false }, remoteJid)
     return { success: true, message: '🔵 Chat marcado como no leído' }
   } catch (error) {
     logger.error('Error marcando chat no leído:', error)
@@ -113,18 +93,7 @@ export async function deleteChat(ctx) {
   const { remoteJid, sock } = ctx
 
   try {
-    const lastMsg = await sock.loadMessage(remoteJid)
-    if (lastMsg) {
-      await sock.chatModify({ 
-        delete: true, 
-        lastMessages: [
-          {
-            key: lastMsg.key,
-            messageTimestamp: lastMsg.messageTimestamp
-          }
-        ]
-      }, remoteJid)
-    }
+    await sock.chatModify({ delete: true }, remoteJid)
     return { success: true, message: '🗑️ Chat eliminado' }
   } catch (error) {
     logger.error('Error eliminando chat:', error)
@@ -185,9 +154,9 @@ export async function enableDisappearing(ctx) {
 
   const validDays = [0, 1, 7, 30, 90]
   if (!validDays.includes(days)) {
-    return { 
-      success: false, 
-      message: `❌ Días válidos: ${validDays.join(', ')}` 
+    return {
+      success: false,
+      message: `❌ Días válidos: ${validDays.join(', ')}`
     }
   }
 
@@ -238,12 +207,8 @@ export async function readMessages(ctx) {
   const { remoteJid, sock } = ctx
 
   try {
-    const messages = await sock.loadMessagesInChat(remoteJid, undefined, 50)
-    if (messages && messages.length > 0) {
-      const keys = messages.map(m => m.key)
-      await sock.readMessages(keys)
-    }
-    return { success: true, message: '✅ Últimos mensajes marcados como leídos' }
+    await sock.chatModify({ markRead: true }, remoteJid)
+    return { success: true, message: '✅ Chat marcado como leído' }
   } catch (error) {
     logger.error('Error marcando mensajes leídos:', error)
     return { success: false, message: `❌ Error: ${error.message}` }
