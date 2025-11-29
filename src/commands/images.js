@@ -167,8 +167,8 @@ async function generateAnimatedBratStyleImage(text) {
 }
 
 
-export async function brat({ args }) {
-  const text = (args || []).join(' ').trim();
+export async function brat(ctx) {
+  const text = (ctx.args || []).join(' ').trim();
   if (!text) {
     return {
       success: true,
@@ -187,12 +187,26 @@ export async function brat({ args }) {
 
     console.log('✅ Sticker BRAT generado, tamaño:', imageBuffer.length, 'bytes');
 
+    // CRÍTICO: Enviar directamente usando sock si está disponible
+    if (ctx.sock && ctx.remoteJid) {
+      try {
+        await ctx.sock.sendMessage(ctx.remoteJid, {
+          sticker: imageBuffer
+        });
+        console.log('✅ Sticker enviado directamente via sock');
+        return { success: true, sent: true };
+      } catch (sendError) {
+        console.error('❌ Error enviando con sock:', sendError);
+        // Continuar al fallback
+      }
+    }
+
+    // Fallback: retornar buffer directo (sin toMediaInput)
     return {
         success: true,
         type: 'sticker',
-        sticker: imageBuffer,
-        caption: `🎨 BRAT\n📝 ${text}`,
-        message: `🎨 *BRAT - Sticker*\n\n📝 **Texto:** "${text}"\n🎭 **Estilo:** BRAT`,
+        sticker: imageBuffer, // Buffer directo
+        // NO incluir 'message' para evitar que se envíe solo texto
         quoted: true
     };
   } catch(e) {
@@ -205,8 +219,8 @@ export async function brat({ args }) {
   }
 }
 
-export async function bratvd({ args }) {
-    const text = (args || []).join(' ').trim();
+export async function bratvd(ctx) {
+    const text = (ctx.args || []).join(' ').trim();
     if (!text) {
       return {
         success: true,
@@ -225,12 +239,26 @@ export async function bratvd({ args }) {
 
         console.log('✅ Sticker BRAT VD generado, tamaño:', imageBuffer.length, 'bytes');
 
+        // CRÍTICO: Enviar directamente usando sock si está disponible
+        if (ctx.sock && ctx.remoteJid) {
+          try {
+            await ctx.sock.sendMessage(ctx.remoteJid, {
+              sticker: imageBuffer
+            });
+            console.log('✅ Sticker animado enviado directamente via sock');
+            return { success: true, sent: true };
+          } catch (sendError) {
+            console.error('❌ Error enviando con sock:', sendError);
+            // Continuar al fallback
+          }
+        }
+
+        // Fallback: retornar buffer directo (sin toMediaInput)
         return {
             success: true,
             type: 'sticker',
-            sticker: imageBuffer,
-            caption: `🎨 BRAT VD\n📝 ${text}`,
-            message: `🎨 *BRAT - Sticker Animado*\n\n📝 **Texto:** "${text}"\n🎭 **Estilo:** BRAT VD`,
+            sticker: imageBuffer, // Buffer directo
+            // NO incluir 'message' para evitar que se envíe solo texto
             quoted: true
         };
     } catch(e) {
