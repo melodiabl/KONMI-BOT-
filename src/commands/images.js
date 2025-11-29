@@ -171,7 +171,7 @@ async function generateAnimatedBratStyleImage(text) {
                     '-an',
                     '-vsync', '0',
                     '-s', '512:512',
-                    '-pix_fmt', 'yuva420p',
+                    '-pix_fmt', 'yuva420p'
                     '-alpha_quality', '100'
                 ])
                 .save(outputPath)
@@ -253,4 +253,3 @@ export async function bratvd(ctx) {
         return { success: false, message: `⚠️ Error generando sticker BRAT animado: ${e.message}`, quoted: true };
     }
 }
-
