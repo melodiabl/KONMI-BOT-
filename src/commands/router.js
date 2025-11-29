@@ -234,8 +234,8 @@ function summarizePayload(p) {
   try {
     if (!p || typeof p !== 'object') return typeof p
     const keys = Object.keys(p)
-    if (p.viewOnceMessage?.message?.interactiveMessage) return 'viewOnceMessage/interactiveMessage' // Detalle el payload para debug
-    if (p.interactiveMessage) return 'interactiveMessage' // Detalle el payload para debug
+    if (p.viewOnceMessage?.message?.interactiveMessage) return 'viewOnceMessage/interactiveMessage'
+    if (p.interactiveMessage) return 'interactiveMessage'
     if (p.listMessage) return 'listMessage'
     if (p.templateButtons) return 'templateButtons'
     if (p.image) return 'image'
@@ -249,17 +249,14 @@ function summarizePayload(p) {
 
 
 // Función auxiliar para construir el payload interactivo moderno (Native Flow)
-// Usa isGroup para decidir entre interactiveMessage (privado) o viewOnceMessage (grupo).
 function createInteractiveMessage(data, isGroup = true) {
   const { body, footer, title, buttons, sections, mentions } = data
 
-  // Estructura del encabezado (Header) para Native Flow
-  // AVISO: Evita títulos muy largos o con caracteres especiales, ya que son el punto más débil de Native Flow.
   let header = undefined
   if (title) {
     header = {
       title: title,
-      hasMediaAttachment: false // Clave: indica que no hay media adjunta
+      hasMediaAttachment: false
     }
   }
 
@@ -272,12 +269,10 @@ function createInteractiveMessage(data, isGroup = true) {
     }
   }
 
-  // CRUCIAL: Añadir contextInfo para menciones/quoted
   if (mentions && mentions.length > 0) {
     interactiveMessage.contextInfo = { mentionedJid: mentions }
   }
 
-  // CASO 1: LISTA (Sections) -> Se convierte en un botón "single_select"
   if (sections && sections.length > 0) {
     const listButton = {
       name: 'single_select',
@@ -288,23 +283,20 @@ function createInteractiveMessage(data, isGroup = true) {
     }
     interactiveMessage.nativeFlowMessage.buttons.push(listButton)
   }
-  // CASO 2: BOTONES NORMALES (Buttons) -> quick_reply o cta_url/copy
   else if (buttons && buttons.length > 0) {
     interactiveMessage.nativeFlowMessage.buttons = buttons.map(btn => {
       const displayText = btn.text || btn.displayText || 'Acción'
 
-      // Botón de URL
       if (btn.url) {
         return {
           name: 'cta_url',
           buttonParamsJson: JSON.stringify({
             display_text: displayText,
             url: btn.url,
-            merchant_url: btn.url // Campo redundante a veces requerido
+            merchant_url: btn.url
           })
         }
       }
-      // Botón de Copiar (si lo usas)
       if (btn.copyCode) {
          return {
           name: 'cta_copy',
@@ -315,7 +307,6 @@ function createInteractiveMessage(data, isGroup = true) {
           })
         }
       }
-      // Botón normal (Quick Reply)
       return {
         name: 'quick_reply',
         buttonParamsJson: JSON.stringify({
@@ -326,17 +317,14 @@ function createInteractiveMessage(data, isGroup = true) {
     })
   }
 
-  // LÓGICA DE SEPARACIÓN: Si no es un grupo, enviamos solo el interactiveMessage
   if (!isGroup) {
-      // Para chats privados, enviar directamente el interactiveMessage (más estable)
       return { interactiveMessage }
   }
 
-  // Para grupos, envolver SIEMPRE en viewOnceMessage
   return {
     viewOnceMessage: {
       message: {
-        interactiveMessage // ✅ OK para grupos (viewOnceMessage)
+        interactiveMessage
       }
     }
   }
@@ -351,7 +339,7 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
     return true
   } catch (err) { e1 = err }
 
-  // Intento 2: Sin quoted (a veces el quoted viejo rompe el envío)
+  // Intento 2: Sin quoted
   try {
     const o = { ...(opts||{}) };
     if (o.quoted) delete o.quoted;
@@ -360,14 +348,12 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   } catch (err) { e2 = err }
 
   try {
-    // ⚠️ CRUCIAL: Muestra el error exacto de la librería
     if (traceEnabled()) console.warn('[router.send] failed:', summarizePayload(payload), e1?.message || e1, '|', e2?.message || e2)
   } catch {}
 
-  // Intento 3: Fallback a texto plano si falla el interactivo complejo
+  // Intento 3: Fallback a texto plano
   if (!silentOnFail && (payload.viewOnceMessage || payload.interactiveMessage || payload.buttonsMessage)) {
      try {
-         // Si falla, enviamos el mensaje de diagnóstico y no el menú en texto plano.
          await sock.sendMessage(jid, { text: '⚠️ No se pudo cargar el menú/botones. Tu app podría estar desactualizada o el formato no es compatible.' }, opts);
      } catch {}
   }
@@ -455,7 +441,31 @@ async function sendResult(sock, jid, result, ctx) {
   if (result.type === 'image' && result.image) { await safeSend(sock, targetJid, { image: toMediaInput(result.image), caption: result.caption, mentions: result.mentions }, opts); return }
   if (result.type === 'video' && result.video) { await safeSend(sock, targetJid, { video: toMediaInput(result.video), caption: result.caption, mentions: result.mentions }, opts); return }
   if (result.type === 'audio' && result.audio) { await safeSend(sock, targetJid, { audio: toMediaInput(result.audio), mimetype: result.mimetype || 'audio/mpeg', ptt: !!result.ptt }, opts); return }
-  if (result.type === 'sticker' && result.sticker) { await safeSend(sock, targetJid, { sticker: toMediaInput(result.sticker) }, opts, true); return }
+
+  // ✅ CORRECCIÓN CRÍTICA PARA STICKERS
+  if (result.type === 'sticker' && result.sticker) {
+    console.log('[DEBUG] Enviando sticker, buffer length:', result.sticker?.length || 'N/A');
+    console.log('[DEBUG] Buffer type:', Buffer.isBuffer(result.sticker) ? 'Buffer' : typeof result.sticker);
+
+    // Intentar envío directo sin toMediaInput para stickers
+    try {
+      await sock.sendMessage(targetJid, { sticker: result.sticker }, opts);
+      console.log('[DEBUG] ✅ Sticker enviado exitosamente');
+      return;
+    } catch (stickerError) {
+      console.error('[DEBUG] ❌ Error enviando sticker:', stickerError?.message || stickerError);
+      // Intentar con toMediaInput como fallback
+      try {
+        await sock.sendMessage(targetJid, { sticker: toMediaInput(result.sticker) }, opts);
+        console.log('[DEBUG] ✅ Sticker enviado con toMediaInput');
+        return;
+      } catch (fallbackError) {
+        console.error('[DEBUG] ❌ Error en fallback:', fallbackError?.message || fallbackError);
+      }
+    }
+    return;
+  }
+
   if (result.type === 'spotify') {
     let sentPrimary = false
     if (result.image) {
@@ -540,7 +550,7 @@ async function sendResult(sock, jid, result, ctx) {
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
-    // Fallback a texto plano si falla Native Flow
+    // Fallback a texto plano
     const plain = [result.text || result.caption || 'Opciones:'];
     for (const b of result.buttons) {
       const label = b.text || b.title || b.displayText || 'Acción';
@@ -552,10 +562,9 @@ async function sendResult(sock, jid, result, ctx) {
   }
 
   /* ============================================================
-     LÓGICA DE LISTAS (Convertido a Single Select Native)
+     LÓGICA DE LISTAS
      ============================================================ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
-    // Mapeo de secciones (debe ser estricto para Native Flow)
     const nativeSections = result.sections.map(s => ({
       title: s.title || 'Sección',
       rows: (s.rows || []).map(r => ({
@@ -582,7 +591,7 @@ async function sendResult(sock, jid, result, ctx) {
     lines.push(result.text || 'Menú')
     for (const sec of result.sections) {
       lines.push(`\n— ${sec.title || ''}`)
-      for (const row of (sec.rows || [])) lines.push(`• ${row.title} → ${row.rowId}`) // Usamos → para evitar parsing erróneo
+      for (const row of (sec.rows || [])) lines.push(`• ${row.title} → ${row.rowId}`)
     }
     await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
     return
@@ -590,7 +599,6 @@ async function sendResult(sock, jid, result, ctx) {
 
   if (result.type === 'content' && result.content && typeof result.content === 'object') {
     const payload = { ...result.content }
-    // Asegurar contexto de menciones para payloads ViewOnce/Interactive pre-construidos
     try {
         if (result.mentions && payload.viewOnceMessage?.message?.interactiveMessage) {
             payload.viewOnceMessage.message.interactiveMessage.contextInfo = {
@@ -598,7 +606,6 @@ async function sendResult(sock, jid, result, ctx) {
                 mentionedJid: result.mentions
             }
         }
-        // Si no es un grupo y el contenido está envuelto en viewOnceMessage, intentamos desempaquetarlo para privados.
         if (!ctx.isGroup && payload.viewOnceMessage) {
             if (payload.viewOnceMessage.message?.interactiveMessage) {
                  const unwrapped = { interactiveMessage: payload.viewOnceMessage.message.interactiveMessage }
@@ -608,7 +615,6 @@ async function sendResult(sock, jid, result, ctx) {
     } catch {}
 
     if (!(await safeSend(sock, targetJid, payload, opts, true))) {
-      // Fallback si el contenido raw falla
       try {
         const body = payload?.viewOnceMessage?.message?.interactiveMessage?.body?.text || 'Opciones'
         const buttons = payload?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage?.buttons || []
@@ -633,26 +639,19 @@ export async function dispatch(ctx = {}) {
   const { sock, remoteJid, isGroup } = ctx
   if (!sock || !remoteJid) return false
 
-  // ============================================================
-  // LÓGICA FROM-ME / OWNER / SENDER (Detección Owner)
-  // ============================================================
   const isFromMe = ctx.message?.key?.fromMe || false
 
-  // Calcular el Sender ID real
   let senderId = ''
   if (isFromMe) {
     senderId = normalizeDigits(sock.user?.id || '')
-    ctx.isOwner = true // <--- Esto asegura que el bot es Owner
+    ctx.isOwner = true
   } else {
     senderId = normalizeDigits(ctx.sender || ctx.senderNumber || ctx.message?.key?.participant || '')
   }
 
-  // Actualizar el contexto con el senderId correcto
   ctx.sender = `${senderId}@s.whatsapp.net`
   ctx.senderNumber = senderId
   ctx.usuario = `${senderId}@s.whatsapp.net`
-
-  // ============================================================
 
   if (isGroup) {
     const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
@@ -663,34 +662,28 @@ export async function dispatch(ctx = {}) {
 
   const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
 
-  // 1. Detección de comando principal (DEBE IR ANTES DEL FILTRO FROM-ME)
   const parsed = parseCommand(text)
   let command = parsed.command
   const args = parsed.args || []
 
-  // 2. ✅ FILTRO ANTI-LOOP: Bloquea el autoprocesamiento de fallbacks de texto
   if (isFromMe) {
-    // Verificar si el mensaje fromMe es una respuesta de botón/lista (Interactive Reply).
     const isInteractiveReply = !!(ctx.message?.message?.buttonsResponseMessage ||
                                  ctx.message?.message?.listResponseMessage ||
                                  ctx.message?.message?.templateButtonReplyMessage ||
                                  ctx.message?.message?.interactiveResponseMessage ||
                                  ctx.message?.message?.interactiveMessage);
 
-    // Si NO es una respuesta interactiva, Y NO se detectó un comando explícito, ENTONCES lo ignoramos.
     if (!isInteractiveReply && !command) {
-        if (traceEnabled()) console.log(`[router] IGNORANDO: Mensaje fromMe no interactivo y sin comando explícito (probablemente texto de fallback).`);
+        if (traceEnabled()) console.log(`[router] IGNORANDO: Mensaje fromMe no interactivo y sin comando explícito.`);
         return false;
     }
   }
-  // FIN DE FILTRO ANTI-LOOP
 
   if (traceEnabled()) {
     const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
     console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${senderId} | Owner: ${ctx.isOwner}`)
   }
 
-  // 3. Detección de comando secundaria (para botones/listas sin prefijo)
   if (!command) {
     try {
       const msg = ctx.message?.message || {}
@@ -711,7 +704,6 @@ export async function dispatch(ctx = {}) {
     } catch {}
   }
 
-  // 4. Lógica de comandos sin prefijo (fromMe y palabras clave)
   try {
     const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'true').toLowerCase() === 'true'
     if (!command && allowNoPrefix && isFromMe) {
@@ -719,7 +711,6 @@ export async function dispatch(ctx = {}) {
       if (parts.length) command = `/${(parts.shift() || '').toLowerCase()}`
     }
   } catch {}
-
 
   try {
     if (!command && !isFromMe) {
@@ -732,7 +723,6 @@ export async function dispatch(ctx = {}) {
     }
   } catch {}
 
-  // 5. Salida si no hay comando
   if (!command) {
     if (/^url\|/i.test(text)) {
       const url = text.split('|')[1] || ''
@@ -740,10 +730,6 @@ export async function dispatch(ctx = {}) {
     }
     return false
   }
-
-  // ============================================================
-  // EJECUCIÓN DEL COMANDO
-  // ============================================================
 
   console.log(`[DEBUG] Command found: ${command}, checking registry...`)
 
@@ -762,7 +748,7 @@ export async function dispatch(ctx = {}) {
         if (registry) console.log('[registry] precargado OK')
         else console.warn('[registry] módulo cargado pero no devolvió registry (getCommandRegistry missing)')
       } catch (impErr) {
-        console.error('⚠️ ERROR CRÍTICO AL GAR EL REGISTRO DE COMANDOS:', impErr?.message || impErr)
+        console.error('⚠️ ERROR CRÍTICO CARGANDO EL REGISTRO DE COMANDOS:', impErr?.message || impErr)
       }
     }
   } catch (e) {
@@ -780,7 +766,6 @@ export async function dispatch(ctx = {}) {
     lazy.set('/bot', async (ctx) => (await import('./bot-control.js')).bot(ctx))
     lazy.set('/help', async (ctx) => {
       const keys = Array.from(lazy.keys()).sort()
-      // En el fallback simple, devolvemos texto. Los comandos reales deben devolver el objeto { type: 'buttons', ... }
       const text = '📋 Comandos disponibles\n\n' + keys.map(k => `• ${k}`).join('\n')
       return { success: true, message: text, quoted: true }
     })
@@ -807,11 +792,7 @@ export async function dispatch(ctx = {}) {
   const entry = registry.get(command)
   console.log(`[DEBUG] Found registry entry for ${command}:`, !!entry)
 
-  // ============================================================
-  // Verificación de Admin (CORREGIDA)
-  // ============================================================
   if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
-    // ✅ CORRECCIÓN: Si el mensaje es del Owner (el bot fromMe), se permite.
     if (ctx.isOwner) {
       console.log(`[router] Bypass de admin para ${command}: es el Owner (Bot itself).`)
     } else {
@@ -819,7 +800,6 @@ export async function dispatch(ctx = {}) {
         const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
         const participants = groupMeta?.participants || []
 
-        // Buscar participante usando el senderId calculado
         const participant = participants.find(p => normalizeDigits(p.id) === senderId)
 
         if (!isAdminFlag(participant)) {
@@ -885,4 +865,3 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
-
