@@ -38,35 +38,59 @@ export async function imageFromPrompt({ args }) {
 
 async function generateBratStyleImage(text) {
     try {
+        console.log('📝 Generando imagen BRAT con texto:', text);
+
         // Crear imagen con fondo verde lima estilo BRAT
-        const width = 800;
-        const height = 800;
-        const image = new Jimp(width, height, '#8ACE00'); // Verde lima característico de BRAT
+        const width = 512;
+        const height = 512;
+        const bgColor = 0x8ACE00FF; // Verde lima característico de BRAT (con alpha)
+        const image = new Jimp(width, height, bgColor);
 
-        // Cargar fuente más grande
-        const font = await Jimp.loadFont(Jimp.FONT_SANS_128_BLACK);
+        console.log('✅ Imagen base creada:', width, 'x', height);
 
-        // Calcular dimensiones del texto
-        const maxWidth = width - 100; // Margen
-        const maxHeight = height - 100;
+        // Cargar fuente (probar con diferentes tamaños)
+        let font;
+        try {
+            font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+            console.log('✅ Fuente cargada: FONT_SANS_64_BLACK');
+        } catch (fontError) {
+            console.error('❌ Error cargando fuente 64:', fontError);
+            font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+            console.log('✅ Fuente cargada (fallback): FONT_SANS_32_BLACK');
+        }
 
-        // Imprimir texto centrado
+        // Texto en mayúsculas estilo BRAT
+        const textUpper = text.toUpperCase();
+        console.log('📝 Texto procesado:', textUpper);
+
+        // Medir el texto
+        const textWidth = Jimp.measureText(font, textUpper);
+        const textHeight = Jimp.measureTextHeight(font, textUpper, width - 100);
+        console.log('📏 Dimensiones del texto:', textWidth, 'x', textHeight);
+
+        // Calcular posición centrada
+        const x = Math.floor((width - textWidth) / 2);
+        const y = Math.floor((height - textHeight) / 2);
+        console.log('📍 Posición del texto: x=', x, ', y=', y);
+
+        // Imprimir texto
         image.print(
             font,
-            50, // x offset
-            0, // y offset
-            {
-                text: text.toUpperCase(), // BRAT usa mayúsculas
-                alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
-                alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE,
-            },
-            maxWidth,
-            height
+            x,
+            y,
+            textUpper
         );
 
-        return await image.getBufferAsync(Jimp.MIME_PNG);
+        console.log('✅ Texto impreso en la imagen');
+
+        // Convertir a buffer PNG
+        const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
+        console.log('✅ Buffer PNG generado, tamaño:', buffer.length, 'bytes');
+
+        return buffer;
     } catch (error) {
-        console.error('Error en generateBratStyleImage:', error);
+        console.error('❌ Error en generateBratStyleImage:', error);
+        console.error('Stack:', error.stack);
         throw error;
     }
 }
@@ -76,90 +100,130 @@ async function generateAnimatedBratStyleImage(text) {
     let tempDir;
 
     try {
+        console.log('🎬 Iniciando generación de sticker animado BRAT');
         tempDir = await fs.mkdtemp(path.join(tmpdir(), 'brat-'));
+        console.log('📁 Directorio temporal creado:', tempDir);
+
         const width = 512;
         const height = 512;
-        const totalFrames = 20;
+        const totalFrames = 15; // Reducido para mejor rendimiento
+        const bgColor = 0x8ACE00FF; // Verde BRAT
+
+        // Cargar fuente una sola vez
+        let font;
+        try {
+            font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+            console.log('✅ Fuente cargada para animación');
+        } catch (fontError) {
+            font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+            console.log('✅ Fuente cargada (fallback) para animación');
+        }
+
+        const textUpper = text.toUpperCase();
+        const textWidth = Jimp.measureText(font, textUpper);
+        const textHeight = Jimp.measureTextHeight(font, textUpper, width - 100);
 
         // Generar frames con efecto de pulsación
         for (let i = 0; i < totalFrames; i++) {
-            // Calcular escala con efecto de pulsación
-            const scale = 1 + Math.sin((i / totalFrames) * Math.PI * 2) * 0.1;
-            const currentWidth = Math.floor(width * scale);
-            const currentHeight = Math.floor(height * scale);
+            // Efecto de escala pulsante (1.0 a 1.15 y vuelta)
+            const scale = 1 + Math.sin((i / totalFrames) * Math.PI * 2) * 0.075;
 
-            // Crear imagen base
-            const baseImage = new Jimp(width, height, '#8ACE00');
-            const textImage = new Jimp(currentWidth, currentHeight, '#8ACE00');
+            // Crear frame base
+            const frameImage = new Jimp(width, height, bgColor);
 
-            const font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+            // Calcular posición centrada con escala
+            const scaledWidth = textWidth * scale;
+            const scaledHeight = textHeight * scale;
+            const x = Math.floor((width - scaledWidth) / 2);
+            const y = Math.floor((height - scaledHeight) / 2);
 
-            // Imprimir texto en la imagen temporal
-            textImage.print(
-                font,
-                0,
-                0,
-                {
-                    text: text.toUpperCase(),
-                    alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
-                    alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE,
-                },
-                currentWidth,
-                currentHeight
-            );
+            // Crear imagen temporal para el texto
+            const textImage = new Jimp(Math.ceil(scaledWidth) + 50, Math.ceil(scaledHeight) + 50, bgColor);
 
-            // Centrar la imagen escalada en el canvas base
-            const x = Math.floor((width - currentWidth) / 2);
-            const y = Math.floor((height - currentHeight) / 2);
+            // Imprimir texto
+            textImage.print(font, 25, 25, textUpper);
 
-            baseImage.composite(textImage, x, y);
+            // Escalar si es necesario
+            if (scale !== 1) {
+                textImage.scale(scale);
+            }
+
+            // Componer en el frame
+            frameImage.composite(textImage, x, y);
 
             const framePath = path.join(tempDir, `frame-${String(i).padStart(3, '0')}.png`);
-            await baseImage.writeAsync(framePath);
+            await frameImage.writeAsync(framePath);
             frames.push(framePath);
+
+            if (i % 5 === 0) {
+                console.log(`📸 Frame ${i + 1}/${totalFrames} generado`);
+            }
         }
 
+        console.log(`✅ ${totalFrames} frames generados, creando WebP...`);
         const outputPath = path.join(tempDir, 'output.webp');
 
         // Crear sticker animado con ffmpeg
         await new Promise((resolve, reject) => {
-            ffmpeg()
+            const ffmpegCmd = ffmpeg()
                 .input(path.join(tempDir, 'frame-%03d.png'))
-                .inputOptions(['-framerate', '15'])
+                .inputOptions([
+                    '-framerate', '10',
+                    '-loop', '0'
+                ])
                 .outputOptions([
                     '-vcodec', 'libwebp',
-                    '-loop', '0',
+                    '-lossless', '0',
+                    '-compression_level', '6',
+                    '-q:v', '80',
                     '-preset', 'default',
                     '-an',
                     '-vsync', '0',
                     '-s', '512:512'
                 ])
                 .toFormat('webp')
-                .save(outputPath)
-                .on('end', () => {
-                    console.log('✅ Sticker animado generado exitosamente');
-                    resolve();
-                })
-                .on('error', (err) => {
-                    console.error('❌ Error en ffmpeg:', err);
-                    reject(err);
-                });
+                .save(outputPath);
+
+            ffmpegCmd.on('start', (cmd) => {
+                console.log('🎥 Comando ffmpeg:', cmd);
+            });
+
+            ffmpegCmd.on('progress', (progress) => {
+                if (progress.percent) {
+                    console.log(`⏳ Progreso: ${Math.round(progress.percent)}%`);
+                }
+            });
+
+            ffmpegCmd.on('end', () => {
+                console.log('✅ Sticker animado generado exitosamente');
+                resolve();
+            });
+
+            ffmpegCmd.on('error', (err) => {
+                console.error('❌ Error en ffmpeg:', err);
+                reject(err);
+            });
         });
 
         const stickerBuffer = await fs.readFile(outputPath);
+        console.log('✅ Buffer WebP leído, tamaño:', stickerBuffer.length, 'bytes');
 
         // Limpiar archivos temporales
         await fs.rm(tempDir, { recursive: true, force: true });
+        console.log('🧹 Archivos temporales eliminados');
 
         return stickerBuffer;
     } catch (error) {
-        console.error('Error en generateAnimatedBratStyleImage:', error);
+        console.error('❌ Error en generateAnimatedBratStyleImage:', error);
+        console.error('Stack:', error.stack);
+
         // Intentar limpiar en caso de error
         if (tempDir) {
             try {
                 await fs.rm(tempDir, { recursive: true, force: true });
+                console.log('🧹 Limpieza de emergencia completada');
             } catch (cleanupError) {
-                console.error('Error limpiando archivos temporales:', cleanupError);
+                console.error('❌ Error limpiando archivos temporales:', cleanupError);
             }
         }
         throw error;
