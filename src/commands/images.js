@@ -254,8 +254,3 @@ export async function bratvd // ensured export(ctx) {
     }
 
 
-
-
-// Exportación correcta final
-export { brat, bratvd };
-
