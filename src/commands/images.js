@@ -171,7 +171,7 @@ async function generateAnimatedBratStyleImage(text) {
                     '-an',
                     '-vsync', '0',
                     '-s', '512:512',
-                    '-pix_fmt', 'yuva420p'
+                    '-pix_fmt', 'yuva420p',
                     '-alpha_quality', '100'
                 ])
                 .save(outputPath)
@@ -233,7 +233,7 @@ export async function brat(ctx) {
   }
 }
 
-export async function bratvd // ensured export(ctx) {
+export async function bratvd(ctx) {
     const text = (ctx.args || []).join(' ').trim();
     if (!text) return { success: true, message: 'ℹ️ Uso: /bratvd [texto]\nEjemplo: /bratvd Hola mundo', quoted: true };
 
@@ -252,5 +252,6 @@ export async function bratvd // ensured export(ctx) {
     } catch(e) {
         return { success: false, message: `⚠️ Error generando sticker BRAT animado: ${e.message}`, quoted: true };
     }
+}
 
 
