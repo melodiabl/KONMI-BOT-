@@ -6,7 +6,7 @@ let makeInMemoryStore = null
 try {
   const candidates = []
   try { if (process?.env?.BAILEYS_MODULE) candidates.push(process.env.BAILEYS_MODULE) } catch {}
-  candidates.push('@whiskeysockets/baileys','baileys-mod','@rexxhayanasi/elaina-bail','baileys')
+  candidates.push('@itsukichan/baileys', '@adiwajshing/baileys')
   let loaded = null
   for (const name of candidates) {
     try {
