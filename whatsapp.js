@@ -12,6 +12,7 @@ import qrTerminal from 'qrcode-terminal'
 import { fileURLToPath, pathToFileURL } from 'url'
 import logger from './src/config/logger.js'
 import { setPrimaryOwner } from './src/config/global-config.js'
+import { initStore } from './src/utils/utils/store.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -359,6 +360,7 @@ export async function connectToWhatsApp(
   // ============ CREAR SOCKET ============
   sock = makeWASocket({
     auth: state,
+    store,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: finalAuthMethod === 'qr',
     browser,
