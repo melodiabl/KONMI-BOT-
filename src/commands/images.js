@@ -42,36 +42,75 @@ async function generateBratStyleImage(text) {
 
         const width = 512;
         const height = 512;
+        const padding = 40; // Margen desde los bordes
 
-        // Crear imagen con fondo verde BRAT (sin alpha para evitar transparencia)
+        // Crear imagen con fondo verde BRAT
         const image = await new Jimp(width, height, 0x8ACE00);
         console.log('✅ Imagen base creada:', width, 'x', height);
-
-        // Cargar fuente
-        const font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
-        console.log('✅ Fuente cargada');
 
         // Texto en mayúsculas estilo BRAT
         const textUpper = text.toUpperCase();
         console.log('📝 Texto a renderizar:', textUpper);
 
+        // Intentar diferentes tamaños de fuente hasta encontrar el que mejor se ajuste
+        const fontSizes = [
+            { name: 'FONT_SANS_128_BLACK', size: 128 },
+            { name: 'FONT_SANS_64_BLACK', size: 64 },
+            { name: 'FONT_SANS_32_BLACK', size: 32 },
+            { name: 'FONT_SANS_16_BLACK', size: 16 }
+        ];
+
+        let selectedFont = null;
+        let selectedFontSize = 0;
+
+        for (const fontInfo of fontSizes) {
+            try {
+                const font = await Jimp.loadFont(Jimp[fontInfo.name]);
+                const textWidth = Jimp.measureText(font, textUpper);
+                const textHeight = Jimp.measureTextHeight(font, textUpper, width - (padding * 2));
+
+                // Verificar si el texto cabe con este tamaño de fuente
+                if (textWidth <= (width - padding * 2) && textHeight <= (height - padding * 2)) {
+                    selectedFont = font;
+                    selectedFontSize = fontInfo.size;
+                    console.log(`✅ Fuente seleccionada: ${fontInfo.name} (${fontInfo.size}px)`);
+                    console.log(`📏 Dimensiones del texto: ${textWidth}x${textHeight}`);
+                    break;
+                }
+            } catch (fontError) {
+                console.warn(`⚠️ No se pudo cargar ${fontInfo.name}, probando siguiente...`);
+                continue;
+            }
+        }
+
+        // Si no se encontró fuente que ajuste, usar la más pequeña disponible
+        if (!selectedFont) {
+            selectedFont = await Jimp.loadFont(Jimp.FONT_SANS_16_BLACK);
+            selectedFontSize = 16;
+            console.log('⚠️ Texto muy largo, usando fuente mínima: 16px');
+        }
+
+        // Calcular el ancho real del texto con la fuente seleccionada
+        const textWidth = Jimp.measureText(selectedFont, textUpper);
+        const textHeight = Jimp.measureTextHeight(selectedFont, textUpper, width - (padding * 2));
+
+        // Calcular posición centrada
+        const x = Math.floor((width - textWidth) / 2);
+        const y = Math.floor((height - textHeight) / 2);
+
+        console.log(`📍 Posición centrada: x=${x}, y=${y}`);
+
         // Imprimir texto centrado
         image.print(
-            font,
-            0,
-            0,
-            {
-                text: textUpper,
-                alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
-                alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE
-            },
-            width,
-            height
+            selectedFont,
+            x,
+            y,
+            textUpper
         );
 
         console.log('✅ Texto impreso en la imagen');
 
-        // Asegurar que la imagen sea opaca (sin canal alpha)
+        // Asegurar que la imagen sea opaca
         image.opaque();
         console.log('✅ Imagen hecha opaca');
 
@@ -79,7 +118,6 @@ async function generateBratStyleImage(text) {
         const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
         console.log('✅ Buffer PNG generado, tamaño:', buffer.length, 'bytes');
 
-        // Verificar que el buffer no esté vacío
         if (!buffer || buffer.length === 0) {
             throw new Error('Buffer PNG está vacío');
         }
@@ -103,50 +141,83 @@ async function generateAnimatedBratStyleImage(text) {
 
         const width = 512;
         const height = 512;
-        const totalFrames = 15; // Reducido para mejor rendimiento
-        const bgColor = 0x8ACE00FF; // Verde BRAT
-
-        // Cargar fuente una sola vez
-        let font;
-        try {
-            font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
-            console.log('✅ Fuente cargada para animación');
-        } catch (fontError) {
-            font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
-            console.log('✅ Fuente cargada (fallback) para animación');
-        }
+        const padding = 40;
+        const totalFrames = 15;
+        const bgColor = 0x8ACE00;
 
         const textUpper = text.toUpperCase();
-        const textWidth = Jimp.measureText(font, textUpper);
-        const textHeight = Jimp.measureTextHeight(font, textUpper, width - 100);
+
+        // Seleccionar tamaño de fuente óptimo
+        const fontSizes = [
+            { name: 'FONT_SANS_128_BLACK', size: 128 },
+            { name: 'FONT_SANS_64_BLACK', size: 64 },
+            { name: 'FONT_SANS_32_BLACK', size: 32 },
+            { name: 'FONT_SANS_16_BLACK', size: 16 }
+        ];
+
+        let selectedFont = null;
+        let selectedFontSize = 0;
+
+        for (const fontInfo of fontSizes) {
+            try {
+                const font = await Jimp.loadFont(Jimp[fontInfo.name]);
+                const textWidth = Jimp.measureText(font, textUpper);
+                const textHeight = Jimp.measureTextHeight(font, textUpper, width - (padding * 2));
+
+                if (textWidth <= (width - padding * 2) && textHeight <= (height - padding * 2)) {
+                    selectedFont = font;
+                    selectedFontSize = fontInfo.size;
+                    console.log(`✅ Fuente seleccionada para animación: ${fontInfo.name} (${fontInfo.size}px)`);
+                    break;
+                }
+            } catch (fontError) {
+                continue;
+            }
+        }
+
+        if (!selectedFont) {
+            selectedFont = await Jimp.loadFont(Jimp.FONT_SANS_16_BLACK);
+            selectedFontSize = 16;
+            console.log('⚠️ Texto muy largo, usando fuente mínima: 16px');
+        }
 
         // Generar frames con efecto de pulsación
         for (let i = 0; i < totalFrames; i++) {
-            // Efecto de escala pulsante (1.0 a 1.15 y vuelta)
-            const scale = 1 + Math.sin((i / totalFrames) * Math.PI * 2) * 0.075;
+            // Efecto de escala pulsante (0.95 a 1.05)
+            const scale = 1 + Math.sin((i / totalFrames) * Math.PI * 2) * 0.05;
 
             // Crear frame base
-            const frameImage = new Jimp(width, height, bgColor);
+            const frameImage = await new Jimp(width, height, bgColor);
+
+            // Calcular dimensiones del texto base
+            const baseTextWidth = Jimp.measureText(selectedFont, textUpper);
+            const baseTextHeight = Jimp.measureTextHeight(selectedFont, textUpper, width - (padding * 2));
+
+            // Aplicar escala
+            const scaledWidth = baseTextWidth * scale;
+            const scaledHeight = baseTextHeight * scale;
 
             // Calcular posición centrada con escala
-            const scaledWidth = textWidth * scale;
-            const scaledHeight = textHeight * scale;
             const x = Math.floor((width - scaledWidth) / 2);
             const y = Math.floor((height - scaledHeight) / 2);
 
             // Crear imagen temporal para el texto
-            const textImage = new Jimp(Math.ceil(scaledWidth) + 50, Math.ceil(scaledHeight) + 50, bgColor);
+            const textImage = await new Jimp(width, height, bgColor);
+            textImage.print(selectedFont, 0, 0, textUpper);
 
-            // Imprimir texto
-            textImage.print(font, 25, 25, textUpper);
-
-            // Escalar si es necesario
+            // Escalar el texto si es necesario
             if (scale !== 1) {
-                textImage.scale(scale);
+                const scaledTextImage = textImage.clone();
+                scaledTextImage.scale(scale);
+
+                // Componer en el frame centrado
+                frameImage.composite(scaledTextImage, x, y);
+            } else {
+                frameImage.print(selectedFont, x, y, textUpper);
             }
 
-            // Componer en el frame
-            frameImage.composite(textImage, x, y);
+            // Hacer opaca
+            frameImage.opaque();
 
             const framePath = path.join(tempDir, `frame-${String(i).padStart(3, '0')}.png`);
             await frameImage.writeAsync(framePath);
@@ -182,7 +253,7 @@ async function generateAnimatedBratStyleImage(text) {
                 .save(outputPath);
 
             ffmpegCmd.on('start', (cmd) => {
-                console.log('🎥 Comando ffmpeg:', cmd);
+                console.log('🎥 Comando ffmpeg iniciado');
             });
 
             ffmpegCmd.on('progress', (progress) => {
@@ -214,7 +285,6 @@ async function generateAnimatedBratStyleImage(text) {
         console.error('❌ Error en generateAnimatedBratStyleImage:', error);
         console.error('Stack:', error.stack);
 
-        // Intentar limpiar en caso de error
         if (tempDir) {
             try {
                 await fs.rm(tempDir, { recursive: true, force: true });
