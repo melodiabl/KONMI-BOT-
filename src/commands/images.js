@@ -253,3 +253,4 @@ export async function bratvd(ctx) {
         return { success: false, message: `⚠️ Error generando sticker BRAT animado: ${e.message}`, quoted: true };
     }
 }
+
