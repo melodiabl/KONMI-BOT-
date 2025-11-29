@@ -8,10 +8,9 @@ import ffmpegInstaller from 'ffmpeg-static';
 import { tmpdir } from 'os';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 ffmpeg.setFfmpegPath(ffmpegInstaller);
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
