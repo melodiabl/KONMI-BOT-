@@ -233,7 +233,7 @@ export async function brat(ctx) {
   }
 }
 
-export async function bratvd(ctx) {
+export async function bratvd // ensured export(ctx) {
     const text = (ctx.args || []).join(' ').trim();
     if (!text) return { success: true, message: 'ℹ️ Uso: /bratvd [texto]\nEjemplo: /bratvd Hola mundo', quoted: true };
 
@@ -253,4 +253,9 @@ export async function bratvd(ctx) {
         return { success: false, message: `⚠️ Error generando sticker BRAT animado: ${e.message}`, quoted: true };
     }
 }
+
+
+
+// Exportación correcta final
+export { brat, bratvd };
 
