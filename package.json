@@ -24,7 +24,6 @@
         "pterodactyl:init": "npm run pterodactyl:setup && npm install && npm run migrate",
         "verify:system": "node tools/verify-system.js",
         "db:backup": "node tools/backup-db.js",
-
         "postinstall": "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true"
     },
     "dependencies": {

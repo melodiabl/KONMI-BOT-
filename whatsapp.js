@@ -322,6 +322,9 @@ export async function connectToWhatsApp(
   const waVersion = await resolveWaVersion(fetchLatestBaileysVersion)
   const browser = Browsers.macOS('Chrome');
 
+  // Initialize the store
+  const store = initStore();
+
   const envPairNumber = sanitizePhoneNumberInput(process.env.PAIR_NUMBER);
   let runtimeNumber = sanitizePhoneNumberInput(phoneNumber || pairingTargetNumber || envPairNumber);
   const isRegistered = !!state?.creds?.registered;
