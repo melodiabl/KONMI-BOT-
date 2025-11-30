@@ -7,7 +7,13 @@ const MUTE_TIMES = {
 }
 
 export async function muteChat(ctx) {
-  const { args, remoteJid, sock } = ctx
+  const { args, remoteJid, sock, isGroup, isAdmin, isBotAdmin, isOwner } = ctx
+
+  // Verificar permisos para grupos
+  if (isGroup && !isAdmin && !isOwner) {
+    return { success: false, message: '❌ Solo administradores pueden silenciar chats en grupos' }
+  }
+
   const timeStr = args[0] || '8h'
 
   const time = MUTE_TIMES[timeStr]
@@ -149,7 +155,18 @@ export async function clearChat(ctx) {
 }
 
 export async function enableDisappearing(ctx) {
-  const { args, remoteJid, sock } = ctx
+  const { args, remoteJid, sock, isGroup, isAdmin, isBotAdmin, isOwner } = ctx
+
+  // Verificar permisos para grupos
+  if (isGroup) {
+    if (!isAdmin && !isOwner) {
+      return { success: false, message: '❌ Solo administradores pueden cambiar mensajes efímeros en grupos' }
+    }
+    if (!isBotAdmin) {
+      return { success: false, message: '❌ El bot debe ser administrador para cambiar mensajes efímeros' }
+    }
+  }
+
   const days = parseInt(args[0]) || 7
 
   const validDays = [0, 1, 7, 30, 90]

@@ -317,17 +317,8 @@ function createInteractiveMessage(data, isGroup = true) {
     })
   }
 
-  if (!isGroup) {
-      return { interactiveMessage }
-  }
-
-  return {
-    viewOnceMessage: {
-      message: {
-        interactiveMessage
-      }
-    }
-  }
+  // Send interactiveMessage directly for both private and groups
+  return { interactiveMessage }
 }
 
 async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
@@ -600,24 +591,18 @@ async function sendResult(sock, jid, result, ctx) {
   if (result.type === 'content' && result.content && typeof result.content === 'object') {
     const payload = { ...result.content }
     try {
-        if (result.mentions && payload.viewOnceMessage?.message?.interactiveMessage) {
-            payload.viewOnceMessage.message.interactiveMessage.contextInfo = {
-                ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo || {}),
+        if (result.mentions && payload.interactiveMessage) {
+            payload.interactiveMessage.contextInfo = {
+                ...(payload.interactiveMessage.contextInfo || {}),
                 mentionedJid: result.mentions
-            }
-        }
-        if (!ctx.isGroup && payload.viewOnceMessage) {
-            if (payload.viewOnceMessage.message?.interactiveMessage) {
-                 const unwrapped = { interactiveMessage: payload.viewOnceMessage.message.interactiveMessage }
-                 if (await safeSend(sock, targetJid, unwrapped, opts, true)) return
             }
         }
     } catch {}
 
     if (!(await safeSend(sock, targetJid, payload, opts, true))) {
       try {
-        const body = payload?.viewOnceMessage?.message?.interactiveMessage?.body?.text || 'Opciones'
-        const buttons = payload?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage?.buttons || []
+        const body = payload?.interactiveMessage?.body?.text || 'Opciones'
+        const buttons = payload?.interactiveMessage?.nativeFlowMessage?.buttons || []
         const lines = [body]
         for (const b of buttons) {
           const meta = JSON.parse(b.buttonParamsJson||'{}')
@@ -795,21 +780,10 @@ export async function dispatch(ctx = {}) {
   if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
     if (ctx.isOwner) {
       console.log(`[router] Bypass de admin para ${command}: es el Owner (Bot itself).`)
-    } else {
-      try {
-        const groupMeta = await antibanSystem.queryGroupMetadata(sock, remoteJid)
-        const participants = groupMeta?.participants || []
-
-        const participant = participants.find(p => normalizeDigits(p.id) === senderId)
-
-        if (!isAdminFlag(participant)) {
-          console.log(`[router] Bloqueado comando ${command} por falta de privilegios admin. User: ${senderId}`)
-          await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
-          return true
-        }
-      } catch (errCheck) {
-        console.error('[router] Error verificando admins:', errCheck)
-      }
+    } else if (!ctx.isAdmin) {
+      console.log(`[router] Bloqueado comando ${command} por falta de privilegios admin. User: ${senderId}`)
+      await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
+      return true
     }
   }
 
