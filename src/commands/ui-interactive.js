@@ -538,7 +538,7 @@ export function createLoadingMessage(message = 'Procesando...') {
 
 /**
  * Crea un menú de paginación
- * @param {Object} config - Configuración
+ * @param {Object} config - Configuración del menú
  * @param {number} config.currentPage - Página actual
  * @param {number} config.totalPages - Total de páginas
  * @param {Array} config.items - Items de la página actual
@@ -654,3 +654,4 @@ export default {
   formatTable,
   createProgressMessage
 }
+
