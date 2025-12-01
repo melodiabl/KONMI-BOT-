@@ -18,6 +18,24 @@ const execAsync = promisify(exec)
 // Configurar ruta de FFmpeg
 ffmpeg.setFfmpegPath(ffmpegInstaller)
 
+/**
+ * Valida que un buffer sea un archivo WebP válido
+ * @param {Buffer} buffer - Buffer a validar
+ * @returns {boolean} true si es WebP válido
+ */
+function isValidWebP(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) {
+    return false
+  }
+
+  // Firmas WebP válidas:
+  // RIFF____WEBP o RIFF____VP8 o RIFF____VP8L
+  const riff = buffer.toString('ascii', 0, 4)
+  const webp = buffer.toString('ascii', 8, 12)
+
+  return riff === 'RIFF' && (webp === 'WEBP' || webp.startsWith('VP8'))
+}
+
 /* ========================
    DESCARGA DE MEDIA ROBUSTA
    ======================== */
@@ -69,6 +87,11 @@ async function createImageSticker(imageBuffer, options = {}) {
       })
       .webp({ quality: 100 })
       .toBuffer()
+
+    // Validar que el resultado sea un WebP válido
+    if (!isValidWebP(stickerBuffer)) {
+      throw new Error('El archivo generado no es un WebP válido')
+    }
 
     return stickerBuffer
   } catch (error) {
@@ -124,6 +147,11 @@ async function createVideoSticker(videoBuffer, options = {}) {
     // Validar resultado
     if (!stickerBuffer || stickerBuffer.length === 0) {
       throw new Error('FFmpeg produjo un archivo vacío')
+    }
+
+    // Validar que sea un WebP válido
+    if (!isValidWebP(stickerBuffer)) {
+      throw new Error('FFmpeg no generó un WebP válido')
     }
 
     return stickerBuffer

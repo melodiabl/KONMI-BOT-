@@ -227,21 +227,52 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   let lastError = null
 
+  // 🔍 DEBUG: Inspeccionar payload
+  console.log('[safeSend] DEBUG - Enviando:', {
+    jid,
+    payloadKeys: Object.keys(payload),
+    payloadType: typeof payload,
+    hasQuoted: !!opts?.quoted,
+    silentOnFail
+  })
+
+  // Validar payload básico
+  if (!payload || typeof payload !== 'object') {
+    console.error('[safeSend] ❌ Payload inválido:', typeof payload)
+    return false
+  }
+
+  // 🔍 DEBUG: Si es sticker, mostrar detalles
+  if (payload.sticker) {
+    console.log('[safeSend] DEBUG Sticker:', {
+      isBuffer: Buffer.isBuffer(payload.sticker),
+      length: payload.sticker?.length || 0,
+      type: typeof payload.sticker,
+      first20Bytes: payload.sticker?.slice?.(0, 20)?.toString('hex')
+    })
+  }
+
   // Intento 1: Envío normal
   try {
+    console.log('[safeSend] Intento 1: Envío normal')
     await sock.sendMessage(jid, payload, opts)
+    console.log('[safeSend] ✅ Intento 1 exitoso')
     return true
   } catch (err) {
+    console.error('[safeSend] ❌ Intento 1 falló:', err?.message)
     lastError = err
   }
 
   // Intento 2: Sin quoted
   try {
+    console.log('[safeSend] Intento 2: Sin quoted')
     const o = { ...opts }
     delete o.quoted
     await sock.sendMessage(jid, payload, o)
+    console.log('[safeSend] ✅ Intento 2 exitoso')
     return true
   } catch (err) {
+    console.error('[safeSend] ❌ Intento 2 falló:', err?.message)
     lastError = err
   }
 
@@ -249,13 +280,19 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   if (!silentOnFail && (payload.viewOnceMessage || payload.interactiveMessage ||
       payload.buttonsMessage || payload.listMessage)) {
     try {
+      console.log('[safeSend] Intento 3: Fallback a texto')
       const fallbackText = extractFallbackText(payload)
       await sock.sendMessage(jid, { text: fallbackText }, opts)
+      console.log('[safeSend] ✅ Intento 3 exitoso')
       return true
-    } catch {}
+    } catch (err3) {
+      console.error('[safeSend] ❌ Intento 3 falló:', err3?.message)
+    }
   }
 
-  console.error('[safeSend] Todos los intentos fallaron:', lastError?.message)
+  console.error('[safeSend] 🚫 TODOS LOS INTENTOS FALLARON')
+  console.error('[safeSend] Último error:', lastError?.message)
+  console.error('[safeSend] Stack:', lastError?.stack)
   return false
 }
 
@@ -448,12 +485,14 @@ async function sendResult(sock, jid, result, ctx) {
 
   // ✅ STICKER CORREGIDO CON VALIDACIÓN ESTRICTA
   if (result.type === 'sticker' && result.sticker) {
+    console.log('[sendResult] Procesando sticker...')
+
     try {
       // Asegurar que es un Buffer válido
       let stickerBuffer = result.sticker
 
       if (!Buffer.isBuffer(stickerBuffer)) {
-        console.error('[sendResult] Sticker no es un Buffer, tipo:', typeof stickerBuffer)
+        console.error('[sendResult] ❌ Sticker no es un Buffer, tipo:', typeof stickerBuffer)
         throw new Error('El sticker debe ser un Buffer')
       }
 
@@ -464,20 +503,29 @@ async function sendResult(sock, jid, result, ctx) {
 
       // Validar tamaño mínimo (un webp válido tiene al menos 100 bytes)
       if (stickerBuffer.length < 100) {
-        throw new Error('El buffer del sticker es demasiado pequeño')
+        throw new Error(`El buffer del sticker es demasiado pequeño: ${stickerBuffer.length} bytes`)
       }
 
-      console.log('[sendResult] Enviando sticker, size:', stickerBuffer.length, 'bytes')
+      console.log('[sendResult] ✅ Buffer validado:', stickerBuffer.length, 'bytes')
+      console.log('[sendResult] Magic bytes:', stickerBuffer.slice(0, 4).toString('hex'))
 
-      // Intentar envío directo
-      await sock.sendMessage(jid, { sticker: stickerBuffer }, opts)
-      console.log('[sendResult] ✅ Sticker enviado exitosamente')
-      return
+      // 🔑 CLAVE: Usar safeSend en lugar de sock.sendMessage directo
+      const payload = { sticker: stickerBuffer }
+      const success = await safeSend(sock, jid, payload, opts, false)
+
+      if (success) {
+        console.log('[sendResult] ✅ Sticker enviado exitosamente')
+      } else {
+        console.log('[sendResult] ⚠️ Sticker no pudo enviarse, usando fallback')
+        await safeSend(sock, jid, {
+          text: '⚠️ No se pudo enviar el sticker. Es posible que tu versión de WhatsApp no lo soporte.'
+        })
+      }
 
     } catch (error) {
-      console.error('[sendResult] ❌ Error enviando sticker:', error?.message)
+      console.error('[sendResult] ❌ Error procesando sticker:', error?.message)
       await safeSend(sock, jid, {
-        text: `⚠️ Error enviando sticker: ${error.message}\n\nPor favor, intenta con otra imagen/video.`
+        text: `⚠️ Error enviando sticker: ${error.message}\n\n💡 Intenta con otra imagen/video.`
       })
     }
     return
