@@ -1,5 +1,5 @@
 // commands/menu.js
-// Menú interactivo refactorizado para usar los tipos de mensaje nativos de @itsukichan/baileys
+// Menú con botones interactivos (centralizados en router)
 import { sendInteractiveButtons, sendCategorizedList } from './ui-interactive.js'
 
 export async function menu(ctx) {

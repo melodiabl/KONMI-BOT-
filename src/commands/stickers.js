@@ -1,221 +1,341 @@
-// commands/stickers.js — utilidades de stickers robustecidas con Sharp (lazy) y FFmpeg
+// commands/stickers.js - VERSIÓN CORREGIDA
+// ✅ Sintaxis FFmpeg corregida
+// ✅ Manejo robusto de errores
+// ✅ Validación de buffers vacíos
+
 import { downloadContentFromMessage } from '@itsukichan/baileys'
 import ffmpeg from 'fluent-ffmpeg'
-import ffmpegInstaller from 'ffmpeg-static' // <--- IMPORTACIÓN AGREGADA
+import ffmpegInstaller from 'ffmpeg-static'
 import axios from 'axios'
 import { tmpdir } from 'os'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
+import { promisify } from 'util'
 
-// <--- CONFIGURACIÓN AGREGADA: Vincula el ejecutable al sistema
+const execAsync = promisify(exec)
+
+// Configurar ruta de FFmpeg
 ffmpeg.setFfmpegPath(ffmpegInstaller)
 
-// Función para ejecutar comandos de forma asíncrona
-const execAsync = (command) => {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`exec error: ${error}`);
-        return reject(error);
-      }
-      resolve(stdout.trim());
-    });
-  });
-};
+/* ========================
+   DESCARGA DE MEDIA ROBUSTA
+   ======================== */
+async function downloadMediaMessage(message, messageType) {
+  try {
+    const stream = await downloadContentFromMessage(message, messageType)
+    const chunks = []
 
+    for await (const chunk of stream) {
+      chunks.push(chunk)
+    }
 
-/**
- * Crea un sticker a partir de una imagen o video, procesándolo para asegurar compatibilidad.
- * @param {object} ctx - El contexto del mensaje, que incluye el socket y el mensaje original.
- */
+    const buffer = Buffer.concat(chunks)
+
+    // Validar que el buffer no esté vacío
+    if (!buffer || buffer.length === 0) {
+      throw new Error('Buffer vacío: el archivo descargado está corrupto')
+    }
+
+    return buffer
+  } catch (error) {
+    throw new Error(`Error descargando media: ${error.message}`)
+  }
+}
+
+/* ========================
+   CREAR STICKER DESDE IMAGEN
+   ======================== */
+async function createImageSticker(imageBuffer, options = {}) {
+  try {
+    // Importar Sharp en runtime
+    let sharp
+    try {
+      sharp = (await import('sharp')).default
+    } catch (e) {
+      throw new Error('Falta dependencia "sharp". Instalar con: npm i sharp')
+    }
+
+    // Validar buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw new Error('Buffer de imagen vacío')
+    }
+
+    // Procesar imagen
+    const stickerBuffer = await sharp(imageBuffer)
+      .resize(512, 512, {
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 }
+      })
+      .webp({ quality: 100 })
+      .toBuffer()
+
+    return stickerBuffer
+  } catch (error) {
+    throw new Error(`Error procesando imagen: ${error.message}`)
+  }
+}
+
+/* ========================
+   CREAR STICKER DESDE VIDEO
+   ======================== */
+async function createVideoSticker(videoBuffer, options = {}) {
+  let tempInputPath = null
+  let tempOutputPath = null
+
+  try {
+    // Validar buffer
+    if (!videoBuffer || videoBuffer.length === 0) {
+      throw new Error('Buffer de video vacío')
+    }
+
+    // Crear archivos temporales
+    tempInputPath = path.join(tmpdir(), `sticker_input_${Date.now()}.mp4`)
+    tempOutputPath = path.join(tmpdir(), `sticker_output_${Date.now()}.webp`)
+
+    await fs.writeFile(tempInputPath, videoBuffer)
+
+    // ✅ CORRECCIÓN CRÍTICA: Filtro de video sin espacios
+    await new Promise((resolve, reject) => {
+      ffmpeg(tempInputPath)
+        .outputOptions([
+          '-vcodec', 'libwebp',
+          '-vf', "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,fps=15,pad=512:512:-1:-1:color=black@0.0",
+          '-loop', '0',
+          '-ss', '00:00:00.0',
+          '-t', '00:00:07.0',
+          '-preset', 'default',
+          '-an',
+          '-vsync', '0',
+          '-s', '512:512'
+        ])
+        .toFormat('webp')
+        .save(tempOutputPath)
+        .on('end', () => resolve())
+        .on('error', (err) => {
+          console.error('[FFmpeg] Error:', err.message)
+          reject(new Error(`FFmpeg falló: ${err.message}`))
+        })
+    })
+
+    // Leer resultado
+    const stickerBuffer = await fs.readFile(tempOutputPath)
+
+    // Validar resultado
+    if (!stickerBuffer || stickerBuffer.length === 0) {
+      throw new Error('FFmpeg produjo un archivo vacío')
+    }
+
+    return stickerBuffer
+
+  } catch (error) {
+    throw new Error(`Error procesando video: ${error.message}`)
+  } finally {
+    // Limpiar archivos temporales
+    try {
+      if (tempInputPath) await fs.unlink(tempInputPath).catch(() => {})
+      if (tempOutputPath) await fs.unlink(tempOutputPath).catch(() => {})
+    } catch {}
+  }
+}
+
+/* ========================
+   COMANDO: /sticker
+   ======================== */
 export async function sticker(ctx) {
-  const { sock, message } = ctx;
-  const quoted = message?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  const mediaMessage = quoted || message?.message;
+  const { sock, message } = ctx
 
-  const imageMessage = mediaMessage?.imageMessage;
-  const videoMessage = mediaMessage?.videoMessage;
+  // Buscar media en el mensaje citado o actual
+  const quoted = message?.message?.extendedTextMessage?.contextInfo?.quotedMessage
+  const mediaMessage = quoted || message?.message
+
+  const imageMessage = mediaMessage?.imageMessage
+  const videoMessage = mediaMessage?.videoMessage
 
   if (!imageMessage && !videoMessage) {
     return {
       success: false,
-      message: 'ℹ️ Responde a una imagen o video con el comando /sticker para convertirlo.',
-    };
+      message: 'ℹ️ Responde a una imagen o video con /sticker para convertirlo.',
+      quoted: true
+    }
   }
 
-  const mediaType = imageMessage ? 'image' : 'video';
-  const media = imageMessage || videoMessage;
+  const mediaType = imageMessage ? 'image' : 'video'
+  const media = imageMessage || videoMessage
 
   try {
-    const stream = await downloadContentFromMessage(media, mediaType);
-    const chunks = [];
-    // ✅ CRÍTICO: Asegurarse de descargar todo el stream a un buffer antes de continuar.
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-    }
-    const mediaBuffer = Buffer.concat(chunks);
+    // Descargar media
+    const mediaBuffer = await downloadMediaMessage(media, mediaType)
 
-    let stickerBuffer;
-
-    const stickerOptions = {
-      pack: 'Konmi Bot',
-      author: ctx.pushName || 'Creado por Konmi',
-      type: 'full', // 'full', 'crop', 'circle'
-    };
-
+    // Crear sticker según tipo
+    let stickerBuffer
     if (mediaType === 'image') {
-      // Importar sharp en runtime para evitar fallos de carga del módulo
-      let sharp
-      try { sharp = (await import('sharp')).default } catch {}
-      if (!sharp) {
-        return { success: false, message: '⚠️ Falta dependencia "sharp" para crear stickers desde imagen. Instala con: npm i sharp', quoted: true }
-      }
-      // Sharp maneja la transparencia con el objeto { alpha: 0 }
-      stickerBuffer = await sharp(mediaBuffer)
-        .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .webp()
-        .toBuffer();
-    } else { // mediaType === 'video'
-      const tempInputPath = path.join(tmpdir(), `sticker_input_${Date.now()}.mp4`);
-      const tempOutputPath = path.join(tmpdir(), `sticker_output_${Date.now()}.webp`);
-      await fs.writeFile(tempInputPath, mediaBuffer);
+      stickerBuffer = await createImageSticker(mediaBuffer)
+    } else {
+      stickerBuffer = await createVideoSticker(mediaBuffer)
+    }
 
-      await new Promise((resolve, reject) => {
-        ffmpeg(tempInputPath)
-          .outputOptions([
-            '-vcodec', 'libwebp',
-            // ✅ CORRECCIÓN CLAVE: Se eliminó el espacio entre ',pad'
-            '-vf', "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,fps=15,pad=512:512:-1:-1:color=black@0.0",
-            '-loop', '0',
-            '-ss', '00:00:00.0',
-            '-t', '00:00:07.0', // Duración máxima de 7 segundos
-            '-preset', 'default',
-            '-an',
-            '-vsync', '0',
-            '-s', '512:512'
-          ])
-          .toFormat('webp')
-          .save(tempOutputPath)
-          .on('end', resolve)
-          .on('error', (err) => {
-             console.error('FFmpeg Error:', err.message);
-             // Usamos el mensaje original de fluent-ffmpeg para evitar el 'code undefined'
-             reject(new Error(`FFmpeg exited: ${err.message}`));
-          });
-      });
-
-      stickerBuffer = await fs.readFile(tempOutputPath);
-      await fs.unlink(tempInputPath);
-      await fs.unlink(tempOutputPath);
+    // Validar resultado final
+    if (!stickerBuffer || stickerBuffer.length === 0) {
+      throw new Error('El sticker generado está vacío')
     }
 
     return {
+      success: true,
       type: 'sticker',
-      sticker: stickerBuffer,
-    };
+      sticker: stickerBuffer
+    }
 
   } catch (error) {
-    console.error('Error creando sticker:', error);
+    console.error('[sticker] Error:', error.message)
     return {
       success: false,
-      message: `⚠️ Ocurrió un error al procesar el medio. Asegúrate de que no esté corrupto.\n\nError: ${error.message}`,
-    };
+      message: `⚠️ Error creando sticker: ${error.message}`,
+      quoted: true
+    }
   }
 }
 
-
+/* ========================
+   COMANDO: /stickerurl
+   ======================== */
 export async function stickerUrl({ args }) {
-  const url = (args || [])[0];
+  const url = (args || [])[0]
+
   if (!url || !/^https?:\/\//i.test(url)) {
-    return { success: false, message: 'ℹ️ Uso: /stickerurl <url de imagen/webp>' };
+    return {
+      success: false,
+      message: 'ℹ️ Uso: /stickerurl <url>\nEjemplo: /stickerurl https://i.imgur.com/imagen.jpg',
+      quoted: true
+    }
   }
 
   try {
-    // Descargar la imagen desde la URL
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
-    const imageBuffer = Buffer.from(response.data, 'binary');
+    // Descargar imagen desde URL
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      maxContentLength: 10 * 1024 * 1024 // 10 MB máximo
+    })
 
-    // Procesar con Sharp para asegurar que sea un sticker válido
-    let sharp
-    try { sharp = (await import('sharp')).default } catch {}
-    if (!sharp) {
-      return { success: false, message: '⚠️ Falta dependencia "sharp" para crear stickers desde URL. Instala con: npm i sharp', quoted: true }
+    const imageBuffer = Buffer.from(response.data)
+
+    // Validar buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw new Error('La URL devolvió un archivo vacío')
     }
-    const stickerBuffer = await sharp(imageBuffer)
-      .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .webp()
-      .toBuffer();
 
-    return { type: 'sticker', sticker: stickerBuffer };
+    // Crear sticker
+    const stickerBuffer = await createImageSticker(imageBuffer)
+
+    return {
+      success: true,
+      type: 'sticker',
+      sticker: stickerBuffer
+    }
+
   } catch (error) {
-    console.error('Error en stickerurl:', error);
-    return { success: false, message: '⚠️ No pude crear el sticker desde esa URL. ¿Es una imagen válida?' };
+    console.error('[stickerurl] Error:', error.message)
+    return {
+      success: false,
+      message: `⚠️ Error descargando imagen: ${error.message}`,
+      quoted: true
+    }
   }
 }
 
-/**
- * Convierte un sticker de vuelta a una imagen.
- */
+/* ========================
+   COMANDO: /toimg
+   ======================== */
 export async function toimg({ sock, message }) {
-  const quoted = message?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  const stickerMessage = quoted?.stickerMessage || message?.message?.stickerMessage;
+  const quoted = message?.message?.extendedTextMessage?.contextInfo?.quotedMessage
+  const stickerMessage = quoted?.stickerMessage || message?.message?.stickerMessage
 
   if (!stickerMessage) {
-    return { success: false, message: 'ℹ️ Responde a un sticker con /toimg para convertirlo en imagen.' };
+    return {
+      success: false,
+      message: 'ℹ️ Responde a un sticker con /toimg para convertirlo en imagen.',
+      quoted: true
+    }
   }
 
   try {
-    const stream = await downloadContentFromMessage(stickerMessage, 'sticker');
-    const chunks = [];
-    // ✅ CRÍTICO: Asegurarse de descargar todo el stream a un buffer antes de continuar.
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-    }
-    const stickerBuffer = Buffer.concat(chunks);
+    // Descargar sticker
+    const stickerBuffer = await downloadMediaMessage(stickerMessage, 'sticker')
 
-    let imageBuffer;
-    // Usamos Sharp (si está disponible) para una conversión más segura a PNG
+    // ✅ Sticker animado → GIF
     if (stickerMessage.isAnimated) {
-        // Para stickers animados, necesitamos webp-js o similar para decodificar frames.
-        // Una alternativa es usar ffmpeg para convertir webp animado a gif o mp4.
-        const tempInputPath = path.join(tmpdir(), `sticker_input_${Date.now()}.webp`);
-        const tempOutputPath = path.join(tmpdir(), `sticker_output_${Date.now()}.gif`);
-        await fs.writeFile(tempInputPath, stickerBuffer);
+      let tempInputPath = null
+      let tempOutputPath = null
 
-        // Usamos el path del instalador también aquí para asegurar que funcione el exec
-        await execAsync(`"${ffmpegInstaller}" -i ${tempInputPath} ${tempOutputPath}`);
+      try {
+        tempInputPath = path.join(tmpdir(), `sticker_${Date.now()}.webp`)
+        tempOutputPath = path.join(tmpdir(), `output_${Date.now()}.gif`)
 
-        const gifBuffer = await fs.readFile(tempOutputPath);
+        await fs.writeFile(tempInputPath, stickerBuffer)
 
-        await fs.unlink(tempInputPath);
-        await fs.unlink(tempOutputPath);
+        // Convertir con FFmpeg
+        await new Promise((resolve, reject) => {
+          ffmpeg(tempInputPath)
+            .outputOptions([
+              '-vf', 'scale=512:512:force_original_aspect_ratio=decrease',
+              '-loop', '0'
+            ])
+            .toFormat('gif')
+            .save(tempOutputPath)
+            .on('end', resolve)
+            .on('error', reject)
+        })
 
-        // Enviar como video para preservar la animación (los GIFs se envían como video en WhatsApp)
+        const gifBuffer = await fs.readFile(tempOutputPath)
+
         return {
-            type: 'video',
-            video: gifBuffer,
-            caption: '🖼️ Sticker animado → GIF',
-            gifPlayback: true
-        };
-    } else {
-        let sharp
-        try { sharp = (await import('sharp')).default } catch {}
-        if (!sharp) {
-          return { success: false, message: '⚠️ Falta dependencia "sharp" para convertir a imagen. Instala con: npm i sharp', quoted: true }
+          success: true,
+          type: 'video',
+          video: gifBuffer,
+          caption: '🖼️ Sticker animado → GIF',
+          gifPlayback: true
         }
-        imageBuffer = await sharp(stickerBuffer).png().toBuffer();
-         return {
-            type: 'image',
-            image: imageBuffer,
-            caption: '🖼️ Sticker → Imagen',
-        };
+
+      } finally {
+        try {
+          if (tempInputPath) await fs.unlink(tempInputPath).catch(() => {})
+          if (tempOutputPath) await fs.unlink(tempOutputPath).catch(() => {})
+        } catch {}
+      }
+    }
+
+    // ✅ Sticker estático → PNG
+    let sharp
+    try {
+      sharp = (await import('sharp')).default
+    } catch {
+      return {
+        success: false,
+        message: '⚠️ Falta dependencia "sharp". Instalar con: npm i sharp',
+        quoted: true
+      }
+    }
+
+    const imageBuffer = await sharp(stickerBuffer)
+      .png()
+      .toBuffer()
+
+    return {
+      success: true,
+      type: 'image',
+      image: imageBuffer,
+      caption: '🖼️ Sticker → Imagen'
     }
 
   } catch (error) {
-    console.error('Error en toimg:', error);
-    return { success: false, message: `⚠️ No pude convertir el sticker. ¿Es un formato válido?\n\nError: ${error.message}` };
+    console.error('[toimg] Error:', error.message)
+    return {
+      success: false,
+      message: `⚠️ Error convirtiendo sticker: ${error.message}`,
+      quoted: true
+    }
   }
 }
 
-export default { sticker, stickerUrl, toimg };
+export default { sticker, stickerUrl, toimg }
