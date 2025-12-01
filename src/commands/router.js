@@ -6,7 +6,6 @@
         return { success: true, message: `✅ Opción ${i} seleccionada. Ahora puedes usar comandos que requieran selección.` }
       })
     }
-=======
     // Handle button selections - redirect to actual commands
     lazy.set('/help', async (ctx) => {
       const { help } = await import('./menu.js')
