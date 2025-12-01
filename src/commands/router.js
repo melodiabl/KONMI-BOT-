@@ -344,7 +344,7 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   } catch {}
 
   // Intento 3: Fallback a texto plano
-  if (!silentOnFail && (payload.viewOnceMessage || payload.interactiveMessage || payload.buttonsMessage)) {
+  if (!silentOnFail && (payload.viewOnceMessage || payload.interactiveMessage || payload.buttonsMessage || payload.buttons)) {
      try {
          await sock.sendMessage(jid, { text: '⚠️ No se pudo cargar el menú/botones. Tu app podría estar desactualizada o el formato no es compatible.' }, opts);
      } catch {}
@@ -553,6 +553,26 @@ async function sendResult(sock, jid, result, ctx) {
     return;
   }
 
+  // Handle direct templateButtons (from ui-interactive.js)
+  if (result.templateButtons && Array.isArray(result.templateButtons)) {
+    const payload = {
+      text: result.text || result.caption || 'Opciones',
+      footer: result.footer || 'KONMI BOT',
+      templateButtons: result.templateButtons
+    }
+
+    if (await safeSend(sock, targetJid, payload, opts, true)) return
+
+    // Fallback a texto plano
+    const plain = [result.text || result.caption || 'Opciones:'];
+    for (const b of result.templateButtons) {
+      const label = b.buttonText?.displayText || 'Acción';
+      plain.push(`• ${label}`);
+    }
+    await safeSend(sock, targetJid, { text: plain.join('\n') }, opts);
+    return;
+  }
+
   /* ============================================================
      LÓGICA DE LISTAS (Compatible con versiones antiguas)
      ============================================================ */
@@ -613,6 +633,9 @@ async function sendResult(sock, jid, result, ctx) {
         } else if (payload.buttonsMessage) {
           body = payload.buttonsMessage.contentText || 'Opciones'
           buttons = payload.buttonsMessage.buttons || []
+        } else if (payload.buttons) {
+          body = payload.text || 'Opciones'
+          buttons = payload.buttons || []
         } else if (payload.listMessage) {
           body = payload.listMessage.description || 'Menú'
           // Para listas, mostrar las secciones
@@ -638,7 +661,7 @@ async function sendResult(sock, jid, result, ctx) {
             label = meta.display_text || 'Acción'
             id = meta.id || meta.copy_code || meta.url || ''
           } else if (b.buttonText) {
-            // Formato buttonsMessage
+            // Formato buttonsMessage o templateButtons
             label = b.buttonText.displayText || 'Acción'
             id = b.buttonId || ''
           }

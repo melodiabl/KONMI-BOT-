@@ -12,7 +12,7 @@ export function sendInteractiveButtons(title, buttons) {
   return {
     text: title,
     footer: 'KONMI BOT',
-    templateButtons: buttons.map((btn, idx) => ({
+    buttons: buttons.map((btn, idx) => ({
       buttonId: btn.command || btn.id || `btn_${idx}`,
       buttonText: { displayText: btn.text || btn.label || `Opción ${idx + 1}` },
       type: 1
@@ -105,9 +105,9 @@ export async function interactiveButtons(ctx) {
   const { args, remoteJid, sock, quoted } = ctx
 
   if (args.length < 2) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /buttons [título] [botón1:comando1] [botón2:comando2] ...\n\nEjemplo: /buttons Menú "Ver Perfil:/profile" "Ayuda:/help"' 
+    return {
+      success: false,
+      message: '❌ Uso: /buttons [título] [botón1:comando1] [botón2:comando2] ...\n\nEjemplo: /buttons Menú "Ver Perfil:/profile" "Ayuda:/help"'
     }
   }
 
@@ -125,7 +125,7 @@ export async function interactiveButtons(ctx) {
     await sock.sendMessage(remoteJid, {
       text: title,
       footer: 'KONMI BOT',
-      templateButtons: buttons,
+      buttons: buttons,
       image: null
     }, { quoted })
 
@@ -140,9 +140,9 @@ export async function createTodoList(ctx) {
   const { args, remoteJid, sock, sender } = ctx
 
   if (args.length === 0) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /todo [nombre] [item1] [item2] ...\n\nEjemplo: /todo "Mi Lista" "Tarea 1" "Tarea 2" "Tarea 3"' 
+    return {
+      success: false,
+      message: '❌ Uso: /todo [nombre] [item1] [item2] ...\n\nEjemplo: /todo "Mi Lista" "Tarea 1" "Tarea 2" "Tarea 3"'
     }
   }
 
@@ -150,9 +150,9 @@ export async function createTodoList(ctx) {
   const items = args.slice(1)
 
   if (items.length === 0) {
-    return { 
-      success: false, 
-      message: '❌ Debes agregar al menos 1 ítem a la lista' 
+    return {
+      success: false,
+      message: '❌ Debes agregar al menos 1 ítem a la lista'
     }
   }
 
@@ -207,9 +207,9 @@ export async function markTodoItem(ctx) {
   const { args, remoteJid, sock, sender } = ctx
 
   if (args.length < 2) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /todo-mark [lista-id] [número-item]' 
+    return {
+      success: false,
+      message: '❌ Uso: /todo-mark [lista-id] [número-item]'
     }
   }
 
@@ -217,17 +217,17 @@ export async function markTodoItem(ctx) {
   const todoList = codeStorage.get(listId)
 
   if (!todoList || !todoList.items) {
-    return { 
-      success: false, 
-      message: '❌ Lista no encontrada o expirada' 
+    return {
+      success: false,
+      message: '❌ Lista no encontrada o expirada'
     }
   }
 
   const idx = parseInt(itemNum) - 1
   if (idx < 0 || idx >= todoList.items.length) {
-    return { 
-      success: false, 
-      message: `❌ Ítem inválido (1-${todoList.items.length})` 
+    return {
+      success: false,
+      message: `❌ Ítem inválido (1-${todoList.items.length})`
     }
   }
 
@@ -256,9 +256,9 @@ export async function unmarkTodoItem(ctx) {
   const { args, remoteJid, sock } = ctx
 
   if (args.length < 2) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /todo-unmark [lista-id] [número-item]' 
+    return {
+      success: false,
+      message: '❌ Uso: /todo-unmark [lista-id] [número-item]'
     }
   }
 
@@ -266,17 +266,17 @@ export async function unmarkTodoItem(ctx) {
   const todoList = codeStorage.get(listId)
 
   if (!todoList || !todoList.items) {
-    return { 
-      success: false, 
-      message: '❌ Lista no encontrada o expirada' 
+    return {
+      success: false,
+      message: '❌ Lista no encontrada o expirada'
     }
   }
 
   const idx = parseInt(itemNum) - 1
   if (idx < 0 || idx >= todoList.items.length) {
-    return { 
-      success: false, 
-      message: `❌ Ítem inválido (1-${todoList.items.length})` 
+    return {
+      success: false,
+      message: `❌ Ítem inválido (1-${todoList.items.length})`
     }
   }
 
@@ -305,9 +305,9 @@ export async function deleteTodoItem(ctx) {
   const { args, remoteJid, sock } = ctx
 
   if (args.length < 2) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /todo-delete [lista-id] [número-item]' 
+    return {
+      success: false,
+      message: '❌ Uso: /todo-delete [lista-id] [número-item]'
     }
   }
 
@@ -315,17 +315,17 @@ export async function deleteTodoItem(ctx) {
   const todoList = codeStorage.get(listId)
 
   if (!todoList || !todoList.items) {
-    return { 
-      success: false, 
-      message: '❌ Lista no encontrada o expirada' 
+    return {
+      success: false,
+      message: '❌ Lista no encontrada o expirada'
     }
   }
 
   const idx = parseInt(itemNum) - 1
   if (idx < 0 || idx >= todoList.items.length) {
-    return { 
-      success: false, 
-      message: `❌ Ítem inválido (1-${todoList.items.length})` 
+    return {
+      success: false,
+      message: `❌ Ítem inválido (1-${todoList.items.length})`
     }
   }
 
@@ -359,9 +359,9 @@ export async function addTodoItem(ctx) {
   const { args, remoteJid, sock } = ctx
 
   if (args.length < 2) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /todo-add [lista-id] [nuevo-ítem]' 
+    return {
+      success: false,
+      message: '❌ Uso: /todo-add [lista-id] [nuevo-ítem]'
     }
   }
 
@@ -370,9 +370,9 @@ export async function addTodoItem(ctx) {
   const todoList = codeStorage.get(listId)
 
   if (!todoList || !todoList.items) {
-    return { 
-      success: false, 
-      message: '❌ Lista no encontrada o expirada' 
+    return {
+      success: false,
+      message: '❌ Lista no encontrada o expirada'
     }
   }
 
@@ -499,7 +499,7 @@ export async function helpByCategory(ctx) {
   }
 
   let helpText = `📖 *AYUDA POR CATEGORÍA*\n\n`
-  
+
   for (const [category, commands] of Object.entries(categories)) {
     helpText += `${category}\n`
     commands.forEach(cmd => {
