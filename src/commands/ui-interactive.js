@@ -324,6 +324,253 @@ export function createWarningMessage(message) {
   }
 }
 
+/**
+ * Envía una lista categorizada (LEGACY - usado por menu.js y admin-menu.js)
+ * @param {Object} sock - Socket de Baileys
+ * @param {string} jid - JID del destinatario
+ * @param {Object} config - Configuración
+ * @returns {Promise<Object>} Resultado del envío
+ */
+export async function sendCategorizedList(sock, jid, config) {
+  const { title, description, buttonText, categories, footer } = config
+
+  // Convertir categorías al formato de secciones
+  const sections = (categories || []).map(cat => ({
+    title: cat.title || cat.name || 'Categoría',
+    rows: (cat.items || cat.commands || []).map(item => ({
+      title: item.name || item.title || item.command,
+      description: item.description || item.desc || '',
+      rowId: item.command || item.id || item.rowId
+    }))
+  }))
+
+  const payload = createListMenu({
+    title,
+    body: description,
+    buttonText,
+    sections,
+    footer
+  })
+
+  return payload
+}
+
+/**
+ * Envía botones interactivos (LEGACY - usado por system-info.js)
+ * @param {Object} sock - Socket de Baileys
+ * @param {string} jid - JID del destinatario
+ * @param {Object} config - Configuración
+ * @returns {Promise<Object>} Resultado del envío
+ */
+export async function sendInteractiveButtons(sock, jid, config) {
+  const { title, body, footer, buttons } = config
+
+  const payload = createButtonMenu({
+    title,
+    body,
+    footer,
+    buttons: (buttons || []).map(btn => ({
+      text: btn.text || btn.buttonText,
+      id: btn.id || btn.buttonId
+    }))
+  })
+
+  return payload
+}
+
+/**
+ * Envía código copiable (LEGACY - usado por pairing.js)
+ * @param {Object} sock - Socket de Baileys
+ * @param {string} jid - JID del destinatario
+ * @param {Object} config - Configuración
+ * @returns {Promise<Object>} Resultado del envío
+ */
+export async function sendCopyableCode(sock, jid, config) {
+  const { title, code, description } = config
+
+  // WhatsApp no soporta botones de "copiar" nativos en todas las versiones
+  // Enviamos el código en formato texto con instrucciones
+  const text = [
+    title || '📋 *Código de Emparejamiento*',
+    '',
+    description || 'Copia el siguiente código:',
+    '',
+    `\`\`\`${code}\`\`\``,
+    '',
+    '💡 _Mantén presionado el código para copiarlo_'
+  ].join('\n')
+
+  return {
+    type: 'text',
+    text
+  }
+}
+
+/**
+ * Crea un menú con secciones expandibles
+ * @param {Object} config - Configuración
+ * @returns {Object} Payload del menú
+ */
+export function createExpandableMenu(config) {
+  const { sections, title, footer } = config
+
+  if (!sections || sections.length === 0) {
+    return createInfoMessage('No hay opciones disponibles')
+  }
+
+  const lines = []
+
+  if (title) {
+    lines.push(`*${title}*`)
+    lines.push('═'.repeat(30))
+    lines.push('')
+  }
+
+  sections.forEach((section, idx) => {
+    lines.push(`📌 *${section.title || `Sección ${idx + 1}`}*`)
+
+    if (section.items) {
+      section.items.forEach(item => {
+        lines.push(`   • ${item.name || item.title}`)
+        if (item.command) {
+          lines.push(`     ↳ \`${item.command}\``)
+        }
+      })
+    }
+
+    lines.push('')
+  })
+
+  if (footer) {
+    lines.push(`_${footer}_`)
+  }
+
+  return {
+    type: 'text',
+    text: lines.join('\n')
+  }
+}
+
+/**
+ * Crea un mensaje con código formateado
+ * @param {string} code - Código a mostrar
+ * @param {string} language - Lenguaje del código
+ * @returns {Object} Payload del mensaje
+ */
+export function createCodeMessage(code, language = '') {
+  return {
+    type: 'text',
+    text: `\`\`\`${language}\n${code}\n\`\`\``
+  }
+}
+
+/**
+ * Crea un mensaje de carga/espera
+ * @param {string} message - Mensaje de carga
+ * @returns {Object} Payload del mensaje
+ */
+export function createLoadingMessage(message = 'Procesando...') {
+  return {
+    type: 'text',
+    text: `⏳ ${message}`
+  }
+}
+
+/**
+ * Crea un menú de paginación
+ * @param {Object} config - Configuración
+ * @param {number} config.currentPage - Página actual
+ * @param {number} config.totalPages - Total de páginas
+ * @param {Array} config.items - Items de la página actual
+ * @param {string} config.commandPrefix - Prefijo del comando de navegación
+ * @returns {Object} Payload del menú
+ */
+export function createPaginatedMenu(config) {
+  const { currentPage = 1, totalPages = 1, items = [], commandPrefix = '/page' } = config
+
+  const lines = []
+
+  lines.push(`📄 *Página ${currentPage} de ${totalPages}*`)
+  lines.push('═'.repeat(30))
+  lines.push('')
+
+  items.forEach((item, idx) => {
+    lines.push(`${idx + 1}. ${item.title || item.text || item}`)
+    if (item.description) {
+      lines.push(`   _${item.description}_`)
+    }
+    if (item.command) {
+      lines.push(`   ↳ ${item.command}`)
+    }
+  })
+
+  lines.push('')
+  lines.push('*Navegación:*')
+
+  const buttons = []
+
+  if (currentPage > 1) {
+    buttons.push({ text: '⬅️ Anterior', id: `${commandPrefix} ${currentPage - 1}` })
+  }
+
+  if (currentPage < totalPages) {
+    buttons.push({ text: 'Siguiente ➡️', id: `${commandPrefix} ${currentPage + 1}` })
+  }
+
+  if (buttons.length > 0) {
+    return createButtonMenu({
+      body: lines.join('\n'),
+      buttons
+    })
+  }
+
+  return {
+    type: 'text',
+    text: lines.join('\n')
+  }
+}
+
+/**
+ * Formatea un mensaje de tabla
+ * @param {Array} headers - Encabezados de la tabla
+ * @param {Array} rows - Filas de la tabla
+ * @returns {string} Texto formateado
+ */
+export function formatTable(headers, rows) {
+  const lines = []
+
+  // Encabezados
+  lines.push(headers.join(' | '))
+  lines.push(headers.map(() => '---').join('|'))
+
+  // Filas
+  rows.forEach(row => {
+    lines.push(row.join(' | '))
+  })
+
+  return '```\n' + lines.join('\n') + '\n```'
+}
+
+/**
+ * Crea un mensaje de progreso con barra
+ * @param {number} current - Valor actual
+ * @param {number} total - Valor total
+ * @param {string} label - Etiqueta
+ * @returns {Object} Payload del mensaje
+ */
+export function createProgressMessage(current, total, label = 'Progreso') {
+  const percentage = Math.round((current / total) * 100)
+  const filled = Math.round(percentage / 10)
+  const empty = 10 - filled
+
+  const bar = '█'.repeat(filled) + '░'.repeat(empty)
+
+  return {
+    type: 'text',
+    text: `${label}\n${bar} ${percentage}%\n${current}/${total}`
+  }
+}
+
 export default {
   createButtonMenu,
   createListMenu,
@@ -336,5 +583,14 @@ export default {
   createErrorMessage,
   createSuccessMessage,
   createInfoMessage,
-  createWarningMessage
+  createWarningMessage,
+  sendCategorizedList,
+  sendInteractiveButtons,
+  sendCopyableCode,
+  createExpandableMenu,
+  createCodeMessage,
+  createLoadingMessage,
+  createPaginatedMenu,
+  formatTable,
+  createProgressMessage
 }

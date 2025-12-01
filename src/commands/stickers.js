@@ -180,10 +180,19 @@ export async function sticker(ctx) {
       throw new Error('El sticker generado está vacío')
     }
 
+    // Validar que el buffer final sea válido
+    if (!stickerBuffer || stickerBuffer.length === 0) {
+      throw new Error('El sticker generado está vacío')
+    }
+
+    // Log para debugging
+    console.log('[sticker] ✅ Sticker creado exitosamente, tamaño:', stickerBuffer.length, 'bytes')
+
     return {
       success: true,
       type: 'sticker',
-      sticker: stickerBuffer
+      sticker: stickerBuffer,
+      quoted: true
     }
 
   } catch (error) {
@@ -228,10 +237,18 @@ export async function stickerUrl({ args }) {
     // Crear sticker
     const stickerBuffer = await createImageSticker(imageBuffer)
 
+    // Validar resultado
+    if (!stickerBuffer || stickerBuffer.length === 0) {
+      throw new Error('La URL produjo un sticker vacío')
+    }
+
+    console.log('[stickerurl] ✅ Sticker creado desde URL, tamaño:', stickerBuffer.length, 'bytes')
+
     return {
       success: true,
       type: 'sticker',
-      sticker: stickerBuffer
+      sticker: stickerBuffer,
+      quoted: true
     }
 
   } catch (error) {
