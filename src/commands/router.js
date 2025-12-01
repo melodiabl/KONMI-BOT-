@@ -15,6 +15,28 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 /* ========================
+   DETECCIÓN DE TIPO DE CHAT
+   ======================== */
+function getChatType(jid) {
+  const jidStr = String(jid || '')
+
+  // Grupos
+  if (jidStr.endsWith('@g.us')) return 'group'
+
+  // Canales/Newsletter
+  if (jidStr.endsWith('@newsletter')) return 'newsletter'
+
+  // Broadcast
+  if (jidStr.endsWith('@broadcast')) return 'broadcast'
+
+  // Privado (incluye @s.whatsapp.net y @lid)
+  if (jidStr.endsWith('@s.whatsapp.net') || jidStr.endsWith('@lid')) return 'private'
+
+  // Desconocido
+  return 'unknown'
+}
+
+/* ========================
    NORMALIZACIÓN DE JIDs ROBUSTA
    ======================== */
 function onlyDigits(v) {
@@ -227,17 +249,17 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   let lastError = null
 
-  // 🔍 Detectar tipo de chat
-  const isChannel = String(jid).endsWith('@newsletter') || String(jid).endsWith('@lid')
-  const isGroup = String(jid).endsWith('@g.us')
-  const isDirect = String(jid).endsWith('@s.whatsapp.net')
+  // 🔍 Detectar tipo de chat correctamente
+  const chatType = getChatType(jid)
+  const isPrivate = chatType === 'private'
+  const isGroup = chatType === 'group'
+  const isNewsletter = chatType === 'newsletter'
 
   // 🔍 DEBUG: Inspeccionar payload
   console.log('[safeSend] DEBUG - Enviando:', {
     jid,
-    chatType: isChannel ? 'canal' : isGroup ? 'grupo' : isDirect ? 'privado' : 'desconocido',
+    chatType,
     payloadKeys: Object.keys(payload),
-    payloadType: typeof payload,
     hasQuoted: !!opts?.quoted,
     silentOnFail
   })
@@ -248,9 +270,9 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
     return false
   }
 
-  // 🚨 CANALES: Solo soportan texto plano
-  if (isChannel && (payload.listMessage || payload.buttonsMessage || payload.interactiveMessage)) {
-    console.log('[safeSend] ⚠️ Canal detectado - convirtiendo a texto plano')
+  // 🚨 NEWSLETTERS: Solo soportan texto plano
+  if (isNewsletter && (payload.listMessage || payload.buttonsMessage || payload.interactiveMessage)) {
+    console.log('[safeSend] ⚠️ Newsletter detectado - convirtiendo a texto plano')
     const fallbackText = extractFallbackText(payload)
     payload = { text: fallbackText }
   }
@@ -295,8 +317,8 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
     try {
       console.log('[safeSend] Intento 3: Fallback a texto')
       const fallbackText = extractFallbackText(payload)
-      await sock.sendMessage(jid, { text: fallbackText }, opts)
-      console.log('[safeSend] ✅ Intento 3 exitoso')
+      await sock.sendMessage(jid, { text: fallbackText }, { ...opts, quoted: undefined })
+      console.log('[safeSend] ✅ Intento 3 exitoso (fallback texto)')
       return true
     } catch (err3) {
       console.error('[safeSend] ❌ Intento 3 falló:', err3?.message)

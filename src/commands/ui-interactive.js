@@ -52,6 +52,7 @@ export function createButtonMenu(config) {
  * @param {string} config.buttonText - Texto del botón
  * @param {Array} config.sections - Secciones con opciones
  * @param {Array} config.mentions - Array de JIDs a mencionar
+ * @param {boolean} config.forceTextMode - Forzar modo texto
  * @returns {Object} Payload compatible
  */
 export function createListMenu(config) {
@@ -61,7 +62,8 @@ export function createListMenu(config) {
     footer,
     buttonText = 'Ver opciones',
     sections = [],
-    mentions = []
+    mentions = [],
+    forceTextMode = false // 🔑 CAMBIO: Por defecto FALSE (intentar interactivos)
   } = config
 
   // Validar que haya secciones
@@ -72,7 +74,55 @@ export function createListMenu(config) {
     }
   }
 
-  // Formato de lista
+  // 🚨 Solo usar texto si se fuerza explícitamente
+  if (forceTextMode === true) {
+    console.log('[createListMenu] Modo texto forzado')
+
+    const lines = []
+
+    if (title) {
+      lines.push(`╔═══════════════════════════╗`)
+      lines.push(`║ ${title.toUpperCase().padEnd(25)} ║`)
+      lines.push(`╚═══════════════════════════╝`)
+      lines.push('')
+    }
+
+    if (body) {
+      lines.push(body)
+      lines.push('')
+    }
+
+    let optionNumber = 1
+    for (const section of sections) {
+      lines.push(`📌 *${section.title || 'Opciones'}*`)
+      lines.push('')
+
+      for (const row of (section.rows || [])) {
+        lines.push(`*${optionNumber}.* ${row.title || row.text || 'Opción'}`)
+        if (row.description) {
+          lines.push(`   _${row.description}_`)
+        }
+        if (row.rowId || row.id || row.command) {
+          lines.push(`   ↳ \`${row.rowId || row.id || row.command}\``)
+        }
+        lines.push('')
+        optionNumber++
+      }
+    }
+
+    if (footer) {
+      lines.push(`_${footer}_`)
+    }
+
+    return {
+      type: 'text',
+      text: lines.join('\n'),
+      mentions
+    }
+  }
+
+  // ✅ Formato de lista interactiva (por defecto)
+  console.log('[createListMenu] Usando formato listMessage')
   const payload = {
     type: 'list',
     title: title || 'Menú',
@@ -170,22 +220,24 @@ export function createNumberedMenu(config) {
  * @returns {Object} Payload óptimo según la configuración
  */
 export function createAdaptiveMenu(config) {
-  const { options = [], sections = [], jid } = config
+  const { options = [], sections = [], forceTextMode = false } = config
 
-  // 🚨 Si es un canal, SIEMPRE usar texto numerado
-  const isChannel = jid && (String(jid).endsWith('@newsletter') || String(jid).endsWith('@lid'))
+  // Solo forzar texto si se especifica explícitamente
+  if (forceTextMode === true) {
+    console.log('[createAdaptiveMenu] Modo texto forzado')
 
-  if (isChannel) {
-    console.log('[ui-interactive] Canal detectado - usando menú numerado')
+    if (sections.length > 0) {
+      return createListMenu({ ...config, forceTextMode: true })
+    }
+
     return createNumberedMenu(config)
   }
 
-  // Si hay secciones, usar lista
+  // ✅ Intentar formatos interactivos por defecto
   if (sections.length > 0) {
     return createListMenu(config)
   }
 
-  // Si hay 1-3 opciones, usar botones
   if (options.length > 0 && options.length <= 3) {
     return createButtonMenu({
       ...config,
@@ -193,7 +245,6 @@ export function createAdaptiveMenu(config) {
     })
   }
 
-  // Si hay 4-10 opciones, usar lista con una sección
   if (options.length >= 4 && options.length <= 10) {
     return createListMenu({
       ...config,
@@ -204,7 +255,6 @@ export function createAdaptiveMenu(config) {
     })
   }
 
-  // Para más de 10 opciones o como fallback, usar menú numerado
   return createNumberedMenu(config)
 }
 
@@ -342,44 +392,6 @@ export function createWarningMessage(message) {
 export async function sendCategorizedList(sock, jid, config) {
   const { title, description, buttonText, categories, footer } = config
 
-  // 🚨 Detectar si es un canal
-  const isChannel = String(jid).endsWith('@newsletter') || String(jid).endsWith('@lid')
-
-  if (isChannel) {
-    console.log('[sendCategorizedList] Canal detectado - usando formato texto')
-
-    const lines = []
-    if (title) {
-      lines.push(`*${title}*`)
-      lines.push('═'.repeat(30))
-      lines.push('')
-    }
-
-    if (description) {
-      lines.push(description)
-      lines.push('')
-    }
-
-    for (const cat of (categories || [])) {
-      lines.push(`📌 *${cat.title || 'Categoría'}*`)
-      for (const item of (cat.items || [])) {
-        lines.push(`  • ${item.name || item.title}`)
-        if (item.description) lines.push(`    ${item.description}`)
-        if (item.command) lines.push(`    ↳ ${item.command}`)
-      }
-      lines.push('')
-    }
-
-    if (footer) {
-      lines.push(`_${footer}_`)
-    }
-
-    return {
-      type: 'text',
-      text: lines.join('\n')
-    }
-  }
-
   // Convertir categorías al formato de secciones
   const sections = (categories || []).map(cat => ({
     title: cat.title || cat.name || 'Categoría',
@@ -390,6 +402,8 @@ export async function sendCategorizedList(sock, jid, config) {
     }))
   }))
 
+  // ✅ Intentar formato interactivo por defecto
+  console.log('[sendCategorizedList] Usando formato listMessage')
   const payload = createListMenu({
     title,
     body: description,
