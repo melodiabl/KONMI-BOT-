@@ -170,7 +170,15 @@ export function createNumberedMenu(config) {
  * @returns {Object} Payload óptimo según la configuración
  */
 export function createAdaptiveMenu(config) {
-  const { options = [], sections = [] } = config
+  const { options = [], sections = [], jid } = config
+
+  // 🚨 Si es un canal, SIEMPRE usar texto numerado
+  const isChannel = jid && (String(jid).endsWith('@newsletter') || String(jid).endsWith('@lid'))
+
+  if (isChannel) {
+    console.log('[ui-interactive] Canal detectado - usando menú numerado')
+    return createNumberedMenu(config)
+  }
 
   // Si hay secciones, usar lista
   if (sections.length > 0) {
@@ -333,6 +341,44 @@ export function createWarningMessage(message) {
  */
 export async function sendCategorizedList(sock, jid, config) {
   const { title, description, buttonText, categories, footer } = config
+
+  // 🚨 Detectar si es un canal
+  const isChannel = String(jid).endsWith('@newsletter') || String(jid).endsWith('@lid')
+
+  if (isChannel) {
+    console.log('[sendCategorizedList] Canal detectado - usando formato texto')
+
+    const lines = []
+    if (title) {
+      lines.push(`*${title}*`)
+      lines.push('═'.repeat(30))
+      lines.push('')
+    }
+
+    if (description) {
+      lines.push(description)
+      lines.push('')
+    }
+
+    for (const cat of (categories || [])) {
+      lines.push(`📌 *${cat.title || 'Categoría'}*`)
+      for (const item of (cat.items || [])) {
+        lines.push(`  • ${item.name || item.title}`)
+        if (item.description) lines.push(`    ${item.description}`)
+        if (item.command) lines.push(`    ↳ ${item.command}`)
+      }
+      lines.push('')
+    }
+
+    if (footer) {
+      lines.push(`_${footer}_`)
+    }
+
+    return {
+      type: 'text',
+      text: lines.join('\n')
+    }
+  }
 
   // Convertir categorías al formato de secciones
   const sections = (categories || []).map(cat => ({

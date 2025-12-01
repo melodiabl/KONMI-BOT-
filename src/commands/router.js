@@ -227,9 +227,15 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   let lastError = null
 
+  // 🔍 Detectar tipo de chat
+  const isChannel = String(jid).endsWith('@newsletter') || String(jid).endsWith('@lid')
+  const isGroup = String(jid).endsWith('@g.us')
+  const isDirect = String(jid).endsWith('@s.whatsapp.net')
+
   // 🔍 DEBUG: Inspeccionar payload
   console.log('[safeSend] DEBUG - Enviando:', {
     jid,
+    chatType: isChannel ? 'canal' : isGroup ? 'grupo' : isDirect ? 'privado' : 'desconocido',
     payloadKeys: Object.keys(payload),
     payloadType: typeof payload,
     hasQuoted: !!opts?.quoted,
@@ -240,6 +246,13 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
   if (!payload || typeof payload !== 'object') {
     console.error('[safeSend] ❌ Payload inválido:', typeof payload)
     return false
+  }
+
+  // 🚨 CANALES: Solo soportan texto plano
+  if (isChannel && (payload.listMessage || payload.buttonsMessage || payload.interactiveMessage)) {
+    console.log('[safeSend] ⚠️ Canal detectado - convirtiendo a texto plano')
+    const fallbackText = extractFallbackText(payload)
+    payload = { text: fallbackText }
   }
 
   // 🔍 DEBUG: Si es sticker, mostrar detalles
@@ -298,15 +311,54 @@ async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
 
 function extractFallbackText(payload) {
   try {
-    if (payload.buttonsMessage) {
-      return payload.buttonsMessage.contentText || 'Opciones no disponibles'
-    }
+    // Lista de mensajes
     if (payload.listMessage) {
-      return payload.listMessage.description || 'Menú no disponible'
+      const lines = []
+      lines.push(payload.listMessage.description || payload.listMessage.title || 'Menú')
+      lines.push('')
+
+      for (const sec of (payload.listMessage.sections || [])) {
+        lines.push(`📌 ${sec.title || 'Sección'}`)
+        for (const row of (sec.rows || [])) {
+          lines.push(`  • ${row.title}`)
+          if (row.description) lines.push(`    ${row.description}`)
+          if (row.rowId) lines.push(`    ↳ ${row.rowId}`)
+        }
+        lines.push('')
+      }
+
+      if (payload.listMessage.footerText) {
+        lines.push(`_${payload.listMessage.footerText}_`)
+      }
+
+      return lines.join('\n')
     }
+
+    // Botones
+    if (payload.buttonsMessage) {
+      const lines = []
+      lines.push(payload.buttonsMessage.contentText || 'Opciones')
+      lines.push('')
+
+      for (const btn of (payload.buttonsMessage.buttons || [])) {
+        const text = btn.buttonText?.displayText || btn.text || 'Opción'
+        const id = btn.buttonId || btn.id || ''
+        lines.push(`• ${text}${id ? ` → ${id}` : ''}`)
+      }
+
+      if (payload.buttonsMessage.footerText) {
+        lines.push('')
+        lines.push(`_${payload.buttonsMessage.footerText}_`)
+      }
+
+      return lines.join('\n')
+    }
+
+    // Mensaje interactivo
     if (payload.interactiveMessage) {
       return payload.interactiveMessage.body?.text || 'Contenido interactivo no compatible'
     }
+
     return '⚠️ Tu versión de WhatsApp no soporta este formato'
   } catch {
     return '⚠️ Error mostrando contenido'
@@ -589,6 +641,16 @@ async function sendResult(sock, jid, result, ctx) {
 export async function dispatch(ctx = {}) {
   const { sock, remoteJid, isGroup } = ctx
   if (!sock || !remoteJid) return false
+
+  // 🔍 Detectar tipo de chat
+  const isChannel = String(remoteJid).endsWith('@newsletter') || String(remoteJid).endsWith('@lid')
+  const isGroupChat = String(remoteJid).endsWith('@g.us')
+  const isPrivate = String(remoteJid).endsWith('@s.whatsapp.net')
+
+  // Actualizar contexto
+  ctx.isChannel = isChannel
+  ctx.isGroup = isGroupChat
+  ctx.isPrivate = isPrivate
 
   const isFromMe = ctx.message?.key?.fromMe || false
 
