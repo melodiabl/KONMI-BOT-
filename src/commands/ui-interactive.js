@@ -9,9 +9,9 @@ export function sendCopyableCode(code, description = '') {
 }
 
 export function sendInteractiveButtons(title, buttons) {
+  // Usar el formato más básico y compatible
   return {
     text: title,
-    footer: 'KONMI BOT',
     buttons: buttons.map((btn, idx) => ({
       buttonId: btn.command || btn.id || `btn_${idx}`,
       buttonText: { displayText: btn.text || btn.label || `Opción ${idx + 1}` },
@@ -124,9 +124,7 @@ export async function interactiveButtons(ctx) {
   try {
     await sock.sendMessage(remoteJid, {
       text: title,
-      footer: 'KONMI BOT',
-      buttons: buttons,
-      image: null
+      buttons: buttons
     }, { quoted })
 
     return { success: true, message: '✅ Botones enviados' }

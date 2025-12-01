@@ -553,23 +553,18 @@ async function sendResult(sock, jid, result, ctx) {
     return;
   }
 
-  // Handle direct templateButtons (from ui-interactive.js)
-  if (result.templateButtons && Array.isArray(result.templateButtons)) {
-    const payload = {
-      text: result.text || result.caption || 'Opciones',
-      footer: result.footer || 'KONMI BOT',
-      templateButtons: result.templateButtons
-    }
+  // Handle buttonsData (from ui-interactive.js) - numbered text options
+  if (result.buttonsData && Array.isArray(result.buttonsData)) {
+    console.log('[DEBUG] Handling buttonsData result:', result.buttonsData.length, 'options')
+    // The text is already formatted with numbered options
+    const payload = { text: result.text }
+    console.log('[DEBUG] ButtonsData payload:', JSON.stringify(payload, null, 2))
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
-    // Fallback a texto plano
-    const plain = [result.text || result.caption || 'Opciones:'];
-    for (const b of result.templateButtons) {
-      const label = b.buttonText?.displayText || 'Acción';
-      plain.push(`• ${label}`);
-    }
-    await safeSend(sock, targetJid, { text: plain.join('\n') }, opts);
+    // Fallback a texto plano simple
+    console.log('[DEBUG] ButtonsData failed, using simple text fallback')
+    await safeSend(sock, targetJid, { text: result.text || 'Opciones disponibles' }, opts);
     return;
   }
 
@@ -812,6 +807,15 @@ export async function dispatch(ctx = {}) {
       const text = '📋 Comandos disponibles\n\n' + keys.map(k => `• ${k}`).join('\n')
       return { success: true, message: text, quoted: true }
     })
+
+    // Handle button selections (numbered options)
+    for (let i = 1; i <= 9; i++) {
+      lazy.set(`/button_${i}`, async (ctx) => {
+        // This will be handled by storing the selection in context for the next command
+        ctx.buttonSelection = i
+        return { success: true, message: `✅ Opción ${i} seleccionada. Ahora puedes usar comandos que requieran selección.` }
+      })
+    }
     if (lazy.has(command)) {
       console.log(`[DEBUG] Using lazy fallback for ${command}`)
       try {
