@@ -23,6 +23,10 @@ function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
 function normalizeDigits(userOrJid){
   try{ let s=String(userOrJid||''); const at=s.indexOf('@'); if(at>0) s=s.slice(0,at); const col=s.indexOf(':'); if(col>0) s=s.slice(0,col); return s.replace(/\D/g,'') }catch{ return onlyDigits(userOrJid) }
 }
+function normalizeJidForDisplay(jid) {
+  const digits = normalizeDigits(jid)
+  return digits ? `+${digits}` : ''
+}
 
 // Verifica si un participante tiene flag de admin
 function isAdminFlag(p){ try { return !!(p && ((p.admin==='admin'||p.admin==='superadmin')||p.admin===true||p.isAdmin===true||p.isSuperAdmin===true||(typeof p.privilege==='string'&&/admin/i.test(p.privilege)))) } catch { return false } }
@@ -248,77 +252,74 @@ function summarizePayload(p) {
 }
 
 
-// Función auxiliar para construir el payload interactivo moderno (Native Flow)
+// Función auxiliar para construir el payload interactivo compatible (buttonsMessage)
 function createInteractiveMessage(data, isGroup = true) {
   const { body, footer, title, buttons, sections, mentions } = data
 
-  let header = undefined
-  if (title) {
-    header = {
-      title: title,
-      hasMediaAttachment: false
-    }
-  }
-
-  let interactiveMessage = {
-    body: { text: body || ' ' },
-    footer: { text: footer || ' ' },
-    header: header,
-    nativeFlowMessage: {
-      buttons: []
-    }
-  }
-
-  if (mentions && mentions.length > 0) {
-    interactiveMessage.contextInfo = { mentionedJid: mentions }
-  }
-
   if (sections && sections.length > 0) {
-    const listButton = {
-      name: 'single_select',
-      buttonParamsJson: JSON.stringify({
-        title: data.buttonText || 'Ver opciones',
-        sections: sections
-      })
+    // Usar listMessage para listas
+    const listMessage = {
+      title: title || 'Menú',
+      description: body || 'Selecciona una opción',
+      buttonText: data.buttonText || 'Ver opciones',
+      sections: sections.map(s => ({
+        title: s.title || 'Sección',
+        rows: (s.rows || []).map(r => ({
+          title: r.title || r.text || 'Opción',
+          description: r.description || '',
+          rowId: r.rowId || r.id || r.command || r.url || 'noop'
+        }))
+      }))
     }
-    interactiveMessage.nativeFlowMessage.buttons.push(listButton)
+    if (footer) listMessage.footerText = footer
+    if (mentions && mentions.length > 0) {
+      listMessage.contextInfo = { mentionedJid: mentions }
+    }
+    return { listMessage }
   }
-  else if (buttons && buttons.length > 0) {
-    interactiveMessage.nativeFlowMessage.buttons = buttons.map(btn => {
-      const displayText = btn.text || btn.displayText || 'Acción'
 
-      if (btn.url) {
+  if (buttons && buttons.length > 0) {
+    // Usar buttonsMessage para botones
+    const buttonsMessage = {
+      contentText: body || 'Opciones',
+      footerText: footer || '',
+      buttons: buttons.map(btn => {
+        const displayText = btn.text || btn.displayText || 'Acción'
+        const id = btn.id || btn.command || ''
+
+        if (btn.url) {
+          return {
+            buttonId: id,
+            buttonText: { displayText },
+            type: 1,
+            url: btn.url
+          }
+        }
+        if (btn.copyCode) {
+          return {
+            buttonId: id,
+            buttonText: { displayText },
+            type: 2,
+            copyCode: btn.copyCode
+          }
+        }
         return {
-          name: 'cta_url',
-          buttonParamsJson: JSON.stringify({
-            display_text: displayText,
-            url: btn.url,
-            merchant_url: btn.url
-          })
+          buttonId: id,
+          buttonText: { displayText },
+          type: 1
         }
-      }
-      if (btn.copyCode) {
-         return {
-          name: 'cta_copy',
-          buttonParamsJson: JSON.stringify({
-            display_text: displayText,
-            id: btn.id || btn.command,
-            copy_code: btn.copyCode
-          })
-        }
-      }
-      return {
-        name: 'quick_reply',
-        buttonParamsJson: JSON.stringify({
-          display_text: displayText,
-          id: btn.id || btn.command || ''
-        })
-      }
-    })
+      }),
+      headerType: title ? 1 : undefined,
+      ...(title && { headerText: title })
+    }
+    if (mentions && mentions.length > 0) {
+      buttonsMessage.contextInfo = { mentionedJid: mentions }
+    }
+    return { buttonsMessage }
   }
 
-  // Send interactiveMessage directly for both private and groups
-  return { interactiveMessage }
+  // Fallback a texto plano
+  return { text: body || 'Opciones' }
 }
 
 async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
@@ -528,7 +529,7 @@ async function sendResult(sock, jid, result, ctx) {
   }
 
   /* ============================================================
-     LÓGICA DE BOTONES (Native Flow Moderno)
+     LÓGICA DE BOTONES (Compatible con versiones antiguas)
      ============================================================ */
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
     const payload = createInteractiveMessage({
@@ -553,25 +554,15 @@ async function sendResult(sock, jid, result, ctx) {
   }
 
   /* ============================================================
-     LÓGICA DE LISTAS
+     LÓGICA DE LISTAS (Compatible con versiones antiguas)
      ============================================================ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
-    const nativeSections = result.sections.map(s => ({
-      title: s.title || 'Sección',
-      rows: (s.rows || []).map(r => ({
-        header: r.title || r.text || '',
-        title: r.title || r.text || 'Opción',
-        description: r.description || '',
-        id: r.rowId || r.id || r.command || r.url || 'noop'
-      }))
-    }))
-
     const payload = createInteractiveMessage({
       body: result.text || result.description || 'Menú',
       footer: result.footer,
       title: result.title,
       buttonText: result.buttonText || 'Ver Opciones',
-      sections: nativeSections,
+      sections: result.sections,
       mentions: result.mentions
     }, ctx.isGroup)
 
@@ -591,23 +582,67 @@ async function sendResult(sock, jid, result, ctx) {
   if (result.type === 'content' && result.content && typeof result.content === 'object') {
     const payload = { ...result.content }
     try {
-        if (result.mentions && payload.interactiveMessage) {
-            payload.interactiveMessage.contextInfo = {
-                ...(payload.interactiveMessage.contextInfo || {}),
-                mentionedJid: result.mentions
+        if (result.mentions) {
+            if (payload.interactiveMessage) {
+                payload.interactiveMessage.contextInfo = {
+                    ...(payload.interactiveMessage.contextInfo || {}),
+                    mentionedJid: result.mentions
+                }
+            } else if (payload.buttonsMessage) {
+                payload.buttonsMessage.contextInfo = {
+                    ...(payload.buttonsMessage.contextInfo || {}),
+                    mentionedJid: result.mentions
+                }
+            } else if (payload.listMessage) {
+                payload.listMessage.contextInfo = {
+                    ...(payload.listMessage.contextInfo || {}),
+                    mentionedJid: result.mentions
+                }
             }
         }
     } catch {}
 
     if (!(await safeSend(sock, targetJid, payload, opts, true))) {
       try {
-        const body = payload?.interactiveMessage?.body?.text || 'Opciones'
-        const buttons = payload?.interactiveMessage?.nativeFlowMessage?.buttons || []
+        let body = 'Opciones'
+        let buttons = []
+
+        if (payload.interactiveMessage) {
+          body = payload.interactiveMessage.body?.text || 'Opciones'
+          buttons = payload.interactiveMessage.nativeFlowMessage?.buttons || []
+        } else if (payload.buttonsMessage) {
+          body = payload.buttonsMessage.contentText || 'Opciones'
+          buttons = payload.buttonsMessage.buttons || []
+        } else if (payload.listMessage) {
+          body = payload.listMessage.description || 'Menú'
+          // Para listas, mostrar las secciones
+          const lines = [body]
+          for (const sec of (payload.listMessage.sections || [])) {
+            lines.push(`\n— ${sec.title || ''}`)
+            for (const row of (sec.rows || [])) {
+              lines.push(`• ${row.title} → ${row.rowId}`)
+            }
+          }
+          await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
+          return
+        }
+
         const lines = [body]
         for (const b of buttons) {
-          const meta = JSON.parse(b.buttonParamsJson||'{}')
-          const label = meta.display_text || 'Acción'
-          const id = meta.id || meta.copy_code || meta.url || ''
+          let label = 'Acción'
+          let id = ''
+
+          if (b.buttonParamsJson) {
+            // Formato nativeFlow
+            const meta = JSON.parse(b.buttonParamsJson||'{}')
+            label = meta.display_text || 'Acción'
+            id = meta.id || meta.copy_code || meta.url || ''
+          } else if (b.buttonText) {
+            // Formato buttonsMessage
+            label = b.buttonText.displayText || 'Acción'
+            id = b.buttonId || ''
+          }
+
           lines.push(`• ${label}${id?` → ${id}`:''}`)
         }
         await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
@@ -780,10 +815,30 @@ export async function dispatch(ctx = {}) {
   if (isGroup && (entry.adminOnly || entry.isAdmin || entry.admin)) {
     if (ctx.isOwner) {
       console.log(`[router] Bypass de admin para ${command}: es el Owner (Bot itself).`)
-    } else if (!ctx.isAdmin) {
-      console.log(`[router] Bloqueado comando ${command} por falta de privilegios admin. User: ${senderId}`)
-      await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
-      return true
+    } else {
+      // Verificar si el usuario es admin
+      let userIsAdmin = false
+      try {
+        const groupMetadata = await sock.groupMetadata(remoteJid)
+        const participant = groupMetadata.participants.find(p => normalizeDigits(p.id) === senderId)
+        userIsAdmin = isAdminFlag(participant)
+      } catch (e) {
+        console.error('[router] Error obteniendo metadata del grupo:', e?.message)
+      }
+
+      if (!userIsAdmin) {
+        console.log(`[router] Bloqueado comando ${command} por falta de privilegios admin. User: ${senderId}`)
+        await safeSend(sock, remoteJid, { text: '⚠️ *Acceso denegado:* Este comando es solo para administradores.' }, { quoted: ctx.message })
+        return true
+      }
+
+      // Verificar si el bot es admin
+      const botIsAdmin = await isBotAdminInGroup(sock, remoteJid)
+      if (!botIsAdmin) {
+        console.log(`[router] Bloqueado comando ${command}: el bot no es admin en el grupo.`)
+        await safeSend(sock, remoteJid, { text: '⚠️ *Error:* El bot debe ser administrador para ejecutar este comando.' }, { quoted: ctx.message })
+        return true
+      }
     }
   }
 
