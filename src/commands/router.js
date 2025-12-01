@@ -446,19 +446,38 @@ async function sendResult(sock, jid, result, ctx) {
     return
   }
 
-  // ✅ STICKER CORREGIDO
+  // ✅ STICKER CORREGIDO CON VALIDACIÓN ESTRICTA
   if (result.type === 'sticker' && result.sticker) {
-    const stickerBuffer = Buffer.isBuffer(result.sticker)
-      ? result.sticker
-      : toMediaInput(result.sticker)
-
     try {
+      // Asegurar que es un Buffer válido
+      let stickerBuffer = result.sticker
+
+      if (!Buffer.isBuffer(stickerBuffer)) {
+        console.error('[sendResult] Sticker no es un Buffer, tipo:', typeof stickerBuffer)
+        throw new Error('El sticker debe ser un Buffer')
+      }
+
+      // Validar que el buffer no esté vacío
+      if (stickerBuffer.length === 0) {
+        throw new Error('El buffer del sticker está vacío')
+      }
+
+      // Validar tamaño mínimo (un webp válido tiene al menos 100 bytes)
+      if (stickerBuffer.length < 100) {
+        throw new Error('El buffer del sticker es demasiado pequeño')
+      }
+
+      console.log('[sendResult] Enviando sticker, size:', stickerBuffer.length, 'bytes')
+
+      // Intentar envío directo
       await sock.sendMessage(jid, { sticker: stickerBuffer }, opts)
+      console.log('[sendResult] ✅ Sticker enviado exitosamente')
       return
+
     } catch (error) {
-      console.error('[sendResult] Error enviando sticker:', error?.message)
+      console.error('[sendResult] ❌ Error enviando sticker:', error?.message)
       await safeSend(sock, jid, {
-        text: '⚠️ Error enviando sticker. Archivo corrupto o formato inválido.'
+        text: `⚠️ Error enviando sticker: ${error.message}\n\nPor favor, intenta con otra imagen/video.`
       })
     }
     return
