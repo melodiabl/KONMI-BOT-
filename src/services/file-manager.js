@@ -384,4 +384,4 @@ export {
   checkDiskSpace,
   DOWNLOADS_DIR,
   MEDIA_DIR
-};*/
+};
