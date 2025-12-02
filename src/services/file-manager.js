@@ -1,4 +1,4 @@
-import fs from 'fs';
+/*import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
@@ -384,4 +384,4 @@ export {
   checkDiskSpace,
   DOWNLOADS_DIR,
   MEDIA_DIR
-};
+};*/
