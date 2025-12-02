@@ -4,7 +4,7 @@ import https from 'https';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import db from '../database/db.js';
-import { downloadContentFromMessage } from '@itsukichan/baileys';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
