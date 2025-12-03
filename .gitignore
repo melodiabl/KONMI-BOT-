@@ -40,4 +40,5 @@ frontend-panel-backup-*/
 **/*.sqlite
 storage/baileys_full
 package-lock.json
-env
+.env
+session_data/

@@ -38,7 +38,7 @@ let __loaded = null
 async function loadBaileys() {
   if (__loaded) return __loaded;
 
-  const picks = ['@itsukichan/baileys', '@whiskeysockets/baileys', 'baileys'];
+  const picks = ['wileys', '@whiskeysockets/baileys', 'baileys'];
 
   if (process?.env?.BAILEYS_MODULE && !['@whiskeysockets/baileys', 'baileys', '@itsukichan/baileys'].includes(process.env.BAILEYS_MODULE)) {
     picks.unshift(process.env.BAILEYS_MODULE);
