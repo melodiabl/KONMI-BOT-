@@ -890,22 +890,46 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const botJidRaw = s.user?.id;
   let botJid = botJidRaw;
 
-  if (botJidRaw && typeof jidDecode === 'function') {
+  // ========== DIAGNÓSTICO: Verificar estado de jidDecode ==========
+  const jidDecodeAvailable = typeof jidDecode === 'function';
+  console.log(`[DIAG-ADMIN] jidDecode disponible: ${jidDecodeAvailable}`);
+  console.log(`[DIAG-ADMIN] botJidRaw: ${botJidRaw}`);
+  // ================================================================
+
+  if (botJidRaw && jidDecodeAvailable) {
     try {
       const decoded = jidDecode(botJidRaw);
+      console.log(`[DIAG-ADMIN] jidDecode result:`, decoded);
       if (decoded && decoded.user && decoded.server) {
         // Reconstruir el JID normalizado, e.g., 595974154768@s.whatsapp.net
         botJid = `${decoded.user}@${decoded.server}`;
+        console.log(`[DIAG-ADMIN] botJid normalizado: ${botJid}`);
       }
     } catch (e) {
-      // Fallback
+      console.log(`[DIAG-ADMIN] jidDecode falló: ${e.message}`);
+      // Fallback manual: extraer número antes de : y @
+      const match = String(botJidRaw).match(/^(\d+)/);
+      if (match) {
+        botJid = `${match[1]}@s.whatsapp.net`;
+        console.log(`[DIAG-ADMIN] botJid fallback manual: ${botJid}`);
+      }
+    }
+  } else if (botJidRaw) {
+    // Fallback si jidDecode no está disponible
+    const match = String(botJidRaw).match(/^(\d+)/);
+    if (match) {
+      botJid = `${match[1]}@s.whatsapp.net`;
+      console.log(`[DIAG-ADMIN] botJid fallback (sin jidDecode): ${botJid}`);
     }
   }
 
   let botNumber = null;
   try {
     // Usamos el botJid normalizado para obtener el número base
-    botNumber = botJid ? jidDecode(botJid).user : null;
+    botNumber = botJid ? (jidDecodeAvailable ? jidDecode(botJid)?.user : null) : null;
+    if (!botNumber) {
+      botNumber = onlyDigits(botJid || '');
+    }
   } catch {
     botNumber = onlyDigits(botJid || '');
   }
@@ -913,7 +937,10 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const sender = isGroup ? message.key.participant || remoteJid : remoteJid;
   let senderNumber = null;
   try {
-    senderNumber = sender ? jidDecode(sender).user : null;
+    senderNumber = sender ? (jidDecodeAvailable ? jidDecode(sender)?.user : null) : null;
+    if (!senderNumber) {
+      senderNumber = onlyDigits(sender || '');
+    }
   } catch {
     senderNumber = onlyDigits(sender || '');
   }
@@ -930,13 +957,47 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   if (isGroup) {
     try {
       groupMetadata = await s.groupMetadata(remoteJid);
+
+      // ========== DIAGNÓSTICO: Mostrar participantes y sus JIDs ==========
+      console.log(`[DIAG-ADMIN] Grupo: ${remoteJid}`);
+      console.log(`[DIAG-ADMIN] Total participantes: ${groupMetadata?.participants?.length || 0}`);
+      console.log(`[DIAG-ADMIN] Buscando sender: ${sender}`);
+      console.log(`[DIAG-ADMIN] Buscando botJid: ${botJid}`);
+
+      // Mostrar primeros 5 participantes para debug
+      const sampleParticipants = (groupMetadata?.participants || []).slice(0, 5);
+      console.log(`[DIAG-ADMIN] Muestra de participantes:`, sampleParticipants.map(p => ({ id: p.id, admin: p.admin })));
+      // ===================================================================
+
       const participantInfo = (groupMetadata.participants || []).find((p) => p.id === sender);
       isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin');
+      console.log(`[DIAG-ADMIN] participantInfo encontrado: ${!!participantInfo}, isAdmin: ${isAdmin}`);
 
-      // ✅ VERIFICACIÓN CORRECTA: Comparamos con el botJid NORMALIZADO
-      const botInfo = (groupMetadata.participants || []).find((p) => p.id === botJid);
+      // ✅ VERIFICACIÓN MEJORADA: Buscar bot con múltiples formatos de JID
+      let botInfo = (groupMetadata.participants || []).find((p) => p.id === botJid);
+
+      // Si no se encuentra, intentar búsqueda por número
+      if (!botInfo && botNumber) {
+        botInfo = (groupMetadata.participants || []).find((p) => {
+          const pNum = onlyDigits(p.id || '');
+          return pNum === botNumber;
+        });
+        if (botInfo) {
+          console.log(`[DIAG-ADMIN] Bot encontrado por número: ${botInfo.id}`);
+        }
+      }
+
       isBotAdmin = !!botInfo && (botInfo.admin === 'admin' || botInfo.admin === 'superadmin');
+      console.log(`[DIAG-ADMIN] botInfo encontrado: ${!!botInfo}, isBotAdmin: ${isBotAdmin}`);
+
+      if (botInfo) {
+        console.log(`[DIAG-ADMIN] Bot participant ID: ${botInfo.id}, admin: ${botInfo.admin}`);
+      } else {
+        console.log(`[DIAG-ADMIN] ⚠️ Bot NO encontrado en participantes!`);
+        console.log(`[DIAG-ADMIN] Todos los IDs de participantes:`, (groupMetadata.participants || []).map(p => p.id));
+      }
     } catch (e) {
+      console.error(`[DIAG-ADMIN] Error getting group metadata for ${remoteJid}: ${e.message}`);
       logger.error(`Error getting group metadata for ${remoteJid}: ${e.message}`);
     }
   }
