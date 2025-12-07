@@ -952,54 +952,94 @@ export async function handleMessage(message, customSock = null, prefix = '', run
       console.log(`[ADMIN-CHECK] Total participantes: ${groupMetadata?.participants?.length || 0}`);
       console.log(`[ADMIN-CHECK] Buscando sender: ${sender}`);
       console.log(`[ADMIN-CHECK] Buscando botJid: ${botJid}`);
+      console.log(`[ADMIN-CHECK] Buscando botJidRaw: ${botJidRaw}`);
+      console.log(`[ADMIN-CHECK] Buscando botNumber: ${botNumber}`);
 
-      const participantInfo = (groupMetadata.participants || []).find((p) => p.id === sender);
+      // ✅ FUNCIÓN HELPER: Verificar si un participante coincide con el bot
+      const isParticipantBot = (participant) => {
+        if (!participant) return false;
+
+        const pid = participant.id;
+        const pLid = participant.lid; // Linked ID
+        const pJid = participant.jid; // JID completo
+
+        // Método 1: Comparación directa de IDs
+        if (pid === botJid || pid === botJidRaw) return true;
+
+        // Método 2: Comparar LID si existe
+        if (pLid && (pLid === botJid || pLid === botJidRaw)) return true;
+
+        // Método 3: Comparar JID si existe
+        if (pJid && (pJid === botJid || pJid === botJidRaw)) return true;
+
+        // Método 4: Extraer y comparar números
+        if (botNumber) {
+          const pidNum = onlyDigits(pid || '');
+          const pLidNum = pLid ? onlyDigits(pLid) : null;
+          const pJidNum = pJid ? onlyDigits(pJid) : null;
+
+          if (pidNum === botNumber || pLidNum === botNumber || pJidNum === botNumber) {
+            return true;
+          }
+        }
+
+        // Método 5: Normalizar y comparar
+        if (typeof jidNormalizedUser === 'function') {
+          try {
+            const normalizedBot = jidNormalizedUser(botJid);
+            const normalizedBotRaw = botJidRaw ? jidNormalizedUser(botJidRaw) : null;
+            const normalizedPid = jidNormalizedUser(pid);
+            const normalizedPLid = pLid ? jidNormalizedUser(pLid) : null;
+            const normalizedPJid = pJid ? jidNormalizedUser(pJid) : null;
+
+            if (normalizedPid === normalizedBot || normalizedPid === normalizedBotRaw) return true;
+            if (normalizedPLid && (normalizedPLid === normalizedBot || normalizedPLid === normalizedBotRaw)) return true;
+            if (normalizedPJid && (normalizedPJid === normalizedBot || normalizedPJid === normalizedBotRaw)) return true;
+          } catch (e) {
+            // Ignorar errores de normalización
+          }
+        }
+
+        return false;
+      };
+
+      // Buscar sender
+      const participantInfo = (groupMetadata.participants || []).find((p) => {
+        return p.id === sender || p.lid === sender || p.jid === sender;
+      });
       isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin');
       console.log(`[ADMIN-CHECK] Sender encontrado: ${!!participantInfo}, isAdmin: ${isAdmin}`);
-
-      // ✅ BÚSQUEDA MEJORADA DEL BOT: Múltiples estrategias
-      let botInfo = null;
-
-      // Estrategia 1: Búsqueda exacta por JID normalizado
-      botInfo = (groupMetadata.participants || []).find((p) => p.id === botJid);
-
-      // Estrategia 2: Si no se encuentra, buscar por número
-      if (!botInfo && botNumber) {
-        console.log(`[ADMIN-CHECK] Búsqueda por número: ${botNumber}`);
-        botInfo = (groupMetadata.participants || []).find((p) => {
-          const pNum = onlyDigits(p.id || '');
-          return pNum === botNumber;
-        });
-        if (botInfo) {
-          console.log(`[ADMIN-CHECK] ✅ Bot encontrado por número: ${botInfo.id}`);
-        }
+      if (participantInfo) {
+        console.log(`[ADMIN-CHECK] Sender details - id: ${participantInfo.id}, lid: ${participantInfo.lid || 'N/A'}, jid: ${participantInfo.jid || 'N/A'}`);
       }
 
-      // Estrategia 3: Buscar usando jidNormalizedUser en cada participante
-      if (!botInfo && typeof jidNormalizedUser === 'function') {
-        console.log(`[ADMIN-CHECK] Búsqueda con jidNormalizedUser en participantes`);
-        const normalizedBotJid = jidNormalizedUser(botJid);
-        botInfo = (groupMetadata.participants || []).find((p) => {
-          try {
-            const normalizedP = jidNormalizedUser(p.id);
-            return normalizedP === normalizedBotJid;
-          } catch {
-            return false;
-          }
-        });
-        if (botInfo) {
-          console.log(`[ADMIN-CHECK] ✅ Bot encontrado con jidNormalizedUser: ${botInfo.id}`);
-        }
-      }
-
-      isBotAdmin = !!botInfo && (botInfo.admin === 'admin' || botInfo.admin === 'superadmin');
+      // ✅ BUSCAR BOT usando la función helper
+      let botInfo = (groupMetadata.participants || []).find(isParticipantBot);
 
       if (botInfo) {
-        console.log(`[ADMIN-CHECK] ✅ Bot encontrado - ID: ${botInfo.id}, admin: ${botInfo.admin}, isBotAdmin: ${isBotAdmin}`);
+        isBotAdmin = botInfo.admin === 'admin' || botInfo.admin === 'superadmin';
+        console.log(`[ADMIN-CHECK] ✅ BOT ENCONTRADO!`);
+        console.log(`[ADMIN-CHECK]   - id: ${botInfo.id}`);
+        console.log(`[ADMIN-CHECK]   - lid: ${botInfo.lid || 'N/A'}`);
+        console.log(`[ADMIN-CHECK]   - jid: ${botInfo.jid || 'N/A'}`);
+        console.log(`[ADMIN-CHECK]   - admin: ${botInfo.admin || 'N/A'}`);
+        console.log(`[ADMIN-CHECK]   - isBotAdmin: ${isBotAdmin}`);
       } else {
-        console.log(`[ADMIN-CHECK] ⚠️ Bot NO encontrado en participantes del grupo`);
-        console.log(`[ADMIN-CHECK] Muestra de IDs (primeros 5):`,
-          (groupMetadata.participants || []).slice(0, 5).map(p => p.id));
+        console.log(`[ADMIN-CHECK] ⚠️ Bot NO encontrado en participantes`);
+        console.log(`[ADMIN-CHECK] Formatos probados:`);
+        console.log(`[ADMIN-CHECK]   - botJid: ${botJid}`);
+        console.log(`[ADMIN-CHECK]   - botJidRaw: ${botJidRaw}`);
+        console.log(`[ADMIN-CHECK]   - botNumber: ${botNumber}`);
+        console.log(`[ADMIN-CHECK] Muestra de participantes (primeros 3):`);
+        (groupMetadata.participants || []).slice(0, 3).forEach((p, idx) => {
+          console.log(`[ADMIN-CHECK]   [${idx}] id: ${p.id}, lid: ${p.lid || 'N/A'}, jid: ${p.jid || 'N/A'}, admin: ${p.admin || 'N/A'}`);
+        });
+
+        // Workaround: Si el sender es owner, asumir permisos de bot
+        if (isOwner) {
+          console.log(`[ADMIN-CHECK] ⚠️ WORKAROUND: Asumiendo permisos de admin (sender es owner)`);
+          isBotAdmin = true;
+        }
       }
     } catch (e) {
       console.error(`[ADMIN-CHECK] Error getting group metadata: ${e.message}`);
