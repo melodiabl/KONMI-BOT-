@@ -55,7 +55,8 @@ async function loadBaileys() {
         fetchLatestBaileysVersion: M?.fetchLatestBaileysVersion || mod?.fetchLatestBaileysVersion,
         Browsers: M?.Browsers || mod?.Browsers,
         DisconnectReason: M?.DisconnectReason || mod?.DisconnectReason,
-        jidDecode: M?.jidDecode || mod?.jidDecode, // Aseguramos que jidDecode esté disponible
+        jidDecode: M?.jidDecode || mod?.jidDecode,
+        jidNormalizedUser: M?.jidNormalizedUser || mod?.jidNormalizedUser, // ✅ AÑADIDO
         loadedName: name,
       };
       if (!api.makeWASocket || !api.useMultiFileAuthState) {
@@ -147,7 +148,8 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
 
 /* ===== Variables globales ===== */
 let sock = null
-let jidDecode; // <-- Variable para almacenar la función jidDecode de Baileys
+let jidDecode; // Variable para almacenar la función jidDecode de Baileys
+let jidNormalizedUser; // ✅ AÑADIDO: Variable para jidNormalizedUser
 const groupSubjectCache = new Map()
 let connectionStatus = 'disconnected'
 let qrCode = null
@@ -181,10 +183,8 @@ const processedMessageIds = new Set()
  * @param {string} [authPath] - Ruta donde se guardan las credenciales.
  * @returns {object} Estado de la sesión.
  */
-export async function checkSessionState(authPath = null) { // <-- EXPORTADO para index.js
-    // Usa la ruta especificada, o la ruta del ENV, o la ruta segura por defecto
+export async function checkSessionState(authPath = null) {
     const effectivePath = authPath || path.resolve(process.env.AUTH_DIR || DEFAULT_AUTH_DIR);
-
     const credsPath = path.join(effectivePath, 'creds.json');
     const hasCreds = fs.existsSync(credsPath);
 
@@ -306,13 +306,23 @@ async function saveQrArtifacts(qr, outDir) {
 
 /* ===== Conexión principal ===== */
 export async function connectToWhatsApp(
-  authPath = (process.env.AUTH_DIR || DEFAULT_AUTH_DIR), // <-- USA RUTA SEGURA CORREGIDA
+  authPath = (process.env.AUTH_DIR || DEFAULT_AUTH_DIR),
   usePairingCode = false,
   phoneNumber = null
 ) {
   const baileysAPI = await loadBaileys();
-  const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers, DisconnectReason, jidDecode: baileyJidDecode } = baileysAPI;
-  jidDecode = baileyJidDecode; // Almacenar la función jidDecode
+  const {
+    makeWASocket,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion,
+    Browsers,
+    DisconnectReason,
+    jidDecode: baileyJidDecode,
+    jidNormalizedUser: baileyJidNormalizedUser // ✅ AÑADIDO
+  } = baileysAPI;
+
+  jidDecode = baileyJidDecode;
+  jidNormalizedUser = baileyJidNormalizedUser; // ✅ ALMACENAR
 
   savedAuthPath = path.resolve(authPath)
   fs.mkdirSync(savedAuthPath, { recursive: true })
@@ -576,28 +586,6 @@ try { mgr = await import('./src/services/subbot-manager.js') } catch (e) { conso
 
       for (const m of messages) {
         try {
-          // Logging detallado (Opcional, desactivar para producción)
-          // try {
-          //   const id = m?.key?.id;
-          //   const fromMe = !!m?.key?.fromMe;
-          //   const remoteJid = m?.key?.remoteJid || '';
-          //   const msg = m?.message || {};
-          //   const rawText = (
-          //     msg?.conversation ||
-          //     msg?.extendedTextMessage?.text ||
-          //     msg?.imageMessage?.caption ||
-          //     msg?.videoMessage?.caption ||
-          //     ''
-          //   ).trim();
-
-          //   console.log('--- mensaje entrante ---');
-          //   console.log('id:', id, 'fromMe:', fromMe, 'remoteJid:', remoteJid);
-          //   console.log('message types:', Object.keys(msg).join(', '));
-          //   console.log('rawText:', rawText.slice(0, 30));
-          // } catch (e) {
-          //   console.error('Error logging incoming message:', e && (e.message || e));
-          // }
-
           const id = m?.key?.id
           if (id && processedMessageIds.has(id)) continue
           if (id) processedMessageIds.add(id)
@@ -885,48 +873,49 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us');
   const fromMe = !!message?.key?.fromMe;
 
-  // CORRECCIÓN CRUCIAL: Normalizar botJid a la forma estándar (number@s.whatsapp.net)
-  // para que la verificación de administrador sea correcta.
+  // ✅ CORRECCIÓN: Normalizar botJid usando jidNormalizedUser si está disponible
   const botJidRaw = s.user?.id;
   let botJid = botJidRaw;
 
-  // ========== DIAGNÓSTICO: Verificar estado de jidDecode ==========
-  const jidDecodeAvailable = typeof jidDecode === 'function';
-  console.log(`[DIAG-ADMIN] jidDecode disponible: ${jidDecodeAvailable}`);
-  console.log(`[DIAG-ADMIN] botJidRaw: ${botJidRaw}`);
-  // ================================================================
+  console.log(`[ADMIN-CHECK] botJidRaw inicial: ${botJidRaw}`);
+  console.log(`[ADMIN-CHECK] jidNormalizedUser disponible: ${typeof jidNormalizedUser === 'function'}`);
 
-  if (botJidRaw && jidDecodeAvailable) {
+  // Método 1: Usar jidNormalizedUser (el más confiable)
+  if (botJidRaw && typeof jidNormalizedUser === 'function') {
+    try {
+      botJid = jidNormalizedUser(botJidRaw);
+      console.log(`[ADMIN-CHECK] botJid normalizado con jidNormalizedUser: ${botJid}`);
+    } catch (e) {
+      console.log(`[ADMIN-CHECK] jidNormalizedUser falló: ${e.message}`);
+    }
+  }
+
+  // Método 2: Usar jidDecode como fallback
+  if (botJid === botJidRaw && typeof jidDecode === 'function') {
     try {
       const decoded = jidDecode(botJidRaw);
-      console.log(`[DIAG-ADMIN] jidDecode result:`, decoded);
+      console.log(`[ADMIN-CHECK] jidDecode result:`, decoded);
       if (decoded && decoded.user && decoded.server) {
-        // Reconstruir el JID normalizado, e.g., 595974154768@s.whatsapp.net
         botJid = `${decoded.user}@${decoded.server}`;
-        console.log(`[DIAG-ADMIN] botJid normalizado: ${botJid}`);
+        console.log(`[ADMIN-CHECK] botJid normalizado con jidDecode: ${botJid}`);
       }
     } catch (e) {
-      console.log(`[DIAG-ADMIN] jidDecode falló: ${e.message}`);
-      // Fallback manual: extraer número antes de : y @
-      const match = String(botJidRaw).match(/^(\d+)/);
-      if (match) {
-        botJid = `${match[1]}@s.whatsapp.net`;
-        console.log(`[DIAG-ADMIN] botJid fallback manual: ${botJid}`);
-      }
+      console.log(`[ADMIN-CHECK] jidDecode falló: ${e.message}`);
     }
-  } else if (botJidRaw) {
-    // Fallback si jidDecode no está disponible
+  }
+
+  // Método 3: Fallback manual extrayendo número
+  if (botJid === botJidRaw && botJidRaw) {
     const match = String(botJidRaw).match(/^(\d+)/);
     if (match) {
       botJid = `${match[1]}@s.whatsapp.net`;
-      console.log(`[DIAG-ADMIN] botJid fallback (sin jidDecode): ${botJid}`);
+      console.log(`[ADMIN-CHECK] botJid fallback manual: ${botJid}`);
     }
   }
 
   let botNumber = null;
   try {
-    // Usamos el botJid normalizado para obtener el número base
-    botNumber = botJid ? (jidDecodeAvailable ? jidDecode(botJid)?.user : null) : null;
+    botNumber = botJid ? (typeof jidDecode === 'function' ? jidDecode(botJid)?.user : null) : null;
     if (!botNumber) {
       botNumber = onlyDigits(botJid || '');
     }
@@ -937,7 +926,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const sender = isGroup ? message.key.participant || remoteJid : remoteJid;
   let senderNumber = null;
   try {
-    senderNumber = sender ? (jidDecodeAvailable ? jidDecode(sender)?.user : null) : null;
+    senderNumber = sender ? (typeof jidDecode === 'function' ? jidDecode(sender)?.user : null) : null;
     if (!senderNumber) {
       senderNumber = onlyDigits(sender || '');
     }
@@ -952,52 +941,68 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const isOwner = !!(ownerNumber && senderNumber && senderNumber === ownerNumber);
 
   let isAdmin = false;
-  let isBotAdmin = false; // <-- Esto debe ser TRUE si es admin
+  let isBotAdmin = false;
   let groupMetadata = null;
+
   if (isGroup) {
     try {
       groupMetadata = await s.groupMetadata(remoteJid);
 
-      // ========== DIAGNÓSTICO: Mostrar participantes y sus JIDs ==========
-      console.log(`[DIAG-ADMIN] Grupo: ${remoteJid}`);
-      console.log(`[DIAG-ADMIN] Total participantes: ${groupMetadata?.participants?.length || 0}`);
-      console.log(`[DIAG-ADMIN] Buscando sender: ${sender}`);
-      console.log(`[DIAG-ADMIN] Buscando botJid: ${botJid}`);
-
-      // Mostrar primeros 5 participantes para debug
-      const sampleParticipants = (groupMetadata?.participants || []).slice(0, 5);
-      console.log(`[DIAG-ADMIN] Muestra de participantes:`, sampleParticipants.map(p => ({ id: p.id, admin: p.admin })));
-      // ===================================================================
+      console.log(`[ADMIN-CHECK] Grupo: ${remoteJid}`);
+      console.log(`[ADMIN-CHECK] Total participantes: ${groupMetadata?.participants?.length || 0}`);
+      console.log(`[ADMIN-CHECK] Buscando sender: ${sender}`);
+      console.log(`[ADMIN-CHECK] Buscando botJid: ${botJid}`);
 
       const participantInfo = (groupMetadata.participants || []).find((p) => p.id === sender);
       isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin');
-      console.log(`[DIAG-ADMIN] participantInfo encontrado: ${!!participantInfo}, isAdmin: ${isAdmin}`);
+      console.log(`[ADMIN-CHECK] Sender encontrado: ${!!participantInfo}, isAdmin: ${isAdmin}`);
 
-      // ✅ VERIFICACIÓN MEJORADA: Buscar bot con múltiples formatos de JID
-      let botInfo = (groupMetadata.participants || []).find((p) => p.id === botJid);
+      // ✅ BÚSQUEDA MEJORADA DEL BOT: Múltiples estrategias
+      let botInfo = null;
 
-      // Si no se encuentra, intentar búsqueda por número
+      // Estrategia 1: Búsqueda exacta por JID normalizado
+      botInfo = (groupMetadata.participants || []).find((p) => p.id === botJid);
+
+      // Estrategia 2: Si no se encuentra, buscar por número
       if (!botInfo && botNumber) {
+        console.log(`[ADMIN-CHECK] Búsqueda por número: ${botNumber}`);
         botInfo = (groupMetadata.participants || []).find((p) => {
           const pNum = onlyDigits(p.id || '');
           return pNum === botNumber;
         });
         if (botInfo) {
-          console.log(`[DIAG-ADMIN] Bot encontrado por número: ${botInfo.id}`);
+          console.log(`[ADMIN-CHECK] ✅ Bot encontrado por número: ${botInfo.id}`);
+        }
+      }
+
+      // Estrategia 3: Buscar usando jidNormalizedUser en cada participante
+      if (!botInfo && typeof jidNormalizedUser === 'function') {
+        console.log(`[ADMIN-CHECK] Búsqueda con jidNormalizedUser en participantes`);
+        const normalizedBotJid = jidNormalizedUser(botJid);
+        botInfo = (groupMetadata.participants || []).find((p) => {
+          try {
+            const normalizedP = jidNormalizedUser(p.id);
+            return normalizedP === normalizedBotJid;
+          } catch {
+            return false;
+          }
+        });
+        if (botInfo) {
+          console.log(`[ADMIN-CHECK] ✅ Bot encontrado con jidNormalizedUser: ${botInfo.id}`);
         }
       }
 
       isBotAdmin = !!botInfo && (botInfo.admin === 'admin' || botInfo.admin === 'superadmin');
-      console.log(`[DIAG-ADMIN] botInfo encontrado: ${!!botInfo}, isBotAdmin: ${isBotAdmin}`);
 
       if (botInfo) {
-        console.log(`[DIAG-ADMIN] Bot participant ID: ${botInfo.id}, admin: ${botInfo.admin}`);
+        console.log(`[ADMIN-CHECK] ✅ Bot encontrado - ID: ${botInfo.id}, admin: ${botInfo.admin}, isBotAdmin: ${isBotAdmin}`);
       } else {
-        console.log(`[DIAG-ADMIN] ⚠️ Bot NO encontrado en participantes!`);
-        console.log(`[DIAG-ADMIN] Todos los IDs de participantes:`, (groupMetadata.participants || []).map(p => p.id));
+        console.log(`[ADMIN-CHECK] ⚠️ Bot NO encontrado en participantes del grupo`);
+        console.log(`[ADMIN-CHECK] Muestra de IDs (primeros 5):`,
+          (groupMetadata.participants || []).slice(0, 5).map(p => p.id));
       }
     } catch (e) {
-      console.error(`[DIAG-ADMIN] Error getting group metadata for ${remoteJid}: ${e.message}`);
+      console.error(`[ADMIN-CHECK] Error getting group metadata: ${e.message}`);
       logger.error(`Error getting group metadata for ${remoteJid}: ${e.message}`);
     }
   }
