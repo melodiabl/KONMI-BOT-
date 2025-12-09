@@ -509,13 +509,14 @@ async function sendResult(sock, jid, result, ctx) {
       })),
     }))
 
+    // En grupos degradar a texto plano para evitar fallos de cliente
     if (isGroupChat) {
       const lines = [];
       lines.push(result.text || result.description || result.title || 'Menu');
       for (const sec of mapSections) {
-        lines.push('
-' + (sec.title || ''));
-        for (const row of (sec.rows || [])) lines.push('- ' + row.title + ' -> ' + row.rowId);
+        lines.push('');
+        lines.push(sec.title || '');
+        for (const row of (sec.rows || [])) lines.push(`- ${row.title} -> ${row.rowId}`);
       }
       await safeSend(sock, targetJid, { text: lines.join('\n'), footer: result.footer }, opts);
       return;
@@ -536,9 +537,9 @@ async function sendResult(sock, jid, result, ctx) {
     const lines = [];
     lines.push(result.text || 'Menu');
     for (const sec of result.sections) {
-      lines.push('
-' + (sec.title || ''));
-      for (const row of (sec.rows || [])) lines.push('- ' + row.title + ' -> ' + row.rowId);
+      lines.push('');
+      lines.push(sec.title || '');
+      for (const row of (sec.rows || [])) lines.push(`- ${row.title} -> ${row.rowId}`);
     }
     await safeSend(sock, targetJid, { text: lines.join('\n') }, opts);
     return;
@@ -764,5 +765,4 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
-
 
