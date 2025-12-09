@@ -1,6 +1,4 @@
-// api-providers.js
-// Utilidades para manejar múltiples APIs con fallback automático y formato unificado
-
+// api-providers.js - Con Sistema de Logs Detallado
 import axios from 'axios'
 import logger from '../../config/logger.js'
 import { getSpotifyAccessToken } from './spotify-auth.js'
@@ -9,14 +7,47 @@ import { downloadWithYtDlp } from './ytdlp-wrapper.js'
 import { tmpdir } from 'os';
 import { join as pathJoin, basename } from 'path';
 import { mkdir, rm, readdir, stat } from 'fs/promises';
-import ffmpegPath from 'ffmpeg-static'; // <--- Importado
+import ffmpegPath from 'ffmpeg-static';
 import ytdl from 'ytdl-core'
 import { Readable } from 'stream'
 import { createWriteStream } from 'fs'
 
-/**
- * Axios por defecto
- */
+/* ===== Sistema de Logs para API Providers ===== */
+const LOG_COLORS = {
+  DEBUG: '\x1b[36m',
+  INFO: '\x1b[34m',
+  WARN: '\x1b[33m',
+  ERROR: '\x1b[31m',
+  SUCCESS: '\x1b[32m',
+  API: '\x1b[35m',
+  RESET: '\x1b[0m'
+}
+
+const LOG_ICONS = {
+  DEBUG: '🔍',
+  INFO: 'ℹ️',
+  WARN: '⚠️',
+  ERROR: '❌',
+  SUCCESS: '✅',
+  API: '🌐'
+}
+
+function logAPI(level, source, message, data = null) {
+  const timestamp = new Date().toISOString()
+  const color = LOG_COLORS[level] || LOG_COLORS.RESET
+  const icon = LOG_ICONS[level] || '•'
+  const reset = LOG_COLORS.RESET
+
+  let logMsg = `${color}${icon} [${timestamp}] [API:${source}] ${message}${reset}`
+
+  if (data) {
+    const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)
+    logMsg += `\n${color}${dataStr}${reset}`
+  }
+
+  console.log(logMsg)
+}
+
 const http = axios.create({
   timeout: 15000,
   headers: {
@@ -25,36 +56,10 @@ const http = axios.create({
   validateStatus: (s) => s >= 200 && s < 500
 })
 
-// yt-dlp tuning variables
 const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 const YTDLP_USER_AGENT = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA
 const YTDLP_EXTRACTOR_ARGS_BASE = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=android'
 const YTDLP_PO_TOKEN = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || ''
-
-function headerIfEnv(varName, headerName, prefix = '') {
-  const key = process.env[varName]
-  if (!key) return null
-  return { [headerName]: prefix ? `${prefix}${key}` : key }
-}
-
-function buildYtDlpExecCookieOpts() {
-  const args = buildYtDlpCookieArgs()
-  if (!Array.isArray(args) || args.length < 2) return {}
-  const [flag, value] = args
-  if (!value) return {}
-  if (flag === '--cookies') return { cookies: value }
-  if (flag === '--cookies-from-browser') return { cookiesFromBrowser: value }
-  if (flag === '--add-header') return { addHeader: [value] }
-  return {}
-}
-
-function buildExtractorArgs() {
-  const list = []
-  if (YTDLP_EXTRACTOR_ARGS_BASE) list.push(YTDLP_EXTRACTOR_ARGS_BASE)
-  if (YTDLP_PO_TOKEN) list.push(`youtube:po_token=${YTDLP_PO_TOKEN}`)
-  if (!list.length) return undefined
-  return list.length === 1 ? list[0] : list
-}
 
 export const API_PROVIDERS = {
   tiktok: [
@@ -178,14 +183,49 @@ export const API_PROVIDERS = {
   ],
 
   youtube: [
-    // Preferir proveedores locales primero (sin depender de APIs externas)
     {
       name: 'yt-dlp (local)',
       method: 'LOCAL__YTDLP_URL',
       url: (videoUrl, options = {}) => ({ url: videoUrl, __ytdlpType: options.type || 'audio' }),
       parse: (data) => data
     },
-    // Piped deshabilitado temporalmente por errores de provider
+    {
+      name: 'ytdl-core (local url)',
+      method: 'LOCAL__YTDL_URL',
+      url: (videoUrl, options = {}) => videoUrl,
+      parse: (data) => data
+    },
+    {
+      name: 'Piped.video',
+      timeoutMs: 5000,
+      url: (videoUrl, options = {}) => {
+        try {
+          const u = new URL(videoUrl)
+          let vid = u.searchParams.get('v')
+          if (!vid && /youtu\.be$/i.test(u.hostname)) {
+            const p = u.pathname.split('/').filter(Boolean)
+            if (p[0]) vid = p[0]
+          }
+          if (!vid) {
+            const m = (videoUrl || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/)
+            vid = m ? m[1] : null
+          }
+          if (!vid) throw new Error('videoId no encontrado')
+          return { url: `https://piped.video/api/v1/streams/${vid}`, __yt_requested_type: options.type || 'video' }
+        } catch (e) { throw e }
+      },
+      parse: (data, extra) => {
+        const want = (extra && extra.__yt_requested_type) || 'video'
+        if (want === 'audio') {
+          const a = Array.isArray(data?.audioStreams) ? data.audioStreams : []
+          const best = a?.[0]?.url || null
+          return { success: Boolean(best), download: best, quality: a?.[0]?.quality }
+        }
+        const v = Array.isArray(data?.videoStreams) ? data.videoStreams : []
+        const bestVideo = v?.[0]?.url || data?.hls || null
+        return { success: Boolean(bestVideo), download: bestVideo, quality: v?.[0]?.quality }
+      }
+    },
     {
       name: 'Vreden',
       url: (videoUrl, options = {}) => {
@@ -219,14 +259,12 @@ export const API_PROVIDERS = {
   ],
 
   youtubeSearch: [
-    // yt-dlp local search
     {
       name: 'yt-dlp (search local)',
       method: 'LOCAL__YTDLP_SEARCH',
       url: (query) => `ytsearch10:${query}`,
       parse: (data) => data,
     },
-    // Piped Search
     {
       name: 'Piped.video Search',
       timeoutMs: 5000,
@@ -246,7 +284,6 @@ export const API_PROVIDERS = {
         }))}
       }
     },
-    // Abhi API como respaldo
     {
       name: 'AbhiAPI',
       timeoutMs: 6000,
@@ -268,7 +305,6 @@ export const API_PROVIDERS = {
         }
       },
     },
-    // Último recurso local: paquete yt-search
     {
       name: 'yt-search (local)',
       method: 'LOCAL__YTSEARCH',
@@ -446,24 +482,25 @@ export const API_PROVIDERS = {
   ]
 }
 
-/**
- * Helper para verificar existencia de archivo
- */
 async function fileExists(path) {
     try { await stat(path); return true; } catch { return false; }
 }
 
-/**
- * Realiza una petición HTTP
- */
 async function doRequest(provider, url, body, extraCtx) {
-  // Proveedor local (yt-search)
+  logAPI('INFO', provider.name, `🔄 Attempting request`, {
+    method: provider.method || 'GET',
+    url: typeof url === 'string' ? url.substring(0, 100) : 'complex'
+  });
+
+  // LOCAL__YTSEARCH
   if (provider?.method === 'LOCAL__YTSEARCH') {
     try {
+      logAPI('DEBUG', 'yt-search', 'Executing local yt-search');
       const mod = await import('yt-search')
       const ytSearch = mod.default || mod
       const r = await ytSearch(url)
       const list = Array.isArray(r?.videos) ? r.videos : []
+      logAPI('SUCCESS', 'yt-search', `Found ${list.length} results`);
       return {
         data: {
           __local: true,
@@ -480,27 +517,55 @@ async function doRequest(provider, url, body, extraCtx) {
         },
         status: 200
       }
-    } catch (e) { throw new Error('yt-search local falló: ' + (e?.message || e)) }
+    } catch (e) {
+      logAPI('ERROR', 'yt-search', 'Local search failed', { error: e?.message });
+      throw new Error('yt-search local falló: ' + (e?.message || e))
+    }
   }
 
-  // Proveedor local: ytdl-core
+  // LOCAL__YTDL_URL
   if (provider?.method === 'LOCAL__YTDL_URL') {
     try {
+      logAPI('DEBUG', 'ytdl-core', 'Attempting ytdl-core download', { url });
       const mod = await import('ytdl-core')
       const ytdl = mod.default || mod
       const info = await ytdl.getInfo(url)
+
+      logAPI('DEBUG', 'ytdl-core', `Got info for video: ${info.videoDetails?.title}`);
+
       let chosen
-      try { chosen = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' }) } 
-      catch (_) { chosen = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)?.[0] }
+      try {
+        chosen = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+        logAPI('SUCCESS', 'ytdl-core', 'Format chosen: highestaudio');
+      }
+      catch (_) {
+        chosen = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)?.[0]
+        logAPI('WARN', 'ytdl-core', 'Fallback to first audio-only format');
+      }
+
       const direct = chosen?.url
+
+      if (!direct) {
+        logAPI('ERROR', 'ytdl-core', 'No direct URL found');
+        throw new Error('No direct URL');
+      }
+
+      logAPI('SUCCESS', 'ytdl-core', 'Got direct URL', { quality: chosen?.audioBitrate });
+
       return {
         data: { __local: true, success: Boolean(direct), download: direct, quality: chosen?.audioBitrate },
         status: 200,
       }
-    } catch (e) { throw new Error('ytdl-core url falló: ' + (e?.message || e)) }
+    } catch (e) {
+      logAPI('ERROR', 'ytdl-core', 'ytdl-core failed', {
+        error: e?.message,
+        statusCode: e?.statusCode
+      });
+      throw new Error('ytdl-core url falló: ' + (e?.message || e))
+    }
   }
 
-  // Proveedor local: yt-dlp con soporte para progreso en tiempo real
+  // LOCAL__YTDLP_URL
   if (provider?.method === 'LOCAL__YTDLP_URL') {
     let tempDir = null;
     try {
@@ -510,21 +575,34 @@ async function doRequest(provider, url, body, extraCtx) {
         const isVideoDownload = want === 'video';
         const isUrlOnly = !isAudioDownload && !isVideoDownload;
 
-        // Configuración de carpeta temporal para descargas
+        logAPI('INFO', 'yt-dlp', `Starting download`, {
+          url,
+          type: want,
+          isAudio: isAudioDownload,
+          isVideo: isVideoDownload
+        });
+
         if (isAudioDownload || isVideoDownload) {
             tempDir = pathJoin(tmpdir(), `konmi-dl-${Date.now()}-${Math.random().toString(16).slice(2)}`);
             await mkdir(tempDir, { recursive: true });
+            logAPI('DEBUG', 'yt-dlp', `Created temp dir: ${tempDir}`);
         }
 
-        // Solo usar downloadWithYtDlp si es descarga de audio o video
         if (isAudioDownload || isVideoDownload) {
             try {
+                logAPI('INFO', 'yt-dlp', 'Attempting downloadWithYtDlp');
+
                 const downloadResult = await downloadWithYtDlp({
                     url,
                     outDir: tempDir,
                     audioOnly: isAudioDownload,
                     format: undefined,
                     onProgress: (info) => {
+                        logAPI('DEBUG', 'yt-dlp', `Progress: ${info?.percent || 0}%`, {
+                          status: info?.status,
+                          speed: info?.speed
+                        });
+
                         if (typeof onProgress === 'function') {
                             onProgress({
                                 percent: info?.percent || 0,
@@ -540,6 +618,10 @@ async function doRequest(provider, url, body, extraCtx) {
                 });
 
                 if (downloadResult?.success && downloadResult?.filePath) {
+                    logAPI('SUCCESS', 'yt-dlp', 'Download completed', {
+                      filePath: downloadResult.filePath
+                    });
+
                     return {
                         data: {
                             __local: true,
@@ -552,27 +634,25 @@ async function doRequest(provider, url, body, extraCtx) {
                 }
                 throw new Error('yt-dlp no retornó archivo válido');
             } catch (error) {
-                // Fallback a yt-dlp-exec si downloadWithYtDlp falla
-                console.warn('downloadWithYtDlp falló, intentando yt-dlp-exec:', error?.message);
+                logAPI('WARN', 'yt-dlp', 'downloadWithYtDlp failed, trying yt-dlp-exec', {
+                  error: error?.message
+                });
             }
         }
 
-        // Fallback para URLs solo (sin descarga local) usando yt-dlp-exec
+        // Fallback yt-dlp-exec
         try {
+            logAPI('INFO', 'yt-dlp-exec', 'Attempting yt-dlp-exec fallback');
+
             const execMod = await import('yt-dlp-exec');
             const ytdlp = execMod.default || execMod;
 
-            const cookieOpts = buildYtDlpExecCookieOpts();
-            const extractorArgs = buildExtractorArgs();
             const optsBase = {
                 noWarnings: true,
                 preferFreeFormats: false,
                 retries: 1,
                 quiet: true,
-                dumpSingleJson: true,
-                userAgent: YTDLP_USER_AGENT,
-                extractorArgs,
-                ...cookieOpts
+                dumpSingleJson: true
             };
 
             if (ytdlp) {
@@ -585,6 +665,10 @@ async function doRequest(provider, url, body, extraCtx) {
                     chosenUrl = info.requested_formats[0]?.url || null;
                 }
                 if (chosenUrl) {
+                    logAPI('SUCCESS', 'yt-dlp-exec', 'Got URL from yt-dlp-exec', {
+                      title: info?.title
+                    });
+
                     return {
                         data: {
                             __local: true,
@@ -596,25 +680,346 @@ async function doRequest(provider, url, body, extraCtx) {
                     };
                 }
             }
-        } catch (_) {
-            // Ignorar fallback silenciosamente si falla
+        } catch (execError) {
+            logAPI('ERROR', 'yt-dlp-search', 'Search failed', { error: e.message });
+        throw new Error('yt-dlp search error: ' + e.message);
+      }
+  }
+
+  // HTTP requests
+  let dynHeaders = {}
+  if (typeof provider?.headers === 'function') {
+      try {
+        dynHeaders = (await provider.headers()) || {}
+        logAPI('DEBUG', provider.name, 'Dynamic headers loaded');
+      } catch (e) {
+        logAPI('WARN', provider.name, 'Failed to load dynamic headers', { error: e?.message });
+      }
+  } else if (provider?.headers) {
+    dynHeaders = provider.headers
+  }
+
+  if (provider?.method === 'POST') {
+    logAPI('INFO', provider.name, 'Sending POST request');
+    return http.post(url, body, { headers: { ...dynHeaders }, timeout: provider?.timeoutMs || 10000 })
+  }
+
+  logAPI('INFO', provider.name, 'Sending GET request');
+  return http.get(url, { headers: dynHeaders, timeout: provider?.timeoutMs || 10000 })
+}
+
+/**
+ * Intenta descargar desde múltiples APIs con fallback automático
+ */
+export async function downloadWithFallback(type, param, options = {}, onProgress) {
+  let providers = API_PROVIDERS[type]
+  if (!providers?.length) {
+    logAPI('ERROR', 'FALLBACK', 'Unsupported API type', { type });
+    throw new Error('Tipo de API no soportado: ' + type)
+  }
+
+  logAPI('INFO', 'FALLBACK', `Starting fallback chain for ${type}`, {
+    providers: providers.map(p => p.name),
+    param: typeof param === 'string' ? param.substring(0, 100) : 'complex',
+    options
+  });
+
+  const errors = []
+
+  for (const provider of providers) {
+    if (provider.headers === null) continue
+
+    try {
+      logAPI('INFO', 'FALLBACK', `Trying provider: ${provider.name}`);
+
+      let url
+      let extra = {}
+
+      if (typeof provider.url === 'function') {
+        const res = await provider.url(param, options)
+        if (res && typeof res === 'object' && res.url) {
+          url = res.url;
+          extra = res
+        }
+        else {
+          url = res
+        }
+      } else {
+        url = provider.url
+      }
+
+      const body = typeof provider.body === 'function' ? provider.body(param, options) : provider.body
+
+      const { data, status } = await doRequest(provider, url, body, { ...extra, onProgress })
+
+      logAPI('DEBUG', 'FALLBACK', `Response received from ${provider.name}`, {
+        status,
+        hasData: !!data,
+        isLocal: data?.__local
+      });
+
+      const parsed = data?.__local ? data : (provider.parse?.(data, extra) || { success: false })
+
+      if (parsed && parsed.success) {
+        logAPI('SUCCESS', 'FALLBACK', `✅ Provider ${provider.name} succeeded!`, {
+          provider: provider.name,
+          httpStatus: status
+        });
+
+        return { ...parsed, provider: provider.name, httpStatus: status }
+      }
+
+      throw new Error('Respuesta no exitosa de la API (' + provider.name + ')')
+    } catch (err) {
+      const errorMsg = provider.name + ': ' + (err?.message || 'Error desconocido')
+      errors.push(errorMsg)
+
+      logAPI('ERROR', 'FALLBACK', `Provider ${provider.name} failed`, {
+        error: err?.message,
+        statusCode: err?.response?.status,
+        stack: err?.stack?.split('\n').slice(0, 3).join('\n')
+      });
+
+      continue
+    }
+  }
+
+  logAPI('ERROR', 'FALLBACK', `❌ ALL PROVIDERS FAILED for ${type}`, {
+    totalProviders: providers.length,
+    errors: errors
+  });
+
+  throw new Error('Todos los proveedores fallaron:\n' + errors.join('\n'))
+}
+
+/**
+ * Descarga audio/video de YouTube usando ytdl-core directamente como Buffer
+ */
+async function downloadYouTubeAsBuffer(videoUrl, type = 'audio', onProgress) {
+  try {
+    logAPI('INFO', 'ytdl-buffer', 'Starting ytdl-core buffer download', {
+      url: videoUrl,
+      type
+    });
+
+    const info = await ytdl.getInfo(videoUrl, {
+      requestOptions: {
+        headers: { 'user-agent': DEFAULT_WEB_UA }
+      }
+    });
+
+    logAPI('DEBUG', 'ytdl-buffer', 'Got video info', {
+      title: info.videoDetails?.title,
+      duration: info.videoDetails?.lengthSeconds,
+      formats: info.formats?.length
+    });
+
+    let chosen;
+
+    if (type === 'audio') {
+      try {
+        chosen = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
+        logAPI('SUCCESS', 'ytdl-buffer', 'Audio format chosen');
+      } catch (_) {
+        chosen = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)?.[0];
+        logAPI('WARN', 'ytdl-buffer', 'Using fallback audio format');
+      }
+    } else {
+      try {
+        chosen = ytdl.chooseFormat(info.formats, { quality: 'highest' });
+        logAPI('SUCCESS', 'ytdl-buffer', 'Video format chosen');
+      } catch (_) {
+        chosen = (info.formats || []).filter((f) => f.hasVideo)?.[0];
+        logAPI('WARN', 'ytdl-buffer', 'Using fallback video format');
+      }
+    }
+
+    if (!chosen?.url) {
+      logAPI('ERROR', 'ytdl-buffer', 'No valid format found');
+      throw new Error('No se encontró formato válido');
+    }
+
+    logAPI('INFO', 'ytdl-buffer', 'Starting stream download', {
+      quality: chosen.quality,
+      container: chosen.container
+    });
+
+    const stream = ytdl.downloadFromInfo(info, { format: chosen });
+    const chunks = [];
+    let totalChunks = 0;
+
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk) => {
+        chunks.push(chunk);
+        totalChunks++;
+
+        if (totalChunks % 50 === 0) {
+          logAPI('DEBUG', 'ytdl-buffer', `Downloaded ${totalChunks} chunks`);
+        }
+
+        if (typeof onProgress === 'function') {
+          onProgress({ percent: (chunks.length % 100) });
+        }
+      });
+
+      stream.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+
+        logAPI('SUCCESS', 'ytdl-buffer', 'Download completed', {
+          bufferSize: `${(buffer.length / 1024 / 1024).toFixed(2)} MB`,
+          totalChunks,
+          title: info.videoDetails?.title
+        });
+
+        resolve({
+          success: true,
+          download: buffer,
+          quality: chosen.quality,
+          title: info.videoDetails?.title,
+          duration: info.videoDetails?.lengthSeconds
+        });
+      });
+
+      stream.on('error', (err) => {
+        logAPI('ERROR', 'ytdl-buffer', 'Stream error', {
+          error: err.message,
+          statusCode: err?.statusCode
+        });
+
+        reject(new Error('Error descargando: ' + err.message));
+      });
+    });
+  } catch (error) {
+    logAPI('ERROR', 'ytdl-buffer', 'Complete failure', {
+      error: error.message,
+      statusCode: error?.statusCode
+    });
+
+    logger.error('Error en downloadYouTubeAsBuffer:', error.message);
+    throw error;
+  }
+}
+
+// Exportaciones
+export async function searchYouTubeMusic(query) {
+  logAPI('INFO', 'EXPORT', 'searchYouTubeMusic called', { query: query?.substring(0, 50) });
+  return downloadWithFallback('youtubeSearch', query)
+}
+
+export async function downloadYouTube(url, type = 'audio', onProgress) {
+  logAPI('INFO', 'EXPORT', 'downloadYouTube called', {
+    url: url?.substring(0, 100),
+    type
+  });
+
+  try {
+    const result = await downloadYouTubeAsBuffer(url, type, onProgress);
+    logAPI('SUCCESS', 'EXPORT', 'downloadYouTube succeeded via ytdl-buffer');
+    return result;
+  } catch (error) {
+    logAPI('WARN', 'EXPORT', 'ytdl-core failed, trying fallback', {
+      error: error.message
+    });
+
+    return downloadWithFallback('youtube', url, { type }, onProgress);
+  }
+}
+
+export async function downloadTikTok(url) {
+  logAPI('INFO', 'EXPORT', 'downloadTikTok called');
+  return downloadWithFallback('tiktok', url)
+}
+
+export async function downloadInstagram(url) {
+  logAPI('INFO', 'EXPORT', 'downloadInstagram called');
+  return downloadWithFallback('instagram', url)
+}
+
+export async function downloadFacebook(url) {
+  logAPI('INFO', 'EXPORT', 'downloadFacebook called');
+  return downloadWithFallback('facebook', url)
+}
+
+export async function downloadTwitter(url) {
+  logAPI('INFO', 'EXPORT', 'downloadTwitter called');
+  return downloadWithFallback('twitter', url)
+}
+
+export async function downloadPinterest(url) {
+  logAPI('INFO', 'EXPORT', 'downloadPinterest called');
+  return downloadWithFallback('pinterest', url)
+}
+
+export async function searchSpotify(query) {
+  logAPI('INFO', 'EXPORT', 'searchSpotify called');
+  return downloadWithFallback('spotify', query)
+}
+
+export async function translateText(text, targetLang, sourceLang) {
+  logAPI('INFO', 'EXPORT', 'translateText called');
+  return downloadWithFallback('translate', text, { sourceLang, targetLang })
+}
+
+export async function getWeather(city) {
+  logAPI('INFO', 'EXPORT', 'getWeather called');
+  return downloadWithFallback('weather', city)
+}
+
+export async function getRandomQuote() {
+  logAPI('INFO', 'EXPORT', 'getRandomQuote called');
+  return downloadWithFallback('quote', null)
+}
+
+export async function getRandomFact() {
+  logAPI('INFO', 'EXPORT', 'getRandomFact called');
+  return downloadWithFallback('fact', null)
+}
+
+export async function getTrivia() {
+  logAPI('INFO', 'EXPORT', 'getTrivia called');
+  return downloadWithFallback('trivia', null)
+}
+
+export async function getRandomMeme() {
+  logAPI('INFO', 'EXPORT', 'getRandomMeme called');
+  return downloadWithFallback('meme', null)
+}
+
+export default {
+  API_PROVIDERS,
+  downloadWithFallback,
+  searchYouTubeMusic,
+  downloadYouTube,
+  searchSpotify
+}-exec', 'yt-dlp-exec also failed', {
+              error: execError?.message
+            });
         }
 
         throw new Error('No se pudo descargar el contenido (ambos métodos fallaron)');
 
     } catch (e) {
-        if (tempDir) { try { await rm(tempDir, { recursive: true, force: true }); } catch {} }
+        if (tempDir) {
+          try { await rm(tempDir, { recursive: true, force: true }); } catch {}
+        }
+
+        logAPI('ERROR', 'yt-dlp', 'Complete failure', {
+          error: e?.message,
+          stderr: e?.stderr ? String(e.stderr).slice(0, 200) : undefined
+        });
+
         throw new Error((e && e.stderr) ? String(e.stderr).slice(0, 200) : (e?.message || e));
     }
   }
 
-  // Proveedor local: yt-dlp search
+  // LOCAL__YTDLP_SEARCH
   if (provider?.method === 'LOCAL__YTDLP_SEARCH') {
       try {
+          logAPI('DEBUG', 'yt-dlp-search', 'Executing yt-dlp search');
+
           const execMod = await import('child_process');
           const util = await import('util');
           const execPromise = util.promisify(execMod.exec);
-          // Ejecución simple para búsqueda
           const { stdout } = await execPromise(`yt-dlp "ytsearch10:${url}" --flat-playlist -J --no-warnings`);
           const json = JSON.parse(stdout);
           const entries = json.entries || [];
@@ -626,149 +1031,9 @@ async function doRequest(provider, url, body, extraCtx) {
               views: v.view_count,
               author: v.uploader
           }));
+
+          logAPI('SUCCESS', 'yt-dlp-search', `Found ${results.length} results`);
+
           return { data: { __local: true, success: results.length > 0, results }, status: 200 };
-      } catch(e) { throw new Error('yt-dlp search error: ' + e.message); }
-  }
-
-  // Peticiones HTTP normales
-  let dynHeaders = {}
-  if (typeof provider?.headers === 'function') {
-      try { dynHeaders = (await provider.headers()) || {} } catch {}
-  } else if (provider?.headers) { dynHeaders = provider.headers }
-
-  if (provider?.method === 'POST') {
-    return http.post(url, body, { headers: { ...dynHeaders }, timeout: provider?.timeoutMs || 10000 })
-  }
-  return http.get(url, { headers: dynHeaders, timeout: provider?.timeoutMs || 10000 })
-}
-
-/**
- * Intenta descargar desde múltiples APIs con fallback automático
- */
-export async function downloadWithFallback(type, param, options = {}, onProgress) {
-  let providers = API_PROVIDERS[type]
-  if (!providers?.length) throw new Error('Tipo de API no soportado: ' + type)
-
-  const errors = []
-
-  for (const provider of providers) {
-    if (provider.headers === null) continue
-
-    try {
-      let url
-      let extra = {}
-
-      if (typeof provider.url === 'function') {
-        const res = await provider.url(param, options)
-        if (res && typeof res === 'object' && res.url) { url = res.url; extra = res } 
-        else { url = res }
-      } else { url = provider.url }
-
-      const body = typeof provider.body === 'function' ? provider.body(param, options) : provider.body
-      const { data, status } = await doRequest(provider, url, body, { ...extra, onProgress })
-      const parsed = data?.__local ? data : (provider.parse?.(data, extra) || { success: false })
-
-      if (parsed && parsed.success) {
-        return { ...parsed, provider: provider.name, httpStatus: status }
-      }
-      throw new Error('Respuesta no exitosa de la API (' + provider.name + ')')
-    } catch (err) {
-      errors.push(provider.name + ': ' + (err?.message || 'Error desconocido'))
-      continue
-    }
-  }
-  throw new Error('Todos los proveedores fallaron:\n' + errors.join('\n'))
-}
-
-/**
- * Descarga audio/video de YouTube usando ytdl-core directamente como Buffer
- */
-async function downloadYouTubeAsBuffer(videoUrl, type = 'audio', onProgress) {
-  try {
-    const info = await ytdl.getInfo(videoUrl, {
-      requestOptions: {
-        headers: { 'user-agent': DEFAULT_WEB_UA }
-      }
-    });
-    let chosen;
-    
-    if (type === 'audio') {
-      try {
-        chosen = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
-      } catch (_) {
-        chosen = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)?.[0];
-      }
-    } else {
-      try {
-        chosen = ytdl.chooseFormat(info.formats, { quality: 'highest' });
-      } catch (_) {
-        chosen = (info.formats || []).filter((f) => f.hasVideo)?.[0];
-      }
-    }
-
-    if (!chosen?.url) {
-      throw new Error('No se encontró formato válido');
-    }
-
-    const stream = ytdl.downloadFromInfo(info, { format: chosen });
-    const chunks = [];
-
-    return new Promise((resolve, reject) => {
-      stream.on('data', (chunk) => {
-        chunks.push(chunk);
-        if (typeof onProgress === 'function') {
-          onProgress({ percent: (chunks.length % 100) });
-        }
-      });
-
-      stream.on('end', () => {
-        const buffer = Buffer.concat(chunks);
-        resolve({
-          success: true,
-          download: buffer,
-          quality: chosen.quality,
-          title: info.videoDetails?.title,
-          duration: info.videoDetails?.lengthSeconds
-        });
-      });
-
-      stream.on('error', (err) => {
-        reject(new Error('Error descargando: ' + err.message));
-      });
-    });
-  } catch (error) {
-    logger.error('Error en downloadYouTubeAsBuffer:', error.message);
-    throw error;
-  }
-}
-
-// Exportaciones
-export async function searchYouTubeMusic(query) { return downloadWithFallback('youtubeSearch', query) }
-export async function downloadYouTube(url, type = 'audio', onProgress) {
-  try {
-    return await downloadYouTubeAsBuffer(url, type, onProgress);
-  } catch (error) {
-    logger.warn('ytdl-core falló, intentando fallback:', error.message);
-    return downloadWithFallback('youtube', url, { type }, onProgress);
-  }
-}
-export async function downloadTikTok(url) { return downloadWithFallback('tiktok', url) }
-export async function downloadInstagram(url) { return downloadWithFallback('instagram', url) }
-export async function downloadFacebook(url) { return downloadWithFallback('facebook', url) }
-export async function downloadTwitter(url) { return downloadWithFallback('twitter', url) }
-export async function downloadPinterest(url) { return downloadWithFallback('pinterest', url) }
-export async function searchSpotify(query) { return downloadWithFallback('spotify', query) }
-export async function translateText(text, targetLang, sourceLang) { return downloadWithFallback('translate', text, { sourceLang, targetLang }) }
-export async function getWeather(city) { return downloadWithFallback('weather', city) }
-export async function getRandomQuote() { return downloadWithFallback('quote', null) }
-export async function getRandomFact() { return downloadWithFallback('fact', null) }
-export async function getTrivia() { return downloadWithFallback('trivia', null) }
-export async function getRandomMeme() { return downloadWithFallback('meme', null) }
-
-export default {
-  API_PROVIDERS,
-  downloadWithFallback,
-  searchYouTubeMusic,
-  downloadYouTube,
-  searchSpotify
-}
+      } catch(e) {
+        logAPI('ERROR', 'yt-dlp
