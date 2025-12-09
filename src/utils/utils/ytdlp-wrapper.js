@@ -85,7 +85,8 @@ function runYtDlp(args, onProgress) {
     let stderr = ''
 
     proc.stdout.on('data', (chunk) => {
-      stdout += chunk.toString()
+      const text = chunk.toString()
+      stdout += text
     })
 
     proc.stderr.on('data', (chunk) => {
@@ -144,7 +145,7 @@ export async function downloadWithYtDlp({
   }
 
   if (audioOnly) {
-    // Audio en alta calidad -> MP3 usando ffmpeg
+    // Audio en alta calidad → MP3
     args.push(
       '-f',
       'bestaudio/best',
@@ -156,7 +157,6 @@ export async function downloadWithYtDlp({
     )
   } else {
     // Video alta calidad → bestvideo + bestaudio, salida MP4
-    // Usa ffmpeg para mergear
     args.push(
       '-f',
       'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
@@ -193,4 +193,5 @@ export async function downloadWithYtDlp({
 }
 
 export default { downloadWithYtDlp }
+
 
