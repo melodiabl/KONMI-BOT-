@@ -67,7 +67,11 @@ const toMediaInput = (val) => {
 const mentionSender = (sender) => [`${sender}`]
 const senderTag = (sender) => `@${String(sender || '').split('@')[0]}`
 
-export async function handleTikTokDownload(ctx) {
+// ============================================================
+// FUNCIONES DE MANEJO DE DESCARGAS
+// ============================================================
+
+async function handleTikTokDownload(ctx) {
   const { args, sender, sock, remoteJid, message } = ctx
   const url = args.join(' ')
 
@@ -121,7 +125,7 @@ export async function handleTikTokDownload(ctx) {
   }
 }
 
-export async function handleInstagramDownload(ctx) {
+async function handleInstagramDownload(ctx) {
   const { args, sender, sock, remoteJid, message } = ctx
   const url = args.join(' ')
 
@@ -174,7 +178,7 @@ export async function handleInstagramDownload(ctx) {
   }
 }
 
-export async function handleFacebookDownload(ctx) {
+async function handleFacebookDownload(ctx) {
   const { args, sender } = ctx
   const url = args.join(' ')
 
@@ -212,7 +216,7 @@ export async function handleFacebookDownload(ctx) {
   }
 }
 
-export async function handleTwitterDownload(ctx) {
+async function handleTwitterDownload(ctx) {
   const { args, sender } = ctx
   const url = args.join(' ')
 
@@ -252,7 +256,7 @@ export async function handleTwitterDownload(ctx) {
   }
 }
 
-export async function handlePinterestDownload(ctx) {
+async function handlePinterestDownload(ctx) {
   const { args, sender } = ctx
   const url = args.join(' ')
 
@@ -289,7 +293,7 @@ export async function handlePinterestDownload(ctx) {
   }
 }
 
-export async function handleMusicDownload(ctx) {
+async function handleMusicDownload(ctx) {
   const { args, sender, sock, remoteJid } = ctx
   const query = args.join(' ')
 
@@ -384,7 +388,7 @@ export async function handleMusicDownload(ctx) {
   }
 }
 
-export async function handleVideoDownload(ctx) {
+async function handleVideoDownload(ctx) {
   const { args, sender, sock, remoteJid } = ctx
   const query = args.join(' ')
 
@@ -470,7 +474,7 @@ export async function handleVideoDownload(ctx) {
   }
 }
 
-export async function handleSpotifySearch(ctx) {
+async function handleSpotifySearch(ctx) {
   const { args, sender } = ctx
   const query = args.join(' ')
 
@@ -530,7 +534,7 @@ export async function handleSpotifySearch(ctx) {
   }
 }
 
-export async function handleTranslate(ctx) {
+async function handleTranslate(ctx) {
   const { args } = ctx
   const lang = args.pop()
   const text = args.join(' ')
@@ -565,7 +569,7 @@ export async function handleTranslate(ctx) {
   }
 }
 
-export async function handleWeather(ctx) {
+async function handleWeather(ctx) {
   const city = (ctx.args || []).join(' ')
 
   logDownload('INFO', 'WEATHER', 'Weather request', { city })
@@ -595,7 +599,7 @@ export async function handleWeather(ctx) {
   }
 }
 
-export async function handleQuote() {
+async function handleQuote() {
   logDownload('INFO', 'QUOTE', 'Quote request')
 
   try {
@@ -614,7 +618,7 @@ export async function handleQuote() {
   }
 }
 
-export async function handleFact() {
+async function handleFact() {
   logDownload('INFO', 'FACT', 'Fact request')
 
   try {
@@ -633,7 +637,7 @@ export async function handleFact() {
   }
 }
 
-export async function handleTriviaCommand() {
+async function handleTriviaCommand() {
   logDownload('INFO', 'TRIVIA', 'Trivia request')
 
   try {
@@ -652,7 +656,7 @@ export async function handleTriviaCommand() {
   }
 }
 
-export async function handleMemeCommand() {
+async function handleMemeCommand() {
   logDownload('INFO', 'MEME', 'Meme request')
 
   try {
@@ -671,7 +675,29 @@ export async function handleMemeCommand() {
   }
 }
 
-// Exportación por defecto
+// ============================================================
+// EXPORTACIONES - Todas las formas posibles de importación
+// ============================================================
+
+// Exportaciones nombradas individuales
+export {
+  handleTikTokDownload,
+  handleInstagramDownload,
+  handleFacebookDownload,
+  handleTwitterDownload,
+  handlePinterestDownload,
+  handleMusicDownload,
+  handleVideoDownload,
+  handleSpotifySearch,
+  handleTranslate,
+  handleWeather,
+  handleQuote,
+  handleFact,
+  handleTriviaCommand,
+  handleMemeCommand,
+}
+
+// Exportación por defecto como objeto
 export default {
   handleTikTokDownload,
   handleInstagramDownload,
