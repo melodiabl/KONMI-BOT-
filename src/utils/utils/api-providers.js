@@ -173,7 +173,6 @@ export const API_PROVIDERS = {
 
   youtube: [
     {
-      // Local, sin python: usa solo ytdl-core
       name: 'ytdl-core (local url)',
       method: 'LOCAL__YTDL_URL',
       url: (videoUrl, options = {}) => videoUrl,
@@ -244,7 +243,6 @@ export const API_PROVIDERS = {
 
   youtubeSearch: [
     {
-      // Búsqueda local con paquete JS yt-search (sin binarios)
       name: 'yt-search (local)',
       method: 'LOCAL__YTSEARCH',
       url: (query) => query,
@@ -361,9 +359,7 @@ export const API_PROVIDERS = {
       parse: (data) => {
         const track = data?.tracks?.items?.[0] || data
         if (!track?.name) return { success: false }
-        const artists = Array.isArray(track.artists)
-          ? track.artists.map(a => a?.name).filter(Boolean).join(', ')
-          : undefined
+        const artists = Array.isArray(track.artists) ? track.artists.map(a => a?.name).filter(Boolean).join(', ') : undefined
         const album = track.album || {}
         const cover = Array.isArray(album.images) && album.images.length ? album.images[0].url : undefined
         return {
@@ -466,6 +462,8 @@ export const API_PROVIDERS = {
   ]
 }
 
+/* ========== DO REQUEST & FALLBACK ========== */
+
 async function doRequest(provider, url, body, extraCtx) {
   logAPI('INFO', provider.name, `🔄 Attempting request`, {
     method: provider.method || 'GET',
@@ -503,19 +501,19 @@ async function doRequest(provider, url, body, extraCtx) {
     }
   }
 
-  // LOCAL__YTDL_URL (ytdl-core puro)
+  // LOCAL__YTDL_URL
   if (provider?.method === 'LOCAL__YTDL_URL') {
     try {
       logAPI('DEBUG', 'ytdl-core', 'Attempting ytdl-core download', { url })
-      const mod = await import('ytdl-core')
-      const ytdlLocal = mod.default || mod
-      const info = await ytdlLocal.getInfo(url)
+      const info = await ytdl.getInfo(url, {
+        requestOptions: { headers: { 'user-agent': DEFAULT_WEB_UA } }
+      })
 
       logAPI('DEBUG', 'ytdl-core', `Got info for video: ${info.videoDetails?.title}`)
 
       let chosen
       try {
-        chosen = ytdlLocal.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+        chosen = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
         logAPI('SUCCESS', 'ytdl-core', 'Format chosen: highestaudio')
       } catch (_) {
         chosen = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)?.[0]
@@ -523,7 +521,6 @@ async function doRequest(provider, url, body, extraCtx) {
       }
 
       const direct = chosen?.url
-
       if (!direct) {
         logAPI('ERROR', 'ytdl-core', 'No direct URL found')
         throw new Error('No direct URL')
@@ -544,7 +541,7 @@ async function doRequest(provider, url, body, extraCtx) {
     }
   }
 
-  // HTTP requests
+  // HTTP requests normales
   let dynHeaders = {}
   if (typeof provider?.headers === 'function') {
     try {
@@ -566,9 +563,148 @@ async function doRequest(provider, url, body, extraCtx) {
   return http.get(url, { headers: dynHeaders, timeout: provider?.timeoutMs || 10000 })
 }
 
-/**
- * Intenta descargar desde múltiples APIs con fallback automático
- */
+/* ========== DESCARGA YOUTUBE COMO BUFFER (SOLO YTDL-CORE) ========== */
+
+async function downloadYouTubeAsBuffer(videoUrl, type = 'audio', onProgress) {
+  try {
+    logAPI('INFO', 'ytdl-buffer', 'Starting ytdl-core buffer download', {
+      url: videoUrl,
+      type
+    })
+
+    const info = await ytdl.getInfo(videoUrl, {
+      requestOptions: {
+        headers: { 'user-agent': DEFAULT_WEB_UA }
+      }
+    })
+
+    logAPI('DEBUG', 'ytdl-buffer', 'Got video info', {
+      title: info.videoDetails?.title,
+      duration: info.videoDetails?.lengthSeconds,
+      formats: info.formats?.length
+    })
+
+    let chosen
+
+    if (type === 'audio') {
+      try {
+        chosen = ytdl.chooseFormat(info.formats, {
+          quality: 'highestaudio',
+          filter: 'audioonly'
+        })
+        logAPI('SUCCESS', 'ytdl-buffer', 'Audio format chosen')
+      } catch (_) {
+        chosen = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)?.[0]
+        logAPI('WARN', 'ytdl-buffer', 'Using fallback audio format')
+      }
+    } else {
+      try {
+        chosen = ytdl.chooseFormat(info.formats, { quality: 'highest' })
+        logAPI('SUCCESS', 'ytdl-buffer', 'Video format chosen')
+      } catch (_) {
+        chosen = (info.formats || []).filter((f) => f.hasVideo)?.[0]
+        logAPI('WARN', 'ytdl-buffer', 'Using fallback video format')
+      }
+    }
+
+    if (!chosen?.url) {
+      logAPI('ERROR', 'ytdl-buffer', 'No valid format found')
+      throw new Error('No se encontró formato válido')
+    }
+
+    const totalBytes = Number(chosen.contentLength || chosen.clen || 0) || 0
+
+    logAPI('INFO', 'ytdl-buffer', 'Starting stream download', {
+      quality: chosen.quality,
+      container: chosen.container,
+      totalBytes: totalBytes || 'desconocido'
+    })
+
+    const stream = ytdl.downloadFromInfo(info, { format: chosen })
+    const chunks = []
+
+    let downloadedBytes = 0
+    let lastNotified = 0
+
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk) => {
+        chunks.push(chunk)
+        downloadedBytes += chunk.length
+
+        const now = Date.now()
+
+        // Notificar como máximo ~1 vez por segundo
+        if (typeof onProgress === 'function' && now - lastNotified > 1000) {
+          lastNotified = now
+
+          let percent = null
+          if (totalBytes > 0) {
+            percent = Math.max(
+              0,
+              Math.min(100, (downloadedBytes / totalBytes) * 100)
+            )
+          }
+
+          onProgress({
+            percent,
+            downloadedBytes,
+            totalBytes,
+            status: 'descargando'
+          })
+        }
+      })
+
+      stream.on('end', () => {
+        const buffer = Buffer.concat(chunks)
+
+        logAPI('SUCCESS', 'ytdl-buffer', 'Download completed', {
+          bufferSize: `${(buffer.length / 1024 / 1024).toFixed(2)} MB`,
+          downloadedBytes,
+          totalBytes,
+          title: info.videoDetails?.title
+        })
+
+        // Aseguramos 100% al final
+        if (typeof onProgress === 'function') {
+          onProgress({
+            percent: 100,
+            downloadedBytes,
+            totalBytes,
+            status: 'completado'
+          })
+        }
+
+        resolve({
+          success: true,
+          download: buffer,
+          quality: chosen.quality,
+          title: info.videoDetails?.title,
+          duration: info.videoDetails?.lengthSeconds
+        })
+      })
+
+      stream.on('error', (err) => {
+        logAPI('ERROR', 'ytdl-buffer', 'Stream error', {
+          error: err.message,
+          statusCode: err?.statusCode
+        })
+
+        reject(new Error('Error descargando: ' + err.message))
+      })
+    })
+  } catch (error) {
+    logAPI('ERROR', 'ytdl-buffer', 'Complete failure', {
+      error: error.message,
+      statusCode: error?.statusCode
+    })
+
+    logger.error('Error en downloadYouTubeAsBuffer:', error.message)
+    throw error
+  }
+}
+
+/* ========== FALLBACK GENÉRICO ========== */
+
 export async function downloadWithFallback(type, param, options = {}, onProgress) {
   let providers = API_PROVIDERS[type]
   if (!providers?.length) {
@@ -643,121 +779,14 @@ export async function downloadWithFallback(type, param, options = {}, onProgress
 
   logAPI('ERROR', 'FALLBACK', `❌ ALL PROVIDERS FAILED for ${type}`, {
     totalProviders: providers.length,
-    errors
+    errors: errors
   })
 
   throw new Error('Todos los proveedores fallaron:\n' + errors.join('\n'))
 }
 
-/**
- * Descarga audio/video de YouTube usando ytdl-core directamente como Buffer (sin python)
- */
-async function downloadYouTubeAsBuffer(videoUrl, type = 'audio', onProgress) {
-  try {
-    logAPI('INFO', 'ytdl-buffer', 'Starting ytdl-core buffer download', {
-      url: videoUrl,
-      type
-    })
+/* ========== EXPORTS DE ALTO NIVEL ========== */
 
-    const info = await ytdl.getInfo(videoUrl, {
-      requestOptions: {
-        headers: { 'user-agent': DEFAULT_WEB_UA }
-      }
-    })
-
-    logAPI('DEBUG', 'ytdl-buffer', 'Got video info', {
-      title: info.videoDetails?.title,
-      duration: info.videoDetails?.lengthSeconds,
-      formats: info.formats?.length
-    })
-
-    let chosen
-
-    if (type === 'audio') {
-      try {
-        chosen = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
-        logAPI('SUCCESS', 'ytdl-buffer', 'Audio format chosen')
-      } catch (_) {
-        chosen = (info.formats || []).filter((f) => f.hasAudio && !f.hasVideo)?.[0]
-        logAPI('WARN', 'ytdl-buffer', 'Using fallback audio format')
-      }
-    } else {
-      try {
-        chosen = ytdl.chooseFormat(info.formats, { quality: 'highest' })
-        logAPI('SUCCESS', 'ytdl-buffer', 'Video format chosen')
-      } catch (_) {
-        chosen = (info.formats || []).filter((f) => f.hasVideo)?.[0]
-        logAPI('WARN', 'ytdl-buffer', 'Using fallback video format')
-      }
-    }
-
-    if (!chosen?.url) {
-      logAPI('ERROR', 'ytdl-buffer', 'No valid format found')
-      throw new Error('No se encontró formato válido')
-    }
-
-    logAPI('INFO', 'ytdl-buffer', 'Starting stream download', {
-      quality: chosen.quality,
-      container: chosen.container
-    })
-
-    const stream = ytdl.downloadFromInfo(info, { format: chosen })
-    const chunks = []
-    let totalChunks = 0
-
-    return new Promise((resolve, reject) => {
-      stream.on('data', (chunk) => {
-        chunks.push(chunk)
-        totalChunks++
-
-        if (totalChunks % 50 === 0) {
-          logAPI('DEBUG', 'ytdl-buffer', `Downloaded ${totalChunks} chunks`)
-        }
-
-        if (typeof onProgress === 'function') {
-          onProgress({ percent: (chunks.length % 100) })
-        }
-      })
-
-      stream.on('end', () => {
-        const buffer = Buffer.concat(chunks)
-
-        logAPI('SUCCESS', 'ytdl-buffer', 'Download completed', {
-          bufferSize: `${(buffer.length / 1024 / 1024).toFixed(2)} MB`,
-          totalChunks,
-          title: info.videoDetails?.title
-        })
-
-        resolve({
-          success: true,
-          download: buffer,
-          quality: chosen.quality,
-          title: info.videoDetails?.title,
-          duration: info.videoDetails?.lengthSeconds
-        })
-      })
-
-      stream.on('error', (err) => {
-        logAPI('ERROR', 'ytdl-buffer', 'Stream error', {
-          error: err.message,
-          statusCode: err?.statusCode
-        })
-
-        reject(new Error('Error descargando: ' + err.message))
-      })
-    })
-  } catch (error) {
-    logAPI('ERROR', 'ytdl-buffer', 'Complete failure', {
-      error: error.message,
-      statusCode: error?.statusCode
-    })
-
-    logger.error('Error en downloadYouTubeAsBuffer:', error.message)
-    throw error
-  }
-}
-
-// Exportaciones
 export async function searchYouTubeMusic(query) {
   logAPI('INFO', 'EXPORT', 'searchYouTubeMusic called', { query: query?.substring(0, 50) })
   return downloadWithFallback('youtubeSearch', query)
@@ -849,4 +878,3 @@ export default {
   downloadYouTube,
   searchSpotify
 }
-
