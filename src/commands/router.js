@@ -215,7 +215,7 @@ function parseCommand(text) {
   const prefixes = Array.from(new Set(((process.env.CMD_PREFIXES || '/!.#?$~').split('')).concat(['/','!','.'])))
   const s = raw.replace(/^\s+/, '')
 
-  // Handle button IDs that are already command-like (e.g., "/help", "btn_1")
+  // Handle button IDs that are already command-like (e.g., "/help")
   if (s.startsWith('/')) {
     const parts = s.slice(1).trim().split(/\s+/)
     return { command: `/${(parts.shift() || '').toLowerCase()}`, args: parts }
@@ -228,26 +228,20 @@ function parseCommand(text) {
     return { command: `/${token}`, args: parts }
   }
 
-  // Handle direct button IDs that might be commands without prefix
-  if (s.includes('/') || s.startsWith('btn_') || s.startsWith('copy_') || s.startsWith('todo_')) {
-    // If it looks like a command path, treat it as such
-    if (s.startsWith('btn_')) {
-      return { command: '', args: [] } // Button IDs without command info
+  // Handle special button IDs without slash prefix
+  if (s.startsWith('btn_')) {
+    return { command: '', args: [] }
+  }
+  if (s.startsWith('copy_')) {
+    return { command: '/handlecopy', args: [s] }
+  }
+  if (s.startsWith('todo_')) {
+    const parts = s.split('_')
+    if (parts.length >= 3) {
+      const action = parts[1]
+      const listId = parts.slice(2).join('_')
+      return { command: `/todo-${action}`, args: [listId] }
     }
-    // Handle special button commands
-    if (s.startsWith('copy_')) {
-      return { command: '/handlecopy', args: [s] }
-    }
-    if (s.startsWith('todo_')) {
-      // Parse todo commands like todo_mark_listid or todo_add_listid
-      const parts = s.split('_')
-      if (parts.length >= 3) {
-        const action = parts[1] // mark, unmark, delete, add
-        const listId = parts.slice(2).join('_')
-        return { command: `/todo-${action}`, args: [listId] }
-      }
-    }
-    return { command: s.toLowerCase(), args: [] }
   }
 
   return { command: '', args: [] }
@@ -765,4 +759,3 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
-
