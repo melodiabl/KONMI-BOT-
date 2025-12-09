@@ -499,39 +499,51 @@ async function sendResult(sock, jid, result, ctx) {
   }
   // Lista interactiva - Formato nativo de @itsukichan/baileys
   if (result.type === 'list' && Array.isArray(result.sections)) {
+    const isGroupChat = typeof targetJid === 'string' && targetJid.endsWith('@g.us');
     const mapSections = (result.sections || []).map((sec) => ({
       title: sec.title || undefined,
       rows: (sec.rows || []).map((r) => ({
-        title: r.title || r.text || 'Opción',
+        title: r.title || r.text || 'Opcion',
         description: r.description || undefined,
         rowId: r.rowId || r.id || r.command || r.url || r.text || 'noop',
       })),
     }))
 
-    // Formato correcto para @itsukichan/baileys: listMessage
+    if (isGroupChat) {
+      const lines = [];
+      lines.push(result.text || result.description || result.title || 'Menu');
+      for (const sec of mapSections) {
+        lines.push('
+' + (sec.title || ''));
+        for (const row of (sec.rows || [])) lines.push('- ' + row.title + ' -> ' + row.rowId);
+      }
+      await safeSend(sock, targetJid, { text: lines.join('\n'), footer: result.footer }, opts);
+      return;
+    }
+
     const listPayload = {
-      text: result.text || result.description || '📋 Menú disponible',
+      text: result.text || result.description || 'Menu disponible',
       buttonText: result.buttonText || 'Ver opciones',
       sections: mapSections,
-      title: result.title || '📋 Menú',
+      title: result.title || 'Menu',
       footer: result.footer,
-    }
+    };
 
     if (await safeSend(sock, targetJid, listPayload, opts)) {
-      return
+      return;
     }
 
-    // Fallback a texto si falla la lista
-    const lines = []
-    lines.push(result.text || 'Menú')
+    const lines = [];
+    lines.push(result.text || 'Menu');
     for (const sec of result.sections) {
-      lines.push(`\n— ${sec.title || ''}`)
-      for (const row of (sec.rows || [])) lines.push(`• ${row.title} -> ${row.rowId}`)
+      lines.push('
+' + (sec.title || ''));
+      for (const row of (sec.rows || [])) lines.push('- ' + row.title + ' -> ' + row.rowId);
     }
-    await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
-    return
+    await safeSend(sock, targetJid, { text: lines.join('\n') }, opts);
+    return;
   }
-  // Contenido crudo (interactiveMessage / nativeFlow)
+// Contenido crudo (interactiveMessage / nativeFlow)
   if (result.type === 'content' && result.content && typeof result.content === 'object') {
     const payload = { ...result.content }
     try { if (payload.viewOnceMessage?.message?.interactiveMessage) payload.viewOnceMessage.message.interactiveMessage.contextInfo = { ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo||{}), mentionedJid: result.mentions } } catch {}
