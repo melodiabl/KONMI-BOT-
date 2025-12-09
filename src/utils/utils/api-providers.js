@@ -166,44 +166,7 @@ export const API_PROVIDERS = {
       url: (videoUrl, options = {}) => ({ url: videoUrl, __ytdlpType: options.type || 'audio' }),
       parse: (data) => data
     },
-    // Fallback final local: ytdl-core (obtiene URL directa del mejor audio)
-    {
-      name: 'ytdl-core (local url)',
-      method: 'LOCAL__YTDL_URL',
-      url: (videoUrl, options = {}) => videoUrl,
-      parse: (data) => data
-    },
-    {
-      name: 'Piped.video',
-      timeoutMs: 5000,
-      url: (videoUrl, options = {}) => {
-        try {
-          const u = new URL(videoUrl)
-          let vid = u.searchParams.get('v')
-          if (!vid && /youtu\.be$/i.test(u.hostname)) {
-            const p = u.pathname.split('/').filter(Boolean)
-            if (p[0]) vid = p[0]
-          }
-          if (!vid) {
-            const m = (videoUrl || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&]|$)/)
-            vid = m ? m[1] : null
-          }
-          if (!vid) throw new Error('videoId no encontrado')
-          return { url: `https://piped.video/api/v1/streams/${vid}`, __yt_requested_type: options.type || 'video' }
-        } catch (e) { throw e }
-      },
-      parse: (data, extra) => {
-        const want = (extra && extra.__yt_requested_type) || 'video'
-        if (want === 'audio') {
-          const a = Array.isArray(data?.audioStreams) ? data.audioStreams : []
-          const best = a?.[0]?.url || null
-          return { success: Boolean(best), download: best, quality: a?.[0]?.quality }
-        }
-        const v = Array.isArray(data?.videoStreams) ? data.videoStreams : []
-        const bestVideo = v?.[0]?.url || data?.hls || null
-        return { success: Boolean(bestVideo), download: bestVideo, quality: v?.[0]?.quality }
-      }
-    },
+    // Piped deshabilitado temporalmente por errores de provider
     {
       name: 'Vreden',
       url: (videoUrl, options = {}) => {
