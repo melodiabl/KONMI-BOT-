@@ -935,6 +935,11 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   ).trim();
 
   const isCommand = /^[\\/!.#?$~]/.test(rawText);
+  const cmdFirst = isCommand ? rawText.split(/\s+/)[0] : "";
+  const normalizedCmd = cmdFirst ? (cmdFirst.startsWith("/") ? cmdFirst.toLowerCase() : `/${cmdFirst.slice(1).toLowerCase()}`) : "";
+  const ADMIN_COMMANDS = new Set([
+    '/bot','/kick','/promote','/demote','/ban','/unban','/warn','/mute','/unmute','/lock','/unlock','/admins','/admin','/group'
+  ]);
   const messageType = isGroup ? 'GROUP' : 'DM';
   const messageSource = fromMe ? 'FROM_BOT' : 'FROM_USER';
 
@@ -1020,21 +1025,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     botNumber
   });
 
-  const rawTextBlock = (message?.message || {});
-  const rawText = (
-    rawTextBlock.conversation ||
-    rawTextBlock.extendedTextMessage?.text ||
-    rawTextBlock.imageMessage?.caption ||
-    rawTextBlock.videoMessage?.caption ||
-    ''
-  ).trim();
-  const isCommand = /^[\/!.#?$~]/.test(rawText);
-  const cmdFirst = isCommand ? rawText.split(/\s+/)[0] : "";
-  const normalizedCmd = cmdFirst ? (cmdFirst.startsWith("/") ? cmdFirst.toLowerCase() : `/${cmdFirst.slice(1).toLowerCase()}`) : "";
-  const ADMIN_COMMANDS = new Set([
-    '/bot','/kick','/promote','/demote','/ban','/unban','/warn','/mute','/unmute','/lock','/unlock','/admins','/admin','/group'
-  ]);
-
   let isAdmin = false;
   let isBotAdmin = false;
   let groupMetadata = null;
@@ -1052,7 +1042,8 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     });
   }
 
-  const rawTextBlock = (message?.message || {});
+  const shouldFetchMetadata = isCommand && ADMIN_COMMANDS.has(normalizedCmd);
+
 if (isGroup) {
     try {
       const shouldFetchMetadata = isCommand && ADMIN_COMMANDS.has(normalizedCmd);
