@@ -1,5 +1,5 @@
 // src/utils/utils/progress-notifier.js
-import logger from '../config/logger.js'
+import logger from '../../config/logger.js'
 
 /**
  * Notificador de progreso para descargas (YouTube, Spotify, etc.)
