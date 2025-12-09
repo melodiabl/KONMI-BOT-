@@ -944,8 +944,24 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   let isBotAdmin = false;
   let groupMetadata = null;
 
+  // Texto bruto para decidir si vale la pena consultar metadata
+  const msgObj = message?.message || {};
+  const rawText = (
+    msgObj.conversation ||
+    msgObj.extendedTextMessage?.text ||
+    msgObj.imageMessage?.caption ||
+    msgObj.videoMessage?.caption ||
+    ''
+  ).trim();
+  const isCommandLikely = /^[\\/!.#?$~]/.test(rawText);
+
   if (isGroup) {
     try {
+      const shouldFetchMetadata = isCommandLikely || fromMe || isOwner;
+      if (!shouldFetchMetadata) {
+        throw new Error('skip_metadata_fetch');
+      }
+
       groupMetadata = await s.groupMetadata(remoteJid);
 
       console.log(`[ADMIN-CHECK] Grupo: ${remoteJid}`);
@@ -1043,7 +1059,9 @@ export async function handleMessage(message, customSock = null, prefix = '', run
       }
     } catch (e) {
       const msg = e?.message || '';
-      if (msg.includes('rate-overlimit')) {
+      if (msg === 'skip_metadata_fetch') {
+        // no-op: no era necesario consultar metadata para mensajes no comando
+      } else if (msg.includes('rate-overlimit')) {
         console.warn(`[ADMIN-CHECK] rate-overlimit al obtener metadata de grupo (${remoteJid}), se omite chequeo admin`);
       } else {
         console.error(`[ADMIN-CHECK] Error getting group metadata: ${msg}`);
