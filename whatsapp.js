@@ -23,10 +23,51 @@ const DEFAULT_AUTH_DIR = path.join(__dirname, 'session_data', 'baileys_full');
 /* ===== Código personalizado KONMIBOT ===== */
 const CUSTOM_PAIRING_CODE = 'KONMIBOT'
 
+/* ===== Sistema de Logs Mejorado ===== */
+const LOG_LEVELS = {
+  DEBUG: '🔍',
+  INFO: 'ℹ️',
+  WARN: '⚠️',
+  ERROR: '❌',
+  SUCCESS: '✅',
+  ADMIN: '👑',
+  GROUP: '👥',
+  DM: '💬',
+  COMMAND: '⚡',
+  METADATA: '📊'
+}
+
+function formatLog(level, source, message, data = null) {
+  const timestamp = new Date().toISOString()
+  const prefix = LOG_LEVELS[level] || '•'
+  let logMsg = `${prefix} [${timestamp}] [${source}] ${message}`
+
+  if (data) {
+    logMsg += '\n' + JSON.stringify(data, null, 2)
+  }
+
+  return logMsg
+}
+
+function logMessage(level, source, message, data = null) {
+  const formattedLog = formatLog(level, source, message, data)
+
+  switch (level) {
+    case 'ERROR':
+      console.error(formattedLog)
+      break
+    case 'WARN':
+      console.warn(formattedLog)
+      break
+    default:
+      console.log(formattedLog)
+  }
+}
+
 /* ===== Utils mínimas ===== */
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
-export const sanitizePhoneNumberInput = (v) => { // <-- EXPORTADO para index.js
+export const sanitizePhoneNumberInput = (v) => {
   const digits = onlyDigits(v)
   return digits || null
 }
@@ -56,18 +97,18 @@ async function loadBaileys() {
         Browsers: M?.Browsers || mod?.Browsers,
         DisconnectReason: M?.DisconnectReason || mod?.DisconnectReason,
         jidDecode: M?.jidDecode || mod?.jidDecode,
-        jidNormalizedUser: M?.jidNormalizedUser || mod?.jidNormalizedUser, // ✅ AÑADIDO
+        jidNormalizedUser: M?.jidNormalizedUser || mod?.jidNormalizedUser,
         loadedName: name,
       };
       if (!api.makeWASocket || !api.useMultiFileAuthState) {
         throw new Error(`The package "${name}" does not expose the expected API.`);
       }
-      console.log(`✅ Baileys loaded: ${name}`);
+      logMessage('SUCCESS', 'BAILEYS', `Baileys loaded: ${name}`);
       __loaded = api;
       return api;
     } catch (e) {
       lastErr = e;
-      console.warn(`⚠️ Could not load ${name}: ${e?.message || e}`);
+      logMessage('WARN', 'BAILEYS', `Could not load ${name}: ${e?.message || e}`);
     }
   }
 
@@ -79,19 +120,19 @@ async function resolveWaVersion(fetchLatestBaileysVersion) {
   if (raw) {
     const parts = raw.split(/[.,\s]+/).map(n => parseInt(n, 10)).filter(n => !Number.isNaN(n)).slice(0, 3)
     if (parts.length === 3) {
-      console.log(`ℹ️ Using WA version from env: ${parts.join('.')}`);
+      logMessage('INFO', 'WA-VERSION', `Using WA version from env: ${parts.join('.')}`);
       return parts;
     }
   }
   try {
     const { version, isLatest } = await fetchLatestBaileysVersion()
-    console.log(`ℹ️ Fetched WA version: ${version.join('.')}, isLatest: ${isLatest}`);
+    logMessage('INFO', 'WA-VERSION', `Fetched WA version: ${version.join('.')}, isLatest: ${isLatest}`);
     if (Array.isArray(version) && version.length === 3) return version
   } catch (e) {
-    console.warn(`⚠️ Could not fetch latest WA version: ${e?.message || e}. Using fallback.`);
+    logMessage('WARN', 'WA-VERSION', `Could not fetch latest WA version: ${e?.message || e}. Using fallback.`);
   }
   const fallbackVersion = [2, 3000, 1027934701]
-  console.log(`ℹ️ Using fallback WA version: ${fallbackVersion.join('.')}`);
+  logMessage('INFO', 'WA-VERSION', `Using fallback WA version: ${fallbackVersion.join('.')}`);
   return fallbackVersion
 }
 
@@ -114,26 +155,26 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     const attemptStart = Date.now()
     try {
-      console.log(`[import-helper] import attempt ${attempt}/${retries} for ${resolvedPath} (timeout ${timeoutMs}ms)`)
+      logMessage('DEBUG', 'IMPORT', `import attempt ${attempt}/${retries} for ${resolvedPath} (timeout ${timeoutMs}ms)`);
       const mod = await Promise.race([
         import(resolvedPath),
         new Promise((_, rej) => setTimeout(() => rej(new Error('import timeout')), timeoutMs))
       ])
-      console.log(`[import-helper] import ok (${attempt}/${retries}) path=${resolvedPath} took=${Date.now()-attemptStart}ms`)
+      logMessage('SUCCESS', 'IMPORT', `import ok (${attempt}/${retries}) path=${resolvedPath} took=${Date.now()-attemptStart}ms`);
       return mod
     } catch (err) {
-      console.error(`[import-helper] import failed attempt ${attempt}/${retries} for ${resolvedPath}:`, err && (err.message || err))
+      logMessage('ERROR', 'IMPORT', `import failed attempt ${attempt}/${retries} for ${resolvedPath}: ${err?.message || err}`);
       try {
         if (resolvedPath.startsWith('file://')) {
           const filePath = new URL(resolvedPath).pathname
           if (fs.existsSync(filePath)) {
             const st = fs.statSync(filePath)
-            console.log(`[import-helper] file size: ${st.size} bytes (${filePath})`)
+            logMessage('DEBUG', 'IMPORT', `file size: ${st.size} bytes (${filePath})`);
           }
         } else {
           if (fs.existsSync(modulePath)) {
             const st = fs.statSync(modulePath)
-            console.log(`[import-helper] file size: ${st.size} bytes (${modulePath})`)
+            logMessage('DEBUG', 'IMPORT', `file size: ${st.size} bytes (${modulePath})`);
           }
         }
       } catch (e) {}
@@ -148,8 +189,8 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
 
 /* ===== Variables globales ===== */
 let sock = null
-let jidDecode; // Variable para almacenar la función jidDecode de Baileys
-let jidNormalizedUser; // ✅ AÑADIDO: Variable para jidNormalizedUser
+let jidDecode;
+let jidNormalizedUser;
 const groupSubjectCache = new Map()
 let connectionStatus = 'disconnected'
 let qrCode = null
@@ -187,6 +228,8 @@ export async function checkSessionState(authPath = null) {
     const effectivePath = authPath || path.resolve(process.env.AUTH_DIR || DEFAULT_AUTH_DIR);
     const credsPath = path.join(effectivePath, 'creds.json');
     const hasCreds = fs.existsSync(credsPath);
+
+    logMessage('INFO', 'SESSION', `Checking session state at: ${effectivePath}`, { hasCreds });
 
     if (hasCreds) {
         return { hasCreds: true, authPath: effectivePath };
@@ -226,7 +269,7 @@ export async function getAvailableGroups() {
       participants: g.participants?.length || 0,
     }))
   } catch (e) {
-    console.error('[getAvailableGroups] error:', e && (e.message || e));
+    logMessage('ERROR', 'GROUPS', 'Error fetching groups', { error: e?.message || e });
     return []
   }
 }
@@ -255,15 +298,16 @@ export function setAuthMethod(method = 'qr', { phoneNumber } = {}) {
   }
 
   authMethod = normalizedMethod
+  logMessage('INFO', 'AUTH', `Auth method set to: ${normalizedMethod}`, { phoneNumber: pairingTargetNumber });
   return pairingTargetNumber
 }
 
 async function teardownSocket() {
   try {
     if (!sock) return
-    try { sock.ev?.removeAllListeners?.() } catch (e) { console.warn('[teardownSocket] removeAllListeners failed:', e && (e.message || e)) }
-    try { sock.ws?.close?.() } catch (e) { console.warn('[teardownSocket] ws.close failed:', e && (e.message || e)) }
-    try { sock.end?.() } catch (e) { console.warn('[teardownSocket] end failed:', e && (e.message || e)) }
+    try { sock.ev?.removeAllListeners?.() } catch (e) { logMessage('WARN', 'TEARDOWN', 'removeAllListeners failed', { error: e?.message }) }
+    try { sock.ws?.close?.() } catch (e) { logMessage('WARN', 'TEARDOWN', 'ws.close failed', { error: e?.message }) }
+    try { sock.end?.() } catch (e) { logMessage('WARN', 'TEARDOWN', 'end failed', { error: e?.message }) }
   } finally {
     sock = null
   }
@@ -280,7 +324,7 @@ async function safeSend(sock, jid, payload, opts = {}) {
       await sock.sendMessage(jid, payload, retry)
       return true
     } catch (e2) {
-      try { console.warn('[safeSend] failed twice:', e2?.message || e2) } catch {}
+      logMessage('WARN', 'SEND', 'Failed to send message after retry', { jid, error: e2?.message });
       return false
     }
   }
@@ -294,12 +338,12 @@ async function saveQrArtifacts(qr, outDir) {
     fs.writeFileSync(path.join(outDir, 'qr.txt'), qr)
     fs.writeFileSync(path.join(outDir, 'qr.dataurl.txt'), dataURL)
   } catch (e) {
-    console.warn('[saveQrArtifacts] primary method failed:', e && (e.message || e));
+    logMessage('WARN', 'QR', 'primary method failed', { error: e?.message });
     try {
       fs.mkdirSync(outDir, { recursive: true })
       fs.writeFileSync(path.join(outDir, 'qr.txt'), qr)
     } catch (e2) {
-      console.error('[saveQrArtifacts] fallback also failed:', e2 && (e2.message || e2));
+      logMessage('ERROR', 'QR', 'fallback also failed', { error: e2?.message });
     }
   }
 }
@@ -318,11 +362,11 @@ export async function connectToWhatsApp(
     Browsers,
     DisconnectReason,
     jidDecode: baileyJidDecode,
-    jidNormalizedUser: baileyJidNormalizedUser // ✅ AÑADIDO
+    jidNormalizedUser: baileyJidNormalizedUser
   } = baileysAPI;
 
   jidDecode = baileyJidDecode;
-  jidNormalizedUser = baileyJidNormalizedUser; // ✅ ALMACENAR
+  jidNormalizedUser = baileyJidNormalizedUser;
 
   savedAuthPath = path.resolve(authPath)
   fs.mkdirSync(savedAuthPath, { recursive: true })
@@ -342,12 +386,12 @@ export async function connectToWhatsApp(
   let wantPair = usePairingCode || authMethod === 'pairing';
 
   if (isRegistered) {
-    console.log('ℹ️ Sesión existente detectada. Usando credenciales guardadas.');
+    logMessage('INFO', 'CONNECT', 'Sesión existente detectada. Usando credenciales guardadas.');
     wantPair = false;
   }
 
   if (wantPair && !isRegistered && !runtimeNumber) {
-    console.log('⚠️ No se proporcionó número de teléfono. Cambiando a modo QR.');
+    logMessage('WARN', 'CONNECT', 'No se proporcionó número de teléfono. Cambiando a modo QR.');
     wantPair = false;
   }
 
@@ -359,8 +403,8 @@ export async function connectToWhatsApp(
   const QUIET = String(process.env.QUIET_LOGS || 'false').toLowerCase() === 'true';
   const infoLog = (...a) => { if (!QUIET) console.log(...a) };
 
-  infoLog(`📱 Modo de autenticación: ${finalAuthMethod.toUpperCase()}`);
-  if (finalAuthMethod === 'pairing') infoLog(`📞 Número objetivo: +${pairingTargetNumber}`);
+  logMessage('INFO', 'CONNECT', `Modo de autenticación: ${finalAuthMethod.toUpperCase()}`);
+  if (finalAuthMethod === 'pairing') logMessage('INFO', 'CONNECT', `Número objetivo: +${pairingTargetNumber}`);
 
   if (usePairingCode) {
     pairingCodeRequestedForSession = false;
@@ -396,19 +440,19 @@ export async function connectToWhatsApp(
   }
 
   if (!sock.ev || typeof sock.ev.on !== 'function') {
-    console.error('❌ Socket creado pero ev.on no está disponible');
+    logMessage('ERROR', 'SOCKET', 'Socket creado pero ev.on no está disponible');
     throw new Error('Socket event emitter not properly initialized');
   }
 
-  console.log('✅ Socket creado correctamente');
-  console.log('📡 Event emitter disponible:', typeof sock.ev.on === 'function');
+  logMessage('SUCCESS', 'SOCKET', 'Socket creado correctamente');
+  logMessage('INFO', 'SOCKET', 'Event emitter disponible: true');
 
   // ============ REGISTRAR EVENTOS ============
   try {
     sock.ev.on('creds.update', saveCreds);
-    console.log('✅ Evento creds.update registrado');
+    logMessage('SUCCESS', 'EVENTS', 'Evento creds.update registrado');
   } catch (e) {
-    console.error('❌ Error registrando creds.update:', e.message);
+    logMessage('ERROR', 'EVENTS', 'Error registrando creds.update', { error: e.message });
     throw e;
   }
 
@@ -416,14 +460,14 @@ export async function connectToWhatsApp(
   (async () => {
     try {
       const resolved = path.isAbsolute(routerPath) ? routerPath : path.resolve(__dirname, routerPath);
-      console.log('[startup] intentando pre-cargar router:', resolved);
+      logMessage('INFO', 'ROUTER', `Intentando pre-cargar router: ${resolved}`);
       const mod = await tryImportModuleWithRetries(resolved, { retries: 4, timeoutMs: 20000, backoffMs: 1500 });
       global.__APP_ROUTER_MODULE = mod;
       global.__APP_DISPATCH = mod?.dispatch || mod?.default?.dispatch || mod?.default || null;
-      if (global.__APP_DISPATCH) console.log('[startup] dispatch precargado correctamente');
-      else console.warn('[startup] router cargado pero no expone dispatch');
+      if (global.__APP_DISPATCH) logMessage('SUCCESS', 'ROUTER', 'dispatch precargado correctamente');
+      else logMessage('WARN', 'ROUTER', 'router cargado pero no expone dispatch');
     } catch (e) {
-      console.error('[startup] fallo al pre-cargar router:', e && (e.message || e));
+      logMessage('ERROR', 'ROUTER', 'fallo al pre-cargar router', { error: e?.message || e });
       global.__APP_ROUTER_MODULE = null;
       global.__APP_DISPATCH = null;
     }
@@ -438,7 +482,7 @@ export async function connectToWhatsApp(
       if (qr && finalAuthMethod === 'qr' && !isAuthenticated) {
         qrCode = qr;
         await saveQrArtifacts(qr, path.join(savedAuthPath, 'qr'));
-        infoLog('🟩 QR code generado - Escanea con tu WhatsApp');
+        logMessage('SUCCESS', 'QR', 'QR code generado - Escanea con tu WhatsApp');
       }
 
       if (finalAuthMethod === 'pairing' && !pairingCodeRequestedForSession && !!pairingTargetNumber && !isAuthenticated) {
@@ -451,13 +495,16 @@ export async function connectToWhatsApp(
 
         try {
           const number = onlyDigits(pairingTargetNumber);
-          if (!number) { infoLog('❌ Número inválido para vinculación.'); return; }
+          if (!number) {
+            logMessage('ERROR', 'PAIRING', 'Número inválido para vinculación.');
+            return;
+          }
           if (typeof sock.requestPairingCode !== 'function') {
-            infoLog('⚠️ La versión de Baileys no soporta códigos de emparejamiento.');
+            logMessage('WARN', 'PAIRING', 'La versión de Baileys no soporta códigos de emparejamiento.');
             return;
           }
 
-          infoLog(`📲 Solicitando código de vinculación para +${number} con código personalizado "${CUSTOM_PAIRING_CODE}"...`);
+          logMessage('INFO', 'PAIRING', `Solicitando código de vinculación para +${number} con código personalizado "${CUSTOM_PAIRING_CODE}"...`);
 
           const code = await sock.requestPairingCode(number, CUSTOM_PAIRING_CODE);
 
@@ -484,15 +531,14 @@ export async function connectToWhatsApp(
               console.log('║  2. Vincular con número de teléfono     ║');
               console.log('║  3. Ingresa el código de arriba         ║');
               console.log('╚═══════════════════════════════════════╝\n');
-            } else {
-              infoLog(`✅ Código de vinculación: ${grouped}`);
             }
+
+            logMessage('SUCCESS', 'PAIRING', `Código de vinculación generado: ${grouped}`);
           } else {
-            infoLog('⚠️ No se pudo generar el código.');
+            logMessage('WARN', 'PAIRING', 'No se pudo generar el código.');
           }
         } catch (e) {
-          infoLog(`❌ Error durante la solicitud de vinculación: ${e?.message || e}`);
-          console.error('[pairing] Stack trace:', e?.stack || e);
+          logMessage('ERROR', 'PAIRING', 'Error durante la solicitud de vinculación', { error: e?.message || e, stack: e?.stack });
         }
       }
 
@@ -502,7 +548,7 @@ export async function connectToWhatsApp(
         qrCode = null;
         qrCodeImage = null;
         pairingCodeRequestedForSession = false;
-        infoLog('✅ Bot conectado exitosamente');
+        logMessage('SUCCESS', 'CONNECTION', 'Bot conectado exitosamente');
 
         try {
           const normalizeJidDigits = (jid) => {
@@ -517,7 +563,7 @@ export async function connectToWhatsApp(
           if (botNum) {
             global.BOT_BASE_NUMBER = botNum;
             setPrimaryOwner(botNum, 'Owner (Base)');
-            infoLog(`📱 Bot número: ${botNum}`);
+            logMessage('INFO', 'BOT', `Bot número: ${botNum}`);
           }
         } catch (e) {
           logger.error(`Error setting primary owner: ${e.message}`);
@@ -527,9 +573,9 @@ export async function connectToWhatsApp(
           const mod = await import('./src/services/subbot-manager.js');
           const clean = await mod.cleanOrphanSubbots?.().catch(() => 0);
           const restored = await mod.restoreActiveSubbots?.().catch(() => 0);
-          infoLog(`♻️ Subbots auto-start: restaurados=${restored||0}, limpieza=${clean||0}`);
+          logMessage('INFO', 'SUBBOTS', `Auto-start: restaurados=${restored||0}, limpieza=${clean||0}`);
         } catch (e) {
-          console.warn('[autostart-subbots] failed:', e?.message || e);
+          logMessage('WARN', 'SUBBOTS', 'Failed to auto-start subbots', { error: e?.message });
         }
         return;
       }
@@ -546,30 +592,30 @@ export async function connectToWhatsApp(
 
         if (status === 428) {
           connectionStatus = 'waiting_pairing';
-          infoLog('⏳ Esperando que ingreses el código de vinculación en tu teléfono...');
+          logMessage('INFO', 'CONNECTION', 'Esperando que ingreses el código de vinculación en tu teléfono...');
           return;
         }
 
         if (shouldReconnect) {
           const backoff = 5000;
-          infoLog(`⚠️ Conexión cerrada (status ${status || '?'}: ${msg || 'sin detalles'}). Auto-reintentando en ${backoff}ms...`);
+          logMessage('WARN', 'CONNECTION', `Conexión cerrada (status ${status || '?'}: ${msg || 'sin detalles'}). Auto-reintentando en ${backoff}ms...`);
 
           setTimeout(() => {
             connectToWhatsApp(savedAuthPath, false, null).catch((e) => {
-              console.error('[reconnect] fallo al reconectar:', e && (e.message || e));
+              logMessage('ERROR', 'RECONNECT', 'Fallo al reconectar', { error: e?.message });
             });
           }, backoff);
         } else {
-          infoLog('❌ Sesión cerrada permanentemente (LoggedOut/401/403). Por favor, inicia sesión de nuevo.');
+          logMessage('ERROR', 'CONNECTION', 'Sesión cerrada permanentemente (LoggedOut/401/403). Por favor, inicia sesión de nuevo.');
           qrCode = null;
           qrCodeImage = null;
         }
         return;
       }
     });
-    console.log('✅ Evento connection.update registrado');
+    logMessage('SUCCESS', 'EVENTS', 'Evento connection.update registrado');
   } catch (e) {
-    console.error('❌ Error registrando connection.update:', e.message);
+    logMessage('ERROR', 'EVENTS', 'Error registrando connection.update', { error: e.message });
     throw e;
   }
 
@@ -579,7 +625,10 @@ export async function connectToWhatsApp(
       let mgr = null
       const ensureMgr = async () => {
         if (mgr) return mgr
-try { mgr = await import('./src/services/subbot-manager.js') } catch (e) { console.error('[ensureMgr] import failed:', e && (e.message || e)); mgr = null }
+        try { mgr = await import('./src/services/subbot-manager.js') } catch (e) {
+          logMessage('ERROR', 'MANAGER', 'import failed', { error: e?.message });
+          mgr = null
+        }
         return mgr
       }
       const ignoreGating = String(process.env.BOT_IGNORE_GATING || 'true').toLowerCase() === 'true'
@@ -624,7 +673,7 @@ try { mgr = await import('./src/services/subbot-manager.js') } catch (e) { conso
               const on = await mm.isBotGloballyActive();
               if (!on && !fromMe && !bypassCmd) continue;
             } catch (e) {
-              console.error('[gating] isBotGloballyActive failed:', e && (e.message || e));
+              logMessage('ERROR', 'GATING', 'isBotGloballyActive failed', { error: e?.message });
             }
           }
           if (!ignoreGating && remoteJid.endsWith('@g.us') && mm && typeof mm.isBotActiveInGroup === 'function') {
@@ -632,15 +681,15 @@ try { mgr = await import('./src/services/subbot-manager.js') } catch (e) { conso
               const ok = await mm.isBotActiveInGroup('main', remoteJid);
               if (!ok && !fromMe && !bypassCmd) continue;
             } catch (e) {
-              console.error('[gating] isBotActiveInGroup failed:', e && (e.message || e));
+              logMessage('ERROR', 'GATING', 'isBotActiveInGroup failed', { error: e?.message });
             }
           }
 
           try {
-const { logIncomingMessage } = await import('./src/utils/utils/wa-logging.js');
+            const { logIncomingMessage } = await import('./src/utils/utils/wa-logging.js');
             await logIncomingMessage(m);
           } catch (e) {
-            console.warn('[wa-logging] logIncomingMessage failed:', e && (e.message || e));
+            logMessage('WARN', 'LOGGING', 'logIncomingMessage failed', { error: e?.message });
           }
 
           const isGroup = remoteJid.endsWith('@g.us');
@@ -702,19 +751,19 @@ const { logIncomingMessage } = await import('./src/utils/utils/wa-logging.js');
                 }
               }
             } catch (e) {
-              logger.warn(`[group-enforcers] error: ${e?.message || e}`);
+              logMessage('WARN', 'GROUP-ENFORCERS', 'Error applying group rules', { error: e?.message });
             }
           }
 
           await handleMessage(m, sock, '[MAIN]')
         } catch (e) {
-          console.error('[messages.upsert] outer handler error:', e && (e.message || e));
+          logMessage('ERROR', 'MESSAGE-HANDLER', 'outer handler error', { error: e?.message || e });
         }
       }
     });
-    console.log('✅ Evento messages.upsert registrado');
+    logMessage('SUCCESS', 'EVENTS', 'Evento messages.upsert registrado');
   } catch (e) {
-    console.error('❌ Error registrando messages.upsert:', e.message);
+    logMessage('ERROR', 'EVENTS', 'Error registrando messages.upsert', { error: e.message });
     throw e;
   }
 
@@ -740,24 +789,24 @@ const { logIncomingMessage } = await import('./src/utils/utils/wa-logging.js');
           }
         }
       } catch (e) {
-        logger.error(`Error welcoming new participants: ${e.message}`);
+        logMessage('ERROR', 'WELCOME', 'Error welcoming new participants', { error: e.message });
       }
     });
-    console.log('✅ Evento group-participants.update registrado');
+    logMessage('SUCCESS', 'EVENTS', 'Evento group-participants.update registrado');
   } catch (e) {
-    console.error('❌ Error registrando group-participants.update:', e.message);
+    logMessage('ERROR', 'EVENTS', 'Error registrando group-participants.update', { error: e.message });
     throw e;
   }
 
   // Adjuntar método personalizado
   try {
     sock.getCurrentPairingInfo = getCurrentPairingInfo;
-    console.log('✅ Método getCurrentPairingInfo adjuntado');
+    logMessage('SUCCESS', 'SOCKET', 'Método getCurrentPairingInfo adjuntado');
   } catch (e) {
-    console.warn('[attach] setting getCurrentPairingInfo failed:', e && (e.message || e));
+    logMessage('WARN', 'SOCKET', 'setting getCurrentPairingInfo failed', { error: e?.message });
   }
 
-  console.log('✅ Socket completamente inicializado');
+  logMessage('SUCCESS', 'SOCKET', 'Socket completamente inicializado');
   return sock
 }
 
@@ -773,14 +822,16 @@ export async function connectWithPairingCode(phoneNumber, authPath = null) {
       fs.rmSync(effective, { recursive: true, force: true })
     }
   } catch (e) {
-    console.warn('[connectWithPairingCode] cleaning old auth failed:', e && (e.message || e));
+    logMessage('WARN', 'PAIRING', 'cleaning old auth failed', { error: e?.message });
   }
-  try { fs.mkdirSync(effective, { recursive: true }) } catch (e) { console.warn('[connectWithPairingCode] mkdir failed:', e && (e.message || e)) }
+  try { fs.mkdirSync(effective, { recursive: true }) } catch (e) {
+    logMessage('WARN', 'PAIRING', 'mkdir failed', { error: e?.message });
+  }
 
   pairingTargetNumber = normalized
   authMethod = 'pairing'
 
-  console.log(`🔐 Usando código personalizado: ${CUSTOM_PAIRING_CODE}`)
+  logMessage('INFO', 'PAIRING', `Usando código personalizado: ${CUSTOM_PAIRING_CODE}`);
 
   return await connectToWhatsApp(effective, true, normalized)
 }
@@ -822,7 +873,7 @@ export async function requestMainBotPairingCode() {
       return { success: false, message: 'Número de teléfono inválido' };
     }
 
-    console.log(`📲 Solicitando código de emparejamiento con "${CUSTOM_PAIRING_CODE}" para +${normalizedNumber}...`);
+    logMessage('INFO', 'PAIRING', `Solicitando código de emparejamiento con "${CUSTOM_PAIRING_CODE}" para +${normalizedNumber}...`);
 
     const code = await sock.requestPairingCode(normalizedNumber, CUSTOM_PAIRING_CODE);
 
@@ -855,13 +906,13 @@ export async function requestMainBotPairingCode() {
     }
 
   } catch (error) {
-    console.error('Error generando código de emparejamiento:', error);
+    logMessage('ERROR', 'PAIRING', 'Error generando código de emparejamiento', { error: error.message });
     return { success: false, message: `Error: ${error.message}` };
   }
 }
 
 // ==========================================================
-// ✅ FUNCIÓN CORREGIDA: handleMessage (JID Normalization)
+// ✅ FUNCIÓN CORREGIDA: handleMessage con LOGS DETALLADOS
 // ==========================================================
 export async function handleMessage(message, customSock = null, prefix = '', runtimeContext = {}) {
   const s = customSock || sock;
@@ -873,20 +924,42 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us');
   const fromMe = !!message?.key?.fromMe;
 
-  // ✅ CORRECCIÓN: Normalizar botJid usando jidNormalizedUser si está disponible
+  // Obtener información básica del mensaje
+  const msgObj = message?.message || {};
+  const rawText = (
+    msgObj.conversation ||
+    msgObj.extendedTextMessage?.text ||
+    msgObj.imageMessage?.caption ||
+    msgObj.videoMessage?.caption ||
+    ''
+  ).trim();
+
+  const isCommand = /^[\\/!.#?$~]/.test(rawText);
+  const messageType = isGroup ? 'GROUP' : 'DM';
+  const messageSource = fromMe ? 'FROM_BOT' : 'FROM_USER';
+
+  // ✅ LOG INICIAL DEL MENSAJE
+  logMessage('INFO', messageType, `Mensaje recibido [${messageSource}]`, {
+    remoteJid,
+    text: rawText.substring(0, 100),
+    isCommand,
+    messageId: message.key.id
+  });
+
+  // ✅ CORRECCIÓN: Normalizar botJid
   const botJidRaw = s.user?.id;
   let botJid = botJidRaw;
 
-  console.log(`[ADMIN-CHECK] botJidRaw inicial: ${botJidRaw}`);
-  console.log(`[ADMIN-CHECK] jidNormalizedUser disponible: ${typeof jidNormalizedUser === 'function'}`);
+  logMessage('DEBUG', 'ADMIN-CHECK', `botJidRaw inicial: ${botJidRaw}`);
+  logMessage('DEBUG', 'ADMIN-CHECK', `jidNormalizedUser disponible: ${typeof jidNormalizedUser === 'function'}`);
 
-  // Método 1: Usar jidNormalizedUser (el más confiable)
+  // Método 1: Usar jidNormalizedUser
   if (botJidRaw && typeof jidNormalizedUser === 'function') {
     try {
       botJid = jidNormalizedUser(botJidRaw);
-      console.log(`[ADMIN-CHECK] botJid normalizado con jidNormalizedUser: ${botJid}`);
+      logMessage('SUCCESS', 'ADMIN-CHECK', `botJid normalizado con jidNormalizedUser: ${botJid}`);
     } catch (e) {
-      console.log(`[ADMIN-CHECK] jidNormalizedUser falló: ${e.message}`);
+      logMessage('WARN', 'ADMIN-CHECK', `jidNormalizedUser falló: ${e.message}`);
     }
   }
 
@@ -894,22 +967,22 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   if (botJid === botJidRaw && typeof jidDecode === 'function') {
     try {
       const decoded = jidDecode(botJidRaw);
-      console.log(`[ADMIN-CHECK] jidDecode result:`, decoded);
+      logMessage('DEBUG', 'ADMIN-CHECK', 'jidDecode result', decoded);
       if (decoded && decoded.user && decoded.server) {
         botJid = `${decoded.user}@${decoded.server}`;
-        console.log(`[ADMIN-CHECK] botJid normalizado con jidDecode: ${botJid}`);
+        logMessage('SUCCESS', 'ADMIN-CHECK', `botJid normalizado con jidDecode: ${botJid}`);
       }
     } catch (e) {
-      console.log(`[ADMIN-CHECK] jidDecode falló: ${e.message}`);
+      logMessage('WARN', 'ADMIN-CHECK', `jidDecode falló: ${e.message}`);
     }
   }
 
-  // Método 3: Fallback manual extrayendo número
+  // Método 3: Fallback manual
   if (botJid === botJidRaw && botJidRaw) {
     const match = String(botJidRaw).match(/^(\d+)/);
     if (match) {
       botJid = `${match[1]}@s.whatsapp.net`;
-      console.log(`[ADMIN-CHECK] botJid fallback manual: ${botJid}`);
+      logMessage('INFO', 'ADMIN-CHECK', `botJid fallback manual: ${botJid}`);
     }
   }
 
@@ -940,52 +1013,61 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   }
   const isOwner = !!(ownerNumber && senderNumber && senderNumber === ownerNumber);
 
+  logMessage('INFO', 'USER-INFO', 'Identificación de usuario', {
+    senderNumber,
+    ownerNumber,
+    isOwner,
+    botNumber
+  });
+
   let isAdmin = false;
   let isBotAdmin = false;
   let groupMetadata = null;
 
-  // Texto bruto para decidir si vale la pena consultar metadata
-  const msgObj = message?.message || {};
-  const rawText = (
-    msgObj.conversation ||
-    msgObj.extendedTextMessage?.text ||
-    msgObj.imageMessage?.caption ||
-    msgObj.videoMessage?.caption ||
-    ''
-  ).trim();
-  const isCommandLikely = /^[\\/!.#?$~]/.test(rawText);
+  const shouldFetchMetadata = isCommand || fromMe || isOwner;
+
+  // ✅ LOGS PARA COMANDOS DE ADMIN
+  if (isCommand) {
+    const commandName = rawText.split(/\s+/)[0];
+    logMessage('COMMAND', messageType, `Comando detectado: ${commandName}`, {
+      fullText: rawText,
+      sender: senderNumber,
+      isOwner,
+      isGroup
+    });
+  }
 
   if (isGroup) {
     try {
-      const shouldFetchMetadata = isCommandLikely || fromMe || isOwner;
       if (!shouldFetchMetadata) {
+        logMessage('DEBUG', 'METADATA', 'Saltando consulta de metadata (no es comando ni owner)');
         throw new Error('skip_metadata_fetch');
       }
 
+      logMessage('INFO', 'METADATA', `Obteniendo metadata del grupo: ${remoteJid}`);
       groupMetadata = await s.groupMetadata(remoteJid);
 
-      console.log(`[ADMIN-CHECK] Grupo: ${remoteJid}`);
-      console.log(`[ADMIN-CHECK] Total participantes: ${groupMetadata?.participants?.length || 0}`);
-      console.log(`[ADMIN-CHECK] Buscando sender: ${sender}`);
-      console.log(`[ADMIN-CHECK] Buscando botJid: ${botJid}`);
-      console.log(`[ADMIN-CHECK] Buscando botJidRaw: ${botJidRaw}`);
-      console.log(`[ADMIN-CHECK] Buscando botNumber: ${botNumber}`);
+      logMessage('METADATA', 'GROUP', `Metadata obtenida exitosamente`, {
+        groupId: remoteJid,
+        totalParticipants: groupMetadata?.participants?.length || 0,
+        groupName: groupMetadata?.subject || 'Sin nombre'
+      });
 
       // ✅ FUNCIÓN HELPER: Verificar si un participante coincide con el bot
       const isParticipantBot = (participant) => {
         if (!participant) return false;
 
         const pid = participant.id;
-        const pLid = participant.lid; // Linked ID
-        const pJid = participant.jid; // JID completo
+        const pLid = participant.lid;
+        const pJid = participant.jid;
 
-        // Método 1: Comparación directa de IDs
+        // Método 1: Comparación directa
         if (pid === botJid || pid === botJidRaw) return true;
 
-        // Método 2: Comparar LID si existe
+        // Método 2: Comparar LID
         if (pLid && (pLid === botJid || pLid === botJidRaw)) return true;
 
-        // Método 3: Comparar JID si existe
+        // Método 3: Comparar JID
         if (pJid && (pJid === botJid || pJid === botJidRaw)) return true;
 
         // Método 4: Extraer y comparar números
@@ -1012,7 +1094,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
             if (normalizedPLid && (normalizedPLid === normalizedBot || normalizedPLid === normalizedBotRaw)) return true;
             if (normalizedPJid && (normalizedPJid === normalizedBot || normalizedPJid === normalizedBotRaw)) return true;
           } catch (e) {
-            // Ignorar errores de normalización
+            // Ignorar errores
           }
         }
 
@@ -1024,48 +1106,51 @@ export async function handleMessage(message, customSock = null, prefix = '', run
         return p.id === sender || p.lid === sender || p.jid === sender;
       });
       isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin');
-      console.log(`[ADMIN-CHECK] Sender encontrado: ${!!participantInfo}, isAdmin: ${isAdmin}`);
-      if (participantInfo) {
-        console.log(`[ADMIN-CHECK] Sender details - id: ${participantInfo.id}, lid: ${participantInfo.lid || 'N/A'}, jid: ${participantInfo.jid || 'N/A'}`);
-      }
 
-      // ✅ BUSCAR BOT usando la función helper
+      logMessage('ADMIN', 'GROUP', `Verificación de permisos del sender`, {
+        sender,
+        found: !!participantInfo,
+        isAdmin,
+        adminLevel: participantInfo?.admin || 'member'
+      });
+
+      // ✅ BUSCAR BOT
       let botInfo = (groupMetadata.participants || []).find(isParticipantBot);
 
       if (botInfo) {
         isBotAdmin = botInfo.admin === 'admin' || botInfo.admin === 'superadmin';
-        console.log(`[ADMIN-CHECK] ✅ BOT ENCONTRADO!`);
-        console.log(`[ADMIN-CHECK]   - id: ${botInfo.id}`);
-        console.log(`[ADMIN-CHECK]   - lid: ${botInfo.lid || 'N/A'}`);
-        console.log(`[ADMIN-CHECK]   - jid: ${botInfo.jid || 'N/A'}`);
-        console.log(`[ADMIN-CHECK]   - admin: ${botInfo.admin || 'N/A'}`);
-        console.log(`[ADMIN-CHECK]   - isBotAdmin: ${isBotAdmin}`);
+        logMessage('SUCCESS', 'ADMIN', `Bot encontrado en grupo`, {
+          botId: botInfo.id,
+          botLid: botInfo.lid || 'N/A',
+          botAdmin: botInfo.admin || 'member',
+          isBotAdmin
+        });
       } else {
-        console.log(`[ADMIN-CHECK] ⚠️ Bot NO encontrado en participantes`);
-        console.log(`[ADMIN-CHECK] Formatos probados:`);
-        console.log(`[ADMIN-CHECK]   - botJid: ${botJid}`);
-        console.log(`[ADMIN-CHECK]   - botJidRaw: ${botJidRaw}`);
-        console.log(`[ADMIN-CHECK]   - botNumber: ${botNumber}`);
-        console.log(`[ADMIN-CHECK] Muestra de participantes (primeros 3):`);
-        (groupMetadata.participants || []).slice(0, 3).forEach((p, idx) => {
-          console.log(`[ADMIN-CHECK]   [${idx}] id: ${p.id}, lid: ${p.lid || 'N/A'}, jid: ${p.jid || 'N/A'}, admin: ${p.admin || 'N/A'}`);
+        logMessage('WARN', 'ADMIN', `Bot NO encontrado en participantes`, {
+          botJid,
+          botJidRaw,
+          botNumber,
+          sampleParticipants: (groupMetadata.participants || []).slice(0, 3).map(p => ({
+            id: p.id,
+            lid: p.lid || 'N/A',
+            admin: p.admin || 'member'
+          }))
         });
 
-        // Workaround: Si el sender es owner, asumir permisos de bot
+        // Workaround para owner
         if (isOwner) {
-          console.log(`[ADMIN-CHECK] ⚠️ WORKAROUND: Asumiendo permisos de admin (sender es owner)`);
+          logMessage('INFO', 'ADMIN', 'WORKAROUND: Asumiendo permisos de admin (sender es owner)');
           isBotAdmin = true;
         }
       }
     } catch (e) {
       const msg = e?.message || '';
       if (msg === 'skip_metadata_fetch') {
-        // no-op: no era necesario consultar metadata para mensajes no comando
+        logMessage('DEBUG', 'METADATA', 'Consulta de metadata omitida (no necesaria)');
       } else if (msg.includes('rate-overlimit')) {
-        console.warn(`[ADMIN-CHECK] rate-overlimit al obtener metadata de grupo (${remoteJid}), se omite chequeo admin`);
+        logMessage('WARN', 'METADATA', `rate-overlimit al obtener metadata de grupo (${remoteJid})`);
       } else {
-        console.error(`[ADMIN-CHECK] Error getting group metadata: ${msg}`);
-        logger.error(`Error getting group metadata for ${remoteJid}: ${msg}`);
+        logMessage('ERROR', 'METADATA', `Error getting group metadata`, { groupId: remoteJid, error: msg });
       }
       groupMetadata = null;
       isAdmin = false;
@@ -1073,7 +1158,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     }
   }
 
-  // Propagate display name for UI messages (DM and groups)
+  // Propagate display name
   const pushName = message?.pushName || null;
   let usuarioName = null;
   try {
@@ -1103,19 +1188,33 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     ...runtimeContext,
   };
 
+  logMessage('INFO', 'CONTEXT', 'Contexto del mensaje preparado', {
+    isGroup,
+    isOwner,
+    isAdmin,
+    isBotAdmin,
+    hasGroupMetadata: !!groupMetadata
+  });
+
   if (fromMe) {
     const m = message.message || {};
     const txt = (m.conversation || m.extendedTextMessage?.text || '').trim();
     const isCmd = /^[\/!.#?$~]/.test(txt) || m.buttonsResponseMessage || m.templateButtonReplyMessage || m.listResponseMessage;
     const mode = String(process.env.FROMME_MODE || 'commands').toLowerCase();
     if (!(mode === 'all' || (mode === 'commands' && isCmd))) {
+      logMessage('DEBUG', 'FROMME', 'Mensaje propio ignorado (FROMME_MODE)');
       return;
     }
   }
 
   const autoRead = String(process.env.AUTO_READ_MESSAGES || 'true').toLowerCase() === 'true';
   if (autoRead && message?.key?.id) {
-    try { await s.readMessages([{ remoteJid, id: message.key.id, fromMe: message.key.fromMe }]); } catch (e) { /* non-fatal */ }
+    try {
+      await s.readMessages([{ remoteJid, id: message.key.id, fromMe: message.key.fromMe }]);
+      logMessage('DEBUG', 'READ', 'Mensaje marcado como leído');
+    } catch (e) {
+      logMessage('WARN', 'READ', 'Error marcando mensaje como leído', { error: e?.message });
+    }
   }
 
   try {
@@ -1123,26 +1222,29 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 
     if (global.__APP_DISPATCH && typeof global.__APP_DISPATCH === 'function') {
       dispatch = global.__APP_DISPATCH;
+      logMessage('DEBUG', 'ROUTER', 'Usando dispatch cacheado');
     } else {
       try {
         const routerResolved = path.isAbsolute(routerPath) ? routerPath : path.resolve(__dirname, routerPath);
-        console.log(`[router] intentando importar dinámicamente: ${routerResolved}`);
+        logMessage('INFO', 'ROUTER', `Importando router dinámicamente: ${routerResolved}`);
         const mod = await tryImportModuleWithRetries(routerResolved, { retries: 3, timeoutMs: 20000, backoffMs: 1000 });
         dispatch = mod?.dispatch || mod?.default?.dispatch || mod?.default;
         if (dispatch) {
           global.__APP_ROUTER_MODULE = mod;
           global.__APP_DISPATCH = dispatch;
-          console.log('[router] dispatch cargado correctamente y cacheado.');
+          logMessage('SUCCESS', 'ROUTER', 'dispatch cargado correctamente y cacheado');
         } else {
-          console.warn('[router] módulo importado pero no expone dispatch.');
+          logMessage('WARN', 'ROUTER', 'módulo importado pero no expone dispatch');
         }
       } catch (e) {
-        console.error('[router] Error importando router dinámico:', e && (e.stack || e.message || e));
+        logMessage('ERROR', 'ROUTER', 'Error importando router dinámico', { error: e?.stack || e?.message || e });
       }
     }
 
     if (typeof dispatch === 'function') {
+      logMessage('INFO', 'DISPATCH', 'Ejecutando dispatch del mensaje');
       const handled = await dispatch(ctx);
+      logMessage('INFO', 'DISPATCH', `Mensaje procesado: ${handled === true ? 'HANDLED' : 'NOT_HANDLED'}`);
 
       const replyFallback = String(process.env.REPLY_ON_UNMATCHED || 'false').toLowerCase() === 'true';
       if (replyFallback && handled !== true && !fromMe) {
@@ -1152,16 +1254,17 @@ export async function handleMessage(message, customSock = null, prefix = '', run
           if (Date.now() - (global.__fallbackTs.get(remoteJid) || 0) > 60000) {
             await safeSend(s, remoteJid, { text: '👋 Envíame un comando. Usa /menu o /help' }, { quoted: message });
             global.__fallbackTs.set(remoteJid, Date.now());
+            logMessage('INFO', 'FALLBACK', 'Respuesta de fallback enviada');
           }
         }
       }
     }
   } catch (e) {
-    logger.warn(`[handleMessage] router failed: ${e?.message || e}`);
+    logMessage('ERROR', 'HANDLER', 'router failed', { error: e?.message || e });
   }
 }
 // ==========================================================
-// FIN DE FUNCIÓN handleMessage CORREGIDA
+// FIN DE FUNCIÓN handleMessage
 // ==========================================================
 
 export async function clearWhatsAppSession(dirPath = null) {
@@ -1171,8 +1274,9 @@ export async function clearWhatsAppSession(dirPath = null) {
     const abs = path.resolve(base);
     if (abs && fs.existsSync(abs)) {
       fs.rmSync(abs, { recursive: true, force: true });
+      logMessage('SUCCESS', 'SESSION', 'Sesión de WhatsApp eliminada correctamente');
     }
   } catch (e) {
-    logger.error(`Error clearing WhatsApp session: ${e.message}`);
+    logMessage('ERROR', 'SESSION', 'Error clearing WhatsApp session', { error: e.message });
   }
 }
