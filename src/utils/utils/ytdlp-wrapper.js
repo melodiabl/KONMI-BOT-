@@ -1,13 +1,13 @@
 import fs from 'fs'
 import path from 'path'
 import ytdl from 'ytdl-core'
-import ytdlp from 'yt-dlp-exec'
 import { buildYtDlpCookieArgs } from './cookies.js'
 
 const DEFAULT_WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 const YTDLP_USER_AGENT = process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA
 const YTDLP_EXTRACTOR_ARGS_BASE = process.env.YTDLP_EXTRACTOR_ARGS || process.env.YOUTUBE_EXTRACTOR_ARGS || 'youtube:player_client=android'
 const YTDLP_PO_TOKEN = process.env.YTDLP_PO_TOKEN || process.env.YOUTUBE_PO_TOKEN || ''
+let cachedYtDlpExec = null
 
 function ensureDir(dir) {
   try { fs.mkdirSync(dir, { recursive: true }) } catch {}
@@ -51,6 +51,17 @@ function mergeExtractorArgs() {
   if (YTDLP_PO_TOKEN) list.push(`youtube:po_token=${YTDLP_PO_TOKEN}`)
   if (!list.length) return undefined
   return list.length === 1 ? list[0] : list
+}
+
+async function loadYtDlpExec() {
+  if (cachedYtDlpExec) return cachedYtDlpExec
+  try {
+    const mod = await import('yt-dlp-exec')
+    cachedYtDlpExec = mod.default || mod
+    return cachedYtDlpExec
+  } catch {
+    return null
+  }
 }
 
 async function downloadWithYtdlCoreFallback({ url, outDir, audioOnly, onProgress }) {
@@ -146,6 +157,11 @@ export async function downloadWithYtDlp({
   ensureDir(outDir)
 
   try {
+    const ytdlpExec = await loadYtDlpExec()
+    if (!ytdlpExec) {
+      throw new Error('yt-dlp-exec no disponible')
+    }
+
     const cookieOptions = buildCookieOptions()
     const extractorArgs = mergeExtractorArgs()
     const outputPattern = outputTemplate || '%(title).95B.%(ext)s'
@@ -170,7 +186,7 @@ export async function downloadWithYtDlp({
       onProgress({ percent: 5, status: 'preparing' })
     }
 
-    const runner = typeof ytdlp.raw === 'function' ? ytdlp.raw : ytdlp
+    const runner = typeof ytdlpExec.raw === 'function' ? ytdlpExec.raw : ytdlpExec
     const proc = runner(url, opts)
     if (proc?.stderr && typeof onProgress === 'function') {
       proc.stderr.on('data', (chunk) => {
