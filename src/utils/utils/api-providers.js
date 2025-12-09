@@ -3,6 +3,8 @@ import axios from 'axios'
 import logger from '../../config/logger.js'
 import { getSpotifyAccessToken } from './spotify-auth.js'
 import ytdl from 'ytdl-core'
+import fs from 'fs/promises'
+import { downloadWithYtDlp } from './ytdlp-wrapper.js'
 
 /* ===== Sistema de Logs para API Providers ===== */
 const LOG_COLORS = {
@@ -172,12 +174,16 @@ export const API_PROVIDERS = {
   ],
 
   youtube: [
-    {
-      name: 'ytdl-core (local url)',
-      method: 'LOCAL__YTDL_URL',
-      url: (videoUrl, options = {}) => videoUrl,
-      parse: (data) => data
-    },
+    // Este provider local de ytdl-core queda sin usar directamente porque ahora
+    // la descarga principal la maneja downloadYouTube() con yt-dlp + ytdl-core.
+    // Lo dejamos comentado para evitar duplicar lógica.
+    //
+    // {
+    //   name: 'ytdl-core (local url)',
+    //   method: 'LOCAL__YTDL_URL',
+    //   url: (videoUrl, options = {}) => videoUrl,
+    //   parse: (data) => data
+    // },
     {
       name: 'Piped.video',
       timeoutMs: 5000,
@@ -501,7 +507,8 @@ async function doRequest(provider, url, body, extraCtx) {
     }
   }
 
-  // LOCAL__YTDL_URL
+  // LOCAL__YTDL_URL (ya no usado porque comentamos el provider,
+  // pero dejamos el código por si lo reactivas en el futuro)
   if (provider?.method === 'LOCAL__YTDL_URL') {
     try {
       logAPI('DEBUG', 'ytdl-core', 'Attempting ytdl-core download', { url })
@@ -798,17 +805,72 @@ export async function downloadYouTube(url, type = 'audio', onProgress) {
     type
   })
 
+  const isAudio = type === 'audio'
+
+  // 1) PRIMER INTENTO: yt-dlp binario (alta calidad con ffmpeg-static)
   try {
-    const result = await downloadYouTubeAsBuffer(url, type, onProgress)
-    logAPI('SUCCESS', 'EXPORT', 'downloadYouTube succeeded via ytdl-buffer')
-    return result
-  } catch (error) {
-    logAPI('WARN', 'EXPORT', 'ytdl-core failed, trying fallback', {
-      error: error.message
+    logAPI('INFO', 'EXPORT', 'Trying yt-dlp binary first', {
+      url,
+      type
     })
 
-    return downloadWithFallback('youtube', url, { type }, onProgress)
+    const dl = await downloadWithYtDlp({
+      url,
+      outDir: '/tmp/konmi-yt',
+      audioOnly: isAudio,
+      highQuality: true,
+      onProgress
+    })
+
+    if (dl?.success && dl.filePath) {
+      const buffer = await fs.readFile(dl.filePath).catch(() => null)
+
+      // Limpieza best effort
+      try {
+        await fs.unlink(dl.filePath)
+      } catch {}
+
+      if (!buffer) {
+        throw new Error('No se pudo leer el archivo descargado')
+      }
+
+      logAPI('SUCCESS', 'EXPORT', 'downloadYouTube succeeded via yt-dlp binary', {
+        isAudio,
+        fileSizeMB: (buffer.length / 1024 / 1024).toFixed(2)
+      })
+
+      return {
+        success: true,
+        download: buffer,
+        quality: dl.quality || (isAudio ? 'bestaudio' : 'best')
+      }
+    }
+
+    logAPI('WARN', 'EXPORT', 'yt-dlp returned no file, falling back', { dl })
+  } catch (error) {
+    const msg = String(error?.message || '')
+    logAPI('WARN', 'EXPORT', 'yt-dlp binary failed', {
+      error: msg
+    })
+    // NO lanzamos todavía, seguimos con ytdl-core
   }
+
+  // 2) SEGUNDO INTENTO: ytdl-core (buffer directo)
+  try {
+    const result = await downloadYouTubeAsBuffer(url, type, onProgress)
+    logAPI('SUCCESS', 'EXPORT', 'downloadYouTube succeeded via ytdl-buffer fallback')
+    return result
+  } catch (error) {
+    const msg = String(error?.message || '')
+    logAPI('WARN', 'EXPORT', 'ytdl-core fallback failed, trying HTTP providers', {
+      error: msg
+    })
+    // Seguimos con fallback HTTP
+  }
+
+  // 3) ÚLTIMO INTENTO: proveedores HTTP (Piped, Vreden, etc.)
+  const fb = await downloadWithFallback('youtube', url, { type }, onProgress)
+  return fb
 }
 
 export async function downloadTikTok(url) {
@@ -878,3 +940,4 @@ export default {
   downloadYouTube,
   searchSpotify
 }
+
