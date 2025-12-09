@@ -37,6 +37,25 @@ function headerIfEnv(varName, headerName, prefix = '') {
   return { [headerName]: prefix ? `${prefix}${key}` : key }
 }
 
+function buildYtDlpExecCookieOpts() {
+  const args = buildYtDlpCookieArgs()
+  if (!Array.isArray(args) || args.length < 2) return {}
+  const [flag, value] = args
+  if (!value) return {}
+  if (flag === '--cookies') return { cookies: value }
+  if (flag === '--cookies-from-browser') return { cookiesFromBrowser: value }
+  if (flag === '--add-header') return { addHeader: [value] }
+  return {}
+}
+
+function buildExtractorArgs() {
+  const list = []
+  if (YTDLP_EXTRACTOR_ARGS_BASE) list.push(YTDLP_EXTRACTOR_ARGS_BASE)
+  if (YTDLP_PO_TOKEN) list.push(`youtube:po_token=${YTDLP_PO_TOKEN}`)
+  if (!list.length) return undefined
+  return list.length === 1 ? list[0] : list
+}
+
 export const API_PROVIDERS = {
   tiktok: [
     {
@@ -543,12 +562,17 @@ async function doRequest(provider, url, body, extraCtx) {
             const execMod = await import('yt-dlp-exec');
             const ytdlp = execMod.default || execMod;
 
+            const cookieOpts = buildYtDlpExecCookieOpts();
+            const extractorArgs = buildExtractorArgs();
             const optsBase = {
                 noWarnings: true,
                 preferFreeFormats: false,
                 retries: 1,
                 quiet: true,
-                dumpSingleJson: true
+                dumpSingleJson: true,
+                userAgent: YTDLP_USER_AGENT,
+                extractorArgs,
+                ...cookieOpts
             };
 
             if (ytdlp) {
