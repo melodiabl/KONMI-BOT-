@@ -12,7 +12,7 @@ import path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 
-const BAILEYS_CANDIDATES = ['wileys', '@whiskeysockets/baileys', '@itsukichan/baileys', 'baileys']
+const BAILEYS_CANDIDATES = ['@whiskeysockets/baileys', '@itsukichan/baileys', 'baileys']
 let downloadFnCache = null
 let downloadFnPromise = null
 
