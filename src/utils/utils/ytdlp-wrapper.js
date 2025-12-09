@@ -1,12 +1,17 @@
-// ytdlp-wrapper.js
-// Wrapper para usar el binario standalone de yt-dlp + ffmpeg-static (sin Python)
-
 import fs from 'fs'
-import fsPromises from 'fs/promises'
 import path from 'path'
+import os from 'os'
 import { spawn } from 'child_process'
 import ffmpegPath from 'ffmpeg-static'
+import { buildYtDlpCookieArgs } from './cookies.js'
 
+const DEFAULT_WEB_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+const YTDLP_USER_AGENT =
+  process.env.YTDLP_USER_AGENT || process.env.YOUTUBE_UA || DEFAULT_WEB_UA
+
+// Ruta del binario dentro del contenedor
 const YTDLP_BIN = path.join(process.cwd(), 'yt-dlp')
 
 function ensureDir(dir) {
@@ -16,182 +21,156 @@ function ensureDir(dir) {
 }
 
 async function ensureYtDlpBinary() {
-  if (fs.existsSync(YTDLP_BIN)) return true
+  if (fs.existsSync(YTDLP_BIN)) return YTDLP_BIN
 
-  console.log('📥 Descargando yt-dlp standalone...')
-  return new Promise((resolve, reject) => {
-    const curl = spawn('curl', [
-      '-L',
-      'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp',
-      '-o',
-      YTDLP_BIN
-    ])
+  // Descarga binario oficial de yt-dlp (SIN Python)
+  const url =
+    process.platform === 'win32'
+      ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+      : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp'
 
-    curl.stdout.on('data', (d) => process.stdout.write(d.toString()))
-    curl.stderr.on('data', (d) => process.stderr.write(d.toString()))
-
+  await new Promise((resolve, reject) => {
+    const curl = spawn('curl', ['-L', url, '-o', YTDLP_BIN], { stdio: 'inherit' })
+    curl.on('error', reject)
     curl.on('close', (code) => {
-      if (code !== 0) {
-        console.error('❌ Error descargando yt-dlp, código:', code)
-        return reject(new Error('Error descargando yt-dlp'))
-      }
-      fs.chmodSync(YTDLP_BIN, '755')
-      console.log('✅ yt-dlp listo sin Python')
-      resolve(true)
+      if (code === 0) resolve()
+      else reject(new Error('curl exit code ' + code))
     })
   })
+
+  if (process.platform !== 'win32') {
+    fs.chmodSync(YTDLP_BIN, 0o755)
+  }
+
+  return YTDLP_BIN
 }
 
-function pickLatestFile(dir, preferredExts = []) {
-  let files = fs.readdirSync(dir).filter((f) => !f.endsWith('.part'))
-
+function pickLatestFile(dir) {
+  const files = fs.readdirSync(dir)
   if (!files.length) return null
+  let latest = null
+  let latestMtime = 0
 
-  if (preferredExts.length) {
-    const byExt = preferredExts
-      .map((ext) =>
-        files.filter((f) => f.toLowerCase().endsWith(`.${ext.toLowerCase()}`))
-      )
-      .flat()
-    if (byExt.length) files = byExt
-  }
-
-  let best = null
-  let bestMtime = 0
-
-  for (const name of files) {
-    const full = path.join(dir, name)
-    let st
-    try {
-      st = fs.statSync(full)
-    } catch {
-      continue
-    }
-    if (!st.isFile()) continue
-    if (st.mtimeMs > bestMtime) {
-      bestMtime = st.mtimeMs
-      best = full
+  for (const f of files) {
+    const full = path.join(dir, f)
+    const stat = fs.statSync(full)
+    if (!stat.isFile()) continue
+    if (stat.size < 20 * 1024) continue // ignorar archivos demasiado pequeños
+    if (stat.mtimeMs > latestMtime) {
+      latestMtime = stat.mtimeMs
+      latest = full
     }
   }
 
-  return best
-}
-
-function runYtDlp(args, onProgress) {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(YTDLP_BIN, args)
-
-    let stdout = ''
-    let stderr = ''
-
-    proc.stdout.on('data', (chunk) => {
-      const text = chunk.toString()
-      stdout += text
-    })
-
-    proc.stderr.on('data', (chunk) => {
-      const text = chunk.toString()
-      stderr += text
-
-      // Parseo simple de porcentaje: " 23.4% " en stderr
-      const match = text.match(/(\d+(?:\.\d+)?)%/)
-
-      if (match && typeof onProgress === 'function') {
-        const percent = Math.max(0, Math.min(99, parseFloat(match[1] || '0')))
-        onProgress({ percent, status: 'downloading' })
-      }
-    })
-
-    proc.on('close', (code) => {
-      if (code === 0) return resolve({ stdout, stderr })
-      const errMsg = stderr || stdout || `yt-dlp exited with code ${code}`
-      reject(new Error(errMsg.slice(0, 300)))
-    })
-  })
+  return latest
 }
 
 /**
- * Descarga con yt-dlp binario
- * - audioOnly = true  → MP3 en alta calidad
- * - audioOnly = false → MP4 (bestvideo + bestaudio) usando ffmpeg-static
+ * Ejecuta yt-dlp binario con cookies, UA y ffmpeg (sin Python).
+ * @param {Object} opts
+ * @param {string} opts.url
+ * @param {string} [opts.outDir]
+ * @param {boolean} [opts.audioOnly]
+ * @param {(info: any) => void} [opts.onProgress]
  */
-export async function downloadWithYtDlp({
-  url,
-  outDir = path.join(process.cwd(), 'downloads', 'yt'),
-  audioOnly = false,
-  highQuality = true,
-  onProgress
-}) {
-  if (!url) throw new Error('URL requerida para yt-dlp')
+export async function downloadWithYtDlp({ url, outDir, audioOnly = true, onProgress }) {
+  const bin = await ensureYtDlpBinary()
 
-  ensureDir(outDir)
-  await ensureYtDlpBinary()
+  const finalOutDir =
+    outDir || path.join(os.tmpdir(), `konmi-ytdlp-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+  ensureDir(finalOutDir)
 
-  const outputTemplate = path.join(outDir, '%(title)s.%(ext)s')
+  const baseTemplate = '%(title).200s.%(ext)s'
+  const outputTemplate = path.join(finalOutDir, baseTemplate)
 
-  const args = [
-    url,
-    '--no-playlist',
-    '--ignore-errors',
-    '--no-warnings',
-    '--no-mtime',
-    '--newline',
-    '-o',
-    outputTemplate
-  ]
+  const args = ['-o', outputTemplate, '--no-progress']
 
+  // User-Agent y cabeceras
+  args.push('--user-agent', YTDLP_USER_AGENT)
+  args.push('--add-header', 'Accept-Language: es-ES,es;q=0.9,en;q=0.8')
+
+  // ✅ Cookies (aquí se usan los cookies.txt)
+  const cookieArgs = buildYtDlpCookieArgs()
+  if (cookieArgs.length) {
+    args.push(...cookieArgs)
+  }
+
+  // ffmpeg
   if (ffmpegPath) {
     args.push('--ffmpeg-location', ffmpegPath)
   }
 
   if (audioOnly) {
-    // Audio en alta calidad → MP3
+    // Mejor calidad de audio posible, convertir a MP3 con calidad 0 (máxima)
     args.push(
       '-f',
       'bestaudio/best',
-      '-x',
+      '--extract-audio',
       '--audio-format',
       'mp3',
       '--audio-quality',
       '0'
     )
   } else {
-    // Video alta calidad → bestvideo + bestaudio, salida MP4
-    args.push(
-      '-f',
-      'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-      '--merge-output-format',
-      'mp4'
-    )
+    // Mejor video con audio
+    args.push('-f', 'bv*+ba/best')
   }
 
-  if (typeof onProgress === 'function') {
-    onProgress({ percent: 1, status: 'starting' })
-  }
+  args.push(url)
 
-  await runYtDlp(args, (p) => {
-    if (typeof onProgress === 'function') onProgress(p)
+  return new Promise((resolve, reject) => {
+    let stderrBuf = ''
+
+    const child = spawn(bin, args, {
+      stdio: ['ignore', 'ignore', 'pipe']
+    })
+
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString()
+      stderrBuf += text
+
+      if (onProgress) {
+        onProgress({
+          percent: 0,
+          status: 'procesando',
+          raw: text.slice(0, 200)
+        })
+      }
+    })
+
+    child.on('error', (err) => {
+      reject(new Error('yt-dlp error: ' + err.message))
+    })
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        return reject(
+          new Error(
+            `yt-dlp exit code ${code}: ${stderrBuf.slice(0, 400)}`
+          )
+        )
+      }
+
+      const filePath = pickLatestFile(finalOutDir)
+      if (!filePath) {
+        return reject(new Error('No se encontró archivo descargado'))
+      }
+
+      if (onProgress) {
+        onProgress({ percent: 100, status: 'complete' })
+      }
+
+      resolve({
+        success: true,
+        filePath,
+        isLocal: true,
+        dir: finalOutDir
+      })
+    })
   })
-
-  const preferredExts = audioOnly ? ['mp3', 'm4a', 'webm'] : ['mp4', 'mkv', 'webm']
-  const filePath = pickLatestFile(outDir, preferredExts)
-
-  if (!filePath) {
-    throw new Error('No se encontró archivo descargado')
-  }
-
-  if (typeof onProgress === 'function') {
-    onProgress({ percent: 100, status: 'complete' })
-  }
-
-  return {
-    success: true,
-    filePath,
-    isAudio: audioOnly,
-    quality: highQuality ? 'best' : 'auto'
-  }
 }
 
 export default { downloadWithYtDlp }
+
 
 
