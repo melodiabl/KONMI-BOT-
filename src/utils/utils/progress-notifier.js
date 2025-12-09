@@ -36,6 +36,7 @@ export function createProgressNotifier({
   let spinnerIndex = 0;
   let spinnerTimer = null;
   let finished = false;
+  let muted = false;
 
   const render = (percent, status, details = [], accent = icon) => {
     const header = `${accent} ${title}`.trim();
@@ -67,6 +68,7 @@ export function createProgressNotifier({
     }
 
     try {
+      if (muted) return messageRef;
       const sock = await resolveSocket();
       if (!sock || typeof sock.sendMessage !== 'function') return messageRef;
 
@@ -77,7 +79,13 @@ export function createProgressNotifier({
         messageRef = await sock.sendMessage(chatId, payload, quoted ? { quoted } : undefined);
       }
     } catch (error) {
-      console.error(' Progress notifier error:', error?.message || error);
+      const msg = error?.message || String(error || '');
+      console.error(' Progress notifier error:', msg);
+      if (msg.includes('rate-overlimit')) {
+        muted = true;
+        finished = true;
+        stopSpinner();
+      }
     }
 
     return messageRef;
@@ -101,17 +109,20 @@ export function createProgressNotifier({
 
   return {
     async update(percent, status, options = {}) {
+      if (muted) return messageRef;
       ensureSpinner();
       await send(percent, status, options);
       return messageRef;
     },
     async complete(status = 'Completado ', options = {}) {
+      if (muted) return messageRef;
       finished = true;
       stopSpinner();
       await send(100, status, options);
       return messageRef;
     },
     async fail(reason = 'Error', options = {}) {
+      if (muted) return messageRef;
       const message = reason.startsWith('') ? reason : ` ${reason}`;
       finished = true;
       stopSpinner();
