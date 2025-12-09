@@ -1042,8 +1042,16 @@ export async function handleMessage(message, customSock = null, prefix = '', run
         }
       }
     } catch (e) {
-      console.error(`[ADMIN-CHECK] Error getting group metadata: ${e.message}`);
-      logger.error(`Error getting group metadata for ${remoteJid}: ${e.message}`);
+      const msg = e?.message || '';
+      if (msg.includes('rate-overlimit')) {
+        console.warn(`[ADMIN-CHECK] rate-overlimit al obtener metadata de grupo (${remoteJid}), se omite chequeo admin`);
+      } else {
+        console.error(`[ADMIN-CHECK] Error getting group metadata: ${msg}`);
+        logger.error(`Error getting group metadata for ${remoteJid}: ${msg}`);
+      }
+      groupMetadata = null;
+      isAdmin = false;
+      isBotAdmin = false;
     }
   }
 
