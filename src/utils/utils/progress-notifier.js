@@ -1,198 +1,156 @@
-// progress-notifier.js
-// Muestra un mensaje de progreso que se EDITA (spinner + barra) sin spamear mensajes
+// src/utils/utils/progress-notifier.js
 
 const SPINNER_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
 
-const SPINNER_INTERVAL_MS = Number(process.env.PROGRESS_SPINNER_INTERVAL_MS || 400)
-// Tiempo mínimo entre EDITs del mensaje (anti rate-overlimit)
-const EDIT_COOLDOWN_MS = Number(process.env.PROGRESS_EDIT_COOLDOWN_MS || 700)
+// Cada cuánto tiempo COMO MÍNIMO se permite un edit (ms)
+const EDIT_MIN_INTERVAL_MS = Number(process.env.PROGRESS_EDIT_MIN_INTERVAL_MS || 2000)
 
-/**
- * Renderiza barra de progreso.
- * pct puede ser null => muestra solo "??%"
- */
-function renderBar(pct, segments = 20) {
-  const total = Math.max(4, segments)
-  if (pct == null || Number.isNaN(pct)) {
-    return '█░░░░░░░░░░░░░░░░░░░  ??%'
-  }
-  const p = Math.max(0, Math.min(100, Math.round(pct)))
-  const filled = Math.round((p / 100) * total)
-  const empty = total - filled
-  return `${'█'.repeat(filled)}${'░'.repeat(empty)}  ${p.toString().padStart(3, ' ')}%`
+function renderBar(percent, length = 20) {
+  const total = Math.max(4, length)
+  const pct = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0
+  const filled = Math.round((pct / 100) * total)
+  const bar = '█'.repeat(filled).padEnd(total, '░')
+  return bar
 }
 
-/**
- * Crea un notificador de progreso basado en edición de mensaje.
- * Recibe:
- *  - resolveSocket: () => Promise<sock>
- *  - chatId: jid
- *  - quoted: mensaje citado (opcional)
- *  - title: título del proceso
- *  - icon: emoji
- */
+function clampPercent(value) {
+  if (!Number.isFinite(value)) return 0
+  if (value < 0) return 0
+  if (value > 100) return 100
+  return Math.round(value)
+}
+
 export function createProgressNotifier({
   resolveSocket,
   chatId,
   quoted = null,
   title = 'Procesando',
-  icon = '📊',
+  icon = '',
   barLength = 20,
   animate = true
 } = {}) {
+  // Si no tenemos cómo resolver el socket o no hay chatId, devolvemos no-op
   if (typeof resolveSocket !== 'function' || !chatId) {
     const noop = async () => {}
     return { update: noop, complete: noop, fail: noop }
   }
 
   let messageRef = null
+  let lastPercent = 0          // último porcentaje lógico recibido
+  let lastStatusText = ''      // último texto de estado
   let spinnerIndex = 0
-  let spinnerTimer = null
   let finished = false
   let muted = false
-  let lastPercent = null
-  let lastStatusText = 'Preparando...'
-  let lastEditAt = 0
 
-  function buildText() {
-    const headerIcon = icon || '📊'
-    const headerTitle = title || 'Procesando'
-    const header = `${headerIcon} ${headerTitle}`
+  // Para throttling por TIEMPO
+  let lastSentAt = 0           // timestamp del último EDIT real (ms)
 
-    const bar = renderBar(lastPercent, barLength)
-    const spinner = animate && !finished
-      ? SPINNER_FRAMES[spinnerIndex % SPINNER_FRAMES.length] + ' '
-      : ''
+  const render = (percent, status, details = [], accent = icon) => {
+    const header = `${accent} ${title}`.trim()
+    const bar = renderBar(percent, barLength)
+    const percentLabel = `${String(percent).padStart(3, ' ')}%`
+    const spin = animate && !finished ? `${SPINNER_FRAMES[spinnerIndex]} ` : ''
+    const barLine = `📊 ${spin}${bar} ${percentLabel}`
 
-    const barLine = `${spinner}${bar}`
-    const status = lastStatusText || ''
+    const lines = [header, '', barLine, '', ` ${status}`]
+    details.filter(Boolean).forEach((line) => {
+      lines.push(`  ${line}`)
+    })
 
-    const lines = [header, '', barLine]
-    if (status) {
-      lines.push('', ` ${status}`)
-    }
     return lines.join('\n')
   }
 
-  async function send(force = false) {
-    if (finished || muted) return messageRef
+  async function send(percent, status, options = {}) {
+    if (muted) return messageRef
 
+    // Actualizamos el estado lógico aunque no mandemos mensaje (por throttling)
+    lastPercent = clampPercent(percent)
+    lastStatusText = String(status || lastStatusText || '')
+
+    const details = Array.isArray(options.details)
+      ? options.details.filter(Boolean).map(String)
+      : options.details
+        ? [String(options.details)]
+        : []
+
+    const force = options && options.force === true
     const now = Date.now()
-    if (!force && messageRef && now - lastEditAt < EDIT_COOLDOWN_MS) {
-      // Demasiado pronto para otro edit
-      return messageRef
+
+    // THROTTLING SOLO POR TIEMPO (no por cambio de %)
+    if (!force) {
+      const diffTime = now - lastSentAt
+      if (diffTime < EDIT_MIN_INTERVAL_MS) {
+        return messageRef
+      }
     }
 
-    const text = buildText()
+    // Vamos a editar: avanzamos el spinner y guardamos tiempos
+    spinnerIndex = (spinnerIndex + 1) % SPINNER_FRAMES.length
+    lastSentAt = now
+
+    const text = render(lastPercent, lastStatusText, details, options.icon || icon)
+    const payload = { text }
+
+    if (options.contextInfo) {
+      payload.contextInfo = options.contextInfo
+    }
 
     try {
       const sock = await resolveSocket()
+      if (!sock || typeof sock.sendMessage !== 'function') return messageRef
 
-      if (!messageRef) {
-        // Primer mensaje
-        const sent = await sock.sendMessage(
-          chatId,
-          quoted ? { text, quoted } : { text }
-        )
-        messageRef = sent?.key || null
+      if (messageRef?.key) {
+        // EDITAR mensaje existente
+        const edited = await sock.sendMessage(chatId, { ...payload, edit: messageRef.key })
+        if (edited?.key) messageRef = edited
       } else {
-        // Edit del mensaje existente
-        await sock.sendMessage(
+        // PRIMER mensaje
+        messageRef = await sock.sendMessage(
           chatId,
-          { text, edit: messageRef },
-          { ephemeralExpiration: 0 }
+          payload,
+          quoted ? { quoted } : undefined
         )
       }
-
-      lastEditAt = now
-      return messageRef
     } catch (error) {
-      const msg = String(error?.message || error || '').toLowerCase()
-      console.error('Progress notifier error:', msg)
+      const msg = error?.message || String(error || '')
+      console.error(' Progress notifier error:', msg)
 
-      if (msg.includes('rate-overlimit') || msg.includes('rate-limit')) {
+      // Si WhatsApp/Baileys nos da rate limit, apagamos el notificador
+      if (msg.includes('rate-overlimit')) {
         muted = true
         finished = true
-        stopSpinner()
       }
-
-      return messageRef
     }
-  }
 
-  function ensureSpinner() {
-    if (!animate || finished || spinnerTimer || muted) return
-    try {
-      spinnerTimer = setInterval(() => {
-        try {
-          spinnerIndex = (spinnerIndex + 1) % SPINNER_FRAMES.length
-        } catch {}
-        // Solo re-render; respeta cooldown interno
-        void send(false)
-      }, SPINNER_INTERVAL_MS)
-    } catch {
-      // ignorar
-    }
-  }
-
-  function stopSpinner() {
-    try {
-      if (spinnerTimer) clearInterval(spinnerTimer)
-    } catch {}
-    spinnerTimer = null
+    return messageRef
   }
 
   return {
-    /**
-     * Actualiza el progreso (0-100) y el texto de estado.
-     * Puede llamarse muy seguido; internamente se hace throttle.
-     */
-    async update(percent = null, status = null, options = {}) {
-      if (finished || muted) return messageRef
-
-      if (typeof percent === 'number' && Number.isFinite(percent)) {
-        lastPercent = Math.max(0, Math.min(100, Math.round(percent)))
-      }
-
-      if (typeof status === 'string' && status.trim()) {
-        lastStatusText = status
-      }
-
-      ensureSpinner()
-      await send(Boolean(options.force))
+    async update(percent, status, options = {}) {
+      if (muted) return messageRef
+      await send(percent, status, options)
       return messageRef
     },
 
-    /**
-     * Marca el progreso como completado y fija mensaje final.
-     */
-    async complete(message = 'Completado', options = {}) {
+    async complete(status = 'Completado', options = {}) {
       if (muted) return messageRef
       finished = true
-      stopSpinner()
-      if (typeof message === 'string' && message.trim()) {
-        lastStatusText = message
-      }
-      // Forzamos último edit
-      await send(true)
+      // forzamos el último update para que sí llegue al 100%
+      await send(100, status, { ...options, force: true })
       return messageRef
     },
 
-    /**
-     * Marca el progreso como fallido y muestra mensaje de error.
-     */
     async fail(reason = 'Error', options = {}) {
       if (muted) return messageRef
+      const message = String(reason || 'Error')
       finished = true
-      stopSpinner()
-      if (typeof reason === 'string' && reason.trim()) {
-        lastStatusText = reason
-      }
-      await send(true)
+      // también forzamos el mensaje de error
+      await send(lastPercent || 0, message, { ...options, force: true })
       return messageRef
     }
   }
 }
 
-export default { createProgressNotifier }
+export default createProgressNotifier
+
 
