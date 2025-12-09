@@ -74,10 +74,10 @@ export async function handleTikTokDownload(ctx) {
   logDownload('INFO', 'TIKTOK', 'Starting TikTok download', {
     url: url?.substring(0, 50),
     sender: senderTag(sender)
-  });
+  })
 
   if (!url || !url.includes('tiktok.com')) {
-    logDownload('WARN', 'TIKTOK', 'Invalid URL provided');
+    logDownload('WARN', 'TIKTOK', 'Invalid URL provided')
     return { success: false, message: 'Uso: /tiktok <url>' }
   }
 
@@ -96,12 +96,12 @@ export async function handleTikTokDownload(ctx) {
     logDownload('DEBUG', 'TIKTOK', 'Download result received', {
       success: result.success,
       hasVideo: !!result.video
-    });
+    })
 
     if (!result.success || !result.video) throw new Error('No se pudo obtener el video')
     await progress.complete('Listo')
 
-    logDownload('SUCCESS', 'TIKTOK', 'Download completed successfully');
+    logDownload('SUCCESS', 'TIKTOK', 'Download completed successfully')
 
     return {
       type: 'video',
@@ -113,7 +113,7 @@ export async function handleTikTokDownload(ctx) {
     logDownload('ERROR', 'TIKTOK', 'Download failed', {
       error: e.message,
       stack: e.stack?.split('\n').slice(0, 3).join('\n')
-    });
+    })
 
     logger.error('handleTikTokDownload', e)
     await progress.fail(e.message)
@@ -127,10 +127,10 @@ export async function handleInstagramDownload(ctx) {
 
   logDownload('INFO', 'INSTAGRAM', 'Starting Instagram download', {
     url: url?.substring(0, 50)
-  });
+  })
 
   if (!url || !url.includes('instagram.com')) {
-    logDownload('WARN', 'INSTAGRAM', 'Invalid URL provided');
+    logDownload('WARN', 'INSTAGRAM', 'Invalid URL provided')
     return { success: false, message: 'Uso: /instagram <url>' }
   }
 
@@ -150,7 +150,7 @@ export async function handleInstagramDownload(ctx) {
       success: result.success,
       type: result.type,
       hasMedia: !!(result.image || result.video)
-    });
+    })
 
     if (!result.success || (!result.image && !result.video)) throw new Error('Contenido no disponible')
     await progress.complete('Listo')
@@ -158,7 +158,7 @@ export async function handleInstagramDownload(ctx) {
     const type = result.type === 'video' ? 'video' : (result.video ? 'video' : 'image')
     const media = toMediaInput(result.video || result.image || result.url)
 
-    logDownload('SUCCESS', 'INSTAGRAM', 'Download completed successfully', { type });
+    logDownload('SUCCESS', 'INSTAGRAM', 'Download completed successfully', { type })
 
     return {
       type,
@@ -167,7 +167,7 @@ export async function handleInstagramDownload(ctx) {
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'INSTAGRAM', 'Download failed', { error: e.message });
+    logDownload('ERROR', 'INSTAGRAM', 'Download failed', { error: e.message })
     logger.error('handleInstagramDownload', e)
     await progress.fail(e.message)
     return { success: false, message: `Error Instagram: ${e.message}` }
@@ -180,10 +180,10 @@ export async function handleFacebookDownload(ctx) {
 
   logDownload('INFO', 'FACEBOOK', 'Starting Facebook download', {
     url: url?.substring(0, 50)
-  });
+  })
 
   if (!url || !url.includes('facebook.com')) {
-    logDownload('WARN', 'FACEBOOK', 'Invalid URL provided');
+    logDownload('WARN', 'FACEBOOK', 'Invalid URL provided')
     return { success: false, message: 'Uso: /facebook <url>' }
   }
 
@@ -193,11 +193,11 @@ export async function handleFacebookDownload(ctx) {
     logDownload('DEBUG', 'FACEBOOK', 'Download result received', {
       success: result.success,
       hasVideo: !!result.video
-    });
+    })
 
     if (!result.success || !result.video) throw new Error('No se pudo descargar')
 
-    logDownload('SUCCESS', 'FACEBOOK', 'Download completed successfully');
+    logDownload('SUCCESS', 'FACEBOOK', 'Download completed successfully')
 
     return {
       type: 'video',
@@ -206,7 +206,7 @@ export async function handleFacebookDownload(ctx) {
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'FACEBOOK', 'Download failed', { error: e.message });
+    logDownload('ERROR', 'FACEBOOK', 'Download failed', { error: e.message })
     logger.error('handleFacebookDownload', e)
     return { success: false, message: `Error Facebook: ${e.message}` }
   }
@@ -218,10 +218,10 @@ export async function handleTwitterDownload(ctx) {
 
   logDownload('INFO', 'TWITTER', 'Starting Twitter/X download', {
     url: url?.substring(0, 50)
-  });
+  })
 
   if (!url || (!url.includes('twitter.com') && !url.includes('x.com'))) {
-    logDownload('WARN', 'TWITTER', 'Invalid URL provided');
+    logDownload('WARN', 'TWITTER', 'Invalid URL provided')
     return { success: false, message: 'Uso: /twitter <url>' }
   }
 
@@ -232,12 +232,12 @@ export async function handleTwitterDownload(ctx) {
       success: result.success,
       hasVideo: !!result.video,
       hasImage: !!result.image
-    });
+    })
 
     if (!result.success || (!result.video && !result.image)) throw new Error('No se pudo descargar')
     const type = result.video ? 'video' : 'image'
 
-    logDownload('SUCCESS', 'TWITTER', 'Download completed successfully', { type });
+    logDownload('SUCCESS', 'TWITTER', 'Download completed successfully', { type })
 
     return {
       type,
@@ -246,7 +246,7 @@ export async function handleTwitterDownload(ctx) {
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'TWITTER', 'Download failed', { error: e.message });
+    logDownload('ERROR', 'TWITTER', 'Download failed', { error: e.message })
     logger.error('handleTwitterDownload', e)
     return { success: false, message: `Error Twitter/X: ${e.message}` }
   }
@@ -258,10 +258,10 @@ export async function handlePinterestDownload(ctx) {
 
   logDownload('INFO', 'PINTEREST', 'Starting Pinterest download', {
     url: url?.substring(0, 50)
-  });
+  })
 
   if (!url || !url.includes('pinterest.')) {
-    logDownload('WARN', 'PINTEREST', 'Invalid URL provided');
+    logDownload('WARN', 'PINTEREST', 'Invalid URL provided')
     return { success: false, message: 'Uso: /pinterest <url>' }
   }
 
@@ -271,11 +271,11 @@ export async function handlePinterestDownload(ctx) {
     logDownload('DEBUG', 'PINTEREST', 'Download result received', {
       success: result.success,
       hasImage: !!result.image
-    });
+    })
 
     if (!result.success || !result.image) throw new Error('No se pudo descargar')
 
-    logDownload('SUCCESS', 'PINTEREST', 'Download completed successfully');
+    logDownload('SUCCESS', 'PINTEREST', 'Download completed successfully')
 
     return {
       type: 'image',
@@ -284,7 +284,7 @@ export async function handlePinterestDownload(ctx) {
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'PINTEREST', 'Download failed', { error: e.message });
+    logDownload('ERROR', 'PINTEREST', 'Download failed', { error: e.message })
     return { success: false, message: `Error Pinterest: ${e.message}` }
   }
 }
@@ -293,27 +293,27 @@ export async function handleMusicDownload(ctx) {
   const { args, sender, sock, remoteJid } = ctx
   const query = args.join(' ')
 
-  logDownload('INFO', 'MUSIC', '🎵 Starting music download', {
+  logDownload('INFO', 'MUSIC', 'Starting music download', {
     query: query?.substring(0, 50),
     sender: senderTag(sender)
-  });
+  })
 
   if (!query) {
-    logDownload('WARN', 'MUSIC', 'No query provided');
+    logDownload('WARN', 'MUSIC', 'No query provided')
     return { success: false, message: 'Uso: /music <nombre o url>' }
   }
 
   try {
-    logDownload('DEBUG', 'MUSIC', 'Searching YouTube Music');
+    logDownload('DEBUG', 'MUSIC', 'Searching YouTube Music')
     const search = await searchYouTubeMusic(query)
 
     logDownload('DEBUG', 'MUSIC', 'Search completed', {
       success: search.success,
       resultsCount: search.results?.length || 0
-    });
+    })
 
     if (!search.success || !search.results.length) {
-      logDownload('WARN', 'MUSIC', 'No results found', { query });
+      logDownload('WARN', 'MUSIC', 'No results found', { query })
       return { success: false, message: `No hay resultados para "${query}"` }
     }
 
@@ -323,7 +323,7 @@ export async function handleMusicDownload(ctx) {
       title: video.title,
       url: video.url,
       duration: video.duration
-    });
+    })
 
     const progress = createProgressNotifier({
       resolveSocket: () => Promise.resolve(sock),
@@ -334,12 +334,12 @@ export async function handleMusicDownload(ctx) {
 
     await progress.update(5, 'Conectando...')
 
-    logDownload('DEBUG', 'MUSIC', 'Starting YouTube download', { url: video.url });
+    logDownload('DEBUG', 'MUSIC', 'Starting YouTube download', { url: video.url })
 
     const dl = await downloadYouTube(video.url, 'audio', (p) => {
       if (p?.percent) {
-        const percent = Math.min(95, Math.floor(p.percent));
-        logDownload('DEBUG', 'MUSIC', `Download progress: ${percent}%`);
+        const percent = Math.min(95, Math.floor(p.percent))
+        logDownload('DEBUG', 'MUSIC', `Download progress: ${percent}%`)
         progress.update(percent, 'Descargando...').catch(() => {})
       }
     })
@@ -347,7 +347,7 @@ export async function handleMusicDownload(ctx) {
     logDownload('DEBUG', 'MUSIC', 'Download completed', {
       success: dl.success,
       hasDownload: !!dl.download
-    });
+    })
 
     if (!dl.success || !dl.download) {
       throw new Error('Descarga fallida')
@@ -355,16 +355,16 @@ export async function handleMusicDownload(ctx) {
 
     const audioInput = toMediaInput(dl.download)
     if (!audioInput) {
-      logDownload('ERROR', 'MUSIC', 'Invalid audio format');
+      logDownload('ERROR', 'MUSIC', 'Invalid audio format')
       throw new Error('Formato de audio no válido')
     }
 
     await progress.complete('Listo')
 
-    logDownload('SUCCESS', 'MUSIC', '✅ Music download completed successfully', {
+    logDownload('SUCCESS', 'MUSIC', 'Music download completed successfully', {
       title: video.title,
       quality: dl.quality
-    });
+    })
 
     return {
       type: 'audio',
@@ -374,10 +374,10 @@ export async function handleMusicDownload(ctx) {
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'MUSIC', '❌ Music download failed', {
+    logDownload('ERROR', 'MUSIC', 'Music download failed', {
       error: e.message,
       stack: e.stack?.split('\n').slice(0, 5).join('\n')
-    });
+    })
 
     logger.error('handleMusicDownload', e)
     return { success: false, message: `Error /music: ${e.message}` }
@@ -388,26 +388,26 @@ export async function handleVideoDownload(ctx) {
   const { args, sender, sock, remoteJid } = ctx
   const query = args.join(' ')
 
-  logDownload('INFO', 'VIDEO', '🎬 Starting video download', {
+  logDownload('INFO', 'VIDEO', 'Starting video download', {
     query: query?.substring(0, 50)
-  });
+  })
 
   if (!query) {
-    logDownload('WARN', 'VIDEO', 'No query provided');
+    logDownload('WARN', 'VIDEO', 'No query provided')
     return { success: false, message: 'Uso: /video <nombre o url>' }
   }
 
   try {
-    logDownload('DEBUG', 'VIDEO', 'Searching YouTube Music');
+    logDownload('DEBUG', 'VIDEO', 'Searching YouTube Music')
     const search = await searchYouTubeMusic(query)
 
     logDownload('DEBUG', 'VIDEO', 'Search completed', {
       success: search.success,
       resultsCount: search.results?.length || 0
-    });
+    })
 
     if (!search.success || !search.results.length) {
-      logDownload('WARN', 'VIDEO', 'No results found', { query });
+      logDownload('WARN', 'VIDEO', 'No results found', { query })
       return { success: false, message: `No hay resultados para "${query}"` }
     }
 
@@ -416,7 +416,7 @@ export async function handleVideoDownload(ctx) {
     logDownload('INFO', 'VIDEO', 'Found video', {
       title: video.title,
       url: video.url
-    });
+    })
 
     const progress = createProgressNotifier({
       resolveSocket: () => Promise.resolve(sock),
@@ -427,30 +427,30 @@ export async function handleVideoDownload(ctx) {
 
     await progress.update(5, 'Conectando...')
 
-    logDownload('DEBUG', 'VIDEO', 'Starting YouTube download');
+    logDownload('DEBUG', 'VIDEO', 'Starting YouTube download')
 
     const dl = await downloadYouTube(video.url, 'video', (p) => {
-      const percent = Math.min(95, Math.floor(p?.percent || 0));
-      logDownload('DEBUG', 'VIDEO', `Download progress: ${percent}%`);
+      const percent = Math.min(95, Math.floor(p?.percent || 0))
+      logDownload('DEBUG', 'VIDEO', `Download progress: ${percent}%`)
       progress.update(percent, 'Descargando...').catch(() => {})
     })
 
     logDownload('DEBUG', 'VIDEO', 'Download completed', {
       success: dl.success,
       hasDownload: !!dl.download
-    });
+    })
 
     if (!dl.success || !dl.download) throw new Error('Descarga fallida')
 
     const videoInput = toMediaInput(dl.download)
     if (!videoInput) {
-      logDownload('ERROR', 'VIDEO', 'Invalid video format');
+      logDownload('ERROR', 'VIDEO', 'Invalid video format')
       throw new Error('Formato de video no válido')
     }
 
     await progress.complete('Listo')
 
-    logDownload('SUCCESS', 'VIDEO', '✅ Video download completed successfully');
+    logDownload('SUCCESS', 'VIDEO', 'Video download completed successfully')
 
     return {
       type: 'video',
@@ -460,10 +460,10 @@ export async function handleVideoDownload(ctx) {
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'VIDEO', '❌ Video download failed', {
+    logDownload('ERROR', 'VIDEO', 'Video download failed', {
       error: e.message,
       stack: e.stack?.split('\n').slice(0, 5).join('\n')
-    });
+    })
 
     logger.error('handleVideoDownload', e)
     return { success: false, message: `Error /video: ${e.message}` }
@@ -476,10 +476,10 @@ export async function handleSpotifySearch(ctx) {
 
   logDownload('INFO', 'SPOTIFY', 'Starting Spotify search', {
     query: query?.substring(0, 50)
-  });
+  })
 
   if (!query) {
-    logDownload('WARN', 'SPOTIFY', 'No query provided');
+    logDownload('WARN', 'SPOTIFY', 'No query provided')
     return { success: false, message: 'Uso: /spotify <canción>' }
   }
 
@@ -488,26 +488,26 @@ export async function handleSpotifySearch(ctx) {
 
     logDownload('DEBUG', 'SPOTIFY', 'Search result received', {
       success: result.success
-    });
+    })
 
     if (!result.success) {
-      logDownload('WARN', 'SPOTIFY', 'No results found', { query });
+      logDownload('WARN', 'SPOTIFY', 'No results found', { query })
       return { success: false, message: `No hay resultados para "${query}"` }
     }
 
     let audioInput = null
     try {
-      logDownload('DEBUG', 'SPOTIFY', 'Attempting YouTube fallback');
+      logDownload('DEBUG', 'SPOTIFY', 'Attempting YouTube fallback')
       const yt = await searchYouTubeMusic(`${result.title} ${result.artists}`)
       if (yt.success && yt.results.length) {
         const dl = await downloadYouTube(yt.results[0].url, 'audio')
         if (dl.success) {
           audioInput = toMediaInput(dl.download)
-          logDownload('SUCCESS', 'SPOTIFY', 'YouTube fallback succeeded');
+          logDownload('SUCCESS', 'SPOTIFY', 'YouTube fallback succeeded')
         }
       }
     } catch (e) {
-      logDownload('WARN', 'SPOTIFY', 'YouTube fallback failed', { error: e.message });
+      logDownload('WARN', 'SPOTIFY', 'YouTube fallback failed', { error: e.message })
       logger.error('spotify fallback', e)
     }
 
@@ -521,10 +521,10 @@ export async function handleSpotifySearch(ctx) {
       }
     }
 
-    logDownload('WARN', 'SPOTIFY', 'Could not download audio');
+    logDownload('WARN', 'SPOTIFY', 'Could not download audio')
     return { success: false, message: `${result.title} - ${result.artists}\nNo se pudo descargar el audio.` }
   } catch (e) {
-    logDownload('ERROR', 'SPOTIFY', 'Search failed', { error: e.message });
+    logDownload('ERROR', 'SPOTIFY', 'Search failed', { error: e.message })
     logger.error('handleSpotifySearch', e)
     return { success: false, message: `Error /spotify: ${e.message}` }
   }
@@ -538,10 +538,10 @@ export async function handleTranslate(ctx) {
   logDownload('INFO', 'TRANSLATE', 'Translation request', {
     textLength: text?.length,
     targetLang: lang
-  });
+  })
 
   if (!text || !lang) {
-    logDownload('WARN', 'TRANSLATE', 'Missing parameters');
+    logDownload('WARN', 'TRANSLATE', 'Missing parameters')
     return { success: false, message: 'Uso: /translate <texto> <lang>' }
   }
 
@@ -550,17 +550,17 @@ export async function handleTranslate(ctx) {
 
     logDownload('DEBUG', 'TRANSLATE', 'Translation result', {
       success: res.success
-    });
+    })
 
     if (!res.success) {
-      logDownload('WARN', 'TRANSLATE', 'Translation failed');
+      logDownload('WARN', 'TRANSLATE', 'Translation failed')
       return { success: false, message: 'No se pudo traducir.' }
     }
 
-    logDownload('SUCCESS', 'TRANSLATE', 'Translation completed');
+    logDownload('SUCCESS', 'TRANSLATE', 'Translation completed')
     return { message: `🔤 *Traducción*\n${res.translatedText}` }
   } catch (e) {
-    logDownload('ERROR', 'TRANSLATE', 'Translation error', { error: e.message });
+    logDownload('ERROR', 'TRANSLATE', 'Translation error', { error: e.message })
     return { success: false, message: `Error /translate: ${e.message}` }
   }
 }
@@ -568,10 +568,10 @@ export async function handleTranslate(ctx) {
 export async function handleWeather(ctx) {
   const city = (ctx.args || []).join(' ')
 
-  logDownload('INFO', 'WEATHER', 'Weather request', { city });
+  logDownload('INFO', 'WEATHER', 'Weather request', { city })
 
   if (!city) {
-    logDownload('WARN', 'WEATHER', 'No city provided');
+    logDownload('WARN', 'WEATHER', 'No city provided')
     return { success: false, message: 'Uso: /weather <ciudad>' }
   }
 
@@ -580,98 +580,98 @@ export async function handleWeather(ctx) {
 
     logDownload('DEBUG', 'WEATHER', 'Weather result', {
       success: res.success
-    });
+    })
 
     if (!res.success) {
-      logDownload('WARN', 'WEATHER', 'City not found', { city });
+      logDownload('WARN', 'WEATHER', 'City not found', { city })
       return { success: false, message: `No encontré clima para "${city}"` }
     }
 
-    logDownload('SUCCESS', 'WEATHER', 'Weather fetched successfully');
+    logDownload('SUCCESS', 'WEATHER', 'Weather fetched successfully')
     return { message: `🌦️ Clima en ${res.city}: ${res.temperature}°C, ${res.description}.` }
   } catch (e) {
-    logDownload('ERROR', 'WEATHER', 'Weather error', { error: e.message });
+    logDownload('ERROR', 'WEATHER', 'Weather error', { error: e.message })
     return { success: false, message: `Error /weather: ${e.message}` }
   }
 }
 
 export async function handleQuote() {
-  logDownload('INFO', 'QUOTE', 'Quote request');
+  logDownload('INFO', 'QUOTE', 'Quote request')
 
   try {
     const res = await getRandomQuote()
 
     if (!res.success) {
-      logDownload('WARN', 'QUOTE', 'Could not get quote');
+      logDownload('WARN', 'QUOTE', 'Could not get quote')
       return { success: false, message: 'No pude obtener una frase.' }
     }
 
-    logDownload('SUCCESS', 'QUOTE', 'Quote fetched successfully');
+    logDownload('SUCCESS', 'QUOTE', 'Quote fetched successfully')
     return { message: `"${res.quote}"\n- ${res.author}` }
   } catch (e) {
-    logDownload('ERROR', 'QUOTE', 'Quote error', { error: e.message });
+    logDownload('ERROR', 'QUOTE', 'Quote error', { error: e.message })
     return { success: false, message: `Error /quote: ${e.message}` }
   }
 }
 
 export async function handleFact() {
-  logDownload('INFO', 'FACT', 'Fact request');
+  logDownload('INFO', 'FACT', 'Fact request')
 
   try {
     const res = await getRandomFact()
 
     if (!res.success) {
-      logDownload('WARN', 'FACT', 'Could not get fact');
+      logDownload('WARN', 'FACT', 'Could not get fact')
       return { success: false, message: 'No pude obtener un dato.' }
     }
 
-    logDownload('SUCCESS', 'FACT', 'Fact fetched successfully');
+    logDownload('SUCCESS', 'FACT', 'Fact fetched successfully')
     return { message: `🧠 ${res.fact}` }
   } catch (e) {
-    logDownload('ERROR', 'FACT', 'Fact error', { error: e.message });
+    logDownload('ERROR', 'FACT', 'Fact error', { error: e.message })
     return { success: false, message: `Error /fact: ${e.message}` }
   }
 }
 
 export async function handleTriviaCommand() {
-  logDownload('INFO', 'TRIVIA', 'Trivia request');
+  logDownload('INFO', 'TRIVIA', 'Trivia request')
 
   try {
     const res = await getTrivia()
 
     if (!res.success) {
-      logDownload('WARN', 'TRIVIA', 'Could not get trivia');
+      logDownload('WARN', 'TRIVIA', 'Could not get trivia')
       return { success: false, message: 'No pude obtener trivia.' }
     }
 
-    logDownload('SUCCESS', 'TRIVIA', 'Trivia fetched successfully');
+    logDownload('SUCCESS', 'TRIVIA', 'Trivia fetched successfully')
     return { message: `❓ ${res.question}\n\nRespuesta: ||${res.correct_answer}||` }
   } catch (e) {
-    logDownload('ERROR', 'TRIVIA', 'Trivia error', { error: e.message });
+    logDownload('ERROR', 'TRIVIA', 'Trivia error', { error: e.message })
     return { success: false, message: `Error /trivia: ${e.message}` }
   }
 }
 
 export async function handleMemeCommand() {
-  logDownload('INFO', 'MEME', 'Meme request');
+  logDownload('INFO', 'MEME', 'Meme request')
 
   try {
     const res = await getRandomMeme()
 
     if (!res.success) {
-      logDownload('WARN', 'MEME', 'Could not get meme');
+      logDownload('WARN', 'MEME', 'Could not get meme')
       return { success: false, message: 'No pude obtener un meme.' }
     }
 
-    logDownload('SUCCESS', 'MEME', 'Meme fetched successfully');
+    logDownload('SUCCESS', 'MEME', 'Meme fetched successfully')
     return { type: 'image', image: toMediaInput(res.image), caption: res.title || 'Meme' }
   } catch (e) {
-    logDownload('ERROR', 'MEME', 'Meme error', { error: e.message });
+    logDownload('ERROR', 'MEME', 'Meme error', { error: e.message })
     return { success: false, message: `Error /meme: ${e.message}` }
   }
 }
 
-// ✅ EXPORTACIÓN EXPLÍCITA DE TODAS LAS FUNCIONES
+// Exportación por defecto
 export default {
   handleTikTokDownload,
   handleInstagramDownload,
@@ -687,22 +687,4 @@ export default {
   handleFact,
   handleTriviaCommand,
   handleMemeCommand,
-}
-
-// ✅ EXPORTACIONES NOMBRADAS ADICIONALES (por si acaso)
-export {
-  handleTikTokDownload as tiktok,
-  handleInstagramDownload as instagram,
-  handleFacebookDownload as facebook,
-  handleTwitterDownload as twitter,
-  handlePinterestDownload as pinterest,
-  handleMusicDownload as music,
-  handleVideoDownload as video,
-  handleSpotifySearch as spotify,
-  handleTranslate as translate,
-  handleWeather as weather,
-  handleQuote as quote,
-  handleFact as fact,
-  handleTriviaCommand as trivia,
-  handleMemeCommand as meme,
 }
