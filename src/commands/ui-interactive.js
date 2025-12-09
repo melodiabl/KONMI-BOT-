@@ -12,7 +12,7 @@
  * @returns {Object} Payload compatible
  */
 export function createButtonMenu(config) {
-  const { title, body, footer, buttons = [], mentions = [] } = config
+  const { title, body, footer, buttons = [], mentions = [] } = config || {}
 
   // Validar que haya botones
   if (!buttons || buttons.length === 0) {
@@ -63,8 +63,8 @@ export function createListMenu(config) {
     buttonText = 'Ver opciones',
     sections = [],
     mentions = [],
-    forceTextMode = false // 🔑 CAMBIO: Por defecto FALSE (intentar interactivos)
-  } = config
+    forceTextMode = false // Por defecto intenta interactivos
+  } = (config || {})
 
   // Validar que haya secciones
   if (!sections || sections.length === 0) {
@@ -155,7 +155,7 @@ export function createListMenu(config) {
  * @returns {Object} Payload de texto con opciones numeradas
  */
 export function createNumberedMenu(config) {
-  const { title, body, options = [], footer } = config
+  const { title, body, options = [], footer } = (config || {})
 
   if (!options || options.length === 0) {
     return {
@@ -220,7 +220,7 @@ export function createNumberedMenu(config) {
  * @returns {Object} Payload óptimo según la configuración
  */
 export function createAdaptiveMenu(config) {
-  const { options = [], sections = [], forceTextMode = false } = config
+  const { options = [], sections = [], forceTextMode = false } = (config || {})
 
   // Solo forzar texto si se especifica explícitamente
   if (forceTextMode === true) {
@@ -389,81 +389,240 @@ export function createWarningMessage(message) {
  * @param {Object} config - Configuración
  * @returns {Promise<Object>} Resultado del envío
  */
-export async function sendCategorizedList(sock, jid, config) {
-  const { title, description, buttonText, categories, footer } = config
+function normalizeListArgs(args = []) {
+  if (args.length === 1 && typeof args[0] === "object" && !Array.isArray(args[0])) return args[0] || {};
+  if (args.length === 2 && typeof args[0] === "string" && Array.isArray(args[1])) return { body: args[0], description: args[0], sections: args[1], categories: args[1] };
+  if (args.length === 3 && typeof args[2] === "object") return args[2] || {};
+  return {};
+}
 
-  // Convertir categorías al formato de secciones
-  const sections = (categories || []).map(cat => ({
-    title: cat.title || cat.name || 'Categoría',
-    rows: (cat.items || cat.commands || []).map(item => ({
+export async function sendCategorizedList(...args) {
+  const cfg = normalizeListArgs(args);
+  const {
+    title,
+    description,
+    buttonText = "Ver opciones",
+    categories = [],
+    sections: providedSections = [],
+    footer,
+    mentions,
+    forceTextMode = false,
+  } = cfg || {};
+
+  const sections = (providedSections.length ? providedSections : categories).map(cat => ({
+    title: cat.title || cat.name || 'Categor?a',
+    rows: (cat.items || cat.commands || cat.rows || []).map(item => ({
       title: item.name || item.title || item.command,
-      description: item.description || item.desc || '',
+      description: item.description || item.desc || "",
       rowId: item.command || item.id || item.rowId
     }))
-  }))
+  }));
 
-  // ✅ Intentar formato interactivo por defecto
-  console.log('[sendCategorizedList] Usando formato listMessage')
-  const payload = createListMenu({
+  return createListMenu({
     title,
-    body: description,
+    body: description || cfg.body,
     buttonText,
     sections,
-    footer
-  })
-
-  return payload
-}
-
-/**
- * Envía botones interactivos (LEGACY - usado por system-info.js)
- * @param {Object} sock - Socket de Baileys
- * @param {string} jid - JID del destinatario
- * @param {Object} config - Configuración
- * @returns {Promise<Object>} Resultado del envío
- */
-export async function sendInteractiveButtons(sock, jid, config) {
-  const { title, body, footer, buttons } = config
-
-  const payload = createButtonMenu({
-    title,
-    body,
     footer,
-    buttons: (buttons || []).map(btn => ({
-      text: btn.text || btn.buttonText,
-      id: btn.id || btn.buttonId
-    }))
-  })
-
-  return payload
+    mentions,
+    forceTextMode
+  });
 }
 
-/**
- * Envía código copiable (LEGACY - usado por pairing.js)
- * @param {Object} sock - Socket de Baileys
- * @param {string} jid - JID del destinatario
- * @param {Object} config - Configuración
- * @returns {Promise<Object>} Resultado del envío
- */
-export async function sendCopyableCode(sock, jid, config) {
-  const { title, code, description } = config
+function normalizeButtonsArgs(args = []) {
+  if (args.length === 1 && typeof args[0] === "object" && !Array.isArray(args[0])) return args[0] || {};
+  if (args.length === 2 && typeof args[0] === "string" && Array.isArray(args[1])) return { body: args[0], buttons: args[1] };
+  if (args.length === 3 && typeof args[2] === "object") return args[2] || {};
+  if (args.length >= 1) return { body: String(args[0] || ""), buttons: Array.isArray(args[1]) ? args[1] : [] };
+  return {};
+}
 
-  // WhatsApp no soporta botones de "copiar" nativos en todas las versiones
-  // Enviamos el código en formato texto con instrucciones
+export async function sendInteractiveButtons(...args) {
+  const cfg = normalizeButtonsArgs(args);
+  const { title, body, footer, buttons = [], mentions } = cfg || {};
+
+  return createButtonMenu({
+    title,
+    body: body || cfg.text || cfg.message || title,
+    footer,
+    mentions,
+    buttons: (buttons || []).map(btn => ({
+      text: btn.text || btn.buttonText || btn.title || btn.displayText,
+      id: btn.id || btn.command || btn.buttonId || btn.rowId || btn.url
+    }))
+  });
+}
+
+export async function sendCopyableCode(...args) {
+  let cfg = {};
+  if (args.length === 1 && typeof args[0] === "object") {
+    cfg = args[0] || {};
+  } else if (args.length >= 2 && typeof args[0] === "string" && typeof args[1] === "string") {
+    cfg = { code: args[0], title: args[1] };
+  } else if (args.length >= 1) {
+    cfg = { code: args[0], ...(typeof args[1] === "object" ? args[1] : {}) };
+  }
+
+  const { title, code, description } = cfg;
+
   const text = [
-    title || '📋 *Código de Emparejamiento*',
-    '',
-    description || 'Copia el siguiente código:',
-    '',
-    `\`\`\`${code}\`\`\``,
-    '',
-    '💡 _Mantén presionado el código para copiarlo_'
-  ].join('\n')
+    title || 'Codigo',
+    "",
+    description || 'Copia el siguiente codigo:',
+    "",
+    `\`\`\`${code || ""}\`\`\``,
+    "",
+    'Manten presionado el codigo para copiarlo'
+  ].join("\n");
 
   return {
-    type: 'text',
-    text
+    type: "text",
+    text,
+    quoted: cfg.quoted
+  };
+}
+
+// ============================================================
+// Comandos interactivos y utilidades de ayuda
+// ============================================================
+const todoStore = global.__UI_TODO_STORE || (global.__UI_TODO_STORE = new Map());
+
+function getTodoList(key) {
+  const k = key || 'default';
+  if (!todoStore.has(k)) todoStore.set(k, []);
+  return todoStore.get(k);
+}
+
+function renderTodoList(list = []) {
+  if (!list.length) {
+    return 'Lista vacia. Usa /todo-add <tarea> para agregar.';
   }
+  const lines = ['Tareas:', ''];
+  list.forEach((item, idx) => {
+    lines.push(`${idx + 1}. [${item.done ? 'x' : ' '}] ${item.text}`);
+  });
+  lines.push('');
+  lines.push('Usa /todo-add, /todo-mark <n>, /todo-unmark <n> o /todo-delete <n>.');
+  return lines.join('\n');
+}
+
+export async function copyCode(ctx = {}) {
+  const raw = Array.isArray(ctx.args) ? ctx.args.join(' ').trim() : '';
+  const fallback = ctx.text ? String(ctx.text).replace(/^\/copy\s*/i, '').trim() : '';
+  const code = raw || fallback || "console.log('KONMI BOT');";
+  return sendCopyableCode({ code, title: 'Codigo', description: 'Manten presionado para copiarlo', quoted: true });
+}
+
+export async function handleCopyButton(ctx = {}) {
+  return copyCode(ctx);
+}
+
+export async function interactiveButtons(ctx = {}) {
+  const buttons = [
+    { text: 'Menu', command: '/menu' },
+    { text: 'Ayuda', command: '/help' },
+    { text: 'Estado', command: '/status' },
+  ];
+  return sendInteractiveButtons({
+    title: 'Panel rapido',
+    body: 'Selecciona una opcion:',
+    buttons,
+    footer: ctx.isGroup ? 'En grupos escribe el comando' : undefined,
+  });
+}
+
+export async function createTodoList(ctx = {}) {
+  const list = getTodoList(ctx.remoteJid);
+  if (Array.isArray(ctx.args) && ctx.args.length) {
+    const items = ctx.args.join(' ').split(',').map(s => s.trim()).filter(Boolean);
+    items.forEach(text => list.push({ text, done: false }));
+  }
+  return { type: 'text', text: renderTodoList(list), quoted: true };
+}
+
+export async function addTodoItem(ctx = {}) {
+  const text = Array.isArray(ctx.args) ? ctx.args.join(' ').trim() : '';
+  if (!text) return { type: 'text', text: 'Uso: /todo-add <tarea>', quoted: true };
+  const list = getTodoList(ctx.remoteJid);
+  list.push({ text, done: false });
+  return { type: 'text', text: renderTodoList(list), quoted: true };
+}
+
+export async function markTodoItem(ctx = {}) {
+  const idx = parseInt((ctx.args || [])[0], 10) - 1;
+  const list = getTodoList(ctx.remoteJid);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= list.length) return { type: 'text', text: 'Uso: /todo-mark <numero>', quoted: true };
+  list[idx].done = true;
+  return { type: 'text', text: renderTodoList(list), quoted: true };
+}
+
+export async function unmarkTodoItem(ctx = {}) {
+  const idx = parseInt((ctx.args || [])[0], 10) - 1;
+  const list = getTodoList(ctx.remoteJid);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= list.length) return { type: 'text', text: 'Uso: /todo-unmark <numero>', quoted: true };
+  list[idx].done = false;
+  return { type: 'text', text: renderTodoList(list), quoted: true };
+}
+
+export async function deleteTodoItem(ctx = {}) {
+  const idx = parseInt((ctx.args || [])[0], 10) - 1;
+  const list = getTodoList(ctx.remoteJid);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= list.length) return { type: 'text', text: 'Uso: /todo-delete <numero>', quoted: true };
+  list.splice(idx, 1);
+  return { type: 'text', text: renderTodoList(list), quoted: true };
+}
+
+async function buildHelpSections(filterCategory = null) {
+  const { getCommandRegistry } = await import('./registry/index.js');
+  const reg = getCommandRegistry();
+  const map = new Map();
+
+  for (const [cmd, meta] of reg.entries()) {
+    const cat = (meta?.category || 'otros').toLowerCase();
+    if (filterCategory && cat !== filterCategory) continue;
+    if (!map.has(cat)) map.set(cat, []);
+    map.get(cat).push({ command: cmd, description: meta?.description || '' });
+  }
+
+  for (const list of map.values()) {
+    list.sort((a, b) => a.command.localeCompare(b.command));
+  }
+
+  return Array.from(map.entries()).map(([cat, cmds]) => ({
+    title: cat.charAt(0).toUpperCase() + cat.slice(1),
+    rows: cmds.map(c => ({
+      title: c.command,
+      description: c.description,
+      rowId: c.command
+    }))
+  }));
+}
+
+export async function categorizedMenu(ctx = {}) {
+  const sections = await buildHelpSections();
+  const body = 'Menú por categorías. Selecciona un comando.';
+  return createListMenu({
+    title: 'Menú',
+    body,
+    sections,
+    buttonText: 'Ver comandos',
+    forceTextMode: !!ctx.isGroup
+  });
+}
+
+export async function helpByCategory(ctx = {}) {
+  const filter = (ctx.args || [])[0] ? String(ctx.args[0]).toLowerCase() : null;
+  const sections = await buildHelpSections(filter);
+  if (!sections.length) return { type: 'text', text: 'Categoría sin comandos.', quoted: true };
+  const body = filter ? `Comandos en ${filter}` : 'Selecciona una categoría o comando';
+  return createListMenu({
+    title: 'Ayuda por categorías',
+    body,
+    sections,
+    buttonText: 'Ver',
+    forceTextMode: !!ctx.isGroup,
+    footer: ctx.isGroup ? 'Modo texto en grupos para compatibilidad' : undefined
+  });
 }
 
 /**
@@ -647,6 +806,16 @@ export default {
   sendCategorizedList,
   sendInteractiveButtons,
   sendCopyableCode,
+  copyCode,
+  handleCopyButton,
+  interactiveButtons,
+  createTodoList,
+  addTodoItem,
+  markTodoItem,
+  unmarkTodoItem,
+  deleteTodoItem,
+  categorizedMenu,
+  helpByCategory,
   createExpandableMenu,
   createCodeMessage,
   createLoadingMessage,
@@ -654,4 +823,3 @@ export default {
   formatTable,
   createProgressMessage
 }
-

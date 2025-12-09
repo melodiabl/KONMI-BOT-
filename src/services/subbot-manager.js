@@ -749,6 +749,24 @@ export async function isBotGloballyActive() {
   }
 }
 
+export async function setBotGlobalState(isOn = true, { actor = null, note = null } = {}) {
+  await ensureBotGlobalStateTableExists();
+  const payload = {
+    is_on: !!isOn,
+    estado: isOn ? "on" : "off",
+    activado_por: actor || null,
+    nota: note || null,
+    fecha_cambio: db.fn.now(),
+  };
+  const existing = await db("bot_global_state").first();
+  if (existing) {
+    await db("bot_global_state").where({ id: existing.id }).update(payload);
+  } else {
+    await db("bot_global_state").insert(payload);
+  }
+  return { success: true, isOn: !!isOn };
+}
+
 export async function isBotActiveInGroup(subbotCode, groupJid) {
   if (!groupJid) return true;
   try {
@@ -928,6 +946,7 @@ export default {
   restoreActiveSubbots,
   cleanOrphanSubbots,
   isBotGloballyActive,
+  setBotGlobalState,
   isBotActiveInGroup,
   setSubbotGroupState,
   getSubbotGroupState,

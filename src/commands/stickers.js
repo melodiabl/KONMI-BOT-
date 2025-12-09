@@ -3,7 +3,6 @@
 // ✅ Manejo robusto de errores
 // ✅ Validación de buffers vacíos
 
-import { downloadContentFromMessage } from '@itsukichan/baileys'
 import ffmpeg from 'fluent-ffmpeg'
 import ffmpegInstaller from 'ffmpeg-static'
 import axios from 'axios'
@@ -12,6 +11,10 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+
+const BAILEYS_CANDIDATES = ['wileys', '@whiskeysockets/baileys', '@itsukichan/baileys', 'baileys']
+let downloadFnCache = null
+let downloadFnPromise = null
 
 const execAsync = promisify(exec)
 
@@ -37,10 +40,39 @@ function isValidWebP(buffer) {
 }
 
 /* ========================
+   Carga dinÃ¡mica de Baileys
+   ======================== */
+async function getDownloadContentFromMessage() {
+  if (downloadFnCache) return downloadFnCache
+  if (downloadFnPromise) return downloadFnPromise
+
+  downloadFnPromise = (async () => {
+    let lastErr = null
+    for (const name of BAILEYS_CANDIDATES) {
+      try {
+        const mod = await import(name)
+        const M = mod?.default || mod
+        const fn = M?.downloadContentFromMessage || mod?.downloadContentFromMessage
+        if (typeof fn === 'function') {
+          downloadFnCache = fn
+          return fn
+        }
+      } catch (e) {
+        lastErr = e
+      }
+    }
+    throw new Error(`No se encontrÃ³ downloadContentFromMessage. Instala @whiskeysockets/baileys. Causa: ${lastErr?.message || lastErr}`)
+  })()
+
+  return downloadFnPromise
+}
+
+/* ========================
    DESCARGA DE MEDIA ROBUSTA
    ======================== */
 async function downloadMediaMessage(message, messageType) {
   try {
+    const downloadContentFromMessage = await getDownloadContentFromMessage()
     const stream = await downloadContentFromMessage(message, messageType)
     const chunks = []
 
