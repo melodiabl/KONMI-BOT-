@@ -698,7 +698,11 @@ export async function downloadWithFallback(type, param, options = {}, onProgress
  */
 async function downloadYouTubeAsBuffer(videoUrl, type = 'audio', onProgress) {
   try {
-    const info = await ytdl.getInfo(videoUrl);
+    const info = await ytdl.getInfo(videoUrl, {
+      requestOptions: {
+        headers: { 'user-agent': DEFAULT_WEB_UA }
+      }
+    });
     let chosen;
     
     if (type === 'audio') {

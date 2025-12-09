@@ -61,6 +61,7 @@ export function createProgressNotifier({
         ? [String(options.details)]
         : [];
 
+    if (muted) return messageRef;
     const text = render(lastPercent, lastStatusText, details, options.icon || icon);
     const payload = { text };
     if (options.contextInfo) {
@@ -68,7 +69,6 @@ export function createProgressNotifier({
     }
 
     try {
-      if (muted) return messageRef;
       const sock = await resolveSocket();
       if (!sock || typeof sock.sendMessage !== 'function') return messageRef;
 
@@ -92,7 +92,7 @@ export function createProgressNotifier({
   }
 
   function ensureSpinner() {
-    if (!animate || finished || spinnerTimer) return;
+    if (!animate || finished || spinnerTimer || muted) return;
     try {
       spinnerTimer = setInterval(() => {
         try { spinnerIndex = (spinnerIndex + 1) % SPINNER_FRAMES.length; } catch {}

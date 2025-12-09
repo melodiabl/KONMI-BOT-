@@ -174,7 +174,7 @@ export async function handleMusicDownload(ctx) {
 
     await progress.update(5, 'Conectando...')
     const dl = await downloadYouTube(video.url, 'audio', (p) => {
-      progress.update(Math.min(95, Math.floor(p?.percent || 0)), 'Descargando...').catch(() => {})
+      if (p?.percent) progress.update(Math.min(95, Math.floor(p.percent)), 'Descargando...').catch(() => {})
     })
     if (!dl.success || !dl.download) throw new Error('Descarga fallida')
 
