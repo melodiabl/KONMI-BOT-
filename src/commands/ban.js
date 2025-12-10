@@ -36,13 +36,13 @@ function extractTargetJid(ctx) {
 }
 
 export async function ban(ctx) {
-  const { isGroup, isAdmin, remoteJid, sender } = ctx
+  const { isGroup, isAdmin, isOwner, remoteJid, sender } = ctx
 
   if (!isGroup) {
     return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
   }
-  if (!isAdmin) {
-    return { success: false, message: '⛔ Solo los administradores pueden banear usuarios del bot.' }
+  if (!isAdmin && !isOwner) {
+    return { success: false, message: '⛔ Solo los administradores o el owner pueden banear usuarios del bot.' }
   }
 
   const targetJid = extractTargetJid(ctx)
@@ -77,13 +77,13 @@ export async function ban(ctx) {
 }
 
 export async function unban(ctx) {
-  const { isGroup, isAdmin, remoteJid } = ctx
+  const { isGroup, isAdmin, isOwner, remoteJid } = ctx
 
   if (!isGroup) {
     return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
   }
-  if (!isAdmin) {
-    return { success: false, message: '⛔ Solo los administradores pueden desbanear usuarios del bot.' }
+  if (!isAdmin && !isOwner) {
+    return { success: false, message: '⛔ Solo los administradores o el owner pueden desbanear usuarios del bot.' }
   }
 
   const targetJid = extractTargetJid(ctx)
