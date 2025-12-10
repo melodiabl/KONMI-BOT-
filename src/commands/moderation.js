@@ -52,13 +52,23 @@ export async function warn(ctx) {
     await ensureWarningsTable();
 
     try {
-        const row = await db('group_warnings').where({ group_id: remoteJid, user_jid: targetJid }).first();
+        const userKey = onlyDigits(targetJid);
+        const row = await db('group_warnings')
+            .where({ group_id: remoteJid })
+            .andWhere(q => {
+                if (userKey) {
+                    q.where('user_jid', userKey).orWhere('user_jid', targetJid);
+                } else {
+                    q.where('user_jid', targetJid);
+                }
+            })
+            .first();
         let newCount = 1;
         if (row) {
             newCount = row.count + 1;
             await db('group_warnings').where({ id: row.id }).update({ count: newCount, updated_at: db.fn.now() });
         } else {
-            await db('group_warnings').insert({ group_id: remoteJid, user_jid: targetJid, count: 1 });
+            await db('group_warnings').insert({ group_id: remoteJid, user_jid: userKey || targetJid, count: 1 });
         }
 
         return {
@@ -83,7 +93,17 @@ export async function unwarn(ctx) {
     await ensureWarningsTable();
 
     try {
-        const deleted = await db('group_warnings').where({ group_id: remoteJid, user_jid: targetJid }).del();
+        const userKey = onlyDigits(targetJid);
+        const deleted = await db('group_warnings')
+            .where({ group_id: remoteJid })
+            .andWhere(q => {
+                if (userKey) {
+                    q.where('user_jid', userKey).orWhere('user_jid', targetJid);
+                } else {
+                    q.where('user_jid', targetJid);
+                }
+            })
+            .del();
         if (deleted > 0) {
             return {
                 success: true,

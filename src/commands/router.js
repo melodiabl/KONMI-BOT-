@@ -610,8 +610,16 @@ export async function dispatch(ctx = {}) {
     try {
       const senderJid = ctx.sender || ctx.participant || ctx.remoteJid
       if (senderJid) {
+        const userKey = onlyDigits(senderJid)
         const banned = await db('group_bans')
-          .where({ group_id: remoteJid, user_jid: senderJid })
+          .where({ group_id: remoteJid })
+          .andWhere(q => {
+            if (userKey) {
+              q.where('user_jid', userKey).orWhere('user_jid', senderJid)
+            } else {
+              q.where('user_jid', senderJid)
+            }
+          })
           .first()
         if (banned) {
           // Permitir que otros administradores gestionen el ban con /ban y /unban

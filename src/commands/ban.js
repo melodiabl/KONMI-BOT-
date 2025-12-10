@@ -60,8 +60,9 @@ export async function ban(ctx) {
   await ensureBansTable()
 
   try {
+    const userKey = onlyDigits(targetJid)
     await db('group_bans')
-      .insert({ group_id: remoteJid, user_jid: targetJid })
+      .insert({ group_id: remoteJid, user_jid: userKey || targetJid })
       .onConflict(['group_id', 'user_jid'])
       .ignore()
 
@@ -97,8 +98,16 @@ export async function unban(ctx) {
   await ensureBansTable()
 
   try {
+    const userKey = onlyDigits(targetJid)
     const deleted = await db('group_bans')
-      .where({ group_id: remoteJid, user_jid: targetJid })
+      .where({ group_id: remoteJid })
+      .andWhere(q => {
+        if (userKey) {
+          q.where('user_jid', userKey).orWhere('user_jid', targetJid)
+        } else {
+          q.where('user_jid', targetJid)
+        }
+      })
       .del()
 
     if (!deleted) {
