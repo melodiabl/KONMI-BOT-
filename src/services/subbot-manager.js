@@ -755,7 +755,6 @@ export async function setBotGlobalState(isOn = true, { actor = null, note = null
     is_on: !!isOn,
     estado: isOn ? "on" : "off",
     activado_por: actor || null,
-    nota: note || null,
     fecha_cambio: db.fn.now(),
   };
   const existing = await db("bot_global_state").first();
