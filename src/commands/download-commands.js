@@ -1,5 +1,5 @@
 // commands/download-commands.js
-// Comandos de descarga con fallbacks robustos y logs detallados
+// Comandos con progreso FLUIDO y EDICIÓN GARANTIZADA del mismo mensaje
 
 import {
   downloadTikTok,
@@ -20,68 +20,7 @@ import {
 import logger from '../config/logger.js'
 import { createProgressNotifier } from '../utils/utils/progress-notifier.js'
 
-/* ===== Sistema de Logs para Download Commands (Caja bonita) ===== */
-
-const LOG_LEVELS = {
-  DEBUG: { label: 'DEBUG', color: '\x1b[36m', icon: '🔍' },
-  INFO: { label: 'INFO', color: '\x1b[34m', icon: 'ℹ️' },
-  WARN: { label: 'WARN', color: '\x1b[33m', icon: '⚠️' },
-  ERROR: { label: 'ERROR', color: '\x1b[31m', icon: '❌' },
-  SUCCESS: { label: 'SUCCESS', color: '\x1b[32m', icon: '✅' },
-  DOWNLOAD: { label: 'DOWNLOAD', color: '\x1b[35m', icon: '⬇️' },
-}
-
-const LOG_RESET = '\x1b[0m'
-const LOG_BOX_WIDTH = 80
-
-function formatBoxLine(text) {
-  const clean = String(text || '')
-  const maxWidth = LOG_BOX_WIDTH
-  const padded = clean.length > maxWidth ? clean.slice(0, maxWidth - 1) + '…' : clean
-  const spaces = ' '.repeat(Math.max(0, maxWidth - padded.length))
-  return `│ ${padded}${spaces} │`
-}
-
-function formatBoxLog(levelKey, command, message, data) {
-  const level = LOG_LEVELS[levelKey] || LOG_LEVELS.INFO
-  const { label, color, icon } = level
-  const timestamp = new Date().toISOString()
-  const header = `${icon} ${label} [${timestamp}] [${command}]`
-
-  const topBorder = `┌${'─'.repeat(LOG_BOX_WIDTH + 2)}┐`
-  const bottomBorder = `└${'─'.repeat(LOG_BOX_WIDTH + 2)}┘`
-
-  const lines = []
-  lines.push(topBorder)
-  lines.push(formatBoxLine(header))
-  lines.push(formatBoxLine(message || ''))
-
-  if (data) {
-    const json = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)
-    json.split('\n').forEach((ln) => {
-      lines.push(formatBoxLine(ln))
-    })
-  }
-
-  lines.push(bottomBorder)
-
-  return `${color}${lines.join('\n')}${LOG_RESET}`
-}
-
-function logDownload(levelKey, command, message, data = null) {
-  const box = formatBoxLog(levelKey, command, message, data)
-  switch (levelKey) {
-    case 'ERROR':
-      console.error(box)
-      break
-    case 'WARN':
-      console.warn(box)
-      break
-    default:
-      console.log(box)
-      break
-  }
-}
+/* ===== Utilidades ===== */
 
 const toMediaInput = (val) => {
   if (!val) return null
@@ -94,22 +33,60 @@ const toMediaInput = (val) => {
 const mentionSender = (sender) => [`${sender}`]
 const senderTag = (sender) => `@${String(sender || '').split('@')[0]}`
 
-// ============================================================
-// FUNCIONES DE MANEJO DE DESCARGAS
-// ============================================================
+// Simular progreso fluido cuando no hay callbacks reales
+class ProgressSimulator {
+  constructor(progressNotifier, targetPercent = 90, durationMs = 3000) {
+    this.notifier = progressNotifier
+    this.currentPercent = 0
+    this.targetPercent = targetPercent
+    this.durationMs = durationMs
+    this.intervalMs = 150 // Más fluido
+    this.timer = null
+    this.stopped = false
+  }
+
+  start() {
+    const steps = this.durationMs / this.intervalMs
+    const increment = (this.targetPercent - this.currentPercent) / steps
+
+    this.timer = setInterval(() => {
+      if (this.stopped) {
+        this.stop()
+        return
+      }
+
+      this.currentPercent = Math.min(this.targetPercent, this.currentPercent + increment)
+      this.notifier.update(this.currentPercent).catch(() => {})
+
+      if (this.currentPercent >= this.targetPercent) {
+        this.stop()
+      }
+    }, this.intervalMs)
+  }
+
+  stop() {
+    if (this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
+  }
+
+  async jumpTo(percent, status) {
+    this.stopped = true
+    this.stop()
+    this.currentPercent = percent
+    await this.notifier.update(percent, status)
+  }
+}
+
+/* ===== COMANDOS DE DESCARGA ===== */
 
 async function handleTikTokDownload(ctx) {
   const { args, sender, sock, remoteJid, message } = ctx
   const url = args.join(' ')
 
-  logDownload('INFO', 'TIKTOK', 'Starting TikTok download', {
-    url: url?.substring(0, 50),
-    sender: senderTag(sender)
-  })
-
   if (!url || !url.includes('tiktok.com')) {
-    logDownload('WARN', 'TIKTOK', 'Invalid URL provided')
-    return { success: false, message: 'Uso: /tiktok <url>' }
+    return { success: false, message: '❌ Uso: /tiktok <url>' }
   }
 
   const progress = createProgressNotifier({
@@ -120,35 +97,35 @@ async function handleTikTokDownload(ctx) {
     icon: '🎵',
   })
 
+  const simulator = new ProgressSimulator(progress, 85, 4000)
+
   try {
-    await progress.update(10, 'Conectando...')
+    await progress.update(5, 'Conectando con TikTok...')
+    simulator.start()
+
     const result = await downloadTikTok(url)
 
-    logDownload('DEBUG', 'TIKTOK', 'Download result received', {
-      success: result.success,
-      hasVideo: !!result.video
-    })
+    await simulator.jumpTo(95, 'Procesando video...')
 
-    if (!result.success || !result.video) throw new Error('No se pudo obtener el video')
-    await progress.complete('Listo')
+    if (!result.success || !result.video) {
+      throw new Error('No se pudo obtener el video')
+    }
 
-    logDownload('SUCCESS', 'TIKTOK', 'Download completed successfully')
+    await progress.complete('✅ Descarga completa')
 
     return {
       type: 'video',
       video: toMediaInput(result.video),
-      caption: `TikTok\nAutor: ${result.author || 'N/D'}\n${senderTag(sender)}`,
+      caption: `🎵 *TikTok*\n👤 Autor: ${result.author || 'Desconocido'}\n📝 ${result.description || ''}\n\n${senderTag(sender)}`,
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'TIKTOK', 'Download failed', {
-      error: e.message,
-      stack: e.stack?.split('\n').slice(0, 3).join('\n')
-    })
-
-    logger.error('handleTikTokDownload', e)
+    logger.error('TikTok error:', e)
     await progress.fail(e.message)
-    return { success: false, message: `Error TikTok: ${e.message}` }
+    return { success: false, message: `❌ Error TikTok: ${e.message}` }
+  } finally {
+    simulator.stop()
+    progress.cleanup?.()
   }
 }
 
@@ -156,13 +133,8 @@ async function handleInstagramDownload(ctx) {
   const { args, sender, sock, remoteJid, message } = ctx
   const url = args.join(' ')
 
-  logDownload('INFO', 'INSTAGRAM', 'Starting Instagram download', {
-    url: url?.substring(0, 50)
-  })
-
   if (!url || !url.includes('instagram.com')) {
-    logDownload('WARN', 'INSTAGRAM', 'Invalid URL provided')
-    return { success: false, message: 'Uso: /instagram <url>' }
+    return { success: false, message: '❌ Uso: /instagram <url>' }
   }
 
   const progress = createProgressNotifier({
@@ -173,211 +145,233 @@ async function handleInstagramDownload(ctx) {
     icon: '📸',
   })
 
+  const simulator = new ProgressSimulator(progress, 85, 3500)
+
   try {
-    await progress.update(10, 'Conectando...')
+    await progress.update(5, 'Conectando con Instagram...')
+    simulator.start()
+
     const result = await downloadInstagram(url)
 
-    logDownload('DEBUG', 'INSTAGRAM', 'Download result received', {
-      success: result.success,
-      type: result.type,
-      hasMedia: !!(result.image || result.video)
-    })
+    await simulator.jumpTo(95, 'Procesando contenido...')
 
-    if (!result.success || (!result.image && !result.video)) throw new Error('Contenido no disponible')
-    await progress.complete('Listo')
+    if (!result.success || (!result.image && !result.video)) {
+      throw new Error('Contenido no disponible')
+    }
 
     const type = result.type === 'video' ? 'video' : (result.video ? 'video' : 'image')
     const media = toMediaInput(result.video || result.image || result.url)
 
-    logDownload('SUCCESS', 'INSTAGRAM', 'Download completed successfully', { type })
+    await progress.complete('✅ Descarga completa')
 
     return {
       type,
       [type]: media,
-      caption: `Instagram\nAutor: ${result.author || 'N/D'}\n${senderTag(sender)}`,
+      caption: `📸 *Instagram*\n👤 ${result.author || 'Desconocido'}\n${result.caption ? `📝 ${result.caption.substring(0, 100)}...` : ''}\n\n${senderTag(sender)}`,
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'INSTAGRAM', 'Download failed', { error: e.message })
-    logger.error('handleInstagramDownload', e)
+    logger.error('Instagram error:', e)
     await progress.fail(e.message)
-    return { success: false, message: `Error Instagram: ${e.message}` }
+    return { success: false, message: `❌ Error Instagram: ${e.message}` }
+  } finally {
+    simulator.stop()
+    progress.cleanup?.()
   }
 }
 
 async function handleFacebookDownload(ctx) {
-  const { args, sender } = ctx
+  const { args, sender, sock, remoteJid, message } = ctx
   const url = args.join(' ')
 
-  logDownload('INFO', 'FACEBOOK', 'Starting Facebook download', {
-    url: url?.substring(0, 50)
-  })
-
   if (!url || !url.includes('facebook.com')) {
-    logDownload('WARN', 'FACEBOOK', 'Invalid URL provided')
-    return { success: false, message: 'Uso: /facebook <url>' }
+    return { success: false, message: '❌ Uso: /facebook <url>' }
   }
 
+  const progress = createProgressNotifier({
+    resolveSocket: () => Promise.resolve(sock),
+    chatId: remoteJid,
+    quoted: message,
+    title: 'Descargando Facebook',
+    icon: '📘',
+  })
+
+  const simulator = new ProgressSimulator(progress, 85, 4000)
+
   try {
+    await progress.update(5, 'Conectando con Facebook...')
+    simulator.start()
+
     const result = await downloadFacebook(url)
 
-    logDownload('DEBUG', 'FACEBOOK', 'Download result received', {
-      success: result.success,
-      hasVideo: !!result.video
-    })
+    await simulator.jumpTo(95, 'Procesando video...')
 
-    if (!result.success || !result.video) throw new Error('No se pudo descargar')
+    if (!result.success || !result.video) {
+      throw new Error('No se pudo descargar el video')
+    }
 
-    logDownload('SUCCESS', 'FACEBOOK', 'Download completed successfully')
+    await progress.complete('✅ Descarga completa')
 
     return {
       type: 'video',
       video: toMediaInput(result.video),
-      caption: `Facebook\n${result.title || ''}\n${senderTag(sender)}`,
+      caption: `📘 *Facebook*\n${result.title ? `📝 ${result.title}` : ''}\n\n${senderTag(sender)}`,
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'FACEBOOK', 'Download failed', { error: e.message })
-    logger.error('handleFacebookDownload', e)
-    return { success: false, message: `Error Facebook: ${e.message}` }
+    logger.error('Facebook error:', e)
+    await progress.fail(e.message)
+    return { success: false, message: `❌ Error Facebook: ${e.message}` }
+  } finally {
+    simulator.stop()
+    progress.cleanup?.()
   }
 }
 
 async function handleTwitterDownload(ctx) {
-  const { args, sender } = ctx
+  const { args, sender, sock, remoteJid, message } = ctx
   const url = args.join(' ')
 
-  logDownload('INFO', 'TWITTER', 'Starting Twitter/X download', {
-    url: url?.substring(0, 50)
-  })
-
   if (!url || (!url.includes('twitter.com') && !url.includes('x.com'))) {
-    logDownload('WARN', 'TWITTER', 'Invalid URL provided')
-    return { success: false, message: 'Uso: /twitter <url>' }
+    return { success: false, message: '❌ Uso: /twitter <url>' }
   }
 
+  const progress = createProgressNotifier({
+    resolveSocket: () => Promise.resolve(sock),
+    chatId: remoteJid,
+    quoted: message,
+    title: 'Descargando Twitter/X',
+    icon: '🐦',
+  })
+
+  const simulator = new ProgressSimulator(progress, 85, 3000)
+
   try {
+    await progress.update(5, 'Conectando con Twitter/X...')
+    simulator.start()
+
     const result = await downloadTwitter(url)
 
-    logDownload('DEBUG', 'TWITTER', 'Download result received', {
-      success: result.success,
-      hasVideo: !!result.video,
-      hasImage: !!result.image
-    })
+    await simulator.jumpTo(95, 'Procesando contenido...')
 
-    if (!result.success || (!result.video && !result.image)) throw new Error('No se pudo descargar')
+    if (!result.success || (!result.video && !result.image)) {
+      throw new Error('No se pudo descargar')
+    }
+
     const type = result.video ? 'video' : 'image'
 
-    logDownload('SUCCESS', 'TWITTER', 'Download completed successfully', { type })
+    await progress.complete('✅ Descarga completa')
 
     return {
       type,
       [type]: toMediaInput(result.video || result.image),
-      caption: `Twitter/X\n${result.text || ''}\n${senderTag(sender)}`,
+      caption: `🐦 *Twitter/X*\n${result.text ? `📝 ${result.text.substring(0, 150)}...` : ''}\n\n${senderTag(sender)}`,
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'TWITTER', 'Download failed', { error: e.message })
-    logger.error('handleTwitterDownload', e)
-    return { success: false, message: `Error Twitter/X: ${e.message}` }
+    logger.error('Twitter error:', e)
+    await progress.fail(e.message)
+    return { success: false, message: `❌ Error Twitter/X: ${e.message}` }
+  } finally {
+    simulator.stop()
+    progress.cleanup?.()
   }
 }
 
 async function handlePinterestDownload(ctx) {
-  const { args, sender } = ctx
+  const { args, sender, sock, remoteJid, message } = ctx
   const url = args.join(' ')
 
-  logDownload('INFO', 'PINTEREST', 'Starting Pinterest download', {
-    url: url?.substring(0, 50)
-  })
-
   if (!url || !url.includes('pinterest.')) {
-    logDownload('WARN', 'PINTEREST', 'Invalid URL provided')
-    return { success: false, message: 'Uso: /pinterest <url>' }
+    return { success: false, message: '❌ Uso: /pinterest <url>' }
   }
 
+  const progress = createProgressNotifier({
+    resolveSocket: () => Promise.resolve(sock),
+    chatId: remoteJid,
+    quoted: message,
+    title: 'Descargando Pinterest',
+    icon: '📌',
+  })
+
+  const simulator = new ProgressSimulator(progress, 85, 2500)
+
   try {
+    await progress.update(5, 'Conectando con Pinterest...')
+    simulator.start()
+
     const result = await downloadPinterest(url)
 
-    logDownload('DEBUG', 'PINTEREST', 'Download result received', {
-      success: result.success,
-      hasImage: !!result.image
-    })
+    await simulator.jumpTo(95, 'Procesando imagen...')
 
-    if (!result.success || !result.image) throw new Error('No se pudo descargar')
+    if (!result.success || !result.image) {
+      throw new Error('No se pudo descargar la imagen')
+    }
 
-    logDownload('SUCCESS', 'PINTEREST', 'Download completed successfully')
+    await progress.complete('✅ Descarga completa')
 
     return {
       type: 'image',
       image: toMediaInput(result.image),
-      caption: `Pinterest\n${result.title || ''}\n${senderTag(sender)}`,
+      caption: `📌 *Pinterest*\n${result.title ? `📝 ${result.title}` : ''}\n\n${senderTag(sender)}`,
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'PINTEREST', 'Download failed', { error: e.message })
-    return { success: false, message: `Error Pinterest: ${e.message}` }
+    logger.error('Pinterest error:', e)
+    await progress.fail(e.message)
+    return { success: false, message: `❌ Error Pinterest: ${e.message}` }
+  } finally {
+    simulator.stop()
+    progress.cleanup?.()
   }
 }
 
 async function handleMusicDownload(ctx) {
-  const { args, sender, sock, remoteJid } = ctx
+  const { args, sender, sock, remoteJid, message } = ctx
   const query = args.join(' ')
 
-  logDownload('INFO', 'MUSIC', 'Starting music download', {
-    query: query?.substring(0, 50),
-    sender: senderTag(sender)
-  })
-
   if (!query) {
-    logDownload('WARN', 'MUSIC', 'No query provided')
-    return { success: false, message: 'Uso: /music <nombre o url>' }
+    return { success: false, message: '❌ Uso: /music <nombre o url>' }
   }
 
+  const progress = createProgressNotifier({
+    resolveSocket: () => Promise.resolve(sock),
+    chatId: remoteJid,
+    quoted: message,
+    title: 'Descargando Música',
+    icon: '🎵',
+  })
+
   try {
-    logDownload('DEBUG', 'MUSIC', 'Searching YouTube Music')
+    await progress.update(5, 'Buscando en YouTube Music...')
+
     const search = await searchYouTubeMusic(query)
 
-    logDownload('DEBUG', 'MUSIC', 'Search completed', {
-      success: search.success,
-      resultsCount: search.results?.length || 0
-    })
-
     if (!search.success || !search.results.length) {
-      logDownload('WARN', 'MUSIC', 'No results found', { query })
-      return { success: false, message: `No hay resultados para "${query}"` }
+      await progress.fail('No se encontraron resultados')
+      return { success: false, message: `❌ No hay resultados para "${query}"` }
     }
 
     const video = search.results[0]
 
-    logDownload('INFO', 'MUSIC', 'Found video', {
-      title: video.title,
-      url: video.url,
-      duration: video.duration
-    })
+    await progress.update(15, `Encontrado: ${video.title.substring(0, 40)}...`)
+    await progress.update(20, 'Preparando descarga...')
 
-    const progress = createProgressNotifier({
-      resolveSocket: () => Promise.resolve(sock),
-      chatId: remoteJid,
-      title: 'Descargando música',
-      icon: '🎵',
-    })
-
-    await progress.update(5, 'Conectando...')
-
-    logDownload('DEBUG', 'MUSIC', 'Starting YouTube download', { url: video.url })
+    let lastPercent = 20
 
     const dl = await downloadYouTube(video.url, 'audio', (p) => {
       if (p?.percent) {
-        const percent = Math.min(95, Math.floor(p.percent))
-        logDownload('DEBUG', 'MUSIC', `Download progress: ${percent}%`)
-        progress.update(percent, 'Descargando...').catch(() => {})
+        const percent = Math.min(95, 20 + Math.floor(p.percent * 0.75))
+        
+        // Solo actualizar si cambió significativamente
+        if (Math.abs(percent - lastPercent) >= 1) {
+          const status = percent < 50 ? 'Conectando con servidor...' : 
+                        percent < 80 ? 'Descargando audio...' : 
+                        'Procesando con FFmpeg...'
+          progress.update(percent, status).catch(() => {})
+          lastPercent = percent
+        }
       }
-    })
-
-    logDownload('DEBUG', 'MUSIC', 'Download completed', {
-      success: dl.success,
-      hasDownload: !!dl.download
     })
 
     if (!dl.success || !dl.download) {
@@ -386,118 +380,99 @@ async function handleMusicDownload(ctx) {
 
     const audioInput = toMediaInput(dl.download)
     if (!audioInput) {
-      logDownload('ERROR', 'MUSIC', 'Invalid audio format')
       throw new Error('Formato de audio no válido')
     }
 
-    await progress.complete('Listo')
-
-    logDownload('SUCCESS', 'MUSIC', 'Music download completed successfully', {
-      title: video.title,
-      quality: dl.quality
-    })
+    await progress.complete('✅ Música lista')
 
     return {
       type: 'audio',
       audio: audioInput,
       mimetype: 'audio/mpeg',
-      caption: `🎵 ${video.title}\nCanal: ${video.author}\nDuración: ${video.duration}\n${senderTag(sender)}`,
+      caption: `🎵 *${video.title}*\n👤 ${video.author}\n⏱️ ${video.duration}\n\n${senderTag(sender)}`,
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'MUSIC', 'Music download failed', {
-      error: e.message,
-      stack: e.stack?.split('\n').slice(0, 5).join('\n')
-    })
-
-    logger.error('handleMusicDownload', e)
-    return { success: false, message: `Error /music: ${e.message}` }
+    logger.error('Music error:', e)
+    await progress.fail(e.message)
+    return { success: false, message: `❌ Error /music: ${e.message}` }
+  } finally {
+    progress.cleanup?.()
   }
 }
 
 async function handleVideoDownload(ctx) {
-  const { args, sender, sock, remoteJid } = ctx
+  const { args, sender, sock, remoteJid, message } = ctx
   const query = args.join(' ')
 
-  logDownload('INFO', 'VIDEO', 'Starting video download', {
-    query: query?.substring(0, 50)
-  })
-
   if (!query) {
-    logDownload('WARN', 'VIDEO', 'No query provided')
-    return { success: false, message: 'Uso: /video <nombre o url>' }
+    return { success: false, message: '❌ Uso: /video <nombre o url>' }
   }
 
+  const progress = createProgressNotifier({
+    resolveSocket: () => Promise.resolve(sock),
+    chatId: remoteJid,
+    quoted: message,
+    title: 'Descargando Video',
+    icon: '🎬',
+  })
+
   try {
-    logDownload('DEBUG', 'VIDEO', 'Searching YouTube Music')
+    await progress.update(5, 'Buscando en YouTube...')
+
     const search = await searchYouTubeMusic(query)
 
-    logDownload('DEBUG', 'VIDEO', 'Search completed', {
-      success: search.success,
-      resultsCount: search.results?.length || 0
-    })
-
     if (!search.success || !search.results.length) {
-      logDownload('WARN', 'VIDEO', 'No results found', { query })
-      return { success: false, message: `No hay resultados para "${query}"` }
+      await progress.fail('No se encontraron resultados')
+      return { success: false, message: `❌ No hay resultados para "${query}"` }
     }
 
     const video = search.results[0]
 
-    logDownload('INFO', 'VIDEO', 'Found video', {
-      title: video.title,
-      url: video.url
-    })
+    await progress.update(15, `Encontrado: ${video.title.substring(0, 40)}...`)
+    await progress.update(20, 'Preparando descarga...')
 
-    const progress = createProgressNotifier({
-      resolveSocket: () => Promise.resolve(sock),
-      chatId: remoteJid,
-      title: 'Descargando video',
-      icon: '🎬',
-    })
-
-    await progress.update(5, 'Conectando...')
-
-    logDownload('DEBUG', 'VIDEO', 'Starting YouTube download')
+    let lastPercent = 20
 
     const dl = await downloadYouTube(video.url, 'video', (p) => {
-      const percent = Math.min(95, Math.floor(p?.percent || 0))
-      logDownload('DEBUG', 'VIDEO', `Download progress: ${percent}%`)
-      progress.update(percent, 'Descargando...').catch(() => {})
+      if (p?.percent) {
+        const percent = Math.min(95, 20 + Math.floor(p.percent * 0.75))
+        
+        if (Math.abs(percent - lastPercent) >= 1) {
+          const status = percent < 40 ? 'Descargando video...' : 
+                        percent < 70 ? 'Descargando audio...' :
+                        percent < 90 ? 'Mezclando video y audio...' :
+                        'Finalizando...'
+          progress.update(percent, status).catch(() => {})
+          lastPercent = percent
+        }
+      }
     })
 
-    logDownload('DEBUG', 'VIDEO', 'Download completed', {
-      success: dl.success,
-      hasDownload: !!dl.download
-    })
-
-    if (!dl.success || !dl.download) throw new Error('Descarga fallida')
+    if (!dl.success || !dl.download) {
+      throw new Error('Descarga fallida')
+    }
 
     const videoInput = toMediaInput(dl.download)
     if (!videoInput) {
-      logDownload('ERROR', 'VIDEO', 'Invalid video format')
       throw new Error('Formato de video no válido')
     }
 
-    await progress.complete('Listo')
-
-    logDownload('SUCCESS', 'VIDEO', 'Video download completed successfully')
+    await progress.complete('✅ Video listo')
 
     return {
       type: 'video',
       video: videoInput,
       mimetype: 'video/mp4',
-      caption: `📺 ${video.title}\nCanal: ${video.author}\nDuración: ${video.duration}\n${senderTag(sender)}`,
+      caption: `🎬 *${video.title}*\n👤 ${video.author}\n⏱️ ${video.duration}\n\n${senderTag(sender)}`,
       mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'VIDEO', 'Video download failed', {
-      error: e.message,
-      stack: e.stack?.split('\n').slice(0, 5).join('\n')
-    })
-
-    logger.error('handleVideoDownload', e)
-    return { success: false, message: `Error /video: ${e.message}` }
+    logger.error('Video error:', e)
+    await progress.fail(e.message)
+    return { success: false, message: `❌ Error /video: ${e.message}` }
+  } finally {
+    progress.cleanup?.()
   }
 }
 
@@ -505,20 +480,15 @@ async function handleSpotifySearch(ctx) {
   const { args, sender, sock, remoteJid, message } = ctx
   const query = args.join(' ')
 
-  logDownload('INFO', 'SPOTIFY', 'Starting Spotify search', {
-    query: query?.substring(0, 50)
-  })
-
   if (!query) {
-    logDownload('WARN', 'SPOTIFY', 'No query provided')
-    return { success: false, message: 'Uso: /spotify <canción>' }
+    return { success: false, message: '❌ Uso: /spotify <canción>' }
   }
 
   const progress = createProgressNotifier({
     resolveSocket: () => Promise.resolve(sock),
     chatId: remoteJid,
     quoted: message,
-    title: 'Spotify → YouTube (alta calidad)',
+    title: 'Spotify → YouTube',
     icon: '🎧',
   })
 
@@ -527,250 +497,151 @@ async function handleSpotifySearch(ctx) {
 
     const result = await searchSpotify(query)
 
-    logDownload('DEBUG', 'SPOTIFY', 'Search result received', {
-      success: result.success
-    })
-
     if (!result.success) {
-      logDownload('WARN', 'SPOTIFY', 'No results found', { query })
-      await progress.fail('No se encontraron resultados en Spotify')
-      return { success: false, message: `No hay resultados para "${query}"` }
+      await progress.fail('No se encontró en Spotify')
+      return { success: false, message: `❌ No hay resultados para "${query}"` }
     }
 
-    logDownload('INFO', 'SPOTIFY', 'Track found', {
-      title: result.title,
-      artists: result.artists,
-      album: result.album,
+    await progress.update(15, `Encontrado: ${result.title}`)
+    await progress.update(20, 'Buscando en YouTube Music...')
+
+    const yt = await searchYouTubeMusic(`${result.title} ${result.artists}`)
+
+    if (!yt.success || !yt.results.length) {
+      await progress.fail('No se encontró en YouTube')
+      return {
+        success: false,
+        message: `🎧 *${result.title}* - ${result.artists}\n❌ No disponible para descarga`
+      }
+    }
+
+    const best = yt.results[0]
+
+    await progress.update(30, 'Descargando audio de alta calidad...')
+
+    let lastPercent = 30
+
+    const dl = await downloadYouTube(best.url, 'audio', (p) => {
+      if (p?.percent) {
+        const percent = Math.min(95, 30 + Math.floor(p.percent * 0.65))
+        
+        if (Math.abs(percent - lastPercent) >= 1) {
+          const status = percent < 60 ? 'Descargando...' :
+                        percent < 85 ? 'Procesando audio...' :
+                        'Optimizando calidad...'
+          progress.update(percent, status).catch(() => {})
+          lastPercent = percent
+        }
+      }
     })
 
-    await progress.update(15, 'Buscando versión en YouTube...')
-
-    let audioInput = null
-    try {
-      logDownload('DEBUG', 'SPOTIFY', 'Attempting YouTube fallback')
-      const yt = await searchYouTubeMusic(`${result.title} ${result.artists}`)
-
-      logDownload('DEBUG', 'SPOTIFY', 'YouTube fallback search result', {
-        success: yt.success,
-        results: yt.results?.length || 0
-      })
-
-      if (yt.success && yt.results.length) {
-        const best = yt.results[0]
-
-        logDownload('INFO', 'SPOTIFY', 'Using YouTube video for download', {
-          title: best.title,
-          url: best.url
-        })
-
-        await progress.update(25, 'Descargando desde YouTube...')
-
-        const dl = await downloadYouTube(best.url, 'audio', (p) => {
-          if (p?.percent) {
-            const percent = Math.min(95, Math.max(25, Math.floor(p.percent)))
-            logDownload('DEBUG', 'SPOTIFY', `Download progress: ${percent}%`)
-            progress.update(percent, 'Descargando...').catch(() => {})
-          }
-        })
-
-        logDownload('DEBUG', 'SPOTIFY', 'YouTube download completed', {
-          success: dl.success,
-          hasDownload: !!dl.download
-        })
-
-        if (dl.success) {
-          audioInput = toMediaInput(dl.download)
-          logDownload('SUCCESS', 'SPOTIFY', 'YouTube fallback succeeded')
-        } else {
-          logDownload('WARN', 'SPOTIFY', 'YouTube download failed in fallback')
-        }
-      } else {
-        logDownload('WARN', 'SPOTIFY', 'YouTube fallback search returned no results')
-      }
-    } catch (e) {
-      logDownload('WARN', 'SPOTIFY', 'YouTube fallback failed', { error: e.message })
-      logger.error('spotify fallback', e)
+    if (!dl.success || !dl.download) {
+      await progress.fail('Error en la descarga')
+      return { success: false, message: '❌ No se pudo descargar el audio' }
     }
 
-    if (audioInput) {
-      await progress.complete('Listo')
+    const audioInput = toMediaInput(dl.download)
 
-      return {
-        type: 'audio',
-        audio: audioInput,
-        mimetype: 'audio/mpeg',
-        caption: `${result.title} - ${result.artists}\nÁlbum: ${result.album}\n${senderTag(sender)}`,
-        mentions: mentionSender(sender),
-      }
-    }
-
-    logDownload('WARN', 'SPOTIFY', 'Could not download audio')
-    await progress.fail('No se pudo descargar el audio')
+    await progress.complete('✅ Descarga completa')
 
     return {
-      success: false,
-      message: `${result.title} - ${result.artists}\nNo se pudo descargar el audio.`
+      type: 'audio',
+      audio: audioInput,
+      mimetype: 'audio/mpeg',
+      caption: `🎧 *${result.title}*\n👤 ${result.artists}\n💿 ${result.album}\n\n${senderTag(sender)}`,
+      mentions: mentionSender(sender),
     }
   } catch (e) {
-    logDownload('ERROR', 'SPOTIFY', 'Search failed', { error: e.message })
-    logger.error('handleSpotifySearch', e)
-
-    try {
-      await progress.fail(e.message || 'Error en la descarga')
-    } catch {
-      // ignore progress errors
-    }
-
-    return { success: false, message: `Error /spotify: ${e.message}` }
+    logger.error('Spotify error:', e)
+    await progress.fail(e.message)
+    return { success: false, message: `❌ Error /spotify: ${e.message}` }
+  } finally {
+    progress.cleanup?.()
   }
 }
+
+/* ===== COMANDOS UTILITARIOS (sin barra de progreso pesada) ===== */
 
 async function handleTranslate(ctx) {
   const { args } = ctx
   const lang = args.pop()
   const text = args.join(' ')
 
-  logDownload('INFO', 'TRANSLATE', 'Translation request', {
-    textLength: text?.length,
-    targetLang: lang
-  })
-
   if (!text || !lang) {
-    logDownload('WARN', 'TRANSLATE', 'Missing parameters')
-    return { success: false, message: 'Uso: /translate <texto> <lang>' }
+    return { success: false, message: '❌ Uso: /translate <texto> <idioma>' }
   }
 
   try {
     const res = await translateText(text, lang)
-
-    logDownload('DEBUG', 'TRANSLATE', 'Translation result', {
-      success: res.success
-    })
-
     if (!res.success) {
-      logDownload('WARN', 'TRANSLATE', 'Translation failed')
-      return { success: false, message: 'No se pudo traducir.' }
+      return { success: false, message: '❌ No se pudo traducir' }
     }
-
-    logDownload('SUCCESS', 'TRANSLATE', 'Translation completed')
-    return { message: `🔤 *Traducción*\n${res.translatedText}` }
+    return { message: `🔤 *Traducción (${lang})*\n\n${res.translatedText}` }
   } catch (e) {
-    logDownload('ERROR', 'TRANSLATE', 'Translation error', { error: e.message })
-    return { success: false, message: `Error /translate: ${e.message}` }
+    return { success: false, message: `❌ Error: ${e.message}` }
   }
 }
 
 async function handleWeather(ctx) {
   const city = (ctx.args || []).join(' ')
 
-  logDownload('INFO', 'WEATHER', 'Weather request', { city })
-
   if (!city) {
-    logDownload('WARN', 'WEATHER', 'No city provided')
-    return { success: false, message: 'Uso: /weather <ciudad>' }
+    return { success: false, message: '❌ Uso: /weather <ciudad>' }
   }
 
   try {
     const res = await getWeather(city)
-
-    logDownload('DEBUG', 'WEATHER', 'Weather result', {
-      success: res.success
-    })
-
     if (!res.success) {
-      logDownload('WARN', 'WEATHER', 'City not found', { city })
-      return { success: false, message: `No encontré clima para "${city}"` }
+      return { success: false, message: `❌ No encontré clima para "${city}"` }
     }
-
-    logDownload('SUCCESS', 'WEATHER', 'Weather fetched successfully')
-    return { message: `🌦️ Clima en ${res.city}: ${res.temperature}°C, ${res.description}.` }
+    return { message: `🌦️ *Clima en ${res.city}*\n🌡️ ${res.temperature}°C\n☁️ ${res.description}` }
   } catch (e) {
-    logDownload('ERROR', 'WEATHER', 'Weather error', { error: e.message })
-    return { success: false, message: `Error /weather: ${e.message}` }
+    return { success: false, message: `❌ Error: ${e.message}` }
   }
 }
 
 async function handleQuote() {
-  logDownload('INFO', 'QUOTE', 'Quote request')
-
   try {
     const res = await getRandomQuote()
-
-    if (!res.success) {
-      logDownload('WARN', 'QUOTE', 'Could not get quote')
-      return { success: false, message: 'No pude obtener una frase.' }
-    }
-
-    logDownload('SUCCESS', 'QUOTE', 'Quote fetched successfully')
-    return { message: `"${res.quote}"\n- ${res.author}` }
+    if (!res.success) return { success: false, message: '❌ No pude obtener una frase' }
+    return { message: `💬 *"${res.quote}"*\n\n— ${res.author}` }
   } catch (e) {
-    logDownload('ERROR', 'QUOTE', 'Quote error', { error: e.message })
-    return { success: false, message: `Error /quote: ${e.message}` }
+    return { success: false, message: `❌ Error: ${e.message}` }
   }
 }
 
 async function handleFact() {
-  logDownload('INFO', 'FACT', 'Fact request')
-
   try {
     const res = await getRandomFact()
-
-    if (!res.success) {
-      logDownload('WARN', 'FACT', 'Could not get fact')
-      return { success: false, message: 'No pude obtener un dato.' }
-    }
-
-    logDownload('SUCCESS', 'FACT', 'Fact fetched successfully')
-    return { message: `🧠 ${res.fact}` }
+    if (!res.success) return { success: false, message: '❌ No pude obtener un dato' }
+    return { message: `🧠 *Dato curioso*\n\n${res.fact}` }
   } catch (e) {
-    logDownload('ERROR', 'FACT', 'Fact error', { error: e.message })
-    return { success: false, message: `Error /fact: ${e.message}` }
+    return { success: false, message: `❌ Error: ${e.message}` }
   }
 }
 
 async function handleTriviaCommand() {
-  logDownload('INFO', 'TRIVIA', 'Trivia request')
-
   try {
     const res = await getTrivia()
-
-    if (!res.success) {
-      logDownload('WARN', 'TRIVIA', 'Could not get trivia')
-      return { success: false, message: 'No pude obtener trivia.' }
-    }
-
-    logDownload('SUCCESS', 'TRIVIA', 'Trivia fetched successfully')
-    return { message: `❓ ${res.question}\n\nRespuesta: ||${res.correct_answer}||` }
+    if (!res.success) return { success: false, message: '❌ No pude obtener trivia' }
+    return { message: `❓ *Trivia*\n\n${res.question}\n\n*Respuesta:* ||${res.correct_answer}||` }
   } catch (e) {
-    logDownload('ERROR', 'TRIVIA', 'Trivia error', { error: e.message })
-    return { success: false, message: `Error /trivia: ${e.message}` }
+    return { success: false, message: `❌ Error: ${e.message}` }
   }
 }
 
 async function handleMemeCommand() {
-  logDownload('INFO', 'MEME', 'Meme request')
-
   try {
     const res = await getRandomMeme()
-
-    if (!res.success) {
-      logDownload('WARN', 'MEME', 'Could not get meme')
-      return { success: false, message: 'No pude obtener un meme.' }
-    }
-
-    logDownload('SUCCESS', 'MEME', 'Meme fetched successfully')
-    return { type: 'image', image: toMediaInput(res.image), caption: res.title || 'Meme' }
+    if (!res.success) return { success: false, message: '❌ No pude obtener un meme' }
+    return { type: 'image', image: toMediaInput(res.image), caption: `😂 ${res.title || 'Meme Random'}` }
   } catch (e) {
-    logDownload('ERROR', 'MEME', 'Meme error', { error: e.message })
-    return { success: false, message: `Error /meme: ${e.message}` }
+    return { success: false, message: `❌ Error: ${e.message}` }
   }
 }
 
-// ============================================================
-// EXPORTACIONES - Todas las formas posibles de importación
-// ============================================================
+/* ===== EXPORTACIONES ===== */
 
-// Exportaciones nombradas individuales
 export {
   handleTikTokDownload,
   handleInstagramDownload,
@@ -788,7 +659,6 @@ export {
   handleMemeCommand,
 }
 
-// Exportación por defecto como objeto
 export default {
   handleTikTokDownload,
   handleInstagramDownload,
