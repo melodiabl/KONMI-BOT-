@@ -122,7 +122,22 @@ async function start() {
           const fromMe = !!m.key?.fromMe;
           const isGroup = remoteJid.endsWith('@g.us');
 
-          if (!await isBotGloballyActive() && !fromMe) continue;
+          const msg = m.message || {};
+          const rawText = (
+            msg.conversation ||
+            msg.extendedTextMessage?.text ||
+            msg.imageMessage?.caption ||
+            msg.videoMessage?.caption ||
+            ''
+          ).trim();
+
+          // Cuando el bot global está OFF, solo dejar pasar "/bot global on"
+          if (!fromMe) {
+            const on = await isBotGloballyActive();
+            const isBotGlobalOnCmd = /^\/bot\s+global\s+on\b/i.test(rawText);
+            if (!on && !isBotGlobalOnCmd) continue;
+          }
+
           if (isGroup && !await isBotActiveInGroup(CODE, remoteJid) && !fromMe) continue;
 
           const runtimeContext = {

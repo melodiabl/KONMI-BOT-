@@ -635,7 +635,8 @@ export async function connectToWhatsApp(
         }
         return mgr
       }
-      const ignoreGating = String(process.env.BOT_IGNORE_GATING || 'true').toLowerCase() === 'true'
+      // Si BOT_IGNORE_GATING no estÃ¡ en true, se aplica el filtro global/grupo
+      const ignoreGating = String(process.env.BOT_IGNORE_GATING || 'false').toLowerCase() === 'true'
 
       for (const m of messages) {
         try {
