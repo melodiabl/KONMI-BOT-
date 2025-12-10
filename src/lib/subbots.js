@@ -56,7 +56,7 @@ export function getSubbotStatus(code) {
   return getSubbotByCode(code);
 }
 
-// MODIFICADO: Renombrado para claridad
+// MODIFICADO: Renombrado para claridad - Subbots del usuario
 export function getAllSubbots(ownerNumber) {
   return listUserSubbots(ownerNumber);
 }

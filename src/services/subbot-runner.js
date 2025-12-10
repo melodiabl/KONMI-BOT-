@@ -1,4 +1,4 @@
-// backend/full/subbot-runner.js
+// backend/services/subbot-runner.js
 import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';

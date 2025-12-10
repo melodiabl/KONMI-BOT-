@@ -242,7 +242,7 @@ export async function cleanOrphanSubbots() {
 
   if (removed) {
     logger.info(
-      ` Limpieza de subbots huérfanos: ${removed} registros eliminados`,
+      `✅ Limpieza de subbots huérfanos: ${removed} registros eliminados`,
     );
   }
 
@@ -332,6 +332,7 @@ export async function createSubbotWithPairing({
   displayName = "KONMI-BOT",
   requestJid,
   requestParticipant,
+  creatorPushName, // NUEVO: Nombre del creador
 }) {
   await ensureTable();
   await ensureRuntimeSyncListeners();
@@ -349,11 +350,21 @@ export async function createSubbotWithPairing({
 
   ensureDir(SUBBOTS_BASE_DIR);
 
+  // CORRECCIÓN: Agregar el push name del creador al display
+  const subbotDisplay = creatorPushName
+    ? `KONMISUB(${creatorPushName})`
+    : displayName;
+
   const launchResult = await launchSubbot({
     type: "code",
     createdBy: cleanedOwner,
     targetNumber: cleanedTarget,
-    metadata: { uiLabel: displayName, requestJid, requestParticipant },
+    metadata: {
+      uiLabel: subbotDisplay,
+      requestJid,
+      requestParticipant,
+      creatorPushName, // Guardar el push name original
+    },
   });
 
   if (!launchResult.success) {
@@ -364,7 +375,8 @@ export async function createSubbotWithPairing({
   const authDir = path.join(SUBBOTS_BASE_DIR, subbot.code, "auth");
 
   const metadata = buildDefaultMetadata({
-    displayName,
+    displayName: subbotDisplay,
+    creatorPushName,
     type: "code",
     targetNumber: cleanedTarget,
     requestJid,
@@ -452,6 +464,20 @@ export async function listUserSubbots(ownerNumber) {
         `%${cleaned}%`,
       );
     })
+    .orderBy("updated_at", "desc");
+
+  return rows.map((row) => ({
+    ...row,
+    metadata: safeParseJson(row.metadata),
+  }));
+}
+
+// NUEVO: Función para listar TODOS los subbots del sistema
+export async function listAllSubbots() {
+  await ensureTable();
+  await ensureRuntimeSyncListeners();
+
+  const rows = await db("subbots")
     .orderBy("updated_at", "desc");
 
   return rows.map((row) => ({
@@ -611,11 +637,8 @@ export async function markSubbotDisconnected(code, reason = null) {
   logger.subbot.disconnected(code, normalizedReason || "unknown");
 
   if (isManualLogout) {
-    // 🗑️ AUTO-LIMPIEZA: eliminar carpeta y registro solo cuando el usuario
-    // desconecta manualmente desde WhatsApp.
     setTimeout(async () => {
       try {
-        // Prefer the stored auth_path for precise cleanup
         const row = await db("subbots").where({ code }).first();
         const authPath = row?.auth_path || path.join(SUBBOTS_BASE_DIR, code, "auth");
         const baseDir = path.resolve(authPath, "..");
@@ -659,8 +682,11 @@ async function ensureRuntimeSyncListeners() {
 
   wrap("pairing_code", async (subbot, data) => {
     if (!subbot?.code) return;
+
+    // CORRECCIÓN: Guardar el código de pairing real y el identificador por separado
     const metaPatch = {
-      pairingCode: data.code || null,
+      pairingCode: data.pairingCode || data.code || null, // Código real de 8 dígitos
+      identificationCode: data.identificationCode || subbot.code, // Código interno
       pairingDisplay: data.displayCode || null,
       pairingGeneratedAt: new Date().toISOString(),
       targetNumber: data.targetNumber || subbot?.metadata?.targetNumber || null,
@@ -924,7 +950,7 @@ export async function restoreActiveSubbots() {
   }
 
   if (restored) {
-    logger.info(`♻️  Subbots restaurados tras reinicio: ${restored}`);
+    logger.info(`♻️ Subbots restaurados tras reinicio: ${restored}`);
   }
 
   return restored;
@@ -934,6 +960,7 @@ export default {
   createSubbotWithPairing,
   createSubbotWithQr,
   listUserSubbots,
+  listAllSubbots, // ⬅️ EXPORTACIÓN AGREGADA
   deleteUserSubbot,
   getSubbotByCode,
   attachRuntimeListeners,
