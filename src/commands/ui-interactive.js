@@ -606,7 +606,8 @@ export async function categorizedMenu(ctx = {}) {
     body,
     sections,
     buttonText: 'Ver comandos',
-    forceTextMode: !!ctx.isGroup
+    // Antes se forzaba modo texto en grupos; ahora se permiten interactivos también en grupos.
+    forceTextMode: false
   });
 }
 
@@ -620,8 +621,9 @@ export async function helpByCategory(ctx = {}) {
     body,
     sections,
     buttonText: 'Ver',
-    forceTextMode: !!ctx.isGroup,
-    footer: ctx.isGroup ? 'Modo texto en grupos para compatibilidad' : undefined
+    // Habilitamos lista interactiva también en grupos
+    forceTextMode: false,
+    footer: undefined
   });
 }
 
