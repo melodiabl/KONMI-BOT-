@@ -439,9 +439,10 @@ async function sendResult(sock, jid, result, ctx) {
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
     const buttonList = result.buttons;
     const isGroupChat = typeof targetJid === 'string' && targetJid.endsWith('@g.us');
+    const allowGroupInteractive = String(process.env.ALLOW_GROUP_INTERACTIVE || 'true').toLowerCase() === 'true';
 
-    // Para grupos, usar directamente texto con comandos clickeables
-    if (isGroupChat) {
+    // Para grupos sin soporte interactivo, degradar a texto con comandos clickeables
+    if (isGroupChat && !allowGroupInteractive) {
       const lines = [result.text || result.caption || 'Opciones:'];
       for (const b of buttonList) {
         const label = b.text || b.title || b.displayText || 'Acción';
@@ -496,6 +497,7 @@ async function sendResult(sock, jid, result, ctx) {
   // Lista interactiva - Formato nativo de @itsukichan/baileys
   if (result.type === 'list' && Array.isArray(result.sections)) {
     const isGroupChat = typeof targetJid === 'string' && targetJid.endsWith('@g.us');
+    const allowGroupInteractive = String(process.env.ALLOW_GROUP_INTERACTIVE || 'true').toLowerCase() === 'true';
     const mapSections = (result.sections || []).map((sec) => ({
       title: sec.title || undefined,
       rows: (sec.rows || []).map((r) => ({
@@ -505,8 +507,8 @@ async function sendResult(sock, jid, result, ctx) {
       })),
     }))
 
-    // En grupos degradar a texto plano para evitar fallos de cliente
-    if (isGroupChat) {
+    // En grupos sin soporte interactivo, degradar a texto plano
+    if (isGroupChat && !allowGroupInteractive) {
       const lines = [];
       lines.push(result.text || result.description || result.title || 'Menu');
       for (const sec of mapSections) {
