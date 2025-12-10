@@ -439,7 +439,7 @@ async function sendResult(sock, jid, result, ctx) {
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
     const buttonList = result.buttons;
     const isGroupChat = typeof targetJid === 'string' && targetJid.endsWith('@g.us');
-    const allowGroupInteractive = String(process.env.ALLOW_GROUP_INTERACTIVE || 'true').toLowerCase() === 'true';
+    const allowGroupInteractive = String(process.env.ALLOW_GROUP_INTERACTIVE || 'false').toLowerCase() === 'true';
 
     // Para grupos sin soporte interactivo, degradar a texto con comandos clickeables
     if (isGroupChat && !allowGroupInteractive) {
@@ -497,7 +497,7 @@ async function sendResult(sock, jid, result, ctx) {
   // Lista interactiva - Formato nativo de @itsukichan/baileys
   if (result.type === 'list' && Array.isArray(result.sections)) {
     const isGroupChat = typeof targetJid === 'string' && targetJid.endsWith('@g.us');
-    const allowGroupInteractive = String(process.env.ALLOW_GROUP_INTERACTIVE || 'true').toLowerCase() === 'true';
+    const allowGroupInteractive = String(process.env.ALLOW_GROUP_INTERACTIVE || 'false').toLowerCase() === 'true';
     const mapSections = (result.sections || []).map((sec) => ({
       title: sec.title || undefined,
       rows: (sec.rows || []).map((r) => ({
