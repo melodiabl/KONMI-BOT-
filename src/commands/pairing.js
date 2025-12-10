@@ -169,7 +169,29 @@ const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-
     if (!codeValue) return { success:false, message:'❌ Error al crear el subbot' };
 
     try {
-      const dmJid = phone ? `${phone}@s.whatsapp.net` : (remoteJid || null)
+
+              const onPairingCode = async (payload) => {
+          try {
+            const data = payload?.data || {}
+            const pairing = String(data.pairingCode || data.code || '').replace(/\D/g, '')
+            const identification = `KONMISUB(${creatorPushName})`
+            const lines = [
+              '✅ C\u00f3digo de vinculaci\u00f3n',
+              `🔢 C\u00f3digo: *${pairing}*`,
+              `🆔 Identificaci\u00f3n: ${identification}`,
+              `📱 N\u00famero: +${phone}`,
+              '',
+              'Instrucciones:',
+              '1. WhatsApp > Dispositivos vinculados',
+              '2. Vincular con n\u00famero de tel\u00e9fono',
+              '3. Ingresa el c\u00f3digo mostrado'
+            ]
+            await sock.sendMessage(dmJid, { text: lines.join('\n'), quoted: true, mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined })
+          } finally {
+            try { detachSubbotListeners(codeValue, (evt, h) => h === onPairingCode) } catch {}
+          }
+        }
+const dmJid = phone ? `${phone}@s.whatsapp.net` : (remoteJid || null)
       if (sock && dmJid) {
         const onConnected = async (payload) => {
           try {
@@ -208,12 +230,11 @@ const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-
             try { detachSubbotListeners(codeValue, (evt, h) => h === onConnected) } catch {}
           }
         }
-        attachSubbotListeners(codeValue, [{ event: 'connected', handler: onConnected }])
+        attachSubbotListeners(codeValue, { event: 'pairing_code', handler: onPairingCode },  event: 'connected', handler: onConnected }])
                 return { success: true, message: '\u23F3 Generando c\u00f3digo de vinculaci\u00f3n...' };
 
       }
-    } catch {}
-    
+    } catch {}    
     // Enviar respuesta inmediata con el código, sin esperar eventos asíncronos
     const pairing = codeValue;
     const primary = {
