@@ -162,7 +162,9 @@ export async function code(ctx) {
       return { success:false, message:hint }
     }
     
-    const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT' });
+    
+      const creatorPushName = ctx.pushName || ctx.usuarioName || phone;
+const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT', creatorPushName });
     const codeValue = res?.code;
     if (!codeValue) return { success:false, message:'❌ Error al crear el subbot' };
 
@@ -207,6 +209,8 @@ export async function code(ctx) {
           }
         }
         attachSubbotListeners(codeValue, [{ event: 'connected', handler: onConnected }])
+                return { success: true, message: '\u23F3 Generando c\u00f3digo de vinculaci\u00f3n...' };
+
       }
     } catch {}
     
