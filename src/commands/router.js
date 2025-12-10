@@ -573,7 +573,15 @@ export async function dispatch(ctx = {}) {
   if (isGroup) {
     const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
     if (!botEnabled) {
-      return false // Bot is disabled in this group, don't process commands
+      const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
+      const firstToken = (text || '').trim().split(/\s+/)[0].toLowerCase()
+      const isBotCommand = firstToken === '/bot' || firstToken === 'bot'
+
+      // Si el bot está desactivado en el grupo, solo permitir el comando "bot" (cualquier subcomando)
+      // para que el owner/admin pueda usar "bot on/off" y reactivarlo.
+      if (!isBotCommand) {
+        return false
+      }
     }
   }
 
