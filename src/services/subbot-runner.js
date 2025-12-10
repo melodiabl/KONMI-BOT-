@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Leer variables de entorno
-const CODE = process.env.SUB_CODE; // Este es el código de identificación interno
+const CODE = process.env.SUB_CODE;
 const TYPE = process.env.SUB_TYPE || 'qr';
 const DIR = process.env.SUB_DIR;
 const TARGET = process.env.SUB_TARGET || null;
@@ -32,6 +32,23 @@ const vlog = (...a) => { if (SUBBOT_VERBOSE) console.log(`[SUBBOT ${CODE}]`, ...
 if (!CODE || !DIR) {
   process.send?.({ event: 'error', data: { message: 'Falta SUB_CODE o SUB_DIR' } });
   process.exit(1);
+}
+
+// 🔧 Helper para enviar mensajes al padre con log
+function sendToParent(event, data) {
+  const payload = { event, data };
+  console.log(`[SUBBOT-RUNNER ${CODE}] 📤 Enviando al padre:`, event, JSON.stringify(data || {}).substring(0, 100));
+  
+  if (process.send) {
+    try {
+      process.send(payload);
+      console.log(`[SUBBOT-RUNNER ${CODE}] ✅ Mensaje enviado correctamente`);
+    } catch (error) {
+      console.error(`[SUBBOT-RUNNER ${CODE}] ❌ Error enviando mensaje:`, error.message);
+    }
+  } else {
+    console.error(`[SUBBOT-RUNNER ${CODE}] ❌ process.send no disponible`);
+  }
 }
 
 // Función principal de ejecución del sub-bot
@@ -56,9 +73,9 @@ async function start() {
       if (qr && !usePairing && qr !== lastQR) {
         lastQR = qr;
         try {
-          console.log(`\n╔═══════════════════════════════════════════════╗`);
+          console.log(`\n╔═══════════════════════════════════════════════════╗`);
           console.log(`║   📱 QR CODE [SUBBOT ${CODE}] 📱              ║`);
-          console.log(`╚═══════════════════════════════════════════════╝\n`);
+          console.log(`╚═══════════════════════════════════════════════════╝\n`);
           qrcodeTerminal.generate(qr, { small: true });
           console.log(`\n✅ Código generado correctamente\n`);
 
@@ -66,17 +83,22 @@ async function start() {
           const QRCode = await import('qrcode');
           const dataUrl = await QRCode.default.toDataURL(qr);
           vlog('Enviando qr_ready event');
-          process.send?.({ event: 'qr_ready', data: { qrCode: qr, qrImage: dataUrl.split(',')[1] } });
+          sendToParent('qr_ready', { qrCode: qr, qrImage: dataUrl.split(',')[1] });
         } catch (e) {
           vlog('Error generando QR:', e.message);
-          process.send?.({ event: 'error', data: { message: 'Error generando QR', reason: e.message } });
+          sendToParent('error', { message: 'Error generando QR', reason: e.message });
         }
       }
 
       if (connection === 'open') {
         const botNumber = sock.user?.id?.split(':')[0] || null;
         vlog('Conectado, botNumber:', botNumber);
-        process.send?.({ event: 'connected', data: { jid: sock.user?.id, number: `+${botNumber}`, digits: botNumber, displayName: DISPLAY } });
+        sendToParent('connected', { 
+          jid: sock.user?.id, 
+          number: `+${botNumber}`, 
+          digits: botNumber, 
+          displayName: DISPLAY 
+        });
       }
 
       if (connection === 'close') {
@@ -86,45 +108,45 @@ async function start() {
 
         const isLoggedOut = statusCode === 401 || /logged out/i.test(reason || '');
         if (isLoggedOut) {
-          process.send?.({ event: 'logged_out', data: { reason } });
+          sendToParent('logged_out', { reason });
           process.exit(0);
         } else {
-          process.send?.({ event: 'disconnected', data: { reason, statusCode } });
+          sendToParent('disconnected', { reason, statusCode });
         }
       }
     });
 
-    // Escuchar evento de pairing code generado - Baileys emite 'pairing_code' o 'pairing_code_ready'
+    // Escuchar evento de pairing code generado
     if (usePairing) {
       sock.ev.on('pairing_code', (pairingCode) => {
-        vlog('Evento pairing_code recibido:', pairingCode);
-        // CORRECCIÓN: Enviar el código de pairing real, no el código de identificación
-        process.send?.({
-          event: 'pairing_code',
-          data: {
-            pairingCode, // Este es el código real de 8 dígitos para emparejar
-            code: pairingCode, // Este es el código que el usuario debe ingresar
-            identificationCode: CODE, // Este es el código interno de identificación
-            displayCode: DISPLAY,
-            targetNumber: TARGET
-          }
-        });
+        console.log(`[SUBBOT-RUNNER ${CODE}] 🔐 Evento pairing_code recibido:`, pairingCode);
+        
+        const payload = {
+          pairingCode,
+          code: pairingCode,
+          identificationCode: CODE,
+          displayCode: DISPLAY,
+          targetNumber: TARGET
+        };
+        
+        console.log(`[SUBBOT-RUNNER ${CODE}] 📋 Payload completo:`, JSON.stringify(payload));
+        sendToParent('pairing_code', payload);
       });
 
       sock.ev.on('pairing_code_ready', (data) => {
-        vlog('Evento pairing_code_ready recibido:', data);
+        console.log(`[SUBBOT-RUNNER ${CODE}] 🔐 Evento pairing_code_ready recibido:`, data);
+        
         const code = data?.code || data?.pairingCode || data;
-        // CORRECCIÓN: Enviar el código de pairing real
-        process.send?.({
-          event: 'pairing_code',
-          data: {
-            pairingCode: code, // Código real de 8 dígitos
-            code, // Código que el usuario debe ingresar
-            identificationCode: CODE, // Código interno de identificación
-            displayCode: DISPLAY,
-            targetNumber: TARGET
-          }
-        });
+        const payload = {
+          pairingCode: code,
+          code,
+          identificationCode: CODE,
+          displayCode: DISPLAY,
+          targetNumber: TARGET
+        };
+        
+        console.log(`[SUBBOT-RUNNER ${CODE}] 📋 Payload completo:`, JSON.stringify(payload));
+        sendToParent('pairing_code', payload);
       });
     }
 
@@ -172,7 +194,7 @@ async function start() {
 
   } catch (error) {
     console.error(`[SUBBOT ${CODE}] Error fatal al iniciar:`, error?.message || error);
-    process.send?.({ event: 'error', data: { message: error.message } });
+    sendToParent('error', { message: error.message });
     process.exit(1);
   }
 }
