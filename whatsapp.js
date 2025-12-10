@@ -771,31 +771,6 @@ export async function connectToWhatsApp(
           const firstToken = /^[\\/!.#?$~]/.test(rawText) ? rawText.split(/\s+/)[0].toLowerCase() : ''
           const bypassCmd = controlSet.has(firstToken)
 
-          // Solo permitir reactivaciÃ³n con "/bot global on" cuando el bot estÃ¡ en OFF global
-          if (!ignoreGating && mm && typeof mm.isBotGloballyActive === 'function') {
-            try {
-              const on = await mm.isBotGloballyActive()
-              const isBotGlobalOnCmd =
-                !fromMe &&
-                /^\/bot\s+global\s+on\b/i.test(rawText)
-
-              if (!on && !isBotGlobalOnCmd) {
-                // Bot global OFF: ignorar todo excepto "/bot global on"
-                continue
-              }
-            } catch (e) {
-              logMessage('ERROR', 'GATING', 'isBotGloballyActive failed', { error: e?.message })
-            }
-          }
-          if (!ignoreGating && remoteJid.endsWith('@g.us') && mm && typeof mm.isBotActiveInGroup === 'function') {
-            try {
-              const ok = await mm.isBotActiveInGroup('main', remoteJid)
-              if (!ok && !fromMe && !bypassCmd) continue
-            } catch (e) {
-              logMessage('ERROR', 'GATING', 'isBotActiveInGroup failed', { error: e?.message })
-            }
-          }
-
           try {
             const { logIncomingMessage } = await import('./src/utils/utils/wa-logging.js')
             await logIncomingMessage(m)

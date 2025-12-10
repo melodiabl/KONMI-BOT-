@@ -5,6 +5,7 @@ import logger from '../config/logger.js'
 import antibanMiddleware from '../utils/utils/anti-ban-middleware.js'
 import antibanSystem from '../utils/utils/anti-ban.js'
 import { getGroupBool } from '../utils/utils/group-config.js'
+import { isBotGloballyActive } from '../services/subbot-manager.js'
 import fs from 'fs'
 import path from 'path'
 import { pathToFileURL, fileURLToPath } from 'url' // <-- añadí fileURLToPath aquí
@@ -568,6 +569,18 @@ async function sendResult(sock, jid, result, ctx) {
 export async function dispatch(ctx = {}) {
   const { sock, remoteJid, isGroup } = ctx
   if (!sock || !remoteJid) return false
+
+  // Gating global centralizado: si el bot está en OFF global,
+  // solo permitir comandos "bot global ..." para que el owner pueda reactivarlo.
+  try {
+    const textForGlobal = (ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || ''
+    const trimmed = textForGlobal.trim().toLowerCase()
+    const isBotGlobalCmd = /^([\/!.#?$~]\s*)?bot\s+global\b/.test(trimmed)
+    const on = await isBotGloballyActive()
+    if (!on && !isBotGlobalCmd) {
+      return false
+    }
+  } catch {}
 
   // Check if bot is enabled in this group
   if (isGroup) {
