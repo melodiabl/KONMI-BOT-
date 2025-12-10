@@ -33,10 +33,10 @@ export async function mybots({ usuario }){
 
       // CORRECCIÓN: Para tipo 'code', mostrar el código de pairing como principal
       const pairingCode = metadata.pairingCode || '-'
-      const identificationCode = r.code || metadata.identificationCode || '-'
-      const displayName = metadata.displayName || metadata.creatorPushName || 'Sin nombre'
+      const pushName = metadata.creatorPushName || 'Sin nombre'
+      const displayName = `KONMISUB(${pushName})`
 
-      msg += `${i+1}. *Código:* ${type === 'code' && pairingCode !== '-' ? pairingCode : identificationCode}\n`
+      msg += `${i+1}. *Código:* ${pairingCode}\n`
       msg += `   *Identificación:* ${displayName}\n`
       msg += `   *Tipo:* ${type}\n`
       msg += `   *Estado:* ${online?'🟢 Online':'⚪ Offline'}\n`
@@ -69,11 +69,11 @@ export async function bots({ usuario }){
 
       // CORRECCIÓN: Para tipo 'code', mostrar el código de pairing como principal
       const pairingCode = metadata.pairingCode || '-'
-      const identificationCode = r.code || metadata.identificationCode || '-'
-      const displayName = metadata.displayName || metadata.creatorPushName || 'Sin nombre'
+      const pushName = metadata.creatorPushName || 'Sin nombre'
+      const displayName = `KONMISUB(${pushName})`
       const ownerNumber = r.owner_number || 'Desconocido'
 
-      msg += `${i+1}. *Código:* ${type === 'code' && pairingCode !== '-' ? pairingCode : identificationCode}\n`
+      msg += `${i+1}. *Código:* ${pairingCode}\n`
       msg += `   *Identificación:* ${displayName}\n`
       msg += `   *Owner:* ${ownerNumber}\n`
       msg += `   *Tipo:* ${type}\n`

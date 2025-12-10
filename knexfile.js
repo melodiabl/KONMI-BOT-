@@ -81,5 +81,19 @@ function makeConfig(env) {
 
 export default {
   development: makeConfig('development'),
-  production: makeConfig('production')
+  production: makeConfig('production'),
+  test: {
+    client: 'sqlite3',
+    connection: {
+      filename: ':memory:'
+    },
+    useNullAsDefault: true,
+    migrations: {
+      directory: join(__dirname, 'migrations'),
+      loadExtensions: ['.cjs']
+    },
+    pool: {
+      afterCreate: (conn, cb) => conn.run('PRAGMA foreign_keys = ON', cb)
+    }
+  }
 };

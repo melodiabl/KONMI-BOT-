@@ -7,7 +7,7 @@
     "scripts": {
         "start": "node index.js",
         "dev": "nodemon index.js",
-        "test": "jest",
+        "test": "NODE_OPTIONS=--experimental-vm-modules jest",
         "pairing:interactive": "node scripts/pairing-interactive.js",
         "pairing:direct": "node scripts/pairing-direct.js",
         "pairing:qr": "node scripts/pairing-qr.js",
