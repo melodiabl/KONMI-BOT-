@@ -227,36 +227,42 @@ export async function code(ctx) {
             console.error('[pairing.js] Error registrando onConnected:', e);
           }
 
-          // Preparar respuestas con el código REAL
-          const primary = {
-            success: true,
-            message: `✅ Código de vinculación\n\n🔢 Código: *${pairingCode}*\n📱 Número: +${phone}\n\nInstrucciones:\n1. WhatsApp > Dispositivos vinculados\n2. Vincular con número de teléfono\n3. Ingresa el código mostrado`,
-            mentions: (phone ? [`${phone}@s.whatsapp.net`] : undefined),
-            quoted: true,
-            ephemeralDuration: 600,
-          };
+          // 🎯 RESPUESTA SIMPLIFICADA: Un solo mensaje con botón de copiar
+          const messageText = `✅ *Código de Vinculación Generado*\n\n` +
+            `🔢 Código: \`${pairingCode}\`\n` +
+            `📱 Número: +${phone}\n\n` +
+            `📋 *Instrucciones:*\n` +
+            `1. Abre WhatsApp > Dispositivos vinculados\n` +
+            `2. Toca "Vincular con número de teléfono"\n` +
+            `3. Ingresa el código de arriba\n\n` +
+            `⏱️ El código expira en 5 minutos`;
 
-          const copyContent = { 
-            type: 'content', 
-            content: sendCopyableCode(pairingCode, '🔢 *CÓDIGO DE VINCULACIÓN*\n📱 Tu número: +' + phone + '\n\n⏱️ Válido por 5 minutos'), 
-            quoted: true, 
-            ephemeralDuration: 600 
-          };
-
-          const quickFlow = buildQuickReplyFlow({
-            header: '🔢 Código de vinculación',
-            body: `Código: ${pairingCode}`,
-            footer: 'Toca "Copiar código"',
+          // Usar el flow interactivo con botón de copiar automático
+          const interactiveFlow = buildQuickReplyFlow({
+            header: '🔐 Código de Vinculación',
+            body: `Código: *${pairingCode}*\nNúmero: +${phone}`,
+            footer: 'Toca el botón para copiar',
             buttons: [
-              { text: '📋 Copiar código', command: '/copy ' + pairingCode },
+              { text: '📋 Copiar Código', copy: pairingCode },
               { text: '🤖 Mis Subbots', command: '/mybots' },
-              { text: '🧾 QR Subbot', command: '/qr' },
-              { text: '🏠 Menú', command: '/menu' },
             ],
           });
-          const quickContent = { type: 'content', content: quickFlow, quoted: true, ephemeralDuration: 600 };
 
-          resolve([primary, copyContent, quickContent]);
+          resolve([
+            {
+              success: true,
+              message: messageText,
+              mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined,
+              quoted: true,
+              ephemeralDuration: 600,
+            },
+            {
+              type: 'content',
+              content: interactiveFlow,
+              quoted: true,
+              ephemeralDuration: 600,
+            }
+          ]);
         } catch (e) {
           console.error('[pairing.js] Error en globalHandler:', e);
           resolve({ success:false, message:`⚠️ Error procesando código: ${e?.message||e}` });
