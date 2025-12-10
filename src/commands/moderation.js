@@ -42,9 +42,9 @@ function extractTargetJid(ctx) {
 }
 
 export async function warn(ctx) {
-    const { isGroup, isAdmin, remoteJid, sender } = ctx;
+    const { isGroup, isAdmin, isOwner, remoteJid, sender } = ctx;
     if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' };
-    if (!isAdmin) return { success: false, message: '⛔ Solo los administradores pueden aplicar advertencias.' };
+    if (!isAdmin && !isOwner) return { success: false, message: '⛔ Solo los administradores o el owner pueden aplicar advertencias.' };
 
     const targetJid = extractTargetJid(ctx);
     if (!targetJid) return { success: false, message: 'ℹ️ Uso: /warn @usuario o responde a un mensaje con /warn.' };
@@ -83,9 +83,9 @@ export async function warn(ctx) {
 }
 
 export async function unwarn(ctx) {
-    const { isGroup, isAdmin, remoteJid, args } = ctx;
+    const { isGroup, isAdmin, isOwner, remoteJid, args } = ctx;
     if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' };
-    if (!isAdmin) return { success: false, message: '⛔ Solo los administradores pueden quitar advertencias.' };
+    if (!isAdmin && !isOwner) return { success: false, message: '⛔ Solo los administradores o el owner pueden quitar advertencias.' };
 
     const targetJid = extractTargetJid(ctx);
     if (!targetJid) return { success: false, message: 'ℹ️ Uso: /unwarn @usuario.' };
