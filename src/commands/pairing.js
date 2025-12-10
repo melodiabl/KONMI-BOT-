@@ -9,6 +9,9 @@ import {
 } from '../lib/subbots.js';
 import { getBotStatus } from '../../whatsapp.js';
 
+// 🔧 NUEVO: Importar directamente desde inproc-subbots para registrar listener global
+import { onSubbotEvent, offSubbotEvent } from '../services/inproc-subbots.js';
+
 function normalizeDigits(v) { return String(v || '').replace(/[^0-9]/g, '') }
 
 async function extractPhoneNumber(ctx) {
@@ -23,19 +26,15 @@ async function extractPhoneNumber(ctx) {
 
   const candidates = [];
 
-  // 1) Argumento: debe venir en formato internacional (8-15 dígitos)
   const argDigits = sanitize((args[0] || '').toString());
   if (isE164Generic(argDigits)) candidates.push(argDigits);
 
-  // 2) senderNumber es la fuente más confiable del usuario actual
   const senderNum = sanitize(senderNumber);
   if (isE164Generic(senderNum)) candidates.push(senderNum);
 
-  // 3) Otros campos del contexto
   const usuarioNum = sanitize(usuarioNumber);
   if (isE164Generic(usuarioNum)) candidates.push(usuarioNum);
 
-  // 4) Extraer de sender directo
   const isLidSender = typeof sender === 'string' && sender.includes('@lid');
   if (sender && !isLidSender) {
     const base = typeof sender === 'string' && sender.includes('@') ? sender.split('@')[0] : sender;
@@ -43,7 +42,6 @@ async function extractPhoneNumber(ctx) {
     if (isE164Generic(d)) candidates.push(d);
   }
 
-  // 5) Extraer de participante del mensaje
   if (message?.key?.participant) {
     const part = message.key?.participant;
     const isLidPart = typeof part === 'string' && part.includes('@lid');
@@ -54,7 +52,6 @@ async function extractPhoneNumber(ctx) {
     }
   }
 
-  // 6) Resolver LID con onWhatsApp -> @s.whatsapp.net
   try {
     const isLidChat = typeof remoteJid === 'string' && remoteJid.includes('@lid');
     if (isLidChat && sock && typeof sock.onWhatsApp === 'function' && sender) {
@@ -67,7 +64,6 @@ async function extractPhoneNumber(ctx) {
     }
   } catch {}
 
-  // 7) Elegir el primero válido
   for (const d of candidates) {
     if (isE164Generic(d)) return d;
   }
@@ -92,7 +88,6 @@ export async function qr(ctx) {
     const code = res?.code;
     if (!code) return { success:false, message:'❌ Error al crear el subbot QR' };
 
-    // Registrar listener INMEDIATAMENTE después de crear el subbot (antes de que emita el QR)
     return await new Promise((resolve) => {
       let detach = null;
       const timeout = setTimeout(() => { try { detach?.() } catch {}; resolve({ success:false, message:'⏱️ Timeout esperando QR (60s). Intenta de nuevo.' }) }, 60000);
@@ -161,67 +156,76 @@ export async function code(ctx) {
         '❌ No pude detectar tu número de WhatsApp. Por favor, proporciona tu número: /code <tu_numero>';
       return { success:false, message:hint }
     }
-    
-    const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT' });
-    const codeValue = res?.code;
-    if (!codeValue) return { success:false, message:'❌ Error al crear el subbot' };
 
-    // 🔧 CORRECCIÓN CRÍTICA: Esperar el evento pairing_code ANTES de responder
-    return await new Promise((resolve) => {
-      let detach = null;
+    // 🔧 CORRECCIÓN: Registrar listener GLOBAL antes de crear el subbot
+    return await new Promise(async (resolve) => {
+      let globalHandler = null;
+      let codeValue = null;
+      
       const timeout = setTimeout(() => {
-        try { detach?.() } catch {}
+        if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
         resolve({ success:false, message:'⏱️ Timeout esperando código de vinculación (60s). Intenta de nuevo.' })
       }, 60000);
 
-      const onPairingCode = async (payload) => {
+      // Registrar listener GLOBAL que captura todos los eventos pairing_code
+      globalHandler = async (payload) => {
         try {
+          const subbotCode = payload?.subbot?.code;
+          
+          // Solo procesar si es NUESTRO subbot
+          if (!codeValue || subbotCode !== codeValue) return;
+
+          // Limpiar timeout y listener
           clearTimeout(timeout);
-          detach?.();
+          if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
           
           const data = payload?.data || {};
-          // El código REAL de 8 dígitos que viene de Baileys
           const pairingCode = data.pairingCode || data.code;
+          
+          console.log(`[pairing.js] 🎯 Código recibido para ${codeValue}: ${pairingCode}`);
           
           if (!pairingCode) {
             resolve({ success:false, message:'⚠️ No se recibió código de vinculación' });
             return;
           }
 
-          // Registrar listener para cuando se conecte (opcional, para notificar)
+          // Registrar listener para cuando se conecte (notificación post-vinculación)
           try {
             const dmJid = phone ? `${phone}@s.whatsapp.net` : (remoteJid || null)
             if (sock && dmJid) {
-              const onConnected = async (payload) => {
+              const onConnected = async (connPayload) => {
                 try {
-                  const data = payload?.data || {}
-                  const linked = String(data?.digits || data?.number || data?.jid || '').replace(/\D/g,'')
+                  if (connPayload?.subbot?.code !== codeValue) return;
+                  
+                  const connData = connPayload?.data || {}
+                  const linked = String(connData?.digits || connData?.number || connData?.jid || '').replace(/\D/g,'')
                   const parts = [
                     '🎉 Listo, ¡ya eres un subbot más de la comunidad!\n',
                     `🆔 SubBot: ${codeValue}`,
                     linked ? `🤝 Vinculado: +${linked}` : null,
                   ].filter(Boolean)
                   await sock.sendMessage(dmJid, { text: parts.join('\n') })
-                  try {
-                    const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
-                    if (isGroup) {
-                      const mention = phone ? `${phone}@s.whatsapp.net` : undefined
-                      const gLines = [
-                        `🎉 ${mention ? '@'+phone : 'Listo'}, ¡ya eres un subbot más de la comunidad!`,
-                        `🆔 SubBot: ${codeValue}`,
-                        linked ? `🤝 Vinculado: +${linked}` : null,
-                      ].filter(Boolean)
-                      const payloadMsg = mention ? { text: gLines.join('\n'), mentions: [mention] } : { text: gLines.join('\n') }
-                      await sock.sendMessage(remoteJid, payloadMsg)
-                    }
-                  } catch {}
+                  
+                  const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
+                  if (isGroup) {
+                    const mention = phone ? `${phone}@s.whatsapp.net` : undefined
+                    const gLines = [
+                      `🎉 ${mention ? '@'+phone : 'Listo'}, ¡ya eres un subbot más de la comunidad!`,
+                      `🆔 SubBot: ${codeValue}`,
+                      linked ? `🤝 Vinculado: +${linked}` : null,
+                    ].filter(Boolean)
+                    const payloadMsg = mention ? { text: gLines.join('\n'), mentions: [mention] } : { text: gLines.join('\n') }
+                    await sock.sendMessage(remoteJid, payloadMsg)
+                  }
                 } finally {
-                  try { detachSubbotListeners(codeValue, (evt, h) => h === onConnected) } catch {}
+                  offSubbotEvent('connected', onConnected);
                 }
               }
-              attachSubbotListeners(codeValue, [{ event: 'connected', handler: onConnected }])
+              onSubbotEvent('connected', onConnected)
             }
-          } catch {}
+          } catch (e) {
+            console.error('[pairing.js] Error registrando onConnected:', e);
+          }
 
           // Preparar respuestas con el código REAL
           const primary = {
@@ -254,16 +258,31 @@ export async function code(ctx) {
 
           resolve([primary, copyContent, quickContent]);
         } catch (e) {
-          console.error('[pairing.js] Error en onPairingCode:', e);
+          console.error('[pairing.js] Error en globalHandler:', e);
           resolve({ success:false, message:`⚠️ Error procesando código: ${e?.message||e}` });
         }
       };
 
       try {
-        detach = attachSubbotListeners(codeValue, [{ event: 'pairing_code', handler: onPairingCode }]);
+        // 1. Registrar listener PRIMERO
+        onSubbotEvent('pairing_code', globalHandler);
+        console.log('[pairing.js] 📡 Listener global registrado para pairing_code');
+        
+        // 2. DESPUÉS crear el subbot
+        const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT' });
+        codeValue = res?.code;
+        
+        console.log(`[pairing.js] 🚀 Subbot creado con código: ${codeValue}`);
+        
+        if (!codeValue) {
+          clearTimeout(timeout);
+          if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
+          resolve({ success:false, message:'❌ Error al crear el subbot' });
+        }
       } catch (e) {
         clearTimeout(timeout);
-        resolve({ success:false, message:`⚠️ Error registrando listeners: ${e?.message||e}` });
+        if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
+        resolve({ success:false, message:`⚠️ Error generando code: ${e?.message||e}` });
       }
     });
 
