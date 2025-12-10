@@ -46,7 +46,7 @@ function cleanupSubbotStorageLimit() {
           const stats = fs.statSync(dirPath);
           return { name: entry.name, dirPath, mtimeMs: stats.mtimeMs };
         } catch (error) {
-          logger.warn("No se pudo obtener informacin de directorio de subbot", {
+          logger.warn("No se pudo obtener información de directorio de subbot", {
             code: entry.name,
             error: error?.message,
           });
@@ -66,7 +66,7 @@ function cleanupSubbotStorageLimit() {
         fs.rmSync(entry.dirPath, { recursive: true, force: true });
         excess -= 1;
         logger.info(
-          ` Directorio de subbot ${entry.name} eliminado para liberar espacio`,
+          `🗑️ Directorio de subbot ${entry.name} eliminado para liberar espacio`,
         );
       } catch (error) {
         logger.warn("No se pudo eliminar directorio de subbot", {
@@ -303,11 +303,15 @@ export async function launchSubbot(options = {}) {
       emit("stopped", { reason, info });
     };
 
+    // 🔧 CORRECCIÓN CRÍTICA: Re-emitir TODOS los eventos al eventBus
     child.on("message", (message) => {
       try {
         if (!message || typeof message.event !== "string") return;
         const info = activeSubbots.get(code) || publicRecord;
 
+        console.log(`[inproc-subbots] 📨 Mensaje del subbot ${code}: ${message.event}`);
+
+        // Actualizar estado interno según el evento
         if (message.event === "connected") {
           info.status = "connected";
           info.connectedAt = new Date().toISOString();
@@ -315,21 +319,18 @@ export async function launchSubbot(options = {}) {
             clearTimeout(info.timeoutHandle);
             info.timeoutHandle = null;
           }
-          emit("connected", { message: "connected" });
         }
+        
         if (message.event === "disconnected") {
           info.status = "disconnected";
           info.disconnectedAt = new Date().toISOString();
-          emit("disconnected", {
-            reason: message.data?.reason,
-            statusCode: message.data?.statusCode,
-          });
         }
+        
         if (message.event === "error") {
           info.status = "error";
           info.error = message.data?.message || "Error desconocido";
-          emit("error", message.data || null);
         }
+        
         if (message.event === "logged_out") {
           info.status = "logged_out";
           info.disconnectedAt = new Date().toISOString();
@@ -341,7 +342,7 @@ export async function launchSubbot(options = {}) {
               force: true,
             });
             logger.info(
-              ` Credenciales del subbot ${code} eliminadas tras logout`,
+              `🗑️ Credenciales del subbot ${code} eliminadas tras logout`,
             );
           } catch (cleanupError) {
             logger.warn(
@@ -351,10 +352,14 @@ export async function launchSubbot(options = {}) {
           }
         }
 
+        // 🔧 CRÍTICO: Re-emitir TODOS los eventos al eventBus (incluyendo pairing_code, qr_ready, etc.)
+        // Esto debe estar FUERA de los if statements para capturar TODOS los eventos
+        console.log(`[inproc-subbots] 📢 Emitiendo '${message.event}' al eventBus global`);
         eventBus.emit(message.event, {
           subbot: { ...info },
           data: message.data || null,
         });
+        
       } catch (err) {
         logger.error(
           "Error procesando mensaje de subbot:",
