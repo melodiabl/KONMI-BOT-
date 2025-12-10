@@ -6,6 +6,7 @@ import antibanMiddleware from '../utils/utils/anti-ban-middleware.js'
 import antibanSystem from '../utils/utils/anti-ban.js'
 import { getGroupBool } from '../utils/utils/group-config.js'
 import { isBotGloballyActive } from '../services/subbot-manager.js'
+import db from '../database/db.js'
 import fs from 'fs'
 import path from 'path'
 import { pathToFileURL, fileURLToPath } from 'url' // <-- añadí fileURLToPath aquí
@@ -603,6 +604,26 @@ export async function dispatch(ctx = {}) {
   const parsed = parseCommand(text)
   let command = parsed.command
   const args = parsed.args || []
+
+  // Bloqueo por ban a nivel de grupo (solo afecta comandos, no mensajes normales)
+  if (isGroup && command) {
+    try {
+      const senderJid = ctx.sender || ctx.participant || ctx.remoteJid
+      if (senderJid) {
+        const banned = await db('group_bans')
+          .where({ group_id: remoteJid, user_jid: senderJid })
+          .first()
+        if (banned) {
+          // Permitir que otros administradores gestionen el ban con /ban y /unban
+          if (command !== '/ban' && command !== '/unban') {
+            return false
+          }
+        }
+      }
+    } catch (e) {
+      logger.error('Error comprobando bans de grupo:', e)
+    }
+  }
 
   if (traceEnabled()) {
     const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')

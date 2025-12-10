@@ -70,7 +70,7 @@ const [
   groupAdminX, groupCmd, groupSettings, images, maintenance, menu, mod, pairing, pedidoCmd, promo,
   stickers, subbots, sysInfo, system, utils, utilmath, votes, logsCmd, polls,
   media, messageControl, interactive, profile, privacy, groupAdvanced, broadcast, chatMgmt, presence, calls, uiInteractive,
-  advancedFeatures, communityFeatures, privacyFeatures, performanceFeatures, games
+  advancedFeatures, communityFeatures, privacyFeatures, performanceFeatures, games, banCmd
 ] = await Promise.all([
   safeImport('../download-commands.js'),
   safeImport('../ai.js'),
@@ -119,6 +119,7 @@ const [
   safeImport('../privacy-features.js'),
   safeImport('../performance-features.js'),
   safeImport('../games.js'),
+  safeImport('../ban.js'),
 ])
 
 // Desestructuración de comandos de download-commands.js
@@ -329,6 +330,9 @@ register([
   { command: '/warn', handler: (ctx) => mod.warn(ctx), category: 'group', description: 'Aplicar advertencia a un usuario' },
   { command: '/unwarn', handler: (ctx) => mod.unwarn(ctx), category: 'group', description: 'Retirar advertencia' },
   { command: '/warns', handler: (ctx) => mod.warns(ctx), category: 'group', description: 'Ver advertencias activas' },
+  { command: '/ban', handler: (ctx) => banCmd.ban(ctx), category: 'group', description: 'Banear usuario del uso del bot en el grupo' },
+  { command: '/unban', handler: (ctx) => banCmd.unban(ctx), category: 'group', description: 'Quitar ban de usuario del bot en el grupo' },
+  { command: '/bans', handler: (ctx) => banCmd.bans(ctx), category: 'group', description: 'Listar usuarios baneados del bot en el grupo' },
   { command: '/antilink', handler: (ctx) => groupSettings.antilink(ctx), category: 'group', description: 'Activar protección contra links' },
   { command: '/antilinkmode', handler: (ctx) => groupSettings.antilinkmode(ctx), category: 'group', description: 'Modo de acción del anti-link' },
   { command: '/slowmode', handler: (ctx) => groupSettings.slowmode(ctx), category: 'group', description: 'Configurar slowmode' },
