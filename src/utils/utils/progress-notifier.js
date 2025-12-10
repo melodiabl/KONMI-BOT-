@@ -1,66 +1,37 @@
 // utils/utils/progress-notifier.js
-// Enviar una sola barra de progreso animada (con spinner) usando edición de mensaje
-// con limitador para evitar `rate-overlimit` de WhatsApp.
+// Sistema de progreso FLUIDO con edición garantizada del mismo mensaje
 
-const SPINNER_FRAMES = [
-  '⠋', '⠙', '⠹', '⠸', '⠼',
-  '⠴', '⠦', '⠧', '⠇', '⠏'
-]
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
-// Intervalo de animación del spinner
-const SPINNER_INTERVAL_MS = Number(process.env.PROGRESS_SPINNER_INTERVAL_MS || 400)
+// Configuración optimizada para fluidez
+const SPINNER_INTERVAL_MS = 200
+const MIN_SEND_INTERVAL_MS = 1500
+const MIN_PERCENT_STEP = 1
+const PROGRESS_BAR_LENGTH = 20
+const FORCE_UPDATE_EVERY_MS = 5000
+const MAX_RETRY_SEND = 3 // Reintentos para enviar mensaje inicial
 
-// Mínimo intervalo entre envíos reales a WhatsApp
-const MIN_SEND_INTERVAL_MS = Number(process.env.PROGRESS_MIN_SEND_INTERVAL_MS || 2500)
-
-// No volver a enviar si el porcentaje cambió menos que esto
-const MIN_PERCENT_STEP = Number(process.env.PROGRESS_MIN_PERCENT_STEP || 3)
-
-// Longitud de la barra de progreso
-const PROGRESS_BAR_LENGTH = Number(process.env.PROGRESS_BAR_LENGTH || 24)
-
-/**
- * Renderiza la barra de progreso tipo:
- * ███░░░ 35%
- */
 function renderProgressBar(percent, length = PROGRESS_BAR_LENGTH) {
   const p = Math.max(0, Math.min(100, percent || 0))
   const filled = Math.round((p / 100) * length)
   const empty = Math.max(0, length - filled)
-
   return `${'█'.repeat(filled)}${'░'.repeat(empty)}`
 }
 
-/**
- * Construye el mensaje completo que se mostrará al usuario.
- */
 function buildProgressMessage(state) {
-  const {
-    title,
-    icon,
-    spinnerIndex,
-    percent,
-    status,
-    finished,
-  } = state
-
+  const { title, icon, spinnerIndex, percent, status, finished, eta } = state
   const spinner = finished ? '✅' : SPINNER_FRAMES[spinnerIndex % SPINNER_FRAMES.length]
   const bar = renderProgressBar(percent)
-  const pct = String(Math.max(0, Math.min(100, Math.floor(percent)))).padStart(2, ' ')
-
-  const header = `${icon || spinner} ${title || 'Procesando...'}`
-  const progressLine = `${spinner} ${bar}   ${pct}%`
-  const statusLine = status ? `\n\n ${status}` : ''
-
-  return `${header}\n\n${progressLine}${statusLine}`
+  const pct = String(Math.max(0, Math.min(100, Math.floor(percent)))).padStart(3, ' ')
+  
+  const header = `${icon || spinner} *${title || 'Procesando...'}*`
+  const progressLine = `${spinner} ${bar} ${pct}%`
+  const statusLine = status ? `\n📌 ${status}` : ''
+  const etaLine = eta ? `\n⏱️ ${eta}` : ''
+  
+  return `${header}\n\n${progressLine}${statusLine}${etaLine}`
 }
 
-/**
- * Crea un notificador de progreso que:
- *  - Envía un solo mensaje
- *  - Luego lo va editando
- *  - Usa un limitador de frecuencia para evitar `rate-overlimit`
- */
 export function createProgressNotifier(options = {}) {
   const {
     resolveSocket,
@@ -72,11 +43,10 @@ export function createProgressNotifier(options = {}) {
   } = options
 
   if (typeof resolveSocket !== 'function' || !chatId) {
-    // Si no tenemos socket o chatId, devolvemos un stub que no hace nada
     return {
-      async update () {},
-      async complete () {},
-      async fail () {},
+      async update() {},
+      async complete() {},
+      async fail() {},
     }
   }
 
@@ -85,51 +55,175 @@ export function createProgressNotifier(options = {}) {
     icon,
     percent: 0,
     status: '',
+    eta: null,
     spinnerIndex: 0,
     finished: false,
     lastSentAt: 0,
     lastPercentSent: 0,
     lastTextSent: '',
+    lastForceUpdateAt: 0,
+    startTime: Date.now(),
   }
 
-  /** Referencia al mensaje de progreso para poder editarlo */
-  const messageRef = {
-    sock: null,
+  const messageRef = { 
+    sock: null, 
     key: null,
+    messageId: null, // ID único del mensaje
+    initialized: false, // Flag para saber si ya enviamos el mensaje inicial
+    initPromise: null, // Promise del primer envío
   }
 
   let spinnerTimer = null
+  let pendingUpdate = false
+  let updateQueue = [] // Cola de actualizaciones pendientes
 
-  async function ensureSocket () {
+  async function ensureSocket() {
     if (messageRef.sock) return messageRef.sock
     const sock = await resolveSocket()
     messageRef.sock = sock
     return sock
   }
 
-  function shouldSend (nextPercent, nextText, force) {
-    if (force) return true
-    const now = Date.now()
-
-    // No spamear si se envió hace muy poco
-    if (now - state.lastSentAt < MIN_SEND_INTERVAL_MS) return false
-
-    // No spamear si el porcentaje cambió muy poco
-    if (Math.abs((nextPercent || 0) - (state.lastPercentSent || 0)) < MIN_PERCENT_STEP) {
-      // Pero si cambió el texto de estado de forma importante, sí podemos mandar
-      if (nextText && nextText !== state.lastTextSent) {
-        return true
-      }
-      return false
-    }
-
-    return true
+  function calculateETA() {
+    if (state.percent <= 0 || state.percent >= 100) return null
+    
+    const elapsed = Date.now() - state.startTime
+    const rate = state.percent / elapsed
+    const remaining = (100 - state.percent) / rate
+    
+    const seconds = Math.floor(remaining / 1000)
+    if (seconds < 5) return 'Casi listo...'
+    if (seconds < 60) return `~${seconds}s`
+    
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `~${mins}m ${secs}s`
   }
 
-  async function sendProgress (force = false) {
+  function shouldSend(nextPercent, nextText, force) {
+    if (force) return true
+    
+    const now = Date.now()
+    
+    // Actualización forzada periódica
+    if (now - state.lastForceUpdateAt > FORCE_UPDATE_EVERY_MS) {
+      return true
+    }
+    
+    // Rate limiting básico
+    if (now - state.lastSentAt < MIN_SEND_INTERVAL_MS) return false
+    
+    // Permitir cambios de 1% o más
+    const percentDiff = Math.abs((nextPercent || 0) - (state.lastPercentSent || 0))
+    if (percentDiff >= MIN_PERCENT_STEP) return true
+    
+    // Permitir si cambió el texto de estado
+    if (nextText && nextText !== state.lastTextSent) return true
+    
+    return false
+  }
+
+  /**
+   * Inicializa el mensaje de progreso (primer envío)
+   * Se asegura de que solo se ejecute UNA vez
+   */
+  async function initializeMessage() {
+    // Si ya está inicializado, no hacer nada
+    if (messageRef.initialized) {
+      return messageRef.key
+    }
+
+    // Si ya hay un intento de inicialización en curso, esperar a que termine
+    if (messageRef.initPromise) {
+      return messageRef.initPromise
+    }
+
+    // Crear la promesa de inicialización
+    messageRef.initPromise = (async () => {
+      const sock = await ensureSocket()
+      if (!sock) {
+        throw new Error('No se pudo obtener socket')
+      }
+
+      const text = buildProgressMessage(state)
+      const payload = { text }
+      
+      if (quoted) {
+        payload.quoted = quoted
+      }
+
+      let lastError = null
+      
+      // Intentar enviar el mensaje inicial con reintentos
+      for (let attempt = 1; attempt <= MAX_RETRY_SEND; attempt++) {
+        try {
+          console.log(`📤 Enviando mensaje inicial (intento ${attempt}/${MAX_RETRY_SEND})...`)
+          
+          const sent = await sock.sendMessage(chatId, payload)
+          
+          if (sent?.key) {
+            messageRef.key = sent.key
+            messageRef.messageId = sent.key.id
+            messageRef.initialized = true
+            
+            console.log(`✅ Mensaje inicial enviado exitosamente (ID: ${messageRef.messageId})`)
+            
+            state.lastSentAt = Date.now()
+            state.lastPercentSent = state.percent
+            state.lastTextSent = text
+            
+            return messageRef.key
+          }
+        } catch (err) {
+          lastError = err
+          console.warn(`⚠️  Intento ${attempt} fallido:`, err.message)
+          
+          // Esperar un poco antes de reintentar
+          if (attempt < MAX_RETRY_SEND) {
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt))
+          }
+        }
+      }
+
+      // Si todos los intentos fallaron
+      throw new Error(`No se pudo enviar mensaje inicial después de ${MAX_RETRY_SEND} intentos: ${lastError?.message}`)
+    })()
+
+    return messageRef.initPromise
+  }
+
+  /**
+   * Envía o edita el mensaje de progreso
+   * GARANTIZA que siempre edite el mismo mensaje
+   */
+  async function sendProgress(force = false) {
+    if (pendingUpdate && !force) {
+      // Si hay una actualización pendiente, agregar a la cola
+      updateQueue.push({ force, timestamp: Date.now() })
+      return
+    }
+    
     try {
+      pendingUpdate = true
+
+      // Asegurar que el mensaje inicial exista
+      if (!messageRef.initialized) {
+        await initializeMessage()
+      }
+
+      // Si no tenemos key después de inicializar, algo salió mal
+      if (!messageRef.key) {
+        console.error('❌ No se pudo obtener key del mensaje inicial')
+        return
+      }
+
       const sock = await ensureSocket()
       if (!sock) return
+
+      // Calcular ETA
+      if (state.percent > 0 && state.percent < 100 && !state.finished) {
+        state.eta = calculateETA()
+      }
 
       const text = buildProgressMessage(state)
       const percent = state.percent || 0
@@ -138,37 +232,70 @@ export function createProgressNotifier(options = {}) {
         return
       }
 
-      const payload = { text }
-      if (quoted && !messageRef.key) {
-        payload.quoted = quoted
+      const payload = { 
+        text,
+        edit: messageRef.key, // SIEMPRE editar el mismo mensaje
       }
 
-      if (messageRef.key) {
-        await sock.sendMessage(chatId, {
-          ...payload,
-          edit: messageRef.key,
-        })
-      } else {
-        const sent = await sock.sendMessage(chatId, payload)
-        messageRef.key = sent?.key || null
+      // Intentar editar el mensaje
+      try {
+        await sock.sendMessage(chatId, payload)
+        
+        const now = Date.now()
+        state.lastSentAt = now
+        state.lastPercentSent = percent
+        state.lastTextSent = text
+        
+        if (force || (now - state.lastForceUpdateAt > FORCE_UPDATE_EVERY_MS)) {
+          state.lastForceUpdateAt = now
+        }
+
+        // console.log(`✏️  Mensaje editado (${percent}%): ${messageRef.messageId}`)
+      } catch (editError) {
+        // Si la edición falla, puede ser que el mensaje fue eliminado
+        const errorMsg = String(editError?.message || editError || '')
+        
+        if (/not found|message.?not.?found/i.test(errorMsg)) {
+          console.warn('⚠️  Mensaje no encontrado, reinicializando...')
+          
+          // Reset y reinicializar
+          messageRef.initialized = false
+          messageRef.key = null
+          messageRef.messageId = null
+          messageRef.initPromise = null
+          
+          // Intentar enviar un nuevo mensaje
+          await initializeMessage()
+        } else if (/rate.?overlimit/i.test(errorMsg)) {
+          console.warn('⚠️  Rate limit detectado, reduciendo frecuencia...')
+        } else {
+          console.error('❌ Error editando mensaje:', errorMsg)
+        }
       }
 
-      state.lastSentAt = Date.now()
-      state.lastPercentSent = percent
-      state.lastTextSent = text
     } catch (err) {
-      // Evitar que un error de rate limit rompa el comando
-      const code = err?.output?.statusCode || err?.code || err?.message
-      if (code === 'rate-overlimit' || /overlimit/i.test(String(code))) {
-        console.warn('Progress notifier: rate-overlimit, se reduce la frecuencia de envío.')
-        return
+      const code = String(err?.output?.statusCode || err?.code || err?.message || '')
+      if (/rate.?overlimit/i.test(code)) {
+        console.warn('⚠️  Rate limit detectado, ajustando frecuencia...')
+      } else {
+        console.error('❌ Error en progress notifier:', err?.message || err)
       }
-
-      console.error('Progress notifier error:', err?.message || err)
+    } finally {
+      pendingUpdate = false
+      
+      // Procesar cola si hay actualizaciones pendientes
+      if (updateQueue.length > 0) {
+        const next = updateQueue.shift()
+        if (next && Date.now() - next.timestamp < 5000) { // Solo si es reciente
+          setTimeout(() => sendProgress(next.force), 100)
+        } else {
+          updateQueue = [] // Limpiar cola si es muy antigua
+        }
+      }
     }
   }
 
-  function startSpinner () {
+  function startSpinner() {
     if (!animate || spinnerTimer) return
 
     spinnerTimer = setInterval(() => {
@@ -179,15 +306,14 @@ export function createProgressNotifier(options = {}) {
       }
 
       state.spinnerIndex = (state.spinnerIndex + 1) % SPINNER_FRAMES.length
-      // En cada tick sólo intentamos enviar, el limitador decide si realmente manda o no
-      sendProgress(false)
+      sendProgress(false).catch(() => {})
     }, SPINNER_INTERVAL_MS)
   }
 
-  async function update (percent, status, options = {}) {
+  async function update(percent, status, options = {}) {
     const p = typeof percent === 'number' ? percent : state.percent
-
     state.percent = Math.max(0, Math.min(100, p))
+    
     if (typeof status === 'string' && status.length) {
       state.status = status
     }
@@ -196,36 +322,48 @@ export function createProgressNotifier(options = {}) {
     await sendProgress(options.force === true)
   }
 
-  async function complete (status, options = {}) {
+  async function complete(status, options = {}) {
     state.finished = true
     state.percent = 100
+    state.eta = null
     if (status) state.status = status
 
-    await sendProgress(true)
-
     if (spinnerTimer) {
       clearInterval(spinnerTimer)
       spinnerTimer = null
     }
+
+    await sendProgress(true)
   }
 
-  async function fail (reason, options = {}) {
+  async function fail(reason, options = {}) {
     state.finished = true
     state.percent = 100
-    state.status = reason || 'Ocurrió un error'
-
-    await sendProgress(true)
+    state.eta = null
+    state.status = reason || '❌ Error en la descarga'
 
     if (spinnerTimer) {
       clearInterval(spinnerTimer)
       spinnerTimer = null
     }
+
+    await sendProgress(true)
   }
 
-  return {
-    update,
-    complete,
+  // Cleanup al destruir
+  function cleanup() {
+    if (spinnerTimer) {
+      clearInterval(spinnerTimer)
+      spinnerTimer = null
+    }
+    updateQueue = []
+  }
+
+  return { 
+    update, 
+    complete, 
     fail,
+    cleanup, // Método para limpiar recursos si es necesario
   }
 }
 
