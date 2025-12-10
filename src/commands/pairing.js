@@ -147,7 +147,7 @@ export async function qr(ctx) {
 
 export async function code(ctx) {
   try {
-    const { isOwner, sock, remoteJid } = ctx || {};
+    const { isOwner } = ctx || {};
 
     const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase();
     if (access === 'owner' && !isOwner) {
@@ -164,134 +164,114 @@ export async function code(ctx) {
 
     const creatorPushName = ctx.pushName || ctx.usuarioName || phone;
 
-    // Crear subbot y obtener code interno (id del subbot)
+    // Creamos el subbot
     const res = await generateSubbotPairingCode(
       phone,
       phone,
       { displayName: 'KONMI-BOT', creatorPushName }
     );
 
+    // En tu implementación previa "code" era el ID interno,
+    // y el problema era que no usabas el verdadero código de vinculación.
     const codeValue = res?.code;
-    if (!codeValue) {
-      return { success: false, message: '❌ Error al crear el subbot' };
-    }
 
-    const dmJid = phone ? `${phone}@s.whatsapp.net` : (remoteJid || null);
+    // Intentamos obtener el CÓDIGO DE VINCULACIÓN real de la respuesta.
+    const pairingRaw =
+      res?.pairingCode ||
+      res?.pairing ||
+      res?.digits ||
+      res?.number ||
+      res?.jid ||
+      null;
 
-    if (sock && dmJid) {
-      // Listener que envía el CÓDIGO DE VINCULACIÓN real cuando Baileys lo emite
-      const onPairingCode = async (payload) => {
-        try {
-          const data = payload?.data || {};
-          const pairing = String(data.pairingCode || data.code || '').replace(/\D/g, '');
-          const identification = `KONMISUB(${creatorPushName})`;
+    const pairing = pairingRaw
+      ? String(pairingRaw).replace(/\D/g, '')
+      : (codeValue ? String(codeValue).replace(/\D/g, '') : null);
 
-          const lines = [
-            '✅ Código de vinculación',
-            `🔢 Código: *${pairing}*`,
-            `🆔 Identificación: ${identification}`,
-            `📱 Número: +${phone}`,
-            '',
-            'Instrucciones:',
-            '1. WhatsApp > Dispositivos vinculados',
-            '2. Vincular con número de teléfono',
-            '3. Ingresa el código mostrado'
-          ];
-
-          await sock.sendMessage(dmJid, {
-            text: lines.join('\n'),
-            quoted: true,
-            mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined
-          });
-        } finally {
-          try {
-            detachSubbotListeners(codeValue, (evt, h) => h === onPairingCode);
-          } catch {}
-        }
-      };
-
-      // Listener cuando el subbot se conecta correctamente
-      const onConnected = async (payload) => {
-        try {
-          const data = payload?.data || {};
-          const linked = String(
-            data?.digits || data?.number || data?.jid || ''
-          ).replace(/\D/g, '');
-
-          const parts = [
-            '🎉 Listo, ¡ya eres un subbot más de la comunidad!\n',
-            `🆔 SubBot: ${codeValue}`,
-            linked ? `🤝 Vinculado: +${linked}` : null,
-          ].filter(Boolean);
-
-          // Mensaje directo
-          await sock.sendMessage(dmJid, { text: parts.join('\n') });
-
-          // Opcional: mensaje al grupo + botones
-          try {
-            const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us');
-            if (isGroup) {
-              const mention = phone ? `${phone}@s.whatsapp.net` : undefined;
-              const gLines = [
-                `🎉 ${mention ? '@' + phone : 'Listo'}, ¡ya eres un subbot más de la comunidad!`,
-                `🆔 SubBot: ${codeValue}`,
-                linked ? `🤝 Vinculado: +${linked}` : null,
-              ].filter(Boolean);
-
-              const payloadMsg = mention
-                ? { text: gLines.join('\n'), mentions: [mention] }
-                : { text: gLines.join('\n') };
-
-              await sock.sendMessage(remoteJid, payloadMsg);
-
-              try {
-                const buttons = [
-                  { index: 1, quickReplyButton: { displayText: '🤖 Mis Subbots', id: '/mybots' } },
-                  { index: 2, quickReplyButton: { displayText: '🧾 QR Subbot', id: '/qr' } },
-                  { index: 3, quickReplyButton: { displayText: '🏠 Menú', id: '/menu' } },
-                ];
-                await sock.sendMessage(remoteJid, {
-                  text: 'Acciones rápidas',
-                  templateButtons: buttons
-                });
-              } catch {
-                try {
-                  await sock.sendMessage(remoteJid, {
-                    text: 'Acciones rápidas:\n• /mybots\n• /qr\n• /menu'
-                  });
-                } catch {}
-              }
-            }
-          } catch {}
-        } finally {
-          try {
-            detachSubbotListeners(codeValue, (evt, h) => h === onConnected);
-          } catch {}
-        }
-      };
-
-      // Registrar los listeners para este subbot
-      attachSubbotListeners(codeValue, [
-        { event: 'pairing_code', handler: onPairingCode },
-        { event: 'connected',   handler: onConnected   },
-      ]);
-
-      // Respuesta inmediata mientras se genera el código real
+    if (!pairing) {
       return {
-        success: true,
-        message: '⏳ Generando código de vinculación...',
-        quoted: true,
+        success: false,
+        message: '❌ No pude obtener el código de vinculación del subbot.',
+        quoted: true
       };
     }
 
-    // Fallback si por alguna razón no hay sock / dmJid
-    return {
+    const identification = `KONMISUB(${creatorPushName})`;
+
+    // 📩 Mensaje principal
+    const primary = {
       success: true,
-      message: `✅ Subbot creado: ${codeValue}\n\nPero no pude enviarte el código de emparejamiento automáticamente.`,
+      message:
+        `✅ Código de vinculación\n\n` +
+        `🔢 Código: *${pairing}*\n` +
+        `🆔 Identificación: ${identification}\n` +
+        `📱 Número: +${phone}\n\n` +
+        `Instrucciones:\n` +
+        `1. WhatsApp > Dispositivos vinculados\n` +
+        `2. Vincular con número de teléfono\n` +
+        `3. Ingresa el código mostrado`,
+      mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined,
       quoted: true,
+      ephemeralDuration: 600,
     };
 
+    // 📋 Bloque "copiar código"
+    const copyContent = {
+      type: 'content',
+      content: sendCopyableCode(
+        pairing,
+        '🔢 *CÓDIGO DE VINCULACIÓN*\n' +
+        '📱 Tu número: +' + phone + '\n\n' +
+        '🆔 Identificación: ' + identification + '\n' +
+        '⏱️ Válido por 5 minutos'
+      ),
+      quoted: true,
+      ephemeralDuration: 600,
+    };
+
+    // 🔘 Quick reply flow
+    const quickFlow = buildQuickReplyFlow({
+      header: '🔢 Código de vinculación',
+      body: `Código: ${pairing}\nIdentificación: ${identification}`,
+      footer: 'Toca "Copiar código"',
+      buttons: [
+        { text: '📋 Copiar código', command: '/copy ' + pairing },
+        { text: '🤖 Mis Subbots', command: '/mybots' },
+        { text: '🧾 QR Subbot', command: '/qr' },
+        { text: '🏠 Menú', command: '/menu' },
+      ],
+    });
+
+    const quickContent = {
+      type: 'content',
+      content: quickFlow,
+      quoted: true,
+      ephemeralDuration: 600,
+    };
+
+    // 🔘 Botones clásicos
+    const buttonsContent = {
+      type: 'buttons',
+      text: 'Acciones rápidas',
+      footer: 'KONMI BOT',
+      buttons: [
+        { text: '📋 Copiar código', command: '/copy ' + pairing },
+        { text: '🤖 Mis Subbots', command: '/mybots' },
+        { text: '🧾 QR Subbot', command: '/qr' },
+        { text: '🏠 Menú', command: '/menu' }
+      ],
+      quoted: true,
+      ephemeralDuration: 300,
+    };
+
+    // Devolvemos todo el paquete de respuestas
+    return [primary, copyContent, quickContent, buttonsContent];
+
   } catch (e) {
-    return { success: false, message: `⚠️ Error generando code: ${e?.message || e}`, quoted: true };
+    return {
+      success: false,
+      message: `⚠️ Error generando code: ${e?.message || e}`,
+      quoted: true
+    };
   }
 }
