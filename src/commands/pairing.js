@@ -148,88 +148,80 @@ export async function qr(ctx) {
 export async function code(ctx) {
   try {
     const { isOwner } = ctx || {};
-
+    
     const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase();
     if (access === 'owner' && !isOwner) {
-      return { success: false, message: '⛔ Solo el owner puede usar /code (subbots).', quoted: true };
+      return { success:false, message:'⛔ Solo el owner puede usar /code (subbots).', quoted: true };
     }
-
+    
     const phone = await extractPhoneNumber(ctx);
     if (!phone) {
-      const hint = Array.isArray(ctx?.args) && ctx.args.length
-        ? '❌ El número proporcionado no es válido. Debe tener 8-15 dígitos (formato internacional sin el +).'
-        : '❌ No pude detectar tu número de WhatsApp. Por favor, proporciona tu número: /code <tu_numero>';
-      return { success: false, message: hint };
+      const hint = Array.isArray(ctx?.args) && ctx.args.length ? 
+        '❌ El número proporcionado no es válido. Debe tener 8-15 dígitos (formato internacional sin el +).' :
+        '❌ No pude detectar tu número de WhatsApp. Por favor, proporciona tu número: /code <tu_numero>';
+      return { success:false, message:hint };
     }
-
+    
     const creatorPushName = ctx.pushName || ctx.usuarioName || phone;
 
-    // Creamos el subbot
+    // Crear subbot y obtener datos de emparejamiento desde tu Baileys
     const res = await generateSubbotPairingCode(
       phone,
       phone,
       { displayName: 'KONMI-BOT', creatorPushName }
     );
 
-    // En tu implementación previa "code" era el ID interno,
-    // y el problema era que no usabas el verdadero código de vinculación.
+    // ID interno del subbot (por si lo necesitas en otro lado)
     const codeValue = res?.code;
 
-    // Intentamos obtener el CÓDIGO DE VINCULACIÓN real de la respuesta.
-    const pairingRaw =
-      res?.pairingCode ||
-      res?.pairing ||
-      res?.digits ||
-      res?.number ||
-      res?.jid ||
+    // 👉 AQUÍ TOMAMOS EL CÓDIGO TAL CUAL LO DA BAILEYS (KONM-IBOT, etc.)
+    const pairing =
+      res?.code ||         // ej: "KONM-IBOT" (lo que ves en los logs [PAIRING])
+      res?.pairingCode ||  // por si viene así
+      res?.pairing ||      // fallback
+      res?.custom ||       // por si guardas el custom aquí
       null;
-
-    const pairing = pairingRaw
-      ? String(pairingRaw).replace(/\D/g, '')
-      : (codeValue ? String(codeValue).replace(/\D/g, '') : null);
 
     if (!pairing) {
       return {
         success: false,
         message: '❌ No pude obtener el código de vinculación del subbot.',
-        quoted: true
+        quoted: true,
       };
     }
 
     const identification = `KONMISUB(${creatorPushName})`;
 
-    // 📩 Mensaje principal
+    // ===== RESPUESTA PRINCIPAL (SIN NINGÚN CÓDIGO NUMÉRICO INVENTADO) =====
     const primary = {
       success: true,
       message:
         `✅ Código de vinculación\n\n` +
-        `🔢 Código: *${pairing}*\n` +
+        `🔢 Código: *${pairing}*\n` +           // 👈 AQUÍ VA, POR EJEMPLO: KONM-IBOT
         `🆔 Identificación: ${identification}\n` +
         `📱 Número: +${phone}\n\n` +
         `Instrucciones:\n` +
         `1. WhatsApp > Dispositivos vinculados\n` +
         `2. Vincular con número de teléfono\n` +
         `3. Ingresa el código mostrado`,
-      mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined,
+      mentions: (phone ? [`${phone}@s.whatsapp.net`] : undefined),
       quoted: true,
       ephemeralDuration: 600,
     };
 
-    // 📋 Bloque "copiar código"
     const copyContent = {
       type: 'content',
       content: sendCopyableCode(
-        pairing,
+        pairing, // 👈 el mismo código alfanumérico
         '🔢 *CÓDIGO DE VINCULACIÓN*\n' +
         '📱 Tu número: +' + phone + '\n\n' +
         '🆔 Identificación: ' + identification + '\n' +
-        '⏱️ Válido por 5 minutos'
+        '⏱️ Válido por 10 minutos'
       ),
       quoted: true,
       ephemeralDuration: 600,
     };
 
-    // 🔘 Quick reply flow
     const quickFlow = buildQuickReplyFlow({
       header: '🔢 Código de vinculación',
       body: `Código: ${pairing}\nIdentificación: ${identification}`,
@@ -249,7 +241,6 @@ export async function code(ctx) {
       ephemeralDuration: 600,
     };
 
-    // 🔘 Botones clásicos
     const buttonsContent = {
       type: 'buttons',
       text: 'Acciones rápidas',
@@ -264,14 +255,77 @@ export async function code(ctx) {
       ephemeralDuration: 300,
     };
 
-    // Devolvemos todo el paquete de respuestas
+    // Devolvemos todas las piezas para que el router las mande
     return [primary, copyContent, quickContent, buttonsContent];
 
   } catch (e) {
-    return {
-      success: false,
-      message: `⚠️ Error generando code: ${e?.message || e}`,
-      quoted: true
-    };
+    return { success:false, message:`⚠️ Error generando code: ${e?.message||e}`, quoted: true };
+  }
+}
+
+export async function requestMainBotPairingCode(ctx) {
+  try {
+    const { isOwner, sock, remoteJid } = ctx || {};
+
+    if (!isOwner) {
+      return { success: false, message: '⛔ Solo el owner puede solicitar código de emparejamiento del bot principal.', quoted: true }
+    }
+
+    // Import the function to request pairing code for main bot
+    const { requestMainBotPairingCode: requestCode } = await import('../../whatsapp.js');
+
+    const result = await requestCode();
+
+    if (result.success) {
+      return {
+        success: true,
+        message: `✅ Código de emparejamiento solicitado. Usa /maincode para verlo.`,
+        quoted: true
+      };
+    } else {
+      return {
+        success: false,
+        message: `❌ Error solicitando código: ${result.message}`,
+        quoted: true
+      };
+    }
+
+  } catch (e) {
+    return { success: false, message: `⚠️ Error solicitando código del bot principal: ${e?.message || e}`, quoted: true };
+  }
+}
+
+export async function mainCode(ctx) {
+  try {
+    const { isOwner, sock, remoteJid } = ctx || {};
+
+    if (!isOwner) {
+      return { success: false, message: '⛔ Solo el owner puede ver el código de emparejamiento del bot principal.', quoted: true }
+    }
+
+    const botStatus = getBotStatus();
+
+    if (!botStatus.pairingCode) {
+      return {
+        success: false,
+        message: '❌ No hay código de emparejamiento disponible. Usa /requestcode para generar uno nuevo.',
+        quoted: true
+      }
+    }
+
+    const codeMessage = `🔐 *CÓDIGO DE EMPAREJAMIENTO DEL BOT PRINCIPAL*\n\n` +
+      `📱 Número: ${botStatus.pairingNumber || 'N/A'}\n` +
+      `🔑 Código: \`${botStatus.pairingCode}\`\n` +
+      `⏰ Generado: ${botStatus.timestamp ? new Date(botStatus.timestamp).toLocaleString('es-ES') : 'N/A'}\n\n` +
+      `💡 *Instrucciones:*\n` +
+      `1. Ve a WhatsApp > Dispositivos vinculados\n` +
+      `2. Toca "Vincular un dispositivo"\n` +
+      `3. Ingresa el código de arriba\n\n` +
+      `⚠️ El código expira en 10 minutos.`;
+
+    return sendCopyableCode(botStatus.pairingCode, codeMessage);
+
+  } catch (e) {
+    return { success: false, message: `⚠️ Error obteniendo código del bot principal: ${e?.message || e}`, quoted: true };
   }
 }
