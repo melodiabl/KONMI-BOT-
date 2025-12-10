@@ -19,6 +19,15 @@ const TARGET = process.env.SUB_TARGET || null;
 const DISPLAY = process.env.SUB_DISPLAY || 'KONMI-BOT';
 const RAW_METADATA = process.env.SUB_METADATA || '{}';
 
+console.log(`[SUBBOT-RUNNER] 🎬 INICIANDO subbot-runner.js`);
+console.log(`[SUBBOT-RUNNER] 📋 CODE: ${CODE}`);
+console.log(`[SUBBOT-RUNNER] 📋 TYPE: ${TYPE}`);
+console.log(`[SUBBOT-RUNNER] 📋 DIR: ${DIR}`);
+console.log(`[SUBBOT-RUNNER] 📋 TARGET: ${TARGET}`);
+console.log(`[SUBBOT-RUNNER] 📋 PID: ${process.pid}`);
+console.log(`[SUBBOT-RUNNER] 📋 PPID: ${process.ppid}`);
+console.log(`[SUBBOT-RUNNER] 📋 process.send disponible: ${!!process.send}`);
+
 let SUBBOT_METADATA = {};
 try {
   SUBBOT_METADATA = JSON.parse(RAW_METADATA);
@@ -30,48 +39,66 @@ const SUBBOT_VERBOSE = /^(1|true|yes)$/i.test(process.env.SUBBOT_VERBOSE || '');
 const vlog = (...a) => { if (SUBBOT_VERBOSE) console.log(`[SUBBOT ${CODE}]`, ...a); };
 
 if (!CODE || !DIR) {
+  console.error(`[SUBBOT-RUNNER] ❌ Falta SUB_CODE o SUB_DIR`);
   process.send?.({ event: 'error', data: { message: 'Falta SUB_CODE o SUB_DIR' } });
+  process.exit(1);
+}
+
+if (!process.send) {
+  console.error(`[SUBBOT-RUNNER] ❌ CRÍTICO: process.send no está disponible - no es un child process`);
   process.exit(1);
 }
 
 // 🔧 Helper para enviar mensajes al padre con log
 function sendToParent(event, data) {
   const payload = { event, data };
-  console.log(`[SUBBOT-RUNNER ${CODE}] 📤 Enviando al padre:`, event, JSON.stringify(data || {}).substring(0, 100));
+  const dataStr = JSON.stringify(data || {});
+  const preview = dataStr.length > 200 ? dataStr.substring(0, 200) + '...' : dataStr;
+  
+  console.log(`[SUBBOT-RUNNER ${CODE}] 📤 Intentando enviar al padre:`, event);
+  console.log(`[SUBBOT-RUNNER ${CODE}] 📦 Data:`, preview);
   
   if (process.send) {
     try {
-      process.send(payload);
-      console.log(`[SUBBOT-RUNNER ${CODE}] ✅ Mensaje enviado correctamente`);
+      const sent = process.send(payload);
+      console.log(`[SUBBOT-RUNNER ${CODE}] ✅ process.send() retornó:`, sent);
     } catch (error) {
-      console.error(`[SUBBOT-RUNNER ${CODE}] ❌ Error enviando mensaje:`, error.message);
+      console.error(`[SUBBOT-RUNNER ${CODE}] ❌ Error en process.send():`, error.message);
+      console.error(`[SUBBOT-RUNNER ${CODE}] 📚 Stack:`, error.stack);
     }
   } else {
-    console.error(`[SUBBOT-RUNNER ${CODE}] ❌ process.send no disponible`);
+    console.error(`[SUBBOT-RUNNER ${CODE}] ❌ process.send no está disponible en este momento`);
   }
 }
 
 // Función principal de ejecución del sub-bot
 async function start() {
-  vlog('Iniciando...');
+  console.log(`[SUBBOT-RUNNER ${CODE}] 🚀 Iniciando función start()...`);
+  
   const authDir = path.join(DIR, 'auth');
   const usePairing = TYPE === 'code';
+  
+  console.log(`[SUBBOT-RUNNER ${CODE}] 📁 authDir: ${authDir}`);
+  console.log(`[SUBBOT-RUNNER ${CODE}] 🔐 usePairing: ${usePairing}`);
 
   try {
+    console.log(`[SUBBOT-RUNNER ${CODE}] 📞 Llamando a connectToWhatsApp...`);
     const sock = await connectToWhatsApp(authDir, usePairing, TARGET);
+    console.log(`[SUBBOT-RUNNER ${CODE}] ✅ connectToWhatsApp completado`);
 
-    vlog('Socket conectado, configurando listeners...');
+    console.log(`[SUBBOT-RUNNER ${CODE}] 🎧 Configurando listeners de eventos...`);
 
     let lastQR = null;
 
     // Re-enganchar los listeners de eventos para comunicar con el proceso principal
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
-      vlog('Evento de conexión:', connection);
+      console.log(`[SUBBOT-RUNNER ${CODE}] 🔄 connection.update:`, connection);
 
       // Enviar QR cuando se genere (para modo QR)
       if (qr && !usePairing && qr !== lastQR) {
         lastQR = qr;
+        console.log(`[SUBBOT-RUNNER ${CODE}] 📱 QR generado`);
         try {
           console.log(`\n╔═══════════════════════════════════════════════════╗`);
           console.log(`║   📱 QR CODE [SUBBOT ${CODE}] 📱              ║`);
@@ -79,20 +106,18 @@ async function start() {
           qrcodeTerminal.generate(qr, { small: true });
           console.log(`\n✅ Código generado correctamente\n`);
 
-          vlog('Generando QR...');
           const QRCode = await import('qrcode');
           const dataUrl = await QRCode.default.toDataURL(qr);
-          vlog('Enviando qr_ready event');
           sendToParent('qr_ready', { qrCode: qr, qrImage: dataUrl.split(',')[1] });
         } catch (e) {
-          vlog('Error generando QR:', e.message);
+          console.error(`[SUBBOT-RUNNER ${CODE}] ❌ Error generando QR:`, e.message);
           sendToParent('error', { message: 'Error generando QR', reason: e.message });
         }
       }
 
       if (connection === 'open') {
         const botNumber = sock.user?.id?.split(':')[0] || null;
-        vlog('Conectado, botNumber:', botNumber);
+        console.log(`[SUBBOT-RUNNER ${CODE}] ✅ Conectado, botNumber:`, botNumber);
         sendToParent('connected', { 
           jid: sock.user?.id, 
           number: `+${botNumber}`, 
@@ -104,7 +129,7 @@ async function start() {
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const reason = lastDisconnect?.error?.message || 'Desconocido';
-        vlog(`Desconectado. Razón: ${reason} (código ${statusCode})`);
+        console.log(`[SUBBOT-RUNNER ${CODE}] ❌ Desconectado. Razón: ${reason} (código ${statusCode})`);
 
         const isLoggedOut = statusCode === 401 || /logged out/i.test(reason || '');
         if (isLoggedOut) {
@@ -116,10 +141,33 @@ async function start() {
       }
     });
 
-    // Escuchar evento de pairing code generado
+    // 🔧 CRÍTICO: Escuchar eventos de pairing code
     if (usePairing) {
+      console.log(`[SUBBOT-RUNNER ${CODE}] 🎧 Registrando listeners para pairing_code...`);
+      
+      // Listener principal que funciona con la mayoría de versiones de Baileys
+      sock.ev.on('creds.update', (update) => {
+        console.log(`[SUBBOT-RUNNER ${CODE}] 🔐 creds.update recibido:`, Object.keys(update || {}));
+        
+        // Verificar si hay código de pairing en la actualización
+        if (update?.pairingCode) {
+          console.log(`[SUBBOT-RUNNER ${CODE}] 🎯 pairingCode encontrado en creds.update:`, update.pairingCode);
+          
+          const payload = {
+            pairingCode: update.pairingCode,
+            code: update.pairingCode,
+            identificationCode: CODE,
+            displayCode: DISPLAY,
+            targetNumber: TARGET
+          };
+          
+          sendToParent('pairing_code', payload);
+        }
+      });
+      
+      // Listener alternativo 1
       sock.ev.on('pairing_code', (pairingCode) => {
-        console.log(`[SUBBOT-RUNNER ${CODE}] 🔐 Evento pairing_code recibido:`, pairingCode);
+        console.log(`[SUBBOT-RUNNER ${CODE}] 🔐 Evento pairing_code directo recibido:`, pairingCode);
         
         const payload = {
           pairingCode,
@@ -129,10 +177,10 @@ async function start() {
           targetNumber: TARGET
         };
         
-        console.log(`[SUBBOT-RUNNER ${CODE}] 📋 Payload completo:`, JSON.stringify(payload));
         sendToParent('pairing_code', payload);
       });
 
+      // Listener alternativo 2
       sock.ev.on('pairing_code_ready', (data) => {
         console.log(`[SUBBOT-RUNNER ${CODE}] 🔐 Evento pairing_code_ready recibido:`, data);
         
@@ -145,9 +193,10 @@ async function start() {
           targetNumber: TARGET
         };
         
-        console.log(`[SUBBOT-RUNNER ${CODE}] 📋 Payload completo:`, JSON.stringify(payload));
         sendToParent('pairing_code', payload);
       });
+      
+      console.log(`[SUBBOT-RUNNER ${CODE}] ✅ Listeners de pairing_code registrados`);
     }
 
     // Re-enganchar el manejador de mensajes del bot principal
@@ -167,7 +216,6 @@ async function start() {
             ''
           ).trim();
 
-          // Cuando el bot global está OFF, solo dejar pasar "/bot global on"
           if (!fromMe) {
             const on = await isBotGloballyActive();
             const isBotGlobalOnCmd = /^\/bot\s+global\s+on\b/i.test(rawText);
@@ -190,13 +238,19 @@ async function start() {
       }
     });
 
-    vlog('Listeners configurados correctamente');
+    console.log(`[SUBBOT-RUNNER ${CODE}] ✅ Todos los listeners configurados correctamente`);
+    console.log(`[SUBBOT-RUNNER ${CODE}] 🎉 Subbot completamente inicializado y listo`);
 
   } catch (error) {
-    console.error(`[SUBBOT ${CODE}] Error fatal al iniciar:`, error?.message || error);
+    console.error(`[SUBBOT-RUNNER ${CODE}] 💥 Error fatal al iniciar:`, error?.message || error);
+    console.error(`[SUBBOT-RUNNER ${CODE}] 📚 Stack:`, error?.stack);
     sendToParent('error', { message: error.message });
     process.exit(1);
   }
 }
 
-start();
+console.log(`[SUBBOT-RUNNER] 🏁 Llamando a start()...`);
+start().catch(err => {
+  console.error(`[SUBBOT-RUNNER] 💥 Error no capturado en start():`, err);
+  process.exit(1);
+});
