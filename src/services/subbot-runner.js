@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Leer variables de entorno
-const CODE = process.env.SUB_CODE;
+const CODE = process.env.SUB_CODE; // Este es el código de identificación interno
 const TYPE = process.env.SUB_TYPE || 'qr';
 const DIR = process.env.SUB_DIR;
 const TARGET = process.env.SUB_TARGET || null;
@@ -61,7 +61,7 @@ async function start() {
           console.log(`╚═══════════════════════════════════════════════╝\n`);
           qrcodeTerminal.generate(qr, { small: true });
           console.log(`\n✅ Código generado correctamente\n`);
-          
+
           vlog('Generando QR...');
           const QRCode = await import('qrcode');
           const dataUrl = await QRCode.default.toDataURL(qr);
@@ -98,18 +98,32 @@ async function start() {
     if (usePairing) {
       sock.ev.on('pairing_code', (pairingCode) => {
         vlog('Evento pairing_code recibido:', pairingCode);
-        process.send?.({ 
-          event: 'pairing_code', 
-          data: { pairingCode, code: pairingCode, displayCode: DISPLAY, targetNumber: TARGET } 
+        // CORRECCIÓN: Enviar el código de pairing real, no el código de identificación
+        process.send?.({
+          event: 'pairing_code',
+          data: {
+            pairingCode, // Este es el código real de 8 dígitos para emparejar
+            code: pairingCode, // Este es el código que el usuario debe ingresar
+            identificationCode: CODE, // Este es el código interno de identificación
+            displayCode: DISPLAY,
+            targetNumber: TARGET
+          }
         });
       });
-      
+
       sock.ev.on('pairing_code_ready', (data) => {
         vlog('Evento pairing_code_ready recibido:', data);
         const code = data?.code || data?.pairingCode || data;
-        process.send?.({ 
-          event: 'pairing_code', 
-          data: { pairingCode: code, code, displayCode: DISPLAY, targetNumber: TARGET } 
+        // CORRECCIÓN: Enviar el código de pairing real
+        process.send?.({
+          event: 'pairing_code',
+          data: {
+            pairingCode: code, // Código real de 8 dígitos
+            code, // Código que el usuario debe ingresar
+            identificationCode: CODE, // Código interno de identificación
+            displayCode: DISPLAY,
+            targetNumber: TARGET
+          }
         });
       });
     }

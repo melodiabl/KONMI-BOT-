@@ -13,6 +13,7 @@ import {
   createSubbotWithPairing,
   createSubbotWithQr,
   listUserSubbots,
+  listAllSubbots, // NUEVO: Importar función para listar todos
   deleteUserSubbot,
   getSubbotByCode,
   markSubbotConnected,
@@ -31,13 +32,15 @@ function ensureDir(dir) {
   }
 }
 
+// MODIFICADO: Agregar soporte para creatorPushName
 export function generateSubbotPairingCode(ownerNumber, targetNumber, options = {}) {
   return createSubbotWithPairing({
     ownerNumber,
     targetNumber,
     displayName: options.displayName,
     requestJid: options.requestJid,
-    requestParticipant: options.requestParticipant
+    requestParticipant: options.requestParticipant,
+    creatorPushName: options.creatorPushName || options.pushName, // NUEVO
   });
 }
 
@@ -53,8 +56,14 @@ export function getSubbotStatus(code) {
   return getSubbotByCode(code);
 }
 
+// MODIFICADO: Renombrado para claridad
 export function getAllSubbots(ownerNumber) {
   return listUserSubbots(ownerNumber);
+}
+
+// NUEVO: Función para obtener todos los subbots del sistema
+export function getAllSystemSubbots() {
+  return listAllSubbots();
 }
 
 export async function startSubbot({ type, ownerNumber, targetNumber, metadata }) {
@@ -106,7 +115,8 @@ export default {
   generateSubbotPairingCode,
   generateSubbotQR,
   getSubbotStatus,
-  getAllSubbots,
+  getAllSubbots, // Subbots del usuario
+  getAllSystemSubbots, // NUEVO: Todos los subbots del sistema
   startSubbot,
   stopSubbotRuntime,
   removeSubbot,
