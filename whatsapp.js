@@ -205,10 +205,14 @@ let authMethod = 'qr'
 let pairingCodeRequestedForSession = false
 let lastQRGenerated = 0
 
+// Comandos especiales que pueden puentear algunos filtros.
+// Nota: el control de apagado global se maneja mÃ¡s abajo con un chequeo
+// explÃ­cito de "/bot global on".
 const controlSet = new Set([
-  '/activate', '/activar', '/on', '/enable',
-  '/deactivate', '/desactivar', '/off', '/disable',
-  '/start', '/stop'
+  '/activate', '/activar',
+  '/deactivate', '/desactivar',
+  '/start', '/stop',
+  '/bot'
 ])
 
 let routerPath = './src/commands/router.js';
@@ -668,10 +672,18 @@ export async function connectToWhatsApp(
           const firstToken = /^[\\/!.#?$~]/.test(rawText) ? rawText.split(/\s+/)[0].toLowerCase() : '';
           const bypassCmd = controlSet.has(firstToken);
 
+          // Solo permitir reactivaciÃ³n con "/bot global on" cuando el bot estÃ¡ en OFF global
           if (!ignoreGating && mm && typeof mm.isBotGloballyActive === 'function') {
             try {
               const on = await mm.isBotGloballyActive();
-              if (!on && !fromMe && !bypassCmd) continue;
+              const isBotGlobalOnCmd =
+                !fromMe &&
+                /^\/bot\s+global\s+on\b/i.test(rawText);
+
+              if (!on && !isBotGlobalOnCmd) {
+                // Bot global OFF: ignorar todo excepto "/bot global on"
+                continue;
+              }
             } catch (e) {
               logMessage('ERROR', 'GATING', 'isBotGloballyActive failed', { error: e?.message });
             }
