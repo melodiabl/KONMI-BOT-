@@ -177,7 +177,7 @@ let __loaded = null
 async function loadBaileys() {
   if (__loaded) return __loaded
 
-  const picks = ['wileys', '@whiskeysockets/baileys', 'baileys']
+  const picks = ['@vkazee/baileys', '@whiskeysockets/baileys', 'baileys']
 
   if (process?.env?.BAILEYS_MODULE && !['@whiskeysockets/baileys', 'baileys', '@itsukichan/baileys'].includes(process.env.BAILEYS_MODULE)) {
     picks.unshift(process.env.BAILEYS_MODULE)
@@ -733,7 +733,7 @@ export async function connectToWhatsApp(
         }
         return mgr
       }
-      // Si BOT_IGNORE_GATING no estÃ¡ en true, se aplica el filtro global/grupo
+      // Si BOT_IGNORE_GATING no esta en true, se aplica el filtro global/grupo
       const ignoreGating = String(process.env.BOT_IGNORE_GATING || 'false').toLowerCase() === 'true'
 
       for (const m of messages) {
