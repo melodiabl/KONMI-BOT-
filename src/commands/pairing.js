@@ -174,13 +174,13 @@ export async function code(ctx) {
     // ID interno del subbot (por si lo necesitas en otro lado)
     const codeValue = res?.code;
 
-    // 👉 AQUÍ TOMAMOS EL CÓDIGO TAL CUAL LO DA BAILEYS (KONM-IBOT, etc.)
-    const pairing =
-      res?.code ||         // ej: "KONM-IBOT" (lo que ves en los logs [PAIRING])
-      res?.pairingCode ||  // por si viene así
-      res?.pairing ||      // fallback
-      res?.custom ||       // por si guardas el custom aquí
-      null;
+// 👉 AHORA SÍ: usamos el CÓDIGO DE VINCULACIÓN, NO EL ID DEL SUBBOT
+const pairing =
+  res?.pairingCode ||  // ej: "KONM-IBOT" (lo que quieres que se muestre)
+  res?.pairing ||      // otros nombres posibles
+  res?.custom ||       // si guardas ahí el custom
+  null;
+
 
     if (!pairing) {
       return {
