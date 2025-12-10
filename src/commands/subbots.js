@@ -1,5 +1,5 @@
-// commands/subbots.js — usa el manager unificado para evitar desajustes de esquema
-import { listUserSubbots } from '../services/subbot-manager.js'
+// commands/subbots.js – Comandos para gestionar subbots
+import { listUserSubbots, listAllSubbots } from '../services/subbot-manager.js'
 
 function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
 function normalizeDigits(userOrJid){
@@ -17,27 +17,79 @@ function isOwner(usuario){
   return false
 }
 
-export async function mine({ usuario }){
+// Comando /mybots - Muestra solo los subbots del usuario
+export async function mybots({ usuario }){
   try{
     const phone = normalizeDigits(usuario)
     const rows = await listUserSubbots(phone)
-    if(!rows.length) return { success:true, message:'📦 No tienes subbots.' }
-    let msg = `🤖 Mis Subbots (${rows.length})\n\n`
+
+    if(!rows.length) return { success:true, message:'📦 No tienes subbots creados.' }
+
+    let msg = `🤖 *Mis Subbots* (${rows.length})\n\n`
     rows.forEach((r,i)=>{
       const online = (r.status||'').toLowerCase()==='connected' || r.is_active===1 || r.is_active===true || r.is_online===true
       const type = r.type || r.method || r.connection_type || 'qr'
-      msg += `${i+1}. ${r.code||'-'} — ${type} — ${online?'🟢':'⚪'}\n`
+      const metadata = typeof r.metadata === 'string' ? JSON.parse(r.metadata || '{}') : r.metadata || {}
+
+      // CORRECCIÓN: Para tipo 'code', mostrar el código de pairing como principal
+      const pairingCode = metadata.pairingCode || '-'
+      const identificationCode = r.code || metadata.identificationCode || '-'
+      const displayName = metadata.displayName || metadata.creatorPushName || 'Sin nombre'
+
+      msg += `${i+1}. *Código:* ${type === 'code' && pairingCode !== '-' ? pairingCode : identificationCode}\n`
+      msg += `   *Identificación:* ${displayName}\n`
+      msg += `   *Tipo:* ${type}\n`
+      msg += `   *Estado:* ${online?'🟢 Online':'⚪ Offline'}\n`
+      msg += '\n'
     })
-    return { success:true, message: msg }
-  }catch{ return { success:false, message:'⚠️ Error listando subbots.' } }
+
+    return { success:true, message: msg.trim() }
+  }catch(e){
+    console.error('Error en mybots:', e)
+    return { success:false, message:'⚠️ Error listando tus subbots.' }
+  }
 }
 
-export async function all({ usuario }){
-  if (!isOwner(usuario)) return { success:true, message:'⛔ Solo el owner puede ver todos los subbots.' }
+// Comando /bots - Muestra TODOS los subbots del sistema (solo owner)
+export async function bots({ usuario }){
+  if (!isOwner(usuario)) {
+    return { success:false, message:'⛔ Solo el owner puede ver todos los subbots del sistema.' }
+  }
+
   try{
-    // Para owner, podríamos listar todos vía DB; por simplicidad reutilizamos mine pero owner verá los suyos
-    return mine({ usuario })
-  }catch{ return { success:false, message:'⚠️ Error listando subbots globales.' } }
+    const rows = await listAllSubbots()
+
+    if(!rows.length) return { success:true, message:'📦 No hay subbots en el sistema.' }
+
+    let msg = `🤖 *Todos los Subbots del Sistema* (${rows.length})\n\n`
+    rows.forEach((r,i)=>{
+      const online = (r.status||'').toLowerCase()==='connected' || r.is_active===1 || r.is_active===true || r.is_online===true
+      const type = r.type || r.method || r.connection_type || 'qr'
+      const metadata = typeof r.metadata === 'string' ? JSON.parse(r.metadata || '{}') : r.metadata || {}
+
+      // CORRECCIÓN: Para tipo 'code', mostrar el código de pairing como principal
+      const pairingCode = metadata.pairingCode || '-'
+      const identificationCode = r.code || metadata.identificationCode || '-'
+      const displayName = metadata.displayName || metadata.creatorPushName || 'Sin nombre'
+      const ownerNumber = r.owner_number || 'Desconocido'
+
+      msg += `${i+1}. *Código:* ${type === 'code' && pairingCode !== '-' ? pairingCode : identificationCode}\n`
+      msg += `   *Identificación:* ${displayName}\n`
+      msg += `   *Owner:* ${ownerNumber}\n`
+      msg += `   *Tipo:* ${type}\n`
+      msg += `   *Estado:* ${online?'🟢 Online':'⚪ Offline'}\n`
+      msg += '\n'
+    })
+
+    return { success:true, message: msg.trim() }
+  }catch(e){
+    console.error('Error en bots:', e)
+    return { success:false, message:'⚠️ Error listando subbots del sistema.' }
+  }
 }
 
-export default { mine, all }
+// Alias para compatibilidad
+export async function mine(ctx){ return mybots(ctx) }
+export async function all(ctx){ return bots(ctx) }
+
+export default { mybots, bots, mine, all }
