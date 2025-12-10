@@ -121,13 +121,13 @@ export async function unban(ctx) {
 }
 
 export async function bans(ctx) {
-  const { isGroup, isAdmin, remoteJid } = ctx
+  const { isGroup, isAdmin, isOwner, remoteJid } = ctx
 
   if (!isGroup) {
     return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
   }
-  if (!isAdmin) {
-    return { success: false, message: '⛔ Solo los administradores pueden ver la lista de baneados.' }
+  if (!isAdmin && !isOwner) {
+    return { success: false, message: '⛔ Solo los administradores o el owner pueden ver la lista de baneados.' }
   }
 
   await ensureBansTable()
