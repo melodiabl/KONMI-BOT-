@@ -276,6 +276,8 @@ export async function launchSubbot(options = {}) {
       processRef: child,
       timeoutHandle: null,
     });
+    
+    console.log(`[inproc-subbots] 🚀 Child process forked para subbot ${code}, PID: ${child.pid}`);
     eventBus.emit("launching", { subbot: { ...publicRecord } });
 
     const emit = (event, data) => {
@@ -304,12 +306,18 @@ export async function launchSubbot(options = {}) {
     };
 
     // 🔧 CORRECCIÓN CRÍTICA: Re-emitir TODOS los eventos al eventBus
+    // IMPORTANTE: Este listener DEBE registrarse INMEDIATAMENTE después del fork
     child.on("message", (message) => {
       try {
-        if (!message || typeof message.event !== "string") return;
+        if (!message || typeof message.event !== "string") {
+          console.log(`[inproc-subbots] ⚠️ Mensaje inválido recibido del subbot ${code}:`, message);
+          return;
+        }
+        
         const info = activeSubbots.get(code) || publicRecord;
 
-        console.log(`[inproc-subbots] 📨 Mensaje del subbot ${code}: ${message.event}`);
+        console.log(`[inproc-subbots] 📨 Mensaje del subbot ${code}: ${message.event}`, 
+          message.data ? `con data: ${JSON.stringify(message.data).substring(0, 100)}` : '(sin data)');
 
         // Actualizar estado interno según el evento
         if (message.event === "connected") {
@@ -354,11 +362,12 @@ export async function launchSubbot(options = {}) {
 
         // 🔧 CRÍTICO: Re-emitir TODOS los eventos al eventBus (incluyendo pairing_code, qr_ready, etc.)
         // Esto debe estar FUERA de los if statements para capturar TODOS los eventos
-        console.log(`[inproc-subbots] 📢 Emitiendo '${message.event}' al eventBus global`);
+        console.log(`[inproc-subbots] 📢 Emitiendo '${message.event}' al eventBus global (${eventBus.listenerCount(message.event)} listeners)`);
         eventBus.emit(message.event, {
           subbot: { ...info },
           data: message.data || null,
         });
+        console.log(`[inproc-subbots] ✅ Evento '${message.event}' emitido correctamente`);
         
       } catch (err) {
         logger.error(
