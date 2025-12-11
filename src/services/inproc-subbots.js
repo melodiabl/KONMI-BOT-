@@ -239,6 +239,10 @@ export async function launchSubbot(options = {}) {
 
     const runnerPath = path.join(__dirname, "subbot-runner.js");
 
+    const verboseSubbots =
+      String(process.env.SUBBOTS_VERBOSE || process.env.SUBBOT_VERBOSE || "false")
+        .toLowerCase() === "true";
+
     const forkOptions = {
       cwd: process.cwd(),
       env: {
@@ -250,7 +254,11 @@ export async function launchSubbot(options = {}) {
         SUB_METADATA: JSON.stringify(metadata),
         SUB_DISPLAY: metadata.customPairingDisplay || "KONMI-BOT",
       },
-      stdio: ["inherit", "inherit", "inherit", "ipc"],
+      // Si no está en modo verbose, no heredar stdout/stderr para que
+      // los QR/códigos de subbots no aparezcan en los logs del proceso padre.
+      stdio: verboseSubbots
+        ? ["inherit", "inherit", "inherit", "ipc"]
+        : ["ignore", "ignore", "ignore", "ipc"],
     };
 
     const child = fork(runnerPath, [], forkOptions);
