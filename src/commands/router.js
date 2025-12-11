@@ -195,7 +195,7 @@ function extractText(message) {
           try {
             const params = JSON.parse(paramsJson)
             const id = params?.id || params?.command || params?.rowId || params?.row_id
-            if (id && typeof id === 'string') return String(id).trim()
+            if (id) return String(id).trim()
           } catch { }
         }
       }
@@ -557,9 +557,8 @@ async function sendResult(sock, jid, result, ctx) {
       }))
     }
 
-    // 🔴 AQUÍ EL CAMBIO IMPORTANTE:
-    // En este Baileys, las listas se envían DIRECTO, no como { listMessage: {...} }
-    if (await safeSend(sock, targetJid, listPayload, opts, true)) return
+    // Forma estándar de Baileys: listMessage anidado
+    if (await safeSend(sock, targetJid, { listMessage: listPayload }, opts, true)) return
 
     // fallback texto
     let txt = (result.text || result.title || 'Menú') + '\n\n'
@@ -635,30 +634,27 @@ export async function dispatch(ctx = {}) {
     }
   }
 
-  // DEBUG shape de listResponse en grupos
-  if (isGroup) {
-    try {
-      const m = ctx.message?.message || {}
-      const isList =
-        !!m.listResponseMessage ||
-        !!m.interactiveResponseMessage?.listResponseMessage
-
-      if (isList) {
-        console.log(
-          '===== [DEBUG] RAW GROUP LIST RESPONSE MESSAGE =====\n' +
-          JSON.stringify(ctx.message, null, 2) +
-          '\n===================================================='
-        )
-      }
-    } catch (e) {
-      console.log('[DEBUG] error logging listResponseMessage:', e?.message || e)
-    }
-  }
-
   const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
   const parsed = parseCommand(text)
   let command = parsed.command
   const args = parsed.args || []
+
+  // 🔎 DEBUG: log completo solo cuando el usuario selecciona un ítem de lista EN GRUPO
+  try {
+    const mm = ctx?.message?.message || {}
+    const isListResponse =
+      !!mm.listResponseMessage ||
+      !!mm.buttonsResponseMessage ||
+      !!mm.templateButtonReplyMessage ||
+      !!mm.interactiveResponseMessage?.listResponseMessage ||
+      !!mm.interactiveMessage?.listResponseMessage
+
+    if (isGroup && isListResponse) {
+      console.log('====================[DEBUG LIST RESPONSE - GROUP]====================')
+      console.log(JSON.stringify(ctx.message, null, 2))
+      console.log('=====================================================================')
+    }
+  } catch { }
 
   if (isGroup && command) {
     try {
@@ -847,6 +843,7 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
+
 
 
 
