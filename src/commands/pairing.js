@@ -142,7 +142,7 @@ export async function qr(ctx) {
 
 export async function code(ctx) {
   try {
-    const { isOwner, sock, remoteJid } = ctx || {};
+    const { isOwner, sock, remoteJid, pushName, usuarioName } = ctx || {};
     
     const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
     if (access === 'owner' && !isOwner) {
@@ -205,6 +205,13 @@ export async function code(ctx) {
                     linked ? `🤝 Vinculado: +${linked}` : null,
                   ].filter(Boolean)
                   await sock.sendMessage(dmJid, { text: parts.join('\n') })
+
+                  const displayName = ctx?.usuarioName || ctx?.pushName || null
+                  if (displayName) {
+                    await sock.sendMessage(dmJid, {
+                      text: `ÐYZ% ${displayName}, ¶­ya eres un subbot mÇ­s de la comunidad!`,
+                    })
+                  }
                   
                   const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
                   if (isGroup) {
@@ -216,6 +223,13 @@ export async function code(ctx) {
                     ].filter(Boolean)
                     const payloadMsg = mention ? { text: gLines.join('\n'), mentions: [mention] } : { text: gLines.join('\n') }
                     await sock.sendMessage(remoteJid, payloadMsg)
+
+                    if (displayName && mention) {
+                      await sock.sendMessage(remoteJid, {
+                        text: `ÐYZ% @${phone} (${displayName}), ¶­ya eres un subbot mÇ­s de la comunidad!`,
+                        mentions: [mention],
+                      })
+                    }
                   }
                 } finally {
                   offSubbotEvent('connected', onConnected);

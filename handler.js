@@ -428,7 +428,7 @@ export async function registerSubbotEvent({ subbotId, token, event, data }) {
       return { success: false, error: "Subbot no encontrado" };
     }
 
-    // Token no implementado aÇ?n; se deja como compatibilidad
+    // Token no implementado no; se deja como compatibilidad
     await emitSubbotEvent(subbotId, event, data || null);
     return { success: true };
   } catch (error) {
