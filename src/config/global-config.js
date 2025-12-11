@@ -1,22 +1,19 @@
 // ==================== CONFIGURACION GLOBAL DEL BOT ====================
 
 // Lista de administradores globales (superadmins)
-// Formato: [numero, nombre, esSuperAdmin]
-// Si OWNER_WHATSAPP_NUMBER está vacío, se auto-detecta al conectar
-const PRIMARY_OWNER = (process.env.OWNER_WHATSAPP_NUMBER || '').replace(/[^0-9]/g, '');
-global.owner = PRIMARY_OWNER ? [
-  [PRIMARY_OWNER, 'Owner', true],
-] : [];
+global.owner = [
+  [
+];
 
-// Lista de moderadores (pueden usar comandos de moderacin)
+// Lista de moderadores
 global.mods = [
-  // Agregar nmeros de moderadores aqu
-]
+  // Agregar números de moderadores aquí
+];
 
 // Lista de usuarios premium
 global.prems = [
-  // Agregar nmeros de usuarios premium aqu
-]
+  // Agregar números premium aquí
+];
 
 // Configuracion del bot
 global.namebot = 'KONMI BOT'
