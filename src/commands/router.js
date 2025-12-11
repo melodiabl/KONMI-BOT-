@@ -511,26 +511,14 @@ async function sendResult(sock, jid, result, ctx) {
 
   /* ============ BOTONES CLÁSICOS (templateButtons) ============ */
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
-    // Usamos solo templateButtons clásicos, que funcionan en PV y grupos
     const templateButtons = result.buttons.map((b, i) => {
       const text = b.text || b.title || b.displayText || 'Acción'
       if (b.url) {
-        // Botón de URL
-        return {
-          index: i + 1,
-          urlButton: {
-            displayText: text,
-            url: b.url,
-          },
-        }
+        return { index: i + 1, urlButton: { displayText: text, url: b.url } }
       }
-      // Botón de respuesta rápida
       return {
         index: i + 1,
-        quickReplyButton: {
-          displayText: text,
-          id: b.id || b.command || b.buttonId || `/btn_${i + 1}`,
-        },
+        quickReplyButton: { displayText: text, id: b.id || b.command || b.buttonId || `/btn_${i + 1}` }
       }
     })
 
@@ -538,13 +526,12 @@ async function sendResult(sock, jid, result, ctx) {
       text: result.text || '',
       footer: result.footer,
       templateButtons,
-      mentions: result.mentions,
+      mentions: result.mentions
     }
 
-    // Intento principal: botones
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
-    // Fallback: solo texto con las opciones
+    // fallback texto plano
     let t = (result.text || 'Opciones:') + '\n\n'
     for (const b of result.buttons) {
       t += `• ${b.text || b.title || b.displayText || 'Acción'}\n`
@@ -553,32 +540,31 @@ async function sendResult(sock, jid, result, ctx) {
     return
   }
 
-  /* ============ LISTA CLÁSICA (list) ============ */
+  /* ============ LISTA CLÁSICA (listMessage) ============ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
-    // Construimos el payload de lista en el formato clásico de Baileys
     const listPayload = {
       text: result.text || 'Elige una opción de la lista',
       title: result.title || undefined,
       footer: result.footer || undefined,
-      buttonText: result.buttonText || 'Ver opciones',
+      buttonText: result.buttonText || 'Ver Categorías',
       sections: (result.sections || []).map(sec => ({
         title: sec.title,
         rows: (sec.rows || []).map(r => ({
-          title: r.title || r.text || 'Opción',
-          description: r.description || undefined,
-          rowId: r.rowId || r.id || r.command || r.url || r.text || 'noop',
-        })),
-      })),
+          title: r.title,
+          description: r.description,
+          rowId: r.rowId || r.id || r.command || r.text || 'noop'
+        }))
+      }))
     }
 
-    // Enviamos la lista directamente (forma soportada por Baileys)
-    if (await safeSend(sock, targetJid, listPayload, opts, true)) return
+    // importante → enviar como listMessage para compatibilidad
+    if (await safeSend(sock, targetJid, { listMessage: listPayload }, opts, true)) return
 
-    // Fallback a texto si falla
+    // fallback texto
     let txt = (result.text || result.title || 'Menú') + '\n\n'
-    for (const sec of listPayload.sections) {
+    for (const sec of result.sections || []) {
       if (sec.title) txt += `*${sec.title}*\n`
-      for (const r of sec.rows) {
+      for (const r of sec.rows || []) {
         txt += `- ${r.title} (${r.rowId})\n`
       }
       txt += '\n'
@@ -630,6 +616,7 @@ export async function dispatch(ctx = {}) {
   const { sock, remoteJid, isGroup } = ctx
   if (!sock || !remoteJid) return false
 
+  // Bot global ON/OFF
   try {
     const textForGlobal = (ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || ''
     const trimmed = textForGlobal.trim().toLowerCase()
@@ -638,6 +625,7 @@ export async function dispatch(ctx = {}) {
     if (!on && !isBotGlobalCmd) return false
   } catch { }
 
+  // Bot habilitado en grupo
   if (isGroup) {
     const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
     if (!botEnabled) {
@@ -648,11 +636,35 @@ export async function dispatch(ctx = {}) {
     }
   }
 
+  /* ============================
+     DEBUG LIST RESPONSE EN GRUPOS
+     ============================ */
+  if (isGroup) {
+    try {
+      const m = ctx.message?.message || {}
+      const isList =
+        !!m.listResponseMessage ||
+        !!m.interactiveResponseMessage?.listResponseMessage
+
+      if (isList) {
+        console.log(
+          '===== [DEBUG] RAW GROUP LIST RESPONSE MESSAGE =====\n' +
+          JSON.stringify(ctx.message, null, 2) +
+          '\n===================================================='
+        )
+      }
+    } catch (e) {
+      console.log('[DEBUG] error logging listResponseMessage:', e?.message || e)
+    }
+  }
+  /* ============================================== */
+
   const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
   const parsed = parseCommand(text)
   let command = parsed.command
   const args = parsed.args || []
 
+  // bans por grupo
   if (isGroup && command) {
     try {
       const senderJid = ctx.sender || ctx.participant || ctx.remoteJid
@@ -682,6 +694,7 @@ export async function dispatch(ctx = {}) {
     console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${ctx.senderNumber || ctx.sender || '?'} | Owner: ${ctx.isOwner}`)
   }
 
+  // si no hay comando pero viene de selección de lista/botón, intentar tomar primer token
   if (!command) {
     try {
       const msg = ctx.message?.message || {}
@@ -702,6 +715,7 @@ export async function dispatch(ctx = {}) {
     } catch { }
   }
 
+  // fromMe sin prefijo (opcional)
   try {
     const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'false').toLowerCase() === 'true'
     if (!command && allowNoPrefix && ctx?.message?.key?.fromMe) {
@@ -710,6 +724,7 @@ export async function dispatch(ctx = {}) {
     }
   } catch { }
 
+  // palabras sin prefijo (help/menu/etc.)
   try {
     if (!command && !ctx?.message?.key?.fromMe) {
       const raw = String(text || '').trim().toLowerCase()
@@ -840,4 +855,5 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
+
 
