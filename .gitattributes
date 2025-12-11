@@ -1,4 +1,4 @@
-# Normaliza fin de línea y declara UTF-8 para archivos de texto
+# Normaliza fin de lヴnea y declara UTF-8 para archivos de texto
 
 # Por defecto, trata archivos como texto y normaliza a LF en el working tree
 * text=auto eol=lf
@@ -18,31 +18,5 @@
 *.{env,env.example}                 text working-tree-encoding=UTF-8
 *.{sh,sql,ini,conf,properties,txt}  text working-tree-encoding=UTF-8
 *.{csv,tsv}                         text working-tree-encoding=UTF-8
-*.{vue,svg,xml}                     text working-tree-encoding=UTF-8
-package.json                        text working-tree-encoding=UTF-8
-package-lock.json                   text working-tree-encoding=UTF-8
 
-# Archivos binarios: Git no intentará normalizarlos ni aplicar diffs de texto
-*.png   binary
-*.jpg   binary
-*.jpeg  binary
-*.gif   binary
-*.webp  binary
-*.ico   binary
-*.pdf   binary
-*.zip   binary
-*.gz    binary
-*.bz2   binary
-*.7z    binary
-*.tar   binary
-*.mp3   binary
-*.mp4   binary
-*.mov   binary
-*.avi   binary
-*.ogg   binary
-*.wav   binary
-*.woff  binary
-*.woff2 binary
-*.ttf   binary
-*.eot   binary
-*.psd   binary
+# Configuracion extra generada por Codex CLI
