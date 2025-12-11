@@ -8,31 +8,31 @@ import { getGroupRoles, getGroupMetadataCached } from '../utils/utils/group-help
 export async function ownerInfo(ctx) {
   const th = getTheme()
   const roles = ctx.isOwner ? ['owner'] : []
-  const msg = `${th.header('TU PERFIL')}\nÐY'Ï +${ctx.usuarioNumber}\nÐY"- Roles: ${roles.join(', ') || 'ninguno'}\n${th.footer()}`
+  const msg = `${th.header('TU PERFIL')}\n+${ctx.usuarioNumber}\n"Roles: ${roles.join(', ') || 'ninguno'}\n${th.footer()}`
   return { success: true, message: msg }
 }
 
 export async function checkOwner(ctx) {
   if (!ctx.isOwner) {
-    return { success: false, message: 'ƒ>" No tienes el rol de owner.' }
+    return { success: false, message: ' No tienes el rol de owner.' }
   }
-  return { success: true, message: 'ƒo. Tienes el rol de owner.' }
+  return { success: true, message: ' Tienes el rol de owner.' }
 }
 
 export async function setOwner(ctx) {
   if (!ctx.isOwner) {
-    return { success: false, message: 'ƒ>" Este comando solo puede ser usado por el owner del bot.' }
+    return { success: false, message: 'Este comando solo puede ser usado por el owner del bot.' }
   }
 
   const numero = String(ctx.args?.[0] || '').replace(/\D/g, '')
   const nombre = ctx.args?.slice(1).join(' ') || 'Owner'
 
   if (!numero) {
-    return { success: false, message: 'ƒ"û‹÷? Uso: /setowner <nÇ§mero> <nombre>' }
+    return { success: false, message: ' Uso: /setowner <nÇ§mero> <nombre>' }
   }
 
   setPrimaryOwner(numero, nombre)
-  return { success: true, message: `ƒo. Owner principal configurado: ${nombre} (+${numero})` }
+  return { success: true, message: `Owner principal configurado: ${nombre} (+${numero})` }
 }
 
 export async function debugBot(ctx) {
@@ -57,14 +57,14 @@ export async function debugBot(ctx) {
     const userAdmin = isAdmin ? 'admin del grupo' : 'miembro'
 
     const body = [
-      `ÐYÏ- Debug del Bot`,
-      `ƒ?½ Bot JID: ${ctx.sock?.user?.id || '(n/a)'}`,
-      `ƒ?½ NÇ§mero Base: +${botNumber || '(n/a)'}`,
-      `ƒ?½ Owner (env): +${envOwner || '(n/a)'}`,
-      `ƒ?½ TÇ§: +${ctx.usuarioNumber} ${rolesOwner.length ? `(${rolesOwner.join(', ')})` : ''}`,
-      `ƒ?½ Tu estatus: ${userAdmin}`,
-      ctx.isGroup ? `ƒ?½ Bot Admin en grupo: ${isBotAdmin ? 'ƒo. SÇð' : 'ƒ?O No'}` : null,
-      ctx.isGroup ? `ƒ?½ Grupo metadata disponible: ${hasGroupMetadata ? 'ƒo. SÇð' : 'ƒ?O No'}` : null,
+      `Debug del Bot`,
+      ` Bot JID: ${ctx.sock?.user?.id || '(n/a)'}`,
+      ` Numero Base: +${botNumber || '(n/a)'}`,
+      ` Owner (env): +${envOwner || '(n/a)'}`,
+      ` Tu: +${ctx.usuarioNumber} ${rolesOwner.length ? `(${rolesOwner.join(', ')})` : ''}`,
+      `Tu estatus: ${userAdmin}`,
+      ctx.isGroup ? ` Bot Admin en grupo: ${isBotAdmin ? 'Si No' : 'Si No'}` : null,
+      ctx.isGroup ? ` Grupo metadata disponible: ${hasGroupMetadata ? 'SI No' : 'SI No'}` : null,
     ]
       .filter(Boolean)
       .join('\n')
@@ -72,7 +72,7 @@ export async function debugBot(ctx) {
     const msg = `${th.header('KONMI BOT')}\n${body}\n${th.footer()}`
     return { success: true, message: msg }
   } catch (e) {
-    return { success: false, message: `ƒsÿ‹÷? Error en /debugbot: ${e?.message || e}` }
+    return { success: false, message: ` Error en /debugbot: ${e?.message || e}` }
   }
 }
 
