@@ -436,68 +436,66 @@ async function sendResult(sock, jid, result, ctx) {
     }
     return
   }
+
+  // 🔹 BOTONES INTERACTIVOS SIEMPRE (también en grupos)
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
-    const buttonList = result.buttons;
-    const isGroupChat = typeof targetJid === 'string' && targetJid.endsWith('@g.us');
-    const allowGroupInteractive = String(process.env.ALLOW_GROUP_INTERACTIVE || 'false').toLowerCase() === 'true';
+    const buttonList = result.buttons
 
-    // Para grupos sin soporte interactivo, degradar a texto con comandos clickeables
-    if (isGroupChat && !allowGroupInteractive) {
-      const lines = [result.text || result.caption || 'Opciones:'];
-      for (const b of buttonList) {
-        const label = b.text || b.title || b.displayText || 'Acción';
-        const cmd = b.command || b.id || b.url || b.buttonId || '';
-        if (cmd) {
-          lines.push(`• \`${cmd}\` - ${label}`);
-        } else {
-          lines.push(`• ${label}`);
-        }
-      }
-      await safeSend(sock, targetJid, { text: lines.join('\n'), footer: result.footer }, opts);
-      return;
-    }
-
-    // Para chats privados, intentar botones interactivos primero
+    // Intentar primero botones interactivos nativos (nativeFlow)
     const interactiveButtons = buttonList.map((b) => {
-      const text = b.text || b.title || b.displayText || 'Acción';
-      const id = b.command || b.id || b.url || b.buttonId || 'noop';
+      const text = b.text || b.title || b.displayText || 'Acción'
+      const id = b.command || b.id || b.url || b.buttonId || 'noop'
       if (b.url) {
-        return { name: "cta_url", buttonParamsJson: JSON.stringify({ display_text: text, url: b.url }) };
+        return { name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: text, url: b.url }) }
       }
-      return { name: "quick_reply", buttonParamsJson: JSON.stringify({ display_text: text, id: id }) };
-    });
+      return { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: text, id }) }
+    })
 
     const interactivePayload = {
       text: result.text || result.caption || 'Opciones',
       title: result.header || result.title,
       footer: result.footer,
       interactiveButtons,
-      mentions: result.mentions
-    };
-    if (await safeSend(sock, targetJid, interactivePayload, opts, true)) return;
+      mentions: result.mentions,
+    }
 
+    if (await safeSend(sock, targetJid, interactivePayload, opts, true)) return
+
+    // Si falla, intentar templateButtons clásicos
     const templateButtons = buttonList.map((b, i) => {
-      const text = b.text || b.title || b.displayText || 'Acción';
-      if (b.url) return { index: i + 1, urlButton: { displayText: text, url: b.url } };
-      return { index: i + 1, quickReplyButton: { displayText: text, id: b.command || b.id || b.buttonId || '/noop' } };
-    });
-    const legacyPayload = { text: result.text || result.caption || ' ', footer: result.footer, templateButtons, mentions: result.mentions };
-    if (await safeSend(sock, targetJid, legacyPayload, opts, true)) return;
+      const text = b.text || b.title || b.displayText || 'Acción'
+      if (b.url) {
+        return { index: i + 1, urlButton: { displayText: text, url: b.url } }
+      }
+      return {
+        index: i + 1,
+        quickReplyButton: { displayText: text, id: b.command || b.id || b.buttonId || '/noop' },
+      }
+    })
+
+    const legacyPayload = {
+      text: result.text || result.caption || 'Opciones',
+      footer: result.footer,
+      templateButtons,
+      mentions: result.mentions,
+    }
+
+    if (await safeSend(sock, targetJid, legacyPayload, opts, true)) return
 
     // Fallback final a texto plano
-    const plain = [result.text || result.caption || 'Opciones:'];
+    const plain = [result.text || result.caption || 'Opciones:']
     for (const b of buttonList) {
-      const label = b.text || b.title || b.displayText || 'Acción';
-      const cmd = b.command || b.id || b.url || b.buttonId || '';
-      plain.push(`• ${label}${cmd ? ` → ${cmd}` : ''}`);
+      const label = b.text || b.title || b.displayText || 'Acción'
+      const cmd = b.command || b.id || b.url || b.buttonId || ''
+      plain.push(`• ${label}${cmd ? ` → ${cmd}` : ''}`)
     }
-    await safeSend(sock, targetJid, { text: plain.join('\n') }, opts);
-    return;
+    await safeSend(sock, targetJid, { text: plain.join('\n') }, opts)
+    return
   }
+
+  // 🔹 LISTA INTERACTIVA SIEMPRE (también en grupos)
   // Lista interactiva - Formato nativo de @itsukichan/baileys
   if (result.type === 'list' && Array.isArray(result.sections)) {
-    const isGroupChat = typeof targetJid === 'string' && targetJid.endsWith('@g.us');
-    const allowGroupInteractive = String(process.env.ALLOW_GROUP_INTERACTIVE || 'false').toLowerCase() === 'true';
     const mapSections = (result.sections || []).map((sec) => ({
       title: sec.title || undefined,
       rows: (sec.rows || []).map((r) => ({
@@ -507,42 +505,32 @@ async function sendResult(sock, jid, result, ctx) {
       })),
     }))
 
-    // En grupos sin soporte interactivo, degradar a texto plano
-    if (isGroupChat && !allowGroupInteractive) {
-      const lines = [];
-      lines.push(result.text || result.description || result.title || 'Menu');
-      for (const sec of mapSections) {
-        lines.push('');
-        lines.push(sec.title || '');
-        for (const row of (sec.rows || [])) lines.push(`- ${row.title} -> ${row.rowId}`);
-      }
-      await safeSend(sock, targetJid, { text: lines.join('\n'), footer: result.footer }, opts);
-      return;
-    }
-
+    // Intentar primero lista interactiva nativa
     const listPayload = {
       text: result.text || result.description || 'Menu disponible',
       buttonText: result.buttonText || 'Ver opciones',
       sections: mapSections,
       title: result.title || 'Menu',
       footer: result.footer,
-    };
-
-    if (await safeSend(sock, targetJid, listPayload, opts)) {
-      return;
     }
 
-    const lines = [];
-    lines.push(result.text || 'Menu');
-    for (const sec of result.sections) {
-      lines.push('');
-      lines.push(sec.title || '');
-      for (const row of (sec.rows || [])) lines.push(`- ${row.title} -> ${row.rowId}`);
+    if (await safeSend(sock, targetJid, listPayload, opts, true)) {
+      return
     }
-    await safeSend(sock, targetJid, { text: lines.join('\n') }, opts);
-    return;
+
+    // Fallback a texto plano
+    const lines = []
+    lines.push(result.text || result.description || result.title || 'Menu')
+    for (const sec of mapSections) {
+      lines.push('')
+      lines.push(sec.title || '')
+      for (const row of sec.rows || []) lines.push(`- ${row.title} -> ${row.rowId}`)
+    }
+    await safeSend(sock, targetJid, { text: lines.join('\n'), footer: result.footer }, opts)
+    return
   }
-// Contenido crudo (interactiveMessage / nativeFlow)
+
+  // Contenido crudo (interactiveMessage / nativeFlow)
   if (result.type === 'content' && result.content && typeof result.content === 'object') {
     const payload = { ...result.content }
     try { if (payload.viewOnceMessage?.message?.interactiveMessage) payload.viewOnceMessage.message.interactiveMessage.contextInfo = { ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo||{}), mentionedJid: result.mentions } } catch {}
