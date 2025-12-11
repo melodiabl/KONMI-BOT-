@@ -1,5 +1,6 @@
 // commands/router.js
 // Router simplificado y estable: parsea comandos, invoca registry y entrega respuestas con safeSend
+// ✅ FIX APLICADO: Mensajes interactivos funcionan correctamente en grupos
 
 import logger from '../config/logger.js'
 import antibanMiddleware from '../utils/utils/anti-ban-middleware.js'
@@ -112,7 +113,7 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
 }
 
 /* ========================
-   Extractor de texto
+   Extractor de texto - MEJORADO ✅
    ======================== */
 
 function extractText(message) {
@@ -120,6 +121,7 @@ function extractText(message) {
     const pick = (obj) => {
       if (!obj || typeof obj !== 'object') return ''
 
+      // 1. Texto normal primero
       const base = (
         obj.conversation ||
         obj.extendedTextMessage?.text ||
@@ -129,68 +131,89 @@ function extractText(message) {
       )
       if (base) return String(base).trim()
 
+      // 2. Botones clásicos
       const btnId =
         obj.buttonsResponseMessage?.selectedButtonId ||
         obj.templateButtonReplyMessage?.selectedId ||
         obj.buttonReplyMessage?.selectedButtonId
       if (btnId) return String(btnId).trim()
 
-      const rowId =
-        obj.listResponseMessage?.singleSelectReply?.selectedRowId ||
-        obj.listResponseMessage?.singleSelectReply?.selectedId ||
-        obj.interactiveResponseMessage?.listResponseMessage?.singleSelectReply?.selectedRowId
-      if (rowId) return String(rowId).trim()
+      // 3. LISTA CLÁSICA - CRÍTICO PARA GRUPOS ✅
+      const listResp = obj.listResponseMessage
+      if (listResp) {
+        const rowId =
+          listResp.singleSelectReply?.selectedRowId ||
+          listResp.singleSelectReply?.selectedId ||
+          listResp.title
+        if (rowId) return String(rowId).trim()
+      }
 
-      if (obj.interactiveResponseMessage) {
-        const intRes = obj.interactiveResponseMessage
-        if (intRes?.nativeFlowResponseMessage?.paramsJson) {
+      // 4. RESPUESTA INTERACTIVA (nuevo formato WhatsApp) ✅
+      const intResp = obj.interactiveResponseMessage
+      if (intResp) {
+        // 4a. Native Flow Response
+        if (intResp.nativeFlowResponseMessage?.paramsJson) {
           try {
-            const params = JSON.parse(intRes.nativeFlowResponseMessage.paramsJson)
+            const params = JSON.parse(intResp.nativeFlowResponseMessage.paramsJson)
             const id = params?.id || params?.command || params?.rowId || params?.row_id
             if (id && typeof id === 'string') return String(id).trim()
           } catch { }
         }
-        if (intRes?.listResponseMessage?.singleSelectReply?.selectedRowId) {
-          const rowId2 = intRes.listResponseMessage.singleSelectReply.selectedRowId
-          if (rowId2 && typeof rowId2 === 'string') return String(rowId2).trim()
+
+        // 4b. List Response dentro de Interactive
+        if (intResp.listResponseMessage?.singleSelectReply) {
+          const rowId = intResp.listResponseMessage.singleSelectReply.selectedRowId
+          if (rowId && typeof rowId === 'string') return String(rowId).trim()
+        }
+
+        // 4c. Body text (último recurso)
+        if (intResp.body?.text) {
+          return String(intResp.body.text).trim()
         }
       }
 
-      if (obj.interactiveMessage) {
-        const interMsg = obj.interactiveMessage
+      // 5. MENSAJE INTERACTIVO (estructura de envío) ✅
+      const intMsg = obj.interactiveMessage
+      if (intMsg) {
+        // 5a. Reply con selectedRowId
         const selectedRowId =
-          interMsg?.replyMessage?.selectedRowId ||
-          interMsg?.selectedRowId ||
-          interMsg?.body?.selectedDisplayText ||
-          interMsg?.nativeFlowResponseMessage?.selectedRowId
+          intMsg.replyMessage?.selectedRowId ||
+          intMsg.selectedRowId ||
+          intMsg.nativeFlowResponseMessage?.selectedRowId
 
         if (selectedRowId && typeof selectedRowId === 'string') {
           return String(selectedRowId).trim()
         }
 
+        // 5b. Display text
         const displayText =
-          interMsg?.replyMessage?.selectedDisplayText ||
-          interMsg?.body?.selectedDisplayText
+          intMsg.replyMessage?.selectedDisplayText ||
+          intMsg.body?.selectedDisplayText ||
+          intMsg.body?.text
         if (displayText && typeof displayText === 'string') {
           return String(displayText).trim()
         }
 
-        const nativeFlowMsg = obj.interactiveMessage?.nativeFlowMessage
+        // 5c. Native Flow Buttons
+        const nativeFlowMsg = intMsg.nativeFlowMessage
         if (nativeFlowMsg && Array.isArray(nativeFlowMsg.buttons)) {
           for (const btn of nativeFlowMsg.buttons) {
             if (btn.buttonParamsJson) {
               try {
                 const params = JSON.parse(btn.buttonParamsJson)
-                if (params?.selectedButtonId || params?.response) {
-                  const id = params.selectedButtonId || params.response?.selectedRowId
-                  if (id) return String(id).trim()
-                }
+                const id =
+                  params?.selectedButtonId ||
+                  params?.response?.selectedRowId ||
+                  params?.id ||
+                  params?.command
+                if (id) return String(id).trim()
               } catch { }
             }
           }
         }
 
-        const paramsJson = obj.interactiveMessage?.nativeFlowResponseMessage?.paramsJson
+        // 5d. Params JSON directo
+        const paramsJson = intMsg.nativeFlowResponseMessage?.paramsJson
         if (paramsJson && typeof paramsJson === 'string') {
           try {
             const params = JSON.parse(paramsJson)
@@ -207,16 +230,28 @@ function extractText(message) {
     let out = pick(m)
     if (out) return out
 
-    const inner = m.viewOnceMessage?.message || m.ephemeralMessage?.message || m.documentWithCaptionMessage?.message || null
+    // Revisar mensajes anidados
+    const inner =
+      m.viewOnceMessage?.message ||
+      m.ephemeralMessage?.message ||
+      m.documentWithCaptionMessage?.message ||
+      null
+
     if (inner) {
       out = pick(inner)
       if (out) return out
-      const inner2 = inner.viewOnceMessage?.message || inner.ephemeralMessage?.message || null
+
+      const inner2 =
+        inner.viewOnceMessage?.message ||
+        inner.ephemeralMessage?.message ||
+        null
+
       if (inner2) {
         out = pick(inner2)
         if (out) return out
       }
     }
+
     return ''
   } catch (e) {
     console.error('[extractText] error:', e?.message)
@@ -353,7 +388,214 @@ function buildVCard(contact = {}) {
 }
 
 /* ========================
-   sendResult
+   Funciones auxiliares para interactivos - NUEVAS ✅
+   ======================== */
+
+async function sendListFixed(sock, jid, result, opts) {
+  const isGroup = jid.endsWith('@g.us')
+
+  // FORMATO 1: Lista clásica de Baileys (funciona en privado)
+  const classicPayload = {
+    text: result.text || 'Elige una opción de la lista',
+    title: result.title || undefined,
+    footer: result.footer || undefined,
+    buttonText: result.buttonText || 'Ver opciones',
+    sections: (result.sections || []).map(sec => ({
+      title: sec.title || '',
+      rows: (sec.rows || []).map(r => ({
+        title: r.title || 'Opción',
+        description: r.description || '',
+        rowId: r.rowId || r.id || r.command || r.text || 'noop'
+      }))
+    }))
+  }
+
+  // FORMATO 2: interactiveMessage para grupos (más compatible) ✅
+  const interactivePayload = {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: {
+          header: result.title ? {
+            title: result.title,
+            hasMediaAttachment: false
+          } : undefined,
+          body: {
+            text: result.text || 'Elige una opción'
+          },
+          footer: result.footer ? {
+            text: result.footer
+          } : undefined,
+          nativeFlowMessage: {
+            buttons: [{
+              name: "single_select",
+              buttonParamsJson: JSON.stringify({
+                title: result.buttonText || "Ver opciones",
+                sections: (result.sections || []).map(sec => ({
+                  title: sec.title || '',
+                  rows: (sec.rows || []).map(r => ({
+                    header: r.title || 'Opción',
+                    title: r.title || 'Opción',
+                    description: r.description || '',
+                    id: r.rowId || r.id || r.command || 'noop'
+                  }))
+                }))
+              })
+            }]
+          },
+          contextInfo: {
+            mentionedJid: result.mentions || []
+          }
+        }
+      }
+    }
+  }
+
+  // Intentar primero el formato clásico
+  try {
+    await sock.sendMessage(jid, classicPayload, opts)
+    console.log('[sendList] ✅ formato clásico enviado')
+    return true
+  } catch (err1) {
+    console.log('[sendList] formato clásico falló:', err1.message)
+
+    // Si es grupo, intentar formato interactivo
+    if (isGroup) {
+      try {
+        await sock.sendMessage(jid, interactivePayload, opts)
+        console.log('[sendList] ✅ formato interactivo enviado (grupo)')
+        return true
+      } catch (err2) {
+        console.log('[sendList] formato interactivo falló:', err2.message)
+      }
+    }
+  }
+
+  // Fallback: texto plano
+  console.log('[sendList] usando fallback texto plano')
+  let txt = (result.text || result.title || 'Menú') + '\n\n'
+  for (const sec of result.sections || []) {
+    if (sec.title) txt += `*${sec.title}*\n`
+    for (const r of sec.rows || []) {
+      txt += `- ${r.title}${r.description ? ` (${r.description})` : ''}\n`
+      txt += `  Usa: ${r.rowId}\n`
+    }
+    txt += '\n'
+  }
+
+  try {
+    await sock.sendMessage(jid, { text: txt }, opts)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function sendButtonsFixed(sock, jid, result, opts) {
+  const isGroup = jid.endsWith('@g.us')
+
+  // FORMATO 1: Botones clásicos (templateButtons)
+  const classicPayload = {
+    text: result.text || '',
+    footer: result.footer,
+    templateButtons: result.buttons.map((b, i) => {
+      const text = b.text || b.title || b.displayText || 'Acción'
+      if (b.url) {
+        return { index: i + 1, urlButton: { displayText: text, url: b.url } }
+      }
+      return {
+        index: i + 1,
+        quickReplyButton: {
+          displayText: text,
+          id: b.id || b.command || b.buttonId || `/btn_${i + 1}`
+        }
+      }
+    }),
+    mentions: result.mentions
+  }
+
+  // FORMATO 2: nativeFlowMessage para grupos ✅
+  const interactivePayload = {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: {
+          body: {
+            text: result.text || ''
+          },
+          footer: result.footer ? {
+            text: result.footer
+          } : undefined,
+          nativeFlowMessage: {
+            buttons: result.buttons.map((b, i) => {
+              const text = b.text || b.title || b.displayText || 'Acción'
+              const id = b.id || b.command || b.buttonId || `/btn_${i + 1}`
+
+              if (b.url) {
+                return {
+                  name: "cta_url",
+                  buttonParamsJson: JSON.stringify({
+                    display_text: text,
+                    url: b.url,
+                    merchant_url: b.url
+                  })
+                }
+              }
+
+              return {
+                name: "quick_reply",
+                buttonParamsJson: JSON.stringify({
+                  display_text: text,
+                  id: id
+                })
+              }
+            })
+          },
+          contextInfo: {
+            mentionedJid: result.mentions || []
+          }
+        }
+      }
+    }
+  }
+
+  // Intentar formato clásico primero
+  try {
+    await sock.sendMessage(jid, classicPayload, opts)
+    console.log('[sendButtons] ✅ formato clásico enviado')
+    return true
+  } catch (err1) {
+    console.log('[sendButtons] formato clásico falló:', err1.message)
+
+    // Si es grupo, intentar formato interactivo
+    if (isGroup) {
+      try {
+        await sock.sendMessage(jid, interactivePayload, opts)
+        console.log('[sendButtons] ✅ formato interactivo enviado (grupo)')
+        return true
+      } catch (err2) {
+        console.log('[sendButtons] formato interactivo falló:', err2.message)
+      }
+    }
+  }
+
+  // Fallback: texto con opciones
+  console.log('[sendButtons] usando fallback texto plano')
+  let txt = (result.text || 'Opciones:') + '\n\n'
+  for (const b of result.buttons) {
+    const text = b.text || b.title || b.displayText || 'Acción'
+    const id = b.id || b.command || b.buttonId || ''
+    txt += `• ${text}${id ? ` → ${id}` : ''}\n`
+  }
+
+  try {
+    await sock.sendMessage(jid, { text: txt }, opts)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/* ========================
+   sendResult - ACTUALIZADO ✅
    ======================== */
 
 async function sendResult(sock, jid, result, ctx) {
@@ -509,68 +751,17 @@ async function sendResult(sock, jid, result, ctx) {
     return
   }
 
-  /* ============ BOTONES CLÁSICOS (templateButtons) ============ */
+  /* ============ BOTONES - ACTUALIZADO ✅ ============ */
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
-    const templateButtons = result.buttons.map((b, i) => {
-      const text = b.text || b.title || b.displayText || 'Acción'
-      if (b.url) {
-        return { index: i + 1, urlButton: { displayText: text, url: b.url } }
-      }
-      return {
-        index: i + 1,
-        quickReplyButton: { displayText: text, id: b.id || b.command || b.buttonId || `/btn_${i + 1}` }
-      }
-    })
-
-    const payload = {
-      text: result.text || '',
-      footer: result.footer,
-      templateButtons,
-      mentions: result.mentions
-    }
-
-    if (await safeSend(sock, targetJid, payload, opts, true)) return
-
-    // fallback texto plano
-    let t = (result.text || 'Opciones:') + '\n\n'
-    for (const b of result.buttons) {
-      t += `• ${b.text || b.title || b.displayText || 'Acción'}\n`
-    }
-    await safeSend(sock, targetJid, { text: t }, opts)
+    if (await sendButtonsFixed(sock, targetJid, result, opts)) return
+    // El fallback ya está incluido en sendButtonsFixed
     return
   }
 
-  /* ============ LISTA CLÁSICA (listMessage) – FORMATO BAILEYS ============ */
+  /* ============ LISTA - ACTUALIZADO ✅ ============ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
-    const sections = (result.sections || []).map(sec => ({
-      title: sec.title || '',
-      rows: (sec.rows || []).map(r => ({
-        title: r.title || 'Opción',
-        description: r.description || '',
-        rowId: r.rowId || r.id || r.command || r.text || 'noop'
-      }))
-    }))
-
-    const payload = {
-      text: result.text || 'Elige una opción de la lista',
-      title: result.title || undefined,
-      footer: result.footer || undefined,
-      buttonText: result.buttonText || 'Ver opciones',
-      sections
-    }
-
-    if (await safeSend(sock, targetJid, payload, opts, true)) return
-
-    // fallback texto
-    let txt = (result.text || result.title || 'Menú') + '\n\n'
-    for (const sec of result.sections || []) {
-      if (sec.title) txt += `*${sec.title}*\n`
-      for (const r of sec.rows || []) {
-        txt += `- ${r.title} (${r.rowId})\n`
-      }
-      txt += '\n'
-    }
-    await safeSend(sock, targetJid, { text: txt }, opts)
+    if (await sendListFixed(sock, targetJid, result, opts)) return
+    // El fallback ya está incluido en sendListFixed
     return
   }
 
@@ -669,7 +860,7 @@ export async function dispatch(ctx = {}) {
     console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${ctx.senderNumber || ctx.sender || '?'} | Owner: ${ctx.isOwner}`)
   }
 
-  // DEBUG ESPECIAL PARA SELECCIONES DE LISTA
+  // DEBUG ESPECIAL PARA SELECCIONES DE LISTA ✅
   if (!command) {
     try {
       const msg = ctx.message?.message || {}
@@ -681,16 +872,14 @@ export async function dispatch(ctx = {}) {
         !!msg.interactiveMessage
 
       if (isListSelection) {
-        // Log completo solo para depurar (sobre todo en grupos)
-        try {
-          console.log('===== DEBUG listSelection ctx.message =====')
-          console.log(JSON.stringify(ctx.message, null, 2))
-        } catch { }
+        console.log('[router] ⚠️ Selección de lista/botón detectada pero no se extrajo comando')
+        console.log('[router] Claves del mensaje:', Object.keys(msg))
 
         const raw = String(text || '').trim()
         const first = raw.split(/\s+/)[0] || ''
         if (first) {
           command = first.startsWith('/') ? first.toLowerCase() : `/${first.toLowerCase()}`
+          console.log('[router] ✅ Comando extraído de selección:', command)
         }
       }
     } catch { }
