@@ -15,6 +15,17 @@ const normalizeDigits = (userOrJid) => {
 const first = (v) => (Array.isArray(v) && v.length ? v[0] : null)
 // --- FIN FUNCIONES DE UTILIDAD ---
 
+async function fetchGroupMetadata(ctx) {
+  const { sock, remoteJid } = ctx
+  if (!sock || !remoteJid) return null
+  try {
+    return await sock.groupMetadata(remoteJid)
+  } catch (e) {
+    console.error('Error obteniendo metadata de grupo en comando:', e?.message || e)
+    return null
+  }
+}
+
 async function ensureGroupsTable() {
   const exists = await db.schema.hasTable('grupos_autorizados')
   if (!exists) {

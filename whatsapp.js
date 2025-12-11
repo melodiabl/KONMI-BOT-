@@ -670,6 +670,23 @@ export async function connectToWhatsApp(
           const clean = await mod.cleanOrphanSubbots?.().catch(() => 0)
           const restored = await mod.restoreActiveSubbots?.().catch(() => 0)
           logMessage('INFO', 'SUBBOTS', `Auto-start: restaurados=${restored||0}, limpieza=${clean||0}`)
+
+          // Limpieza periдdica de subbots huйrfanos mientras el bot estб corriendo
+          const intervalMs = parseInt(process.env.SUBBOT_CLEANUP_INTERVAL_MS ?? '600000', 10) // 10 min por defecto
+          if (!globalThis.__SUBBOT_CLEAN_TIMER && Number.isFinite(intervalMs) && intervalMs > 0) {
+            globalThis.__SUBBOT_CLEAN_TIMER = setInterval(async () => {
+              try {
+                const mod2 = await import('./src/services/subbot-manager.js')
+                const removed = await mod2.cleanOrphanSubbots?.().catch(() => 0)
+                if (removed) {
+                  logMessage('INFO', 'SUBBOTS', `Cleanup periдdico: ${removed} subbots eliminados`)
+                }
+              } catch (err) {
+                logMessage('WARN', 'SUBBOTS', 'Error en cleanup periдdico de subbots', { error: err?.message })
+              }
+            }, intervalMs)
+            logMessage('INFO', 'SUBBOTS', `Servicio de cleanup periдdico iniciado (cada ${Math.round(intervalMs/60000)} min)`)
+          }
         } catch (e) {
           logMessage('WARN', 'SUBBOTS', 'Failed to auto-start subbots', { error: e?.message })
         }
@@ -1019,7 +1036,27 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const normalizedCmd = cmdFirst ? (cmdFirst.startsWith("/") ? cmdFirst.toLowerCase() : `/${cmdFirst.slice(1).toLowerCase()}`) : ""
 
   const ADMIN_COMMANDS = new Set([
-    '/bot','/kick','/promote','/demote','/ban','/unban','/warn','/mute','/unmute','/lock','/unlock','/admins','/admin','/group'
+    '/bot',
+    '/kick',
+    '/promote',
+    '/demote',
+    '/ban',
+    '/unban',
+    '/warn',
+    '/mute',
+    '/unmute',
+    '/lock',
+    '/unlock',
+    '/admins',
+    '/admin',
+    '/group',
+    // Comandos que necesitan metadata/admin pero no estaban listados
+    '/tag',
+    '/addgroup',
+    '/delgroup',
+    '/debugadmin',
+    '/debuggroup',
+    '/whoami',
   ])
 
   const messageType = isChannel ? 'CHANNEL' : (isGroup ? 'GROUP' : 'DM')
