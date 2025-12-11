@@ -46,7 +46,7 @@ function extractTargetJid(ctx) {
 export async function warn(ctx) {
   const { isGroup, isOwner, remoteJid, sender, sock } = ctx
   if (!isGroup) {
-    return { success: false, message: 'ƒ"û‹÷? Este comando solo funciona en grupos.' }
+    return { success: false, message: ' Este comando solo funciona en grupos.' }
   }
 
   let isAdmin = !!ctx.isAdmin
@@ -56,12 +56,12 @@ export async function warn(ctx) {
   }
 
   if (!isAdmin && !isOwner) {
-    return { success: false, message: 'ƒ>" Solo los administradores o el owner pueden aplicar advertencias.' }
+    return { success: false, message: 'Solo los administradores o el owner pueden aplicar advertencias.' }
   }
 
   const targetJid = extractTargetJid(ctx)
   if (!targetJid) {
-    return { success: false, message: 'ƒ"û‹÷? Uso: /warn @usuario o responde a un mensaje con /warn.' }
+    return { success: false, message: ' Uso: /warn @usuario o responde a un mensaje con /warn.' }
   }
 
   await ensureWarningsTable()
@@ -95,19 +95,19 @@ export async function warn(ctx) {
 
     return {
       success: true,
-      message: `ƒsÿ‹÷? Advertencia para @${targetJid.split('@')[0]}. Este usuario ahora tiene ${newCount} advertencia(s).`,
+      message: ` Advertencia para @${targetJid.split('@')[0]}. Este usuario ahora tiene ${newCount} advertencia(s).`,
       mentions: [targetJid],
     }
   } catch (e) {
     console.error('Error en /warn:', e.message)
-    return { success: false, message: 'ƒsÿ‹÷? OcurriÇü un error al aplicar la advertencia.' }
+    return { success: false, message: 'OcurriÇü un error al aplicar la advertencia.' }
   }
 }
 
 export async function unwarn(ctx) {
   const { isGroup, isOwner, remoteJid, args, sock, sender } = ctx
   if (!isGroup) {
-    return { success: false, message: 'ƒ"û‹÷? Este comando solo funciona en grupos.' }
+    return { success: false, message: ' Este comando solo funciona en grupos.' }
   }
 
   let isAdmin = !!ctx.isAdmin
@@ -117,12 +117,12 @@ export async function unwarn(ctx) {
   }
 
   if (!isAdmin && !isOwner) {
-    return { success: false, message: 'ƒ>" Solo los administradores o el owner pueden quitar advertencias.' }
+    return { success: false, message: 'Solo los administradores o el owner pueden quitar advertencias.' }
   }
 
   const targetJid = extractTargetJid(ctx)
   if (!targetJid) {
-    return { success: false, message: 'ƒ"û‹÷? Uso: /unwarn @usuario.' }
+    return { success: false, message: 'Uso: /unwarn @usuario.' }
   }
 
   await ensureWarningsTable()
@@ -143,26 +143,26 @@ export async function unwarn(ctx) {
     if (deleted > 0) {
       return {
         success: true,
-        message: `ƒT¯‹÷? Se han eliminado todas las advertencias para @${targetJid.split('@')[0]}.`,
+        message: ` Se han eliminado todas las advertencias para @${targetJid.split('@')[0]}.`,
         mentions: [targetJid],
       }
     } else {
       return {
         success: false,
-        message: `ƒ"û‹÷? @${targetJid.split('@')[0]} no tenÇða advertencias registradas.`,
+        message: ` @${targetJid.split('@')[0]} no tenia advertencias registradas.`,
         mentions: [targetJid],
       }
     }
   } catch (e) {
     console.error('Error en /unwarn:', e.message)
-    return { success: false, message: 'ƒsÿ‹÷? OcurriÇü un error al quitar las advertencias.' }
+    return { success: false, message: ' Ocurrio un error al quitar las advertencias.' }
   }
 }
 
 export async function warns(ctx) {
   const { isGroup, remoteJid } = ctx
   if (!isGroup) {
-    return { success: false, message: 'ƒ"û‹÷? Este comando solo funciona en grupos.' }
+    return { success: false, message: ' Este comando solo funciona en grupos.' }
   }
 
   await ensureWarningsTable()
@@ -174,7 +174,7 @@ export async function warns(ctx) {
       .limit(20)
 
     if (rows.length === 0) {
-      return { success: true, message: 'ÐY"? No hay advertencias registradas en este grupo.' }
+      return { success: true, message: 'No hay advertencias registradas en este grupo.' }
     }
 
     const mentions = rows.map((r) => r.user_jid)
@@ -184,12 +184,12 @@ export async function warns(ctx) {
 
     return {
       success: true,
-      message: `ÐY"< *Advertencias en este grupo*\n\n${list}`,
+      message: ` *Advertencias en este grupo*\n\n${list}`,
       mentions,
     }
   } catch (e) {
     console.error('Error en /warns:', e.message)
-    return { success: false, message: 'ƒsÿ‹÷? OcurriÇü un error al obtener la lista de advertencias.' }
+    return { success: false, message: 'Ocurrio un error al obtener la lista de advertencias.' }
   }
 }
 

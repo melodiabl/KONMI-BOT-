@@ -5,9 +5,9 @@ export async function createGroup(ctx) {
   const [groupName, ...participants] = args
 
   if (!groupName || participants.length === 0) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /creategroup [nombre] [participante1] [participante2] ...' 
+    return {
+      success: false,
+      message: '❌ Uso: /creategroup [nombre] [participante1] [participante2] ...'
     }
   }
 
@@ -34,7 +34,7 @@ export async function getGroupInfo(ctx) {
 
   try {
     const metadata = await sock.groupMetadata(remoteJid)
-    
+
     let info = `📋 *Información del Grupo*\n`
     info += `Nombre: ${metadata.subject}\n`
     info += `Descripción: ${metadata.desc || 'N/D'}\n`
@@ -220,9 +220,9 @@ export async function toggleEphemeral(ctx) {
 
   const validDays = [0, 1, 7, 30, 90]
   if (!validDays.includes(days)) {
-    return { 
-      success: false, 
-      message: `❌ Días válidos: ${validDays.join(', ')}` 
+    return {
+      success: false,
+      message: `❌ Días válidos: ${validDays.join(', ')}`
     }
   }
 

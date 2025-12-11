@@ -12,6 +12,40 @@ const toStr = (v) => {
 
 function onlyDigits(v) { return String(v || '').replace(/\D/g, '') }
 
+let logsTableChecked = false
+let logsTableAvailable = false
+
+async function ensureLogsTableAvailable() {
+  if (logsTableChecked) return logsTableAvailable
+  try {
+    const exists = await db.schema.hasTable('logs')
+    if (!exists) {
+      // Crear tabla logs con el mismo esquema que la migración
+      await db.schema.createTable('logs', (table) => {
+        table.increments('id').primary()
+        table.string('tipo').notNullable()
+        table.string('comando').notNullable()
+        table.string('usuario').notNullable()
+        table.string('grupo').nullable()
+        table.timestamp('fecha').defaultTo(db.fn.now())
+        table.text('detalles').nullable()
+      })
+      try {
+        logger.database?.info?.('logs.table.created', 'Tabla logs creada automáticamente')
+      } catch {}
+    }
+    logsTableAvailable = true
+    logsTableChecked = true
+  } catch (e) {
+    logsTableAvailable = false
+    logsTableChecked = true
+    try {
+      logger.database?.error?.('logs.ensureTable', e?.message || e)
+    } catch {}
+  }
+  return logsTableAvailable
+}
+
 function unwrapMessageRoot(msg) {
   let x = msg?.message || {}
   let guard = 0
@@ -110,6 +144,7 @@ export async function logIncomingMessage(msg) {
 
     // Intentar guardar en DB, pero sin romper el flujo si falla
     try {
+      if (!(await ensureLogsTableAvailable())) return
       await db('logs').insert({
         tipo,
         comando: commandId,
@@ -146,6 +181,7 @@ export async function logCommandExecuted({ command, usuario, remoteJid, args, me
 
     // Intentar guardar en DB sin romper el flujo si falla
     try {
+      if (!(await ensureLogsTableAvailable())) return
       await db('logs').insert({
         tipo: 'comando',
         comando: command,
