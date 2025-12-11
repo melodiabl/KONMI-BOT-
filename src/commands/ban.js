@@ -1,6 +1,8 @@
-// commands/ban.js – Sistema sencillo de ban por grupo
+// commands/ban.js
+// Sistema sencillo de ban por grupo
 
 import db from '../database/db.js'
+import { getGroupRoles } from '../utils/utils/group-helper.js'
 
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
 
@@ -36,25 +38,32 @@ function extractTargetJid(ctx) {
 }
 
 export async function ban(ctx) {
-  const { isGroup, isAdmin, isOwner, remoteJid, sender } = ctx
+  const { isGroup, isOwner, remoteJid, sender, sock } = ctx
 
   if (!isGroup) {
-    return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
+    return { success: false, message: 'ƒ"û‹÷? Este comando solo funciona en grupos.' }
   }
+
+  let isAdmin = !!ctx.isAdmin
+  if (!isAdmin && sock && remoteJid && sender) {
+    const roles = await getGroupRoles(sock, remoteJid, sender)
+    isAdmin = roles.isAdmin
+  }
+
   if (!isAdmin && !isOwner) {
-    return { success: false, message: '⛔ Solo los administradores o el owner pueden banear usuarios del bot.' }
+    return { success: false, message: 'ƒ>" Solo los administradores o el owner pueden banear usuarios del bot.' }
   }
 
   const targetJid = extractTargetJid(ctx)
   if (!targetJid) {
     return {
       success: false,
-      message: 'ℹ️ Uso: /ban @usuario o responde a un mensaje con /ban.'
+      message: 'ƒ"û‹÷? Uso: /ban @usuario o responde a un mensaje con /ban.',
     }
   }
 
   if (targetJid === sender) {
-    return { success: false, message: '⛔ No puedes banearte a ti mismo.' }
+    return { success: false, message: 'ƒ>" No puedes banearte a ti mismo.' }
   }
 
   await ensureBansTable()
@@ -68,30 +77,37 @@ export async function ban(ctx) {
 
     return {
       success: true,
-      message: `🚫 Usuario @${targetJid.split('@')[0]} ha sido baneado del uso del bot en este grupo.`,
-      mentions: [targetJid]
+      message: `ÐYs® Usuario @${targetJid.split('@')[0]} ha sido baneado del uso del bot en este grupo.`,
+      mentions: [targetJid],
     }
   } catch (e) {
     console.error('Error en /ban:', e)
-    return { success: false, message: '⚠️ Ocurrió un error al banear al usuario.' }
+    return { success: false, message: 'ƒsÿ‹÷? OcurriÇü un error al banear al usuario.' }
   }
 }
 
 export async function unban(ctx) {
-  const { isGroup, isAdmin, isOwner, remoteJid } = ctx
+  const { isGroup, isOwner, remoteJid, sock, sender } = ctx
 
   if (!isGroup) {
-    return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
+    return { success: false, message: 'ƒ"û‹÷? Este comando solo funciona en grupos.' }
   }
+
+  let isAdmin = !!ctx.isAdmin
+  if (!isAdmin && sock && remoteJid && sender) {
+    const roles = await getGroupRoles(sock, remoteJid, sender)
+    isAdmin = roles.isAdmin
+  }
+
   if (!isAdmin && !isOwner) {
-    return { success: false, message: '⛔ Solo los administradores o el owner pueden desbanear usuarios del bot.' }
+    return { success: false, message: 'ƒ>" Solo los administradores o el owner pueden desbanear usuarios del bot.' }
   }
 
   const targetJid = extractTargetJid(ctx)
   if (!targetJid) {
     return {
       success: false,
-      message: 'ℹ️ Uso: /unban @usuario o responde a un mensaje con /unban.'
+      message: 'ƒ"û‹÷? Uso: /unban @usuario o responde a un mensaje con /unban.',
     }
   }
 
@@ -101,7 +117,7 @@ export async function unban(ctx) {
     const userKey = onlyDigits(targetJid)
     const deleted = await db('group_bans')
       .where({ group_id: remoteJid })
-      .andWhere(q => {
+      .andWhere((q) => {
         if (userKey) {
           q.where('user_jid', userKey).orWhere('user_jid', targetJid)
         } else {
@@ -113,41 +129,46 @@ export async function unban(ctx) {
     if (!deleted) {
       return {
         success: false,
-        message: `ℹ️ El usuario @${targetJid.split('@')[0]} no estaba baneado en este grupo.`,
-        mentions: [targetJid]
+        message: `ƒ"û‹÷? El usuario @${targetJid.split('@')[0]} no estaba baneado en este grupo.`,
+        mentions: [targetJid],
       }
     }
 
     return {
       success: true,
-      message: `✅ Usuario @${targetJid.split('@')[0]} ha sido desbaneado del uso del bot en este grupo.`,
-      mentions: [targetJid]
+      message: `ƒo. Usuario @${targetJid.split('@')[0]} ha sido desbaneado del uso del bot en este grupo.`,
+      mentions: [targetJid],
     }
   } catch (e) {
     console.error('Error en /unban:', e)
-    return { success: false, message: '⚠️ Ocurrió un error al desbanear al usuario.' }
+    return { success: false, message: 'ƒsÿ‹÷? OcurriÇü un error al desbanear al usuario.' }
   }
 }
 
 export async function bans(ctx) {
-  const { isGroup, isAdmin, isOwner, remoteJid } = ctx
+  const { isGroup, isOwner, remoteJid, sock, sender } = ctx
 
   if (!isGroup) {
-    return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
+    return { success: false, message: 'ƒ"û‹÷? Este comando solo funciona en grupos.' }
   }
+
+  let isAdmin = !!ctx.isAdmin
+  if (!isAdmin && sock && remoteJid && sender) {
+    const roles = await getGroupRoles(sock, remoteJid, sender)
+    isAdmin = roles.isAdmin
+  }
+
   if (!isAdmin && !isOwner) {
-    return { success: false, message: '⛔ Solo los administradores o el owner pueden ver la lista de baneados.' }
+    return { success: false, message: 'ƒ>" Solo los administradores o el owner pueden ver la lista de baneados.' }
   }
 
   await ensureBansTable()
 
   try {
-    const rows = await db('group_bans')
-      .where({ group_id: remoteJid })
-      .orderBy('created_at', 'asc')
+    const rows = await db('group_bans').where({ group_id: remoteJid }).orderBy('created_at', 'asc')
 
     if (!rows.length) {
-      return { success: true, message: 'ℹ️ No hay usuarios baneados en este grupo.' }
+      return { success: true, message: 'ƒ"û‹÷? No hay usuarios baneados en este grupo.' }
     }
 
     const lines = rows.map((r, i) => {
@@ -155,14 +176,15 @@ export async function bans(ctx) {
       return `${i + 1}. @${num}`
     })
 
-    const mentions = rows.map(r => r.user_jid)
-    const text = `🚫 *Usuarios baneados del bot en este grupo*\n\n${lines.join('\n')}`
+    const mentions = rows.map((r) => r.user_jid)
+    const text = `ÐYs® *Usuarios baneados del bot en este grupo*\n\n${lines.join('\n')}`
 
     return { success: true, message: text, mentions }
   } catch (e) {
     console.error('Error en /bans:', e)
-    return { success: false, message: '⚠️ Ocurrió un error al obtener la lista de baneados.' }
+    return { success: false, message: 'ƒsÿ‹÷? OcurriÇü un error al obtener la lista de baneados.' }
   }
 }
 
 export default { ban, unban, bans }
+

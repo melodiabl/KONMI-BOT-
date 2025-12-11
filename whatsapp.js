@@ -69,6 +69,9 @@ const LOG_COLORS = {
   DEFAULT: ANSI.fg.white
 }
 
+const SHOW_LOG_DETAILS =
+  (process.env.LOG_DETAILS || "").toLowerCase() === "true"
+
 function formatLog(level, source, message, data = null) {
   const timestamp = new Date().toISOString()
   const icon = LOG_LEVELS[level] || '•'
@@ -80,7 +83,7 @@ function formatLog(level, source, message, data = null) {
 
   let logMsg = `${header}${message}`
 
-  if (data) {
+  if (data && SHOW_LOG_DETAILS) {
     const pretty = JSON.stringify(data, null, 2)
     logMsg += `\n${ANSI.dim}${pretty}${ANSI.reset}`
   }
@@ -1164,7 +1167,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     })
   }
 
-  if (isGroup) {
+  if (false && isGroup) {
     try {
       const shouldFetchMetadata = isCommand && ADMIN_COMMANDS.has(normalizedCmd)
       if (!shouldFetchMetadata) {
@@ -1281,6 +1284,21 @@ export async function handleMessage(message, customSock = null, prefix = '', run
       usuarioName = p?.notify || p?.name || null
     }
   } catch (e) {}
+
+  const chatLabel = isGroup
+    ? (groupMetadata?.subject || remoteJid)
+    : isChannel
+      ? remoteJid
+      : (usuarioName || pushName || remoteJid)
+
+  logMessage('INFO', 'CHAT', 'Contexto con nombres', {
+    remoteJid,
+    chatName: chatLabel,
+    senderNumber,
+    senderName: usuarioName || pushName || senderNumber,
+    isGroup,
+    isChannel,
+  })
 
   const ctx = {
     sock: s,

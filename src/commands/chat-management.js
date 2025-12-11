@@ -1,17 +1,23 @@
 import logger from '../config/logger.js'
+import { getGroupRoles } from '../utils/utils/group-helper.js'
 
 const MUTE_TIMES = {
   '8h': 8 * 60 * 60 * 1000,
   '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000
+  '30d': 30 * 24 * 60 * 60 * 1000,
 }
 
 export async function muteChat(ctx) {
-  const { args, remoteJid, sock, isGroup, isAdmin, isBotAdmin, isOwner } = ctx
+  const { args, remoteJid, sock, isGroup, isOwner, sender } = ctx
 
-  // Verificar permisos para grupos
-  if (isGroup && !isAdmin && !isOwner) {
-    return { success: false, message: '❌ Solo administradores pueden silenciar chats en grupos' }
+  if (isGroup) {
+    const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
+    if (!isAdmin && !isOwner) {
+      return { success: false, message: 'ƒ?O Solo administradores pueden silenciar chats en grupos' }
+    }
+    if (!isBotAdmin) {
+      return { success: false, message: 'ƒ?O El bot debe ser administrador para silenciar chats en grupos' }
+    }
   }
 
   const timeStr = args[0] || '8h'
@@ -20,7 +26,7 @@ export async function muteChat(ctx) {
   if (!time && timeStr !== 'forever') {
     return {
       success: false,
-      message: `❌ Opciones: ${Object.keys(MUTE_TIMES).join(', ')}, forever`
+      message: ` Opciones: ${Object.keys(MUTE_TIMES).join(', ')}, forever`,
     }
   }
 
@@ -28,10 +34,10 @@ export async function muteChat(ctx) {
     const muteTime = timeStr === 'forever' ? true : time
     await sock.chatModify({ mute: muteTime }, remoteJid)
     const label = timeStr === 'forever' ? 'indefinidamente' : timeStr
-    return { success: true, message: `🔇 Chat silenciado por ${label}` }
+    return { success: true, message: `Chat silenciado por ${label}` }
   } catch (error) {
     logger.error('Error silenciando chat:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -40,10 +46,10 @@ export async function unmuteChat(ctx) {
 
   try {
     await sock.chatModify({ mute: null }, remoteJid)
-    return { success: true, message: '🔊 Chat desilenciado' }
+    return { success: true, message: 'Chat desilenciado' }
   } catch (error) {
     logger.error('Error desilenciando chat:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -52,10 +58,10 @@ export async function archiveChat(ctx) {
 
   try {
     await sock.chatModify({ archive: true }, remoteJid)
-    return { success: true, message: '📦 Chat archivado' }
+    return { success: true, message: 'Chat archivado' }
   } catch (error) {
     logger.error('Error archivando chat:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -64,10 +70,10 @@ export async function unarchiveChat(ctx) {
 
   try {
     await sock.chatModify({ archive: false }, remoteJid)
-    return { success: true, message: '📬 Chat desarchivado' }
+    return { success: true, message: 'Chat desarchivado' }
   } catch (error) {
     logger.error('Error desarchivando chat:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    return { success: false, message: ` Error: ${error.message}` }
   }
 }
 
@@ -76,10 +82,10 @@ export async function markChatRead(ctx) {
 
   try {
     await sock.chatModify({ markRead: true }, remoteJid)
-    return { success: true, message: '✅ Chat marcado como leído' }
+    return { success: true, message: ' Chat marcado como leido' }
   } catch (error) {
-    logger.error('Error marcando chat leído:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    logger.error('Error marcando chat leido:', error)
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -88,10 +94,10 @@ export async function markChatUnread(ctx) {
 
   try {
     await sock.chatModify({ markRead: false }, remoteJid)
-    return { success: true, message: '🔵 Chat marcado como no leído' }
+    return { success: true, message: ' Chat marcado como no leido' }
   } catch (error) {
-    logger.error('Error marcando chat no leído:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    logger.error('Error marcando chat no leido:', error)
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -100,10 +106,10 @@ export async function deleteChat(ctx) {
 
   try {
     await sock.chatModify({ delete: true }, remoteJid)
-    return { success: true, message: '🗑️ Chat eliminado' }
+    return { success: true, message: 'Chat eliminado' }
   } catch (error) {
     logger.error('Error eliminando chat:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -112,10 +118,10 @@ export async function pinChat(ctx) {
 
   try {
     await sock.chatModify({ pin: true }, remoteJid)
-    return { success: true, message: '📌 Chat fijado' }
+    return { success: true, message: ' Chat fijado' }
   } catch (error) {
     logger.error('Error fijando chat:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -124,10 +130,10 @@ export async function unpinChat(ctx) {
 
   try {
     await sock.chatModify({ pin: false }, remoteJid)
-    return { success: true, message: '📍 Chat desfijado' }
+    return { success: true, message: 'Chat desfijado' }
   } catch (error) {
     logger.error('Error desfijando chat:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -137,33 +143,36 @@ export async function clearChat(ctx) {
   try {
     const messages = await sock.loadMessagesInChat(remoteJid, undefined, 10)
     if (messages && messages.length > 0) {
-      await sock.chatModify({
-        clear: {
-          messages: messages.map(m => ({
-            id: m.key.id,
-            fromMe: m.key.fromMe,
-            timestamp: m.messageTimestamp
-          }))
-        }
-      }, remoteJid)
+      await sock.chatModify(
+        {
+          clear: {
+            messages: messages.map((m) => ({
+              id: m.key.id,
+              fromMe: m.key.fromMe,
+              timestamp: m.messageTimestamp,
+            })),
+          },
+        },
+        remoteJid,
+      )
     }
-    return { success: true, message: '✨ Últimos mensajes borrados para ti' }
+    return { success: true, message: 'ultimos mensajes borrados para ti' }
   } catch (error) {
     logger.error('Error limpiando chat:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
 export async function enableDisappearing(ctx) {
-  const { args, remoteJid, sock, isGroup, isAdmin, isBotAdmin, isOwner } = ctx
+  const { args, remoteJid, sock, isGroup, isOwner, sender } = ctx
 
-  // Verificar permisos para grupos
   if (isGroup) {
+    const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
     if (!isAdmin && !isOwner) {
-      return { success: false, message: '❌ Solo administradores pueden cambiar mensajes efímeros en grupos' }
+      return { success: false, message: 'Solo administradores pueden cambiar mensajes efimeros en grupos' }
     }
     if (!isBotAdmin) {
-      return { success: false, message: '❌ El bot debe ser administrador para cambiar mensajes efímeros' }
+      return { success: false, message: 'El bot debe ser administrador para cambiar mensajes efimeros' }
     }
   }
 
@@ -173,20 +182,20 @@ export async function enableDisappearing(ctx) {
   if (!validDays.includes(days)) {
     return {
       success: false,
-      message: `❌ Días válidos: ${validDays.join(', ')}`
+      message: ` Dias validos: ${validDays.join(', ')}`,
     }
   }
 
   try {
     const seconds = days * 86400
     await sock.sendMessage(remoteJid, {
-      disappearingMessagesInChat: seconds || false
+      disappearingMessagesInChat: seconds || false,
     })
-    const label = days === 0 ? 'Deshabilitado' : `${days} días`
-    return { success: true, message: `⏰ Mensajes efímeros: ${label}` }
+    const label = days === 0 ? 'Deshabilitado' : `${days} dÇðas`
+    return { success: true, message: ` Mensajes emiferos: ${label}` }
   } catch (error) {
-    logger.error('Error habilitando efímeros:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    logger.error('Error habilitando efimeros:', error)
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -195,12 +204,12 @@ export async function disableDisappearing(ctx) {
 
   try {
     await sock.sendMessage(remoteJid, {
-      disappearingMessagesInChat: false
+      disappearingMessagesInChat: false,
     })
-    return { success: true, message: '✅ Mensajes efímeros deshabilitados' }
+    return { success: true, message: ' Mensajes efimeros deshabilitados' }
   } catch (error) {
-    logger.error('Error deshabilitando efímeros:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    logger.error('Error deshabilitando efimeros:', error)
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -208,15 +217,15 @@ export async function readMessage(ctx) {
   const { quoted, remoteJid, sock } = ctx
 
   if (!quoted || !quoted.key) {
-    return { success: false, message: '❌ Responde al mensaje a marcar como leído' }
+    return { success: false, message: 'Responde al mensaje a marcar como leÇðdo' }
   }
 
   try {
     await sock.readMessages([quoted.key])
-    return { success: true, message: '✅ Mensaje marcado como leído' }
+    return { success: true, message: 'Mensaje marcado como leÇðdo' }
   } catch (error) {
-    logger.error('Error marcando mensaje leído:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    logger.error('Error marcando mensaje leido:', error)
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
 
@@ -225,9 +234,9 @@ export async function readMessages(ctx) {
 
   try {
     await sock.chatModify({ markRead: true }, remoteJid)
-    return { success: true, message: '✅ Chat marcado como leído' }
+    return { success: true, message: 'Chat marcado como leido' }
   } catch (error) {
-    logger.error('Error marcando mensajes leídos:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    logger.error('Error marcando mensajes leidos:', error)
+    return { success: false, message: `Error: ${error.message}` }
   }
 }
