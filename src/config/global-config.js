@@ -2,7 +2,7 @@
 
 // Lista de administradores globales (superadmins)
 global.owner = [
-  ['51900373696', 'GianPool', true]
+  [
 ];
 
 // Lista de moderadores
