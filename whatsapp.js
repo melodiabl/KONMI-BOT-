@@ -674,7 +674,7 @@ export async function connectToWhatsApp(
           const restored = await mod.restoreActiveSubbots?.().catch(() => 0)
           logMessage('INFO', 'SUBBOTS', `Auto-start: restaurados=${restored||0}, limpieza=${clean||0}`)
 
-          // Limpieza periдdica de subbots huйrfanos mientras el bot estб corriendo
+          // Limpieza periodica de subbots huйrfanos mientras el bot esta corriendo
           const intervalMs = parseInt(process.env.SUBBOT_CLEANUP_INTERVAL_MS ?? '600000', 10) // 10 min por defecto
           if (!globalThis.__SUBBOT_CLEAN_TIMER && Number.isFinite(intervalMs) && intervalMs > 0) {
             globalThis.__SUBBOT_CLEAN_TIMER = setInterval(async () => {
@@ -682,13 +682,13 @@ export async function connectToWhatsApp(
                 const mod2 = await import('./src/services/subbot-manager.js')
                 const removed = await mod2.cleanOrphanSubbots?.().catch(() => 0)
                 if (removed) {
-                  logMessage('INFO', 'SUBBOTS', `Cleanup periдdico: ${removed} subbots eliminados`)
+                  logMessage('INFO', 'SUBBOTS', `Cleanup periodicamente: ${removed} subbots eliminados`)
                 }
               } catch (err) {
-                logMessage('WARN', 'SUBBOTS', 'Error en cleanup periдdico de subbots', { error: err?.message })
+                logMessage('WARN', 'SUBBOTS', 'Error en cleanup periodico de subbots', { error: err?.message })
               }
             }, intervalMs)
-            logMessage('INFO', 'SUBBOTS', `Servicio de cleanup periдdico iniciado (cada ${Math.round(intervalMs/60000)} min)`)
+            logMessage('INFO', 'SUBBOTS', `Servicio de cleanup periodico iniciado (cada ${Math.round(intervalMs/60000)} min)`)
           }
         } catch (e) {
           logMessage('WARN', 'SUBBOTS', 'Failed to auto-start subbots', { error: e?.message })
