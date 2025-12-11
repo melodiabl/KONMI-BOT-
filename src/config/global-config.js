@@ -1,7 +1,7 @@
 // ==================== CONFIGURACION GLOBAL DEL BOT ====================
 
 // Lista de administradores globales (superadmins)
-global.owner = [
+global.owner =
   [
 ];
 
