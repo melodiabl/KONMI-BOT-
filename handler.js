@@ -1858,12 +1858,12 @@ async function sendResult(sock, jid, result, ctx) {
   }
 
   if (result.type === 'list' || result.sections) {
-    await sendListFixed(sock, targetJid, result, ctx)
+    await sendListFixedV2(sock, targetJid, result, ctx)
     return
   }
 
   if (result.type === 'buttons' || result.buttons) {
-    await sendButtonsFixed(sock, targetJid, result, ctx)
+    await sendButtonsFixedV2(sock, targetJid, result, ctx)
     return
   }
 
@@ -2268,6 +2268,207 @@ export async function analyzeContentWithAI(text, context = "") {
       err?.message ||
       String(err)
     return { success: false, error: msg }
+  }
+}
+
+// Helpers avanzados para listas/botones en grupos (nativeFlow)
+async function sendListFixedV2(sock, jid, result, ctx) {
+  const isGroup = typeof jid === 'string' && jid.endsWith('@g.us')
+  const opts = buildSendOptions(result, ctx)
+
+  const classicPayload = {
+    text: result.text || 'Elige una opción de la lista',
+    title: result.title || undefined,
+    footer: result.footer || undefined,
+    buttonText: result.buttonText || 'Ver opciones',
+    sections: (result.sections || []).map(sec => ({
+      title: sec.title || '',
+      rows: (sec.rows || []).map(r => ({
+        title: r.title || 'Opción',
+        description: r.description || '',
+        rowId: r.rowId || r.id || r.command || r.text || 'noop'
+      }))
+    }))
+  }
+
+  const interactivePayload = {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: {
+          header: result.title ? {
+            title: result.title,
+            hasMediaAttachment: false
+          } : undefined,
+          body: {
+            text: result.text || 'Elige una opción'
+          },
+          footer: result.footer ? {
+            text: result.footer
+          } : undefined,
+          nativeFlowMessage: {
+            buttons: [{
+              name: "single_select",
+              buttonParamsJson: JSON.stringify({
+                title: result.buttonText || "Ver opciones",
+                sections: (result.sections || []).map(sec => ({
+                  title: sec.title || '',
+                  rows: (sec.rows || []).map(r => ({
+                    header: r.title || 'Opción',
+                    title: r.title || 'Opción',
+                    description: r.description || '',
+                    id: r.rowId || r.id || r.command || 'noop'
+                  }))
+                }))
+              })
+            }]
+          },
+          contextInfo: {
+            mentionedJid: result.mentions || []
+          }
+        }
+      }
+    }
+  }
+
+  try {
+    await sock.sendMessage(jid, classicPayload, opts)
+    console.log('[sendListV2] formato clásico enviado')
+    return true
+  } catch (err1) {
+    console.log('[sendListV2] formato clásico falló:', err1?.message || err1)
+
+    if (isGroup) {
+      try {
+        await sock.sendMessage(jid, interactivePayload, opts)
+        console.log('[sendListV2] formato interactivo enviado (grupo)')
+        return true
+      } catch (err2) {
+        console.log('[sendListV2] formato interactivo falló:', err2?.message || err2)
+      }
+    }
+  }
+
+  console.log('[sendListV2] usando fallback texto plano')
+  let txt = (result.text || result.title || 'Menú') + '\n\n'
+  for (const sec of result.sections || []) {
+    if (sec.title) txt += `*${sec.title}*\n`
+    for (const r of sec.rows || []) {
+      txt += `- ${r.title}${r.description ? ` (${r.description})` : ''}\n`
+      txt += `  Usa: ${r.rowId}\n`
+    }
+    txt += '\n'
+  }
+
+  try {
+    await sock.sendMessage(jid, { text: txt }, opts)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function sendButtonsFixedV2(sock, jid, result, ctx) {
+  const isGroup = typeof jid === 'string' && jid.endsWith('@g.us')
+  const opts = buildSendOptions(result, ctx)
+  const buttons = Array.isArray(result.buttons) ? result.buttons : []
+
+  if (!buttons.length) {
+    return safeSend(sock, jid, { text: result.text || result.message || 'No hay botones disponibles' }, opts)
+  }
+
+  const classicPayload = {
+    text: result.text || '',
+    footer: result.footer,
+    templateButtons: buttons.map((b, i) => {
+      const text = b.text || b.title || b.displayText || 'Acción'
+      if (b.url) {
+        return { index: i + 1, urlButton: { displayText: text, url: b.url } }
+      }
+      return {
+        index: i + 1,
+        quickReplyButton: {
+          displayText: text,
+          id: b.id || b.command || b.buttonId || `/btn_${i + 1}`
+        }
+      }
+    }),
+    mentions: result.mentions
+  }
+
+  const interactivePayload = {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: {
+          body: {
+            text: result.text || ''
+          },
+          footer: result.footer ? {
+            text: result.footer
+          } : undefined,
+          nativeFlowMessage: {
+            buttons: buttons.map((b, i) => {
+              const text = b.text || b.title || b.displayText || 'Acción'
+              const id = b.id || b.command || b.buttonId || `/btn_${i + 1}`
+
+              if (b.url) {
+                return {
+                  name: "cta_url",
+                  buttonParamsJson: JSON.stringify({
+                    display_text: text,
+                    url: b.url,
+                    merchant_url: b.url
+                  })
+                }
+              }
+
+              return {
+                name: "quick_reply",
+                buttonParamsJson: JSON.stringify({
+                  display_text: text,
+                  id: id
+                })
+              }
+            })
+          },
+          contextInfo: {
+            mentionedJid: result.mentions || []
+          }
+        }
+      }
+    }
+  }
+
+  try {
+    await sock.sendMessage(jid, classicPayload, opts)
+    console.log('[sendButtonsV2] formato clásico enviado')
+    return true
+  } catch (err1) {
+    console.log('[sendButtonsV2] formato clásico falló:', err1?.message || err1)
+
+    if (isGroup) {
+      try {
+        await sock.sendMessage(jid, interactivePayload, opts)
+        console.log('[sendButtonsV2] formato interactivo enviado (grupo)')
+        return true
+      } catch (err2) {
+        console.log('[sendButtonsV2] formato interactivo falló:', err2?.message || err2)
+      }
+    }
+  }
+
+  console.log('[sendButtonsV2] usando fallback texto plano')
+  let txt = (result.text || 'Opciones:') + '\n\n'
+  for (const b of buttons) {
+    const text = b.text || b.title || b.displayText || 'Acción'
+    const id = b.id || b.command || b.buttonId || ''
+    txt += `• ${text}${id ? ` -> ${id}` : ''}\n`
+  }
+
+  try {
+    await sock.sendMessage(jid, { text: txt }, opts)
+    return true
+  } catch {
+    return false
   }
 }
 
