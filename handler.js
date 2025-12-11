@@ -14,7 +14,16 @@ import appLogger from "./src/config/logger.js";
 import antibanMiddleware from "./src/utils/utils/anti-ban-middleware.js";
 import antibanSystem from "./src/utils/utils/anti-ban.js";
 import { getGroupBool } from "./src/utils/utils/group-config.js";
-import { isBotGloballyActive } from "./src/services/subbot-manager.js";
+import {
+  isBotGloballyActive,
+  createSubbotWithPairing,
+  createSubbotWithQr,
+  listUserSubbots,
+  listAllSubbots,
+  deleteUserSubbot,
+  getSubbotByCode as getSubbotByCodeCore,
+  cleanOrphanSubbots,
+} from "./src/services/subbot-manager.js";
 import {
   startSubbot,
   stopSubbotRuntime as stopSubbot,
@@ -22,6 +31,7 @@ import {
 } from "./src/lib/subbots.js";
 import { processWhatsAppMedia } from "./src/services/file-manager.js";
 import { isSuperAdmin } from "./src/config/global-config.js";
+import { getGeminiModel, hasGeminiApiKey } from "./src/services/gemini-client.js";
 // legacy helpers removidos; toda la lógica está en commands/*
 
 // Nota: handler.js no maneja conexión; no requiere Baileys aquí.
@@ -254,7 +264,7 @@ export function offSubbotEvent(event, listener) {
   subbotEmitter.off(event, listener);
 }
 
-async function cleanupInactiveSubbots() {
+export async function cleanupInactiveSubbots() {
   try {
     const THRESHOLD = 1000 * 60 * 60 * 12; // 12 horas
     const now = Date.now();
@@ -288,6 +298,209 @@ async function cleanupInactiveSubbots() {
     console.error("Error en cleanupInactiveSubbots:", err);
   }
 }
+
+export async function createSubbot(userPhone, userName, connectionType = "qr") {
+  const owner = normalizePhone(userPhone);
+  if (!owner) {
+    return { success: false, error: "userPhone invalido" };
+  }
+
+  const type = String(connectionType || "qr").toLowerCase();
+
+  try {
+    let result;
+    if (type === "code" || type === "pairing") {
+      result = await createSubbotWithPairing({
+        ownerNumber: owner,
+        targetNumber: owner,
+        displayName: userName || "KONMI Subbot",
+        creatorPushName: userName || null,
+      });
+    } else {
+      result = await createSubbotWithQr({
+        ownerNumber: owner,
+        displayName: userName || "KONMI Subbot",
+        requestJid: `${owner}@s.whatsapp.net`,
+      });
+    }
+
+    return {
+      success: true,
+      subbot: result?.subbot || null,
+      code: result?.code || result?.subbot?.code || null,
+    };
+  } catch (error) {
+    console.error("Error en createSubbot:", error);
+    return {
+      success: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+export async function getUserSubbots(userPhone) {
+  const owner = normalizePhone(userPhone);
+  if (!owner) {
+    return { success: false, error: "userPhone invalido", subbots: [] };
+  }
+
+  try {
+    const rows = await listUserSubbots(owner);
+    return { success: true, subbots: rows || [] };
+  } catch (error) {
+    console.error("Error en getUserSubbots:", error);
+    return {
+      success: false,
+      error: error?.message || String(error),
+      subbots: [],
+    };
+  }
+}
+
+export async function getSubbotByCode(code) {
+  if (!code) {
+    return { success: false, error: "code requerido" };
+  }
+  try {
+    const row = await getSubbotByCodeCore(code);
+    if (!row) {
+      return { success: false, error: "Subbot no encontrado" };
+    }
+    return { success: true, subbot: row };
+  } catch (error) {
+    console.error("Error en getSubbotByCode:", error);
+    return {
+      success: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+export async function getSubbotRecord(code) {
+  return getSubbotByCode(code);
+}
+
+export async function getSubbotAccessData(code) {
+  const base = await getSubbotByCode(code);
+  if (!base?.success || !base.subbot) {
+    return base;
+  }
+
+  const s = base.subbot;
+  const access = {
+    code: s.code,
+    type: s.type || s.method || "qr",
+    status: s.status || "unknown",
+    owner: s.owner_number || s.user_phone || null,
+    targetNumber: s.target_number || null,
+    authPath: s.auth_path || null,
+  };
+
+  return { success: true, access };
+}
+
+export async function deleteSubbot(code, userPhone) {
+  const owner = normalizePhone(userPhone);
+  if (!code || !owner) {
+    return { success: false, error: "code y userPhone requeridos" };
+  }
+
+  try {
+    await deleteUserSubbot(code, owner);
+    return { success: true };
+  } catch (error) {
+    console.error("Error en deleteSubbot:", error);
+    return {
+      success: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+export async function registerSubbotEvent({ subbotId, token, event, data }) {
+  try {
+    if (!subbotId || !event) {
+      return { success: false, error: "subbotId y event son requeridos" };
+    }
+
+    const row = await getSubbotByCodeCore(subbotId);
+    if (!row) {
+      return { success: false, error: "Subbot no encontrado" };
+    }
+
+    // Token no implementado aÇ?n; se deja como compatibilidad
+    await emitSubbotEvent(subbotId, event, data || null);
+    return { success: true };
+  } catch (error) {
+    console.error("Error en registerSubbotEvent:", error);
+    return {
+      success: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+export async function getSubbotStats() {
+  try {
+    await ensureSubbotsTable();
+
+    const totalRow = await db("subbots")
+      .count("id as count")
+      .first();
+
+    let activos = 0;
+    let conectados = 0;
+    let porEstado = [];
+
+    try {
+      const activosRow = await db("subbots")
+        .where({ is_active: true })
+        .count("id as count")
+        .first();
+      activos = Number(activosRow?.count || 0);
+    } catch { }
+
+    try {
+      const conectadosRow = await db("subbots")
+        .where({ is_online: true })
+        .count("id as count")
+        .first();
+      conectados = Number(conectadosRow?.count || 0);
+    } catch { }
+
+    try {
+      const byStatus = await db("subbots")
+        .select("status")
+        .count("id as count")
+        .groupBy("status");
+      porEstado = byStatus.map((r) => ({
+        status: r.status || "unknown",
+        count: Number(r.count || 0),
+      }));
+    } catch { }
+
+    return {
+      success: true,
+      total: Number(totalRow?.count || 0),
+      activos,
+      conectados,
+      porEstado,
+    };
+  } catch (error) {
+    console.error("Error en getSubbotStats:", error);
+    return {
+      success: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+export async function getSubbotStatusOverview() {
+  return getSubbotStats();
+}
+
+// Reexportar lista completa para API
+export { listAllSubbots };
 
 // ---------------------------------------------------
 // Comandos de subbot /qr, /code, /bots, /mybots (core)
@@ -970,6 +1183,125 @@ export async function handleProveedorAportes(ctx) {
   await sock.sendMessage(remoteJid, { text });
 
   return { success: true, contenidos: rows };
+}
+
+// =========================
+// Proveedores automÇ­ticos (API panel)
+// =========================
+
+export async function getProviderStats() {
+  try {
+    const totalRow = await db("aportes")
+      .where({ tipo: "proveedor_auto" })
+      .count("id as count")
+      .first();
+
+    const pendingRow = await db("aportes")
+      .where({ tipo: "proveedor_auto", estado: "pendiente" })
+      .count("id as count")
+      .first();
+
+    const approvedRow = await db("aportes")
+      .where({ tipo: "proveedor_auto", estado: "aprobado" })
+      .count("id as count")
+      .first();
+
+    const rejectedRow = await db("aportes")
+      .where({ tipo: "proveedor_auto", estado: "rechazado" })
+      .count("id as count")
+      .first();
+
+    const byGroup = await db("aportes")
+      .where({ tipo: "proveedor_auto" })
+      .select("grupo")
+      .count("id as count")
+      .groupBy("grupo")
+      .orderBy("count", "desc")
+      .limit(20);
+
+    return {
+      success: true,
+      total: Number(totalRow?.count || 0),
+      pendientes: Number(pendingRow?.count || 0),
+      aprobados: Number(approvedRow?.count || 0),
+      rechazados: Number(rejectedRow?.count || 0),
+      porProveedor: byGroup.map((r) => ({
+        grupo: r.grupo,
+        count: Number(r.count || 0),
+      })),
+    };
+  } catch (error) {
+    console.error("Error en getProviderStats:", error);
+    throw error;
+  }
+}
+
+export async function getProviderAportes(filtros = {}) {
+  try {
+    const {
+      proveedor = "",
+      manhwa = "",
+      tipo = "",
+      fecha_desde = "",
+      fecha_hasta = "",
+      limit = 100,
+    } = filtros;
+
+    let q = db("aportes")
+      .where({ tipo: "proveedor_auto" })
+      .select(
+        "id",
+        "contenido",
+        "tipo",
+        "usuario",
+        "grupo",
+        "fecha",
+        "archivo_path",
+        "estado",
+        "manhwa_titulo as titulo",
+        "contenido_tipo"
+      );
+
+    if (proveedor) {
+      q = q.andWhere("grupo", String(proveedor));
+    }
+
+    if (manhwa) {
+      const pattern = `%${manhwa}%`;
+      q = q.andWhere("manhwa_titulo", "like", pattern);
+    }
+
+    if (tipo) {
+      q = q.andWhere("contenido_tipo", String(tipo));
+    }
+
+    if (fecha_desde) {
+      q = q.andWhere("fecha", ">=", fecha_desde);
+    }
+
+    if (fecha_hasta) {
+      q = q.andWhere("fecha", "<=", fecha_hasta);
+    }
+
+    const rows = await q
+      .orderBy("fecha", "desc")
+      .limit(Number.isFinite(Number(limit)) ? Number(limit) : 100);
+
+    return rows.map((r) => ({
+      id: r.id,
+      proveedor: r.grupo,
+      usuario: r.usuario,
+      titulo: r.titulo || r.contenido || "",
+      tipo: r.contenido_tipo || r.tipo,
+      estado: r.estado || "pendiente",
+      fecha: r.fecha,
+      archivo_path: r.archivo_path || null,
+      contenido: r.contenido,
+    }));
+  } catch (error) {
+    console.error("Error en getProviderAportes:", error);
+    throw error;
+  }
 }
 
 // ---------------------------------------------------
@@ -1691,6 +2023,150 @@ export async function dispatch(ctx = {}) {
 
     await safeSend(sock, remoteJid, { text: `⚠️ Error ejecutando ${command}: ${e?.message || e}` })
     return true
+  }
+}
+
+// =========================
+// IA (Gemini) y adaptador de compatibilidad
+// =========================
+
+export async function chatWithAI(message, context = "panel") {
+  const prompt = String(message || "").trim()
+  if (!prompt) {
+    return { success: false, error: "Texto vacÇðo" }
+  }
+
+  if (!hasGeminiApiKey()) {
+    return { success: false, error: "GEMINI_API_KEY no configurada" }
+  }
+
+  try {
+    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+    const model = getGeminiModel(modelName)
+    const systemPrefix =
+      "Eres el asistente del panel de administraciÇün de KONMI BOT. Responde en espaÇñol, claro y directo.\n\n"
+    const fullPrompt = `${systemPrefix}Contexto: ${context}\n\nUsuario: ${prompt}`
+
+    const result = await model.generateContent(fullPrompt)
+    const text = (await result.response).text()
+
+    return {
+      success: true,
+      response: text || "",
+      model: modelName,
+    }
+  } catch (err) {
+    const msg =
+      err?.response?.data?.error?.message ||
+      err?.message ||
+      String(err)
+    return { success: false, error: msg }
+  }
+}
+
+export async function analyzeManhwaContent(text) {
+  const prompt = String(text || "").trim()
+  if (!prompt) {
+    return { success: false, error: "Texto vacÇðo" }
+  }
+
+  if (!hasGeminiApiKey()) {
+    return { success: false, error: "GEMINI_API_KEY no configurada" }
+  }
+
+  try {
+    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+    const model = getGeminiModel(modelName)
+    const instruction = [
+      "Analiza este texto relacionado con contenido tipo manhwa/manga.",
+      "Devuelve SOLO un JSON con las claves:",
+      "{",
+      '  "titulo": string,',
+      '  "tipo": string,',
+      '  "capitulo": string | null,',
+      '  "confianza": number (0-100)',
+      "}",
+      "Sin explicaciones adicionales.",
+    ].join("\n")
+
+    const fullPrompt = `${instruction}\n\nTexto:\n${prompt}`
+    const result = await model.generateContent(fullPrompt)
+    const raw = (await result.response).text()
+
+    let parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      parsed = {}
+    }
+
+    const analysis = {
+      titulo: parsed.titulo || "",
+      tipo: parsed.tipo || "extra",
+      capitulo: parsed.capitulo || null,
+      confianza: Number(parsed.confianza || 50),
+    }
+
+    return { success: true, analysis, raw }
+  } catch (err) {
+    const msg =
+      err?.response?.data?.error?.message ||
+      err?.message ||
+      String(err)
+    return { success: false, error: msg }
+  }
+}
+
+export async function analyzeContentWithAI(text, context = "") {
+  const prompt = String(text || "").trim()
+  if (!prompt) {
+    return { success: false, error: "Texto vacÇðo" }
+  }
+
+  if (!hasGeminiApiKey()) {
+    return { success: false, error: "GEMINI_API_KEY no configurada" }
+  }
+
+  try {
+    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+    const model = getGeminiModel(modelName)
+    const instruction = [
+      "Analiza el siguiente contenido y clasifÇðcalo.",
+      "Devuelve SOLO un JSON con las claves:",
+      "{",
+      '  "titulo": string,',
+      '  "tipo": string,',
+      '  "capitulo": string | null,',
+      '  "confianza": number (0-100)',
+      "}",
+      "Sin explicaciones adicionales.",
+    ].join("\n")
+
+    const fullPrompt = `${instruction}\n\nContexto: ${context}\n\nTexto:\n${prompt}`
+    const result = await model.generateContent(fullPrompt)
+    const raw = (await result.response).text()
+
+    let parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      parsed = {}
+    }
+
+    const analysis = {
+      titulo: parsed.titulo || "",
+      tipo: parsed.tipo || "extra",
+      capitulo: parsed.capitulo || null,
+      confianza: Number(parsed.confianza || 50),
+    }
+
+    return { success: true, analysis, raw }
+  } catch (err) {
+    const msg =
+      err?.response?.data?.error?.message ||
+      err?.message ||
+      String(err)
+    return { success: false, error: msg }
   }
 }
 
