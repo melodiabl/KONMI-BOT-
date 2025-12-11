@@ -509,9 +509,50 @@ async function sendResult(sock, jid, result, ctx) {
     return
   }
 
-  /* ============ BOTONES CLÁSICOS (templateButtons) ============ */
+  /* ============ BOTONES (INTERACTIVOS + TEMPLATE) ============ */
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
-    const templateButtons = result.buttons.map((b, i) => {
+    const buttonList = result.buttons
+
+    // 1️⃣ Intento: botones interactivos (quick_reply / cta_url)
+    try {
+      const interactiveButtons = buttonList.map((b) => {
+        const text = b.text || b.title || b.displayText || 'Acción'
+        const id = b.command || b.id || b.url || b.buttonId || 'noop'
+
+        if (b.url) {
+          return {
+            name: 'cta_url',
+            buttonParamsJson: JSON.stringify({
+              display_text: text,
+              url: b.url,
+            }),
+          }
+        }
+
+        return {
+          name: 'quick_reply',
+          buttonParamsJson: JSON.stringify({
+            display_text: text,
+            id,
+          }),
+        }
+      })
+
+      const interactivePayload = {
+        text: result.text || result.caption || 'Opciones',
+        title: result.header || result.title,
+        footer: result.footer,
+        interactiveButtons,
+        mentions: result.mentions,
+      }
+
+      if (await safeSend(sock, targetJid, interactivePayload, opts, true)) return
+    } catch (e) {
+      console.log('[buttons] interactive send failed, falling back to templateButtons:', e?.message || e)
+    }
+
+    // 2️⃣ Intento: templateButtons clásicos
+    const templateButtons = buttonList.map((b, i) => {
       const text = b.text || b.title || b.displayText || 'Acción'
       if (b.url) {
         return { index: i + 1, urlButton: { displayText: text, url: b.url } }
@@ -531,7 +572,7 @@ async function sendResult(sock, jid, result, ctx) {
 
     if (await safeSend(sock, targetJid, payload, opts, true)) return
 
-    // fallback texto plano
+    // 3️⃣ Fallback: texto plano
     let t = (result.text || 'Opciones:') + '\n\n'
     for (const b of result.buttons) {
       t += `• ${b.text || b.title || b.displayText || 'Acción'}\n`
@@ -540,35 +581,54 @@ async function sendResult(sock, jid, result, ctx) {
     return
   }
 
-  /* ============ LISTA CLÁSICA (listMessage) ============ */
+  /* ============ LISTA (INTERACTIVA + listMessage) ============ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
+    const mapSections = (result.sections || []).map(sec => ({
+      title: sec.title || undefined,
+      rows: (sec.rows || []).map(r => ({
+        title: r.title || r.text || 'Opción',
+        description: r.description || undefined,
+        rowId: r.rowId || r.id || r.command || r.url || r.text || 'noop',
+      })),
+    }))
+
     const listPayload = {
+      text: result.text || result.description || 'Menú disponible',
+      buttonText: result.buttonText || 'Ver opciones',
+      sections: mapSections,
+      title: result.title || 'Menú',
+      footer: result.footer,
+    }
+
+    // 1️⃣ Intento: lista "nativa" directa
+    if (await safeSend(sock, targetJid, listPayload, opts, true)) return
+
+    // 2️⃣ Intento: lista clásica vía listMessage
+    const listMessagePayload = {
       text: result.text || 'Elige una opción de la lista',
       title: result.title || undefined,
       footer: result.footer || undefined,
-      buttonText: result.buttonText || 'Ver Categorías',
-      sections: (result.sections || []).map(sec => ({
-        title: sec.title,
-        rows: (sec.rows || []).map(r => ({
-          title: r.title,
-          description: r.description,
-          rowId: r.rowId || r.id || r.command || r.text || 'noop'
-        }))
-      }))
+      buttonText: result.buttonText || 'Ver opciones',
+      sections: mapSections,
     }
 
-    if (await safeSend(sock, targetJid, { listMessage: listPayload }, opts, true)) return
+    if (await safeSend(sock, targetJid, { listMessage: listMessagePayload }, opts, true)) return
 
-    // fallback texto
-    let txt = (result.text || result.title || 'Menú') + '\n\n'
-    for (const sec of result.sections || []) {
-      if (sec.title) txt += `*${sec.title}*\n`
-      for (const r of sec.rows || []) {
-        txt += `- ${r.title} (${r.rowId})\n`
+    // 3️⃣ Fallback: texto plano
+    const lines = []
+    lines.push(result.text || result.description || result.title || 'Menú')
+
+    for (const sec of mapSections) {
+      if (sec.title) {
+        lines.push('')
+        lines.push(sec.title)
       }
-      txt += '\n'
+      for (const row of (sec.rows || [])) {
+        lines.push(`- ${row.title} -> ${row.rowId}`)
+      }
     }
-    await safeSend(sock, targetJid, { text: txt }, opts)
+
+    await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
     return
   }
 
@@ -825,5 +885,3 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
-
-
