@@ -540,25 +540,26 @@ async function sendResult(sock, jid, result, ctx) {
     return
   }
 
-  /* ============ LISTA CLÁSICA (listMessage) ============ */
+  /* ============ LISTA CLÁSICA (listMessage) – FORMATO BAILEYS ============ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
-    const listPayload = {
+    const sections = (result.sections || []).map(sec => ({
+      title: sec.title || '',
+      rows: (sec.rows || []).map(r => ({
+        title: r.title || 'Opción',
+        description: r.description || '',
+        rowId: r.rowId || r.id || r.command || r.text || 'noop'
+      }))
+    }))
+
+    const payload = {
       text: result.text || 'Elige una opción de la lista',
       title: result.title || undefined,
       footer: result.footer || undefined,
-      buttonText: result.buttonText || 'Ver Categorías',
-      sections: (result.sections || []).map(sec => ({
-        title: sec.title,
-        rows: (sec.rows || []).map(r => ({
-          title: r.title,
-          description: r.description,
-          rowId: r.rowId || r.id || r.command || r.text || 'noop'
-        }))
-      }))
+      buttonText: result.buttonText || 'Ver opciones',
+      sections
     }
 
-    // Forma estándar de Baileys: listMessage anidado
-    if (await safeSend(sock, targetJid, { listMessage: listPayload }, opts, true)) return
+    if (await safeSend(sock, targetJid, payload, opts, true)) return
 
     // fallback texto
     let txt = (result.text || result.title || 'Menú') + '\n\n'
@@ -639,23 +640,6 @@ export async function dispatch(ctx = {}) {
   let command = parsed.command
   const args = parsed.args || []
 
-  // 🔎 DEBUG: log completo solo cuando el usuario selecciona un ítem de lista EN GRUPO
-  try {
-    const mm = ctx?.message?.message || {}
-    const isListResponse =
-      !!mm.listResponseMessage ||
-      !!mm.buttonsResponseMessage ||
-      !!mm.templateButtonReplyMessage ||
-      !!mm.interactiveResponseMessage?.listResponseMessage ||
-      !!mm.interactiveMessage?.listResponseMessage
-
-    if (isGroup && isListResponse) {
-      console.log('====================[DEBUG LIST RESPONSE - GROUP]====================')
-      console.log(JSON.stringify(ctx.message, null, 2))
-      console.log('=====================================================================')
-    }
-  } catch { }
-
   if (isGroup && command) {
     try {
       const senderJid = ctx.sender || ctx.participant || ctx.remoteJid
@@ -685,6 +669,7 @@ export async function dispatch(ctx = {}) {
     console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${ctx.senderNumber || ctx.sender || '?'} | Owner: ${ctx.isOwner}`)
   }
 
+  // DEBUG ESPECIAL PARA SELECCIONES DE LISTA
   if (!command) {
     try {
       const msg = ctx.message?.message || {}
@@ -696,6 +681,12 @@ export async function dispatch(ctx = {}) {
         !!msg.interactiveMessage
 
       if (isListSelection) {
+        // Log completo solo para depurar (sobre todo en grupos)
+        try {
+          console.log('===== DEBUG listSelection ctx.message =====')
+          console.log(JSON.stringify(ctx.message, null, 2))
+        } catch { }
+
         const raw = String(text || '').trim()
         const first = raw.split(/\s+/)[0] || ''
         if (first) {
@@ -843,6 +834,7 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
+
 
 
 
