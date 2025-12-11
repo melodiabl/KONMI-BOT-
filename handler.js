@@ -1544,9 +1544,13 @@ export async function dispatch(ctx = {}) {
       if (senderJid) {
         const userKey = onlyDigits(senderJid)
         const banned = await db('group_bans')
-          .where({
-            group_jid: remoteJid,
-            user_jid: userKey
+          .where({ group_id: remoteJid })
+          .andWhere(q => {
+            if (userKey) {
+              q.where('user_jid', userKey).orWhere('user_jid', senderJid)
+            } else {
+              q.where('user_jid', senderJid)
+            }
           })
           .first()
 
