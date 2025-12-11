@@ -195,7 +195,7 @@ function extractText(message) {
           try {
             const params = JSON.parse(paramsJson)
             const id = params?.id || params?.command || params?.rowId || params?.row_id
-            if (id) return String(id).trim()
+            if (id && typeof id === 'string') return String(id).trim()
           } catch { }
         }
       }
@@ -557,8 +557,9 @@ async function sendResult(sock, jid, result, ctx) {
       }))
     }
 
-    // importante → enviar como listMessage para compatibilidad
-    if (await safeSend(sock, targetJid, { listMessage: listPayload }, opts, true)) return
+    // 🔴 AQUÍ EL CAMBIO IMPORTANTE:
+    // En este Baileys, las listas se envían DIRECTO, no como { listMessage: {...} }
+    if (await safeSend(sock, targetJid, listPayload, opts, true)) return
 
     // fallback texto
     let txt = (result.text || result.title || 'Menú') + '\n\n'
@@ -616,7 +617,6 @@ export async function dispatch(ctx = {}) {
   const { sock, remoteJid, isGroup } = ctx
   if (!sock || !remoteJid) return false
 
-  // Bot global ON/OFF
   try {
     const textForGlobal = (ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || ''
     const trimmed = textForGlobal.trim().toLowerCase()
@@ -625,7 +625,6 @@ export async function dispatch(ctx = {}) {
     if (!on && !isBotGlobalCmd) return false
   } catch { }
 
-  // Bot habilitado en grupo
   if (isGroup) {
     const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
     if (!botEnabled) {
@@ -636,9 +635,7 @@ export async function dispatch(ctx = {}) {
     }
   }
 
-  /* ============================
-     DEBUG LIST RESPONSE EN GRUPOS
-     ============================ */
+  // DEBUG shape de listResponse en grupos
   if (isGroup) {
     try {
       const m = ctx.message?.message || {}
@@ -657,14 +654,12 @@ export async function dispatch(ctx = {}) {
       console.log('[DEBUG] error logging listResponseMessage:', e?.message || e)
     }
   }
-  /* ============================================== */
 
   const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
   const parsed = parseCommand(text)
   let command = parsed.command
   const args = parsed.args || []
 
-  // bans por grupo
   if (isGroup && command) {
     try {
       const senderJid = ctx.sender || ctx.participant || ctx.remoteJid
@@ -694,7 +689,6 @@ export async function dispatch(ctx = {}) {
     console.log(`[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp} | User: ${ctx.senderNumber || ctx.sender || '?'} | Owner: ${ctx.isOwner}`)
   }
 
-  // si no hay comando pero viene de selección de lista/botón, intentar tomar primer token
   if (!command) {
     try {
       const msg = ctx.message?.message || {}
@@ -715,7 +709,6 @@ export async function dispatch(ctx = {}) {
     } catch { }
   }
 
-  // fromMe sin prefijo (opcional)
   try {
     const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'false').toLowerCase() === 'true'
     if (!command && allowNoPrefix && ctx?.message?.key?.fromMe) {
@@ -724,7 +717,6 @@ export async function dispatch(ctx = {}) {
     }
   } catch { }
 
-  // palabras sin prefijo (help/menu/etc.)
   try {
     if (!command && !ctx?.message?.key?.fromMe) {
       const raw = String(text || '').trim().toLowerCase()
@@ -855,5 +847,6 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
+
 
 
