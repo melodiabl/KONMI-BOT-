@@ -1436,81 +1436,182 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
 
 function extractText(message) {
   try {
-    if (!message || typeof message !== 'object') return ''
-    const m = message.message || message
+    const pick = (obj) => {
+      if (!obj || typeof obj !== 'object') return ''
 
-    if (m.conversation) return m.conversation
+      // 1. Texto normal primero
+      const base = (
+        obj.conversation ||
+        obj.extendedTextMessage?.text ||
+        obj.imageMessage?.caption ||
+        obj.videoMessage?.caption ||
+        ''
+      )
+      if (base) return String(base).trim()
 
-    if (m.extendedTextMessage && m.extendedTextMessage.text) return m.extendedTextMessage.text
+      // 2. Botones clÃ¡sicos
+      const btnId =
+        obj.buttonsResponseMessage?.selectedButtonId ||
+        obj.templateButtonReplyMessage?.selectedId ||
+        obj.buttonReplyMessage?.selectedButtonId
+      if (btnId) return String(btnId).trim()
 
-    if (m.imageMessage && m.imageMessage.caption) return m.imageMessage.caption
-
-    if (m.videoMessage && m.videoMessage.caption) return m.videoMessage.caption
-
-    const intResp = m.buttonsResponseMessage ||
-      m.listResponseMessage ||
-      m.templateButtonReplyMessage ||
-      m.interactiveResponseMessage ||
-      m.interactiveMessage
-
-    if (intResp) {
-      if (intResp.buttonsResponseMessage?.selectedButtonId) {
-        return String(intResp.buttonsResponseMessage.selectedButtonId).trim()
+      // 3. LISTA CLÃ?SICA - CRÃ?TICO PARA GRUPOS
+      const listResp = obj.listResponseMessage
+      if (listResp) {
+        const rowId =
+          listResp.singleSelectReply?.selectedRowId ||
+          listResp.singleSelectReply?.selectedId ||
+          listResp.title
+        if (rowId) return String(rowId).trim()
       }
 
-      if (intResp.templateButtonReplyMessage?.selectedId) {
-        return String(intResp.templateButtonReplyMessage.selectedId).trim()
+      // 4. RESPUESTA INTERACTIVA (nuevo formato WhatsApp)
+      const intResp = obj.interactiveResponseMessage
+      if (intResp) {
+        // 4a. Native Flow Response
+        if (intResp.nativeFlowResponseMessage?.paramsJson) {
+          try {
+            const params = JSON.parse(intResp.nativeFlowResponseMessage.paramsJson)
+            const id = params?.id || params?.command || params?.rowId || params?.row_id
+            if (id && typeof id === 'string') return String(id).trim()
+          } catch { }
+        }
+
+        // 4b. List Response dentro de Interactive
+        if (intResp.listResponseMessage?.singleSelectReply) {
+          const rowId = intResp.listResponseMessage.singleSelectReply.selectedRowId
+          if (rowId && typeof rowId === 'string') return String(rowId).trim()
+        }
+
+        // 4c. Body text (Ãºltimo recurso)
+        if (intResp.body?.text) {
+          return String(intResp.body.text).trim()
+        }
       }
 
-      if (intResp.listResponseMessage?.singleSelectReply?.selectedRowId) {
-        return String(intResp.listResponseMessage.singleSelectReply.selectedRowId).trim()
+      // 5. MENSAJE INTERACTIVO (estructura de envÃ­o)
+      const intMsg = obj.interactiveMessage
+      if (intMsg) {
+        // 5a. Reply con selectedRowId
+        const selectedRowId =
+          intMsg.replyMessage?.selectedRowId ||
+          intMsg.selectedRowId ||
+          intMsg.nativeFlowResponseMessage?.selectedRowId
+
+        if (selectedRowId && typeof selectedRowId === 'string') {
+          return String(selectedRowId).trim()
+        }
+
+        // 5b. Display text
+        const displayText =
+          intMsg.replyMessage?.selectedDisplayText ||
+          intMsg.body?.selectedDisplayText ||
+          intMsg.body?.text
+        if (displayText && typeof displayText === 'string') {
+          return String(displayText).trim()
+        }
+
+        // 5c. Native Flow Buttons
+        const nativeFlowMsg = intMsg.nativeFlowMessage
+        if (nativeFlowMsg && Array.isArray(nativeFlowMsg.buttons)) {
+          for (const btn of nativeFlowMsg.buttons) {
+            if (btn.buttonParamsJson) {
+              try {
+                const params = JSON.parse(btn.buttonParamsJson)
+                const id =
+                  params?.selectedButtonId ||
+                  params?.response?.selectedRowId ||
+                  params?.id ||
+                  params?.command
+                if (id) return String(id).trim()
+              } catch { }
+            }
+          }
+        }
+
+        // 5d. Params JSON directo
+        const paramsJson = intMsg.nativeFlowResponseMessage?.paramsJson
+        if (paramsJson && typeof paramsJson === 'string') {
+          try {
+            const params = JSON.parse(paramsJson)
+            const id = params?.id || params?.command || params?.rowId || params?.row_id
+            if (id) return String(id).trim()
+          } catch { }
+        }
       }
 
-      if (intResp.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
-        try {
-          const params = JSON.parse(intResp.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson)
-          const id = params?.id || params?.command || params?.rowId || params?.row_id
-          if (id && typeof id === 'string') return String(id).trim()
-        } catch { }
-      }
-
-      if (intResp.body?.text) {
-        return String(intResp.body.text).trim()
-      }
+      return ''
     }
 
-    const keys = Object.keys(m)
-    const firstKey = keys[0]
-    if (firstKey && typeof firstKey === 'string') {
-      const maybeTxt = m[firstKey]?.text || m[firstKey]?.caption
-      if (maybeTxt) return String(maybeTxt).trim()
+    const m = message?.message || {}
+    let out = pick(m)
+    if (out) return out
+
+    // Revisar mensajes anidados (viewOnce / ephemeral)
+    const inner =
+      m.viewOnceMessage?.message ||
+      m.ephemeralMessage?.message ||
+      m.documentWithCaptionMessage?.message ||
+      null
+
+    if (inner) {
+      out = pick(inner)
+      if (out) return out
+
+      const inner2 =
+        inner.viewOnceMessage?.message ||
+        inner.ephemeralMessage?.message ||
+        null
+
+      if (inner2) {
+        out = pick(inner2)
+        if (out) return out
+      }
     }
 
     return ''
-  } catch {
+  } catch (e) {
+    console.error('[extractText] error:', e?.message)
     return ''
   }
 }
 
 function parseCommand(text) {
-  if (!text || typeof text !== 'string') {
-    return { command: null, args: [] }
+  const raw = String(text || '').trim()
+  if (!raw) return { command: '', args: [] }
+
+  const prefixes = Array.from(
+    new Set(
+      ((process.env.CMD_PREFIXES || '/!.#?$~').split('')).concat(['/', '!', '.']),
+    ),
+  )
+  const s = raw.replace(/^\s+/, '')
+
+  if (s.startsWith('/')) {
+    const parts = s.slice(1).trim().split(/\s+/)
+    return { command: `/${(parts.shift() || '').toLowerCase()}`, args: parts }
   }
 
-  const trimmed = text.trim()
-  const prefixMatch = trimmed.match(/^([\/!.#?$~])\s*/)
-  let cmd = trimmed
-  if (prefixMatch) {
-    cmd = trimmed.slice(prefixMatch[0].length)
+  if (prefixes.includes(s[0])) {
+    const parts = s.slice(1).trim().split(/\s+/)
+    const token = (parts.shift() || '').toLowerCase().replace(/^[\/.!#?$~]+/, '')
+    return { command: `/${token}`, args: parts }
   }
 
-  if (!cmd) return { command: null, args: [] }
+  if (s.startsWith('btn_')) return { command: '', args: [] }
+  if (s.startsWith('copy_')) return { command: '/handlecopy', args: [s] }
 
-  const parts = cmd.split(/\s+/)
-  const command = '/' + parts[0].toLowerCase()
-  const args = parts.slice(1)
+  if (s.startsWith('todo_')) {
+    const parts = s.split('_')
+    if (parts.length >= 3) {
+      const action = parts[1]
+      const listId = parts.slice(2).join('_')
+      return { command: `/todo-${action}`, args: [listId] }
+    }
+  }
 
-  return { command, args }
+  return { command: '', args: [] }
 }
 
 /* ========================
