@@ -6,10 +6,15 @@ import db from "./src/database/db.js";
 import path from "path";
 import fs from "fs";
 import axios from "axios";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import QRCode from "qrcode";
 import pino from "pino";
 import { EventEmitter } from "events";
+import appLogger from "./src/config/logger.js";
+import antibanMiddleware from "./src/utils/utils/anti-ban-middleware.js";
+import antibanSystem from "./src/utils/utils/anti-ban.js";
+import { getGroupBool } from "./src/utils/utils/group-config.js";
+import { isBotGloballyActive } from "./src/services/subbot-manager.js";
 import {
   startSubbot,
   stopSubbotRuntime as stopSubbot,
@@ -68,95 +73,26 @@ async function ensureSubbotEventsTable() {
       table.json("payload").nullable();
       table.timestamp("created_at").defaultTo(db.fn.now());
     });
+    console.log(" Tabla `subbot_events` creada");
   }
 }
 
-function emitSubbotEvent(type, payload) {
-  try {
-    subbotEmitter.emit(type, payload);
-    subbotEmitter.emit("*", { type, ...payload });
-  } catch (error) {
-    console.error("Error emitiendo evento de subbot:", error);
-  }
-}
-
-export function onSubbotEvent(type, handler) {
-  subbotEmitter.on(type, handler);
-  return () => subbotEmitter.off(type, handler);
-}
-
-function createSubbotSessionDir(subbotCode) {
-  const dir = path.join(__dirname, "sessions", "subbots", subbotCode);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
+async function initDatabase() {
+  await ensureSubbotsTable();
+  await ensureSubbotEventsTable();
 }
 
 function normalizePhone(phone) {
   if (!phone) return null;
-  const digits = String(phone).replace(/[^0-9]/g, "");
+  let digits = String(phone).replace(/[^0-9]/g, "");
   if (!digits) return null;
   if (digits.startsWith("0") && digits.length > 10) return digits.slice(1);
   return digits;
 }
 
 // =========================
-// Router de comandos (mínimo)
-// Nota: NO modifica handlers existentes; solo los invoca.
-// =========================
-
-function onlyDigits(v) { return String(v||'').replace(/[^0-9]/g,''); }
-
-async function isOwnerNumber(usuario) {
-  try {
-    const owner = (process.env.OWNER_WHATSAPP_NUMBER || '595974154768').replace(/[^0-9]/g,'');
-    return onlyDigits(usuario) === owner;
-  } catch { return false }
-}
-
-async function isAdminOfGroup() { return false }
-
-export async function routeCommand(ctx) {
-  const { command } = ctx;
-  if (!command || typeof command !== 'string') return { handled: false };
-
-  // Admin/bot: manejado por registry
-
-  // Subbots: ahora manejados vía registry (/qr, /code, /bots, /mybots)
-
-  // Registro modular de comandos (organizado por carpeta)
-  // Evita modificar whatsapp.js y reduce líneas del switch
-  try {
-    const mod = await import('./src/commands/registry/index.js');
-    const reg = mod?.getCommandRegistry?.();
-    if (reg && reg.has(command)) {
-      const entry = reg.get(command);
-      const fecha = new Date().toISOString();
-      const params = { ...ctx, fecha };
-      let result = null;
-      try {
-        result = await entry.handler(params);
-        await sock.sendMessage(ctx.remoteJid, { react: { text: '✅', key: ctx.key } })
-      } catch (e) {
-        await safeSend(ctx.sock, ctx.remoteJid, `⚠️ Error ejecutando comando: ${e?.message || e}`);
-        await sock.sendMessage(ctx.remoteJid, { react: { text: '⚠️', key: ctx.key } })
-        return { handled: true };
-      }
-      await deliverResult(ctx.sock, ctx.remoteJid, result);
-      return { handled: true };
-    }
-  } catch (e) {
-    try { console.warn('Fallo al cargar registry de comandos:', e?.message); } catch {}
-  }
-
-  // Admin grupo (fallback) removido — usar commands/groups.js via registry
-
-  // Otros comandos: no manejados aquí
-  return { handled: false };
-}
-
 // Contexto simple por chat para mensajes idempotentes y UX mejorada
+// =========================
 const __chatContext = new Map(); // key: chatId -> { events: [{ type, at, actor }] }
 
 function pushChatEvent(chatId, type, actor) {
@@ -192,142 +128,75 @@ function msToHuman(ms) {
     if (h < 24) return `${h}h`;
     const d = Math.floor(h / 24);
     return `${d}d`;
-  } catch { return '' }
+  } catch {
+    return `${ms}ms`;
+  }
 }
 
-// handler de /bot removido; ahora en commands/bot-control.js
+// -----------------------------
+// Session helpers para subbots
+// -----------------------------
+function getSessionFilePath(code) {
+  if (!code) return null;
+  return path.join(SESSION_DIR, `${code}.json`);
+}
 
-async function handleBotsRoute({ sock, remoteJid, usuario, command }) {
+async function loadSubbotSession(code) {
   try {
-    const isMy = command === '/mybots' || command === '/mibots';
-    const res = isMy ? await listUserBots(usuario) : await listAllBots(usuario);
-    const payload = res?.mentions ? { text: res.message, mentions: res.mentions } : { text: res?.message || '⚠️ Error obteniendo subbots' };
-    await sock.sendMessage(remoteJid, payload);
-  } catch { await safeSend(sock, remoteJid, '⚠️ Error obteniendo subbots') }
-  return { handled: true };
+    const filePath = getSessionFilePath(code);
+    if (!filePath) return null;
+    if (!fs.existsSync(filePath)) return null;
+    const raw = await fs.promises.readFile(filePath, "utf8");
+    const json = JSON.parse(raw);
+    return json;
+  } catch (err) {
+    console.error("Error cargando session de subbot:", err);
+    return null;
+  }
 }
 
-// Eliminados handlers locales de /qr y /code para permitir manejo original en whatsapp.js
-
-async function wrapGroup(coreFn, { sock, remoteJid, usuario, isGroup }) {
-  if (!isGroup) { await safeSend(sock, remoteJid, 'ℹ️ Este comando solo funciona en grupos'); return { handled:true } }
-  const ok = await isAdminOfGroup(usuario, remoteJid);
-  if (!ok) { await safeSend(sock, remoteJid, '⛔ Solo owner o administradores del grupo pueden usar este comando.'); return { handled:true } }
-  try { const r = await coreFn(usuario, remoteJid); await safeSend(sock, remoteJid, r?.message || '✅ Listo'); } catch { await safeSend(sock, remoteJid, '⚠️ Error ejecutando comando') }
-  return { handled:true };
-}
-
-async function wrapGroupTarget(coreFn, { sock, remoteJid, usuario, isGroup, args }) {
-  if (!isGroup) { await safeSend(sock, remoteJid, 'ℹ️ Este comando solo funciona en grupos'); return { handled:true } }
-  const ok = await isAdminOfGroup(usuario, remoteJid);
-  if (!ok) { await safeSend(sock, remoteJid, '⛔ Solo owner o administradores del grupo pueden usar este comando.'); return { handled:true } }
-  const target = args?.[0] || '';
-  try { const r = await coreFn(target, usuario, remoteJid); await safeSend(sock, remoteJid, r?.message || '✅ Listo'); } catch { await safeSend(sock, remoteJid, '⚠️ Error ejecutando comando') }
-  return { handled:true };
-}
-
-async function wrapTag({ sock, remoteJid, usuario, message }) {
-  const text = message?.message?.extendedTextMessage?.text || message?.message?.conversation || '';
-  try { const r = await tagCore(text, usuario, remoteJid); await safeSend(sock, remoteJid, r?.message || '✅'); } catch { await safeSend(sock, remoteJid, '⚠️ Error en tag') }
-  return { handled:true };
-}
-
-async function safeSend(sock, jid, text) {
-  try { await sock.sendMessage(jid, { text }); } catch {}
-}
-
-// Enviar resultados heterogéneos de comandos (texto / imagen / video / botones / listas)
-async function deliverResult(sock, jid, result) {
+async function saveSubbotSession(code, data) {
   try {
-    if (!result) return;
-    // Manejo de errores explícito
-    if (result.success === false && result.message) {
-      if (result.mentions && Array.isArray(result.mentions)) {
-        await sock.sendMessage(jid, { text: result.message, mentions: result.mentions });
-      } else {
-        await safeSend(sock, jid, result.message);
-      }
-      return;
-    }
-    // Mensaje de Botones (Buttons Message)
-    if (result.type === 'buttons' && result.buttons) {
-      await sock.sendMessage(jid, {
-        text: result.text,
-        footer: result.footer,
-        buttons: result.buttons,
-        headerType: result.headerType || 1,
-      });
-      return;
-    }
-    // Mensaje de Lista (List Message)
-    if (result.type === 'list' && result.sections) {
-      await sock.sendMessage(jid, {
-        text: result.text,
-        footer: result.footer,
-        title: result.title,
-        buttonText: result.buttonText,
-        sections: result.sections,
-      });
-      return;
-    }
-    // Media: sticker
-    if (result.type === 'sticker' && (result.sticker || result.url)) {
-      const sticker = result.sticker || { url: result.url };
-      await sock.sendMessage(jid, {
-        sticker,
-        caption: result.caption || '',
-        mentions: result.mentions || [],
-      });
-      return;
-    }
-    // Media: video
-    if (result.type === 'video' && result.video) {
-      const video = typeof result.video === 'string' ? { url: result.video } : result.video;
-      await sock.sendMessage(jid, {
-        video,
-        caption: result.caption || '',
-        mentions: result.mentions || [],
-      });
-      return;
-    }
-    // Media: audio
-    if (result.type === 'audio' && result.audio) {
-      const audio = typeof result.audio === 'string' ? { url: result.audio } : result.audio;
-      await sock.sendMessage(jid, {
-        audio,
-        mimetype: result.mimetype || 'audio/mpeg',
-        ptt: result.ptt || false,
-        caption: result.caption || '',
-        mentions: result.mentions || [],
-      });
-      return;
-    }
-    // Media: imagen
-    if (result.type === 'image' && result.image) {
-      const image = typeof result.image === 'string' ? { url: result.image } : result.image;
-      await sock.sendMessage(jid, {
-        image,
-        caption: result.caption || '',
-        mentions: result.mentions || [],
-      });
-      return;
-    }
-    // Texto por defecto
-    if (typeof result.message === 'string' && result.message) {
-      if (result.mentions && Array.isArray(result.mentions)) {
-        await sock.sendMessage(jid, { text: result.message, mentions: result.mentions });
-      } else {
-        await safeSend(sock, jid, result.message);
-      }
-      return;
-    }
-    // Si no es un mensaje de texto, no enviar '✅ Listo'
-    if (result.type) return;
+    const filePath = getSessionFilePath(code);
+    if (!filePath) return;
+    await fs.promises.mkdir(SESSION_DIR, { recursive: true });
+    await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
+  } catch (err) {
+    console.error("Error guardando session de subbot:", err);
+  }
+}
 
-    // Fallback generico
-    await safeSend(sock, jid, '✅ Listo');
-  } catch (e) {
-    try { await safeSend(sock, jid, `⚠️ Error enviando respuesta: ${e?.message || e}`) } catch {}
+async function deleteSubbotSession(code) {
+  try {
+    const filePath = getSessionFilePath(code);
+    if (!filePath) return;
+    if (fs.existsSync(filePath)) {
+      await fs.promises.unlink(filePath);
+    }
+  } catch (err) {
+    console.error("Error eliminando session de subbot:", err);
+  }
+}
+
+function markSubbotOnline(code, sessionData) {
+  if (!code) return;
+  const now = Date.now();
+  const s = {
+    lastHeartbeat: now,
+    lastActivity: now,
+    sessionData: sessionData || null,
+    online: true,
+  };
+  subbotSessions.set(code, s);
+}
+
+function markSubbotOffline(code) {
+  if (!code) return;
+  const existing = subbotSessions.get(code);
+  if (existing) {
+    existing.online = false;
+    existing.lastHeartbeat = Date.now();
+    subbotSessions.set(code, existing);
   }
 }
 
@@ -348,1661 +217,779 @@ function formatSubbotRow(row) {
   return {
     id: row.id,
     code: row.code,
-    type: row.connection_type === "pairing" ? "code" : "qr",
-    status: row.status || (online ? "connected" : "disconnected"),
-    created_by: row.user_name || row.user_phone,
-    created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
-    last_heartbeat: lastHeartbeat,
-    qr_data: row.qr_code || null,
-    pairing_code: row.pairing_code || null,
-    isOnline: online,
-    message_count: row.message_count ?? 0,
+    user_phone: row.user_phone,
+    user_name: row.user_name,
+    status: row.status,
+    connection_type: row.connection_type,
+    created_at: row.created_at,
+    last_activity: row.last_activity,
+    connected_at: row.connected_at,
+    is_active: row.is_active,
+    message_count: row.message_count,
+    settings: row.settings,
+    online,
+    lastHeartbeat,
   };
 }
 
-function buildSubbotSummary(rows) {
-  const summary = {
-    total: rows.length,
-    qr: 0,
-    code: 0,
-    connected: 0,
-    pending: 0,
-    disconnected: 0,
-    errors: 0,
-  };
-
-  rows.forEach((row) => {
-    const item = formatSubbotRow(row);
-    if (!item) return;
-    if (item.type === "qr") summary.qr += 1;
-    else summary.code += 1;
-    if (item.isOnline || item.status === "connected") summary.connected += 1;
-    else if (
-      ["pending", "waiting_scan", "waiting_pairing"].includes(item.status)
-    )
-      summary.pending += 1;
-    else if (item.status === "error") summary.errors += 1;
-    else summary.disconnected += 1;
-  });
-
-  return summary;
-}
-
-// -----------------------------
-// SubbotService class
-// -----------------------------
-class SubbotService {
-  constructor() {
-    this.maxActiveSubbots = parseInt(process.env.MAX_SUBBOTS) || 10;
-    this.inactiveTimeout =
-      parseInt(process.env.SUBBOT_TIMEOUT) || 30 * 60 * 1000;
-    this.cleanupInterval =
-      parseInt(process.env.CLEANUP_INTERVAL) || 5 * 60 * 1000;
-    this.maxMemoryUsage = parseInt(process.env.MAX_MEMORY_MB) || 512;
-    this.startCleanupService();
-    this.startMemoryMonitoring();
-  }
-
-  startCleanupService() {
-    const interval = setInterval(
-      () => this.intelligentCleanup(),
-      this.cleanupInterval,
-    );
-    if (typeof interval.unref === "function") interval.unref();
-  }
-
-  startMemoryMonitoring() {
-    const interval = setInterval(() => {
-      const mem = process.memoryUsage().heapUsed / 1024 / 1024;
-      if (mem > this.maxMemoryUsage * this.maxActiveSubbots * 0.8) {
-        console.log(` Uso de memoria elevado: ${Math.round(mem)}MB`);
-      }
-    }, 60000);
-    if (typeof interval.unref === "function") interval.unref();
-  }
-
-  async canCreateSubbot(userPhone) {
-    try {
-      const actives = await db("subbots")
-        .where({ is_active: true })
-        .count("id as count")
-        .first();
-      if (Number(actives?.count || 0) >= this.maxActiveSubbots) {
-        return {
-          canCreate: false,
-          reason: `Limite global (${this.maxActiveSubbots}) alcanzado`,
-        };
-      }
-      const userActives = await db("subbots")
-        .where({ user_phone: userPhone, is_active: true })
-        .count("id as count")
-        .first();
-      if (Number(userActives?.count || 0) >= 2) {
-        return {
-          canCreate: false,
-          reason: "Maximo de 2 subbots activos por usuario",
-        };
-      }
-      const mem = process.memoryUsage().heapUsed / 1024 / 1024;
-      if (mem > this.maxMemoryUsage * this.maxActiveSubbots * 0.8) {
-        return {
-          canCreate: false,
-          reason: "Uso de memoria elevado, intenta mas tarde",
-        };
-      }
-      return { canCreate: true };
-    } catch (error) {
-      console.error("Error verificando capacidad de subbots:", error);
-      return { canCreate: false, reason: "Error interno del sistema" };
-    }
-  }
-
-  async getResourceStats() {
-    try {
-      const memoryUsage = process.memoryUsage();
-      const totalSubbots = await db("subbots").count("id as count").first();
-      const stats = await db("subbots")
-        .select("status")
-        .count("id as count")
-        .groupBy("status");
-      return {
-        memory: {
-          used: Math.round(memoryUsage.heapUsed / 1024 / 1024),
-          total: Math.round(memoryUsage.heapTotal / 1024 / 1024),
-          external: Math.round(memoryUsage.external / 1024 / 1024),
-        },
-        subbots: {
-          active: activeSubbots.size,
-          total: Number(totalSubbots?.count || 0),
-          maxCapacity: this.maxActiveSubbots,
-          byStatus: stats,
-        },
-        system: {
-          uptime: Math.round(process.uptime()),
-          nodeVersion: process.version,
-          platform: process.platform,
-        },
-      };
-    } catch (error) {
-      console.error("Error obteniendo estadisticas de subbots:", error);
-      return null;
-    }
-  }
-
-  async intelligentCleanup() {
-    try {
-      const now = Date.now();
-      const candidates = [];
-      for (const [code, session] of subbotSessions.entries()) {
-        if (now - session.lastActivity > this.inactiveTimeout) {
-          candidates.push(code);
-        }
-      }
-      for (const code of candidates) {
-        await cleanupSubbotInternal(code);
-      }
-      const mem = process.memoryUsage().heapUsed / 1024 / 1024;
-      if (mem > this.maxMemoryUsage * this.maxActiveSubbots * 0.9) {
-        console.log(" Memoria alta, limpiando sesiones inactivas");
-        for (const code of Array.from(subbotSessions.keys())) {
-          await cleanupSubbotInternal(code);
-        }
-      }
-    } catch (error) {
-      console.error("Error limpiando subbots inactivos:", error);
-    }
-  }
-}
-
-const subbotService = new SubbotService();
-
-// -----------------------------
-// Baileys helpers
-// Importación única de handleMessage (fuera de los listeners)
-let handleMessageImport = null;
-async function getHandleMessage() {
-  if (!handleMessageImport) {
-    const module = await import("./whatsapp.js");
-    handleMessageImport = module.handleMessage;
-  }
-  return handleMessageImport;
-}
-
-// -----------------------------
-async function setupSubbotMessageHandlers(sock, subbotCode) {
+async function emitSubbotEvent(code, event, payload = null) {
   try {
-    const handleMessage = await getHandleMessage();
-    sock.ev.on("messages.upsert", async (upsert) => {
-      try {
-        const messages = upsert.messages || [];
-        for (const message of messages) {
-          // Política configurable para mensajes propios (fromMe)
-          // Modos: all | commands | none (default: commands)
-          if (message.key.fromMe) {
-            const txt = (
-              message.message?.conversation ||
-              message.message?.extendedTextMessage?.text ||
-              ''
-            ).trim();
-            const isCommand = txt.startsWith('/') || txt.startsWith('!') || txt.startsWith('.');
-            const mode = String(process.env.FROMME_MODE || process.env.ALLOW_FROM_ME || 'commands').toLowerCase();
-            const allow = (mode === 'all' || mode === 'true') || (mode === 'commands' && isCommand);
-            if (!allow) continue;
-          }
-          const session = subbotSessions.get(subbotCode);
-          if (session) session.lastActivity = Date.now();
+    if (!code || !event) return;
+    await db("subbot_events").insert({
+      code,
+      event,
+      payload: payload ? JSON.stringify(payload) : null,
+    });
+    subbotEmitter.emit(event, { code, payload, at: new Date().toISOString() });
+  } catch (err) {
+    console.error("Error registrando evento de subbot:", err);
+  }
+}
 
-          // Wrapper con manejo de errores mejorado
-          try {
-            await handleMessage(message, sock, `subbot_${subbotCode}`);
-          } catch (handleError) {
-            console.error(`❌ Error en handleMessage (subbot ${subbotCode}):`);
-            console.error(`   Mensaje: ${handleError.message}`);
-            console.error(`   Stack: ${handleError.stack}`);
-            // No lanzar el error para evitar detener el procesamiento
-          }
+export function onSubbotEvent(event, listener) {
+  subbotEmitter.on(event, listener);
+}
 
-          await db("subbots")
-            .where({ code: subbotCode })
-            .increment("message_count", 1)
-            .update({ last_activity: new Date().toISOString() });
-        }
-      } catch (error) {
-        console.error(
-          `Error procesando mensaje en subbot ${subbotCode}:`,
-          error,
+export function offSubbotEvent(event, listener) {
+  subbotEmitter.off(event, listener);
+}
+
+async function cleanupInactiveSubbots() {
+  try {
+    const THRESHOLD = 1000 * 60 * 60 * 12; // 12 horas
+    const now = Date.now();
+    const rows = await db("subbots")
+      .select("*")
+      .whereNot("status", "deleted")
+      .andWhere("is_active", false);
+
+    for (const row of rows) {
+      const lastAt = row.last_activity
+        ? new Date(row.last_activity).getTime()
+        : 0;
+      if (!lastAt) continue;
+      const diff = now - lastAt;
+      if (diff > THRESHOLD) {
+        console.log(
+          `🧹 Limpieza: marcando subbot ${row.code} como deleted (inactivo ${msToHuman(
+            diff,
+          )})`,
         );
-        console.error(`Stack completo:`, error.stack);
+        await db("subbots")
+          .where({ id: row.id })
+          .update({
+            status: "deleted",
+            is_active: false,
+          });
+        await deleteSubbotSession(row.code);
       }
+    }
+  } catch (err) {
+    console.error("Error en cleanupInactiveSubbots:", err);
+  }
+}
+
+// ---------------------------------------------------
+// Comandos de subbot /qr, /code, /bots, /mybots (core)
+// ---------------------------------------------------
+async function ensureSubbotForUser(phone, name) {
+  const userPhone = normalizePhone(phone);
+  if (!userPhone) throw new Error("Número de teléfono inválido");
+
+  let row = await db("subbots").where({ user_phone: userPhone }).first();
+  if (!row) {
+    const code = `SUB-${userPhone}`;
+    await db("subbots").insert({
+      code,
+      user_phone: userPhone,
+      user_name: name || null,
+      status: "pending",
+      connection_type: "qr",
     });
-  } catch (error) {
-    console.error(
-      `Error configurando handlers para subbot ${subbotCode}:`,
-      error,
-    );
-    console.error(`Stack completo:`, error.stack);
+    row = await db("subbots").where({ user_phone: userPhone }).first();
   }
-}
-
-// Delegate QR and pairing generation to the multi-account manager (baileys-mod fork)
-async function generateQRCode(subbotCode) {
-  try {
-    const result = await multiAccount.generateSubbotQR(
-      `KONMI-QR-${Date.now().toString().slice(-6)}`,
-    );
-    if (!result || !result.success) {
-      throw new Error(result?.error || "Error generando QR");
-    }
-    // Persist some metadata in our db for compatibility
-    await db("subbots")
-      .where({ code: subbotCode })
-      .update({
-        qr_code: result.qr || null,
-        status: result.status || "waiting_scan",
-        last_activity: new Date().toISOString(),
-      });
-    emitSubbotEvent("qr_ready", { code: subbotCode, qr: result.qr });
-    return { success: true, qr: result.qr, message: result.message };
-  } catch (error) {
-    console.error("generateQRCode delegated error:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-async function generatePairingCode(subbotCode, phoneNumber) {
-  try {
-    const result = await multiAccount.generateSubbotPairingCode(
-      phoneNumber,
-      "KONMI-BOT",
-    );
-    if (!result || !result.success) {
-      throw new Error(result?.error || "Error generando pairing code");
-    }
-    await db("subbots")
-      .where({ code: subbotCode })
-      .update({
-        pairing_code: result.code || null,
-        status: result.status || "waiting_pairing",
-        last_activity: new Date().toISOString(),
-      });
-    emitSubbotEvent("pairing_code", {
-      code: subbotCode,
-      pairingCode: result.code,
-    });
-    return { success: true, code: result.code, message: result.message };
-  } catch (error) {
-    console.error("generatePairingCode delegated error:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-async function cleanupSubbotInternal(subbotCode) {
-  try {
-    const session = subbotSessions.get(subbotCode);
-    if (session?.sock) {
-      try {
-        session.sock.end();
-      } catch (_) {}
-    }
-    activeSubbots.delete(subbotCode);
-    subbotSessions.delete(subbotCode);
-
-    await db("subbots").where({ code: subbotCode }).update({
-      status: "disconnected",
-      is_active: false,
-      last_activity: new Date().toISOString(),
-    });
-
-    emitSubbotEvent("disconnected", { code: subbotCode });
-  } catch (error) {
-    console.error(`Error limpiando subbot ${subbotCode}:`, error);
-  }
-}
-
-// -----------------------------
-// Subbot API functions
-// -----------------------------
-export async function createSubbot(userPhone, userName, connectionType = "qr") {
-  await ensureSubbotsTable();
-  const normalizedPhone = normalizePhone(userPhone) || String(userPhone || "");
-  const canCreate = await subbotService.canCreateSubbot(normalizedPhone);
-  if (!canCreate.canCreate) {
-    return { success: false, error: canCreate.reason };
-  }
-
-  const subbotCode = `sb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  await db("subbots").insert({
-    code: subbotCode,
-    user_phone: normalizedPhone,
-    user_name: userName,
-    connection_type: connectionType,
-    status: "pending",
-    settings: JSON.stringify({
-      autoReply: false,
-      allowGroups: true,
-      maxMessages: 1000,
-    }),
-  });
-
-  let result;
-  try {
-    if (connectionType === "qr") {
-      result = await generateQRCode(subbotCode);
-    } else if (connectionType === "pairing" || connectionType === "code") {
-      result = await generatePairingCode(subbotCode, normalizedPhone);
-    } else {
-      throw new Error("Tipo de conexion no valido");
-    }
-  } catch (error) {
-    console.error("Error generando credenciales de subbot:", error);
-    await deleteSubbot(subbotCode, normalizedPhone);
-    return { success: false, error: error.message };
-  }
-
-  const subbot = await db("subbots").where({ code: subbotCode }).first();
-  emitSubbotEvent("launch", {
-    code: subbotCode,
-    subbot: formatSubbotRow(subbot),
-  });
-  return {
-    success: true,
-    connectionType,
-    subbot: formatSubbotRow(subbot),
-    qr: result?.qr || null,
-    pairingCode: result?.code || null,
-  };
-}
-
-export async function getSubbotByCode(code) {
-  await ensureSubbotsTable();
-  const row = await db("subbots").where({ code }).first();
   return formatSubbotRow(row);
 }
 
-export async function getUserSubbots(userPhone) {
-  await ensureSubbotsTable();
-  const normalized = normalizePhone(userPhone) || String(userPhone || "");
-  const rows = await db("subbots")
-    .where("user_phone", normalized)
-    .orderBy("created_at", "desc");
-  return {
-    success: true,
-    subbots: rows.map((row) => formatSubbotRow(row)).filter(Boolean),
-    summary: buildSubbotSummary(rows),
-  };
-}
+async function handleStartSubbot(ctx) {
+  const { sock, remoteJid, sender, pushName, text } = ctx;
+  const usuario = sender || ctx.participant || remoteJid;
+  const cleanPhone = normalizePhone(usuario);
+  const name = pushName || "Usuario";
 
-export async function getSubbotRecord(subbotCode) {
-  const subbot = await db("subbots").where({ code: subbotCode }).first();
-  if (!subbot) return { success: false, error: "Subbot no encontrado" };
-  return { success: true, subbot: formatSubbotRow(subbot) };
-}
+  await initDatabase();
+  await cleanupInactiveSubbots();
 
-export async function getSubbotStatusOverview(userPhone) {
-  await ensureSubbotsTable();
-  const rows = await db("subbots")
-    .where("user_phone", normalizePhone(userPhone) || String(userPhone || ""))
-    .orderBy("created_at", "desc");
-  const summary = buildSubbotSummary(rows);
-  const details = rows
-    .map((row) => {
-      const formatted = formatSubbotRow(row);
-      return {
-        subbotId: formatted?.code,
-        status: formatted?.status,
-        isOnline: formatted?.isOnline || false,
-        lastHeartbeat: formatted?.last_heartbeat || null,
-      };
-    })
-    .filter((item) => item.subbotId);
-  return { success: true, summary, subbots: details };
-}
-
-export async function getSubbotAccessData(subbotCode, userPhone) {
-  await ensureSubbotsTable();
-  const subbot = await db("subbots").where({ code: subbotCode }).first();
-  if (!subbot) return { success: false, error: "Subbot no encontrado" };
-  if (userPhone) {
-    const normalized = normalizePhone(userPhone) || String(userPhone || "");
-    if (subbot.user_phone && normalized && subbot.user_phone !== normalized) {
-      return {
-        success: false,
-        error: "Subbot no autorizado para este usuario",
-      };
-    }
-  }
-  const qrData = subbot.qr_code
-    ? subbot.qr_code.replace(/^data:image\/png;base64,/, "")
-    : null;
-  return {
-    success: true,
-    qr: qrData,
-    qrImage: subbot.qr_code || null,
-    pairingCode: subbot.pairing_code || null,
-    subbot: formatSubbotRow(subbot),
-  };
-}
-
-export async function deleteSubbot(subbotCode, userPhone = null) {
-  await ensureSubbotsTable();
-  const subbot = await db("subbots").where({ code: subbotCode }).first();
-  if (!subbot) return { success: false, error: "Subbot no encontrado" };
-
-  if (userPhone) {
-    const normalized = normalizePhone(userPhone) || String(userPhone || "");
-    if (subbot.user_phone && normalized && subbot.user_phone !== normalized) {
-      return {
-        success: false,
-        error: "Subbot no autorizado para este usuario",
-      };
-    }
-  }
-  const record = await getSubbotRecord(subbotCode);
-  if (!record.success) return record;
-  await cleanupSubbotInternal(subbotCode);
-  await db("subbots").where({ code: subbotCode }).del();
-  emitSubbotEvent("stopped", { code: subbotCode });
-  return { success: true };
-}
-
-export async function registerSubbotEvent({ subbotId, token, event, data }) {
-  await ensureSubbotsTable();
-  await ensureSubbotEventsTable();
-
-  if (!subbotId || !event) {
-    return { success: false, error: "subbotId y event son requeridos" };
-  }
-  const subbot = await db("subbots").where({ code: subbotId }).first();
-  if (!subbot) {
-    return { success: false, error: "Subbot no encontrado" };
-  }
-  if (subbot.token && token !== subbot.token) {
-    return { success: false, error: "Token invalido" };
-  }
-  await db("subbot_events").insert({
-    code: subbotId,
-    event,
-    payload: data ? JSON.stringify(data) : null,
-  });
-  emitSubbotEvent(event, { subbot: formatSubbotRow(subbot), data });
-  return { success: true };
-}
-
-export function listAllSubbots() {
-  return Array.from(activeSubbots.keys()).map((code) => ({
-    code,
-    isOnline: true,
-    status: "connected",
-    lastHeartbeat: subbotSessions.get(code)?.lastActivity
-      ? new Date(subbotSessions.get(code).lastActivity).toISOString()
-      : null,
-  }));
-}
-
-export async function cleanupInactiveSubbots() {
-  return subbotService.intelligentCleanup();
-}
-
-export async function getSubbotStats() {
-  return subbotService.getResourceStats();
-}
-
-/**
- * Agrega un aporte al sistema
- * @param {Object} params - { usuario, grupo, tipo, contenido, descripcion, mediaPath, estado, fuente, metadata }
- * @returns {Promise<{success: boolean, message: string, aporte?: any}>}
- */
-export async function addAporte({
-  usuario,
-  grupo,
-  tipo,
-  contenido,
-  descripcion = "",
-  mediaPath = null,
-  estado = "pendiente",
-  fuente = "",
-  metadata = {},
-}) {
-  try {
-    const fecha = new Date().toISOString();
-    const aporteData = {
-      usuario,
-      grupo,
-      tipo,
-      contenido,
-      descripcion,
-      archivo_path: mediaPath,
-      estado,
-      fuente,
-      metadata: JSON.stringify(metadata),
-      fecha,
-      updated_at: fecha,
-    };
-    const [id] = await db("aportes").insert(aporteData);
-    const aporte = await db("aportes").where({ id }).first();
-    return {
-      success: true,
-      message: "Aporte registrado correctamente.",
-      aporte,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: "Error al registrar aporte: " + error.message,
-    };
-  }
-}
-
-/**
- * Agrega un pedido al sistema
- * @param {Object} params - { usuario, grupo, contenido, fecha }
- * @returns {Promise<{success: boolean, message: string}>}
- */
-export async function addPedido({ usuario, grupo, contenido, fecha }) {
-  try {
-    await db("pedidos").insert({
-      texto: contenido,
-      estado: "pendiente",
-      usuario,
-      grupo,
-      fecha,
+  const row = await ensureSubbotForUser(cleanPhone, name);
+  if (!row) {
+    await sock.sendMessage(remoteJid, {
+      text: "⚠️ No se pudo crear o recuperar tu subbot. Intenta de nuevo.",
     });
-    return { success: true, message: "Pedido registrado correctamente." };
-  } catch (error) {
-    return {
-      success: false,
-      message: "Error al registrar pedido: " + error.message,
-    };
+    return { success: false };
   }
-}
 
-/**
- * Agrega un proveedor al sistema
- * @param {Object} params - { grupo, tipo, descripcion, activo }
- * @returns {Promise<{success: boolean, message: string, proveedor?: any}>}
- */
-export async function addProveedor({
-  grupo,
-  tipo,
-  descripcion,
-  activo = true,
-}) {
-  try {
-    const fecha = new Date().toISOString();
-    const proveedorData = {
-      grupo_jid: grupo,
-      tipo,
-      descripcion,
-      activo,
-      fecha_creacion: fecha,
-      updated_at: fecha,
-    };
-    const [id] = await db("proveedores").insert(proveedorData);
-    const proveedor = await db("proveedores").where({ id }).first();
-    return {
-      success: true,
-      message: "Proveedor registrado correctamente.",
-      proveedor,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: "Error al registrar proveedor: " + error.message,
-    };
-  }
-}
-
-// Funciones adicionales de comandos que se movieron desde commands.js
-
-/**
- * Normaliza el tipo de aporte
- */
-export function normalizeAporteTipo(raw) {
-  if (!raw) return "extra";
-  const v = String(raw).trim().toLowerCase();
-  const map = {
-    manhwa: "manhwa",
-    manhwas: "manhwa",
-    manhwas_bls: "manhwas_bls",
-    "manhwa bls": "manhwas_bls",
-    bls: "manhwas_bls",
-    serie: "series",
-    series: "series",
-    series_videos: "series_videos",
-    "series videos": "series_videos",
-    series_bls: "series_bls",
-    "series bls": "series_bls",
-    anime: "anime",
-    anime_bls: "anime_bls",
-    "anime bls": "anime_bls",
-    extra: "extra",
-    extra_imagen: "extra_imagen",
-    "extra imagen": "extra_imagen",
-    imagen: "extra_imagen",
-    ilustracion: "ilustracion",
-    ilustracion: "ilustracion",
-    ilustraciones: "ilustracion",
-    pack: "pack",
-  };
-  return map[v] || v.replace(/\s+/g, "_");
-}
-
-/**
- * Handle the /aportar command to save a new aporte in the database.
- * @param {string} contenido - The content description or title.
- * @param {string} tipo - The type of content (e.g., 'manhwa', 'ilustracion', 'extra').
- * @param {string} usuario - The user who sent the aporte.
- * @param {string} grupo - The group where the aporte was sent.
- * @param {string} fecha - The date/time of the aporte.
- */
-export async function handleAportar(contenido, tipo, usuario, grupo, fecha) {
-  try {
-    const tipoNorm = normalizeAporteTipo(tipo);
-    // Usar el handler principal
-    return await addAporte({
-      contenido,
-      tipo: tipoNorm,
-      usuario,
-      grupo,
-      fecha,
-    });
-  } catch (error) {
-    return { success: false, message: error.message };
-  }
-}
-
-/**
- * Handle the /pedido [contenido] - Hace un pedido y busca en la base de datos si existe
- */
-export async function handlePedido(contenido, usuario, grupo, fecha) {
-  try {
-    const { getSocket } = await import("./whatsapp.js");
-    const sock = getSocket();
-    const remoteJid = grupo || usuario;
-
-    // Buscar en manhwas
-    const manhwaEncontrado = await db.get(
-      "SELECT * FROM manhwas WHERE titulo LIKE ? OR titulo LIKE ?",
-      [`%${contenido}%`, `${contenido}%`],
-    );
-
-    // Buscar en aportes
-    const aporteEncontrado = await db.get(
-      "SELECT * FROM aportes WHERE contenido LIKE ? OR contenido LIKE ?",
-      [`%${contenido}%`, `${contenido}%`],
-    );
-
-    // Buscar en archivos descargados
-    const archivosEncontrados = await db.all(
-      "SELECT * FROM descargas WHERE filename LIKE ? OR filename LIKE ?",
-      [`%${contenido}%`, `${contenido}%`],
-    );
-
-    // Registrar el pedido en la base de datos
-    const stmt = await db.prepare(
-      "INSERT INTO pedidos (texto, estado, usuario, grupo, fecha) VALUES (?, ?, ?, ?, ?)",
-    );
-    await stmt.run(contenido, "pendiente", usuario, grupo, fecha);
-    await stmt.finalize();
-
-    let response = ` *Pedido registrado:* "${contenido}"\n\n`;
-
-    // Si encontr contenido, mencionarlo
-    if (manhwaEncontrado) {
-      response += ` *Encontrado en manhwas!*\n`;
-      response += ` **${manhwaEncontrado.titulo}**\n`;
-      response += ` Autor: ${manhwaEncontrado.autor}\n`;
-      response += ` Estado: ${manhwaEncontrado.estado}\n`;
-      if (manhwaEncontrado.descripcion) {
-        response += ` ${manhwaEncontrado.descripcion}\n`;
-      }
-      if (manhwaEncontrado.url) {
-        response += ` ${manhwaEncontrado.url}\n`;
-      }
-      response += `\n`;
-    }
-
-    if (aporteEncontrado) {
-      response += ` *Encontrado en aportes!*\n`;
-      response += ` **${aporteEncontrado.contenido}**\n`;
-      response += ` Tipo: ${aporteEncontrado.tipo}\n`;
-      {
-        const num = String(aporteEncontrado.usuario || "")
-          .split("@")[0]
-          .split(":")[0];
-        const u = await db("usuarios")
-          .where({ whatsapp_number: num })
-          .select("username")
-          .first();
-        const wa = u?.username
-          ? null
-          : await db("wa_contacts")
-              .where({ wa_number: num })
-              .select("display_name")
-              .first();
-        const mention = `@${u?.username || wa?.display_name || num}`;
-        response += ` Aportado por: ${mention}\n`;
-      }
-      response += ` Fecha: ${new Date(aporteEncontrado.fecha).toLocaleDateString()}\n\n`;
-    }
-
-    // Buscar y enviar archivos fsicos si existen
-    let archivosEnviados = 0;
-    if (archivosEncontrados.length > 0 && sock) {
-      response += ` *Archivos encontrados:*\n`;
-
-      for (const archivo of archivosEncontrados.slice(0, 5)) {
-        // Mximo 5 archivos
-        try {
-          const archivoPath = path.join(
-            process.cwd(),
-            "storage",
-            "downloads",
-            archivo.category,
-            archivo.filename,
-          );
-
-          if (fs.existsSync(archivoPath)) {
-            const fileBuffer = fs.readFileSync(archivoPath);
-            const fileExtension = path.extname(archivo.filename).toLowerCase();
-
-            let mediaType = "document";
-            if (
-              [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(fileExtension)
-            ) {
-              mediaType = "image";
-            } else if (
-              [".mp4", ".avi", ".mkv", ".mov"].includes(fileExtension)
-            ) {
-              mediaType = "video";
-            } else if ([".mp3", ".wav", ".m4a"].includes(fileExtension)) {
-              mediaType = "audio";
-            }
-
-            // Enviar el archivo
-            let sentMessage;
-            if (mediaType === "image") {
-              sentMessage = await sock.sendMessage(remoteJid, {
-                image: fileBuffer,
-                caption: ` ${archivo.filename}\n ${archivo.category}\n Subido por: ${archivo.usuario}\n ${new Date(archivo.fecha).toLocaleDateString()}`,
-              });
-            } else if (mediaType === "video") {
-              sentMessage = await sock.sendMessage(remoteJid, {
-                video: fileBuffer,
-                caption: ` ${archivo.filename}\n ${archivo.category}`,
-              });
-            } else if (mediaType === "audio") {
-              sentMessage = await sock.sendMessage(remoteJid, {
-                audio: fileBuffer,
-                mimetype: "audio/mpeg",
-              });
-            } else {
-              sentMessage = await sock.sendMessage(remoteJid, {
-                document: fileBuffer,
-                fileName: archivo.filename,
-                caption: ` ${archivo.filename}\n ${archivo.category}`,
-              });
-            }
-
-            response += ` *Enviado:* ${archivo.filename} (${archivo.category})\n`;
-            archivosEnviados++;
-
-            // Marcar el pedido como completado si se envi al menos un archivo
-            if (archivosEnviados === 1) {
-              await db("pedidos")
-                .where({ texto: contenido, usuario: usuario, grupo: grupo })
-                .update({
-                  estado: "completado",
-                  completado_por: "bot",
-                  fecha_completado: new Date().toISOString(),
-                });
-            }
-          }
-        } catch (fileError) {
-          console.error(
-            `Error enviando archivo ${archivo.filename}:`,
-            fileError,
-          );
-          response += ` Error enviando: ${archivo.filename}\n`;
-        }
-      }
-
-      if (archivosEnviados === 0) {
-        response += ` Archivos encontrados pero no se pudieron enviar\n`;
-      }
-    }
-
-    if (!manhwaEncontrado && !aporteEncontrado && archivosEnviados === 0) {
-      response += ` *No encontrado en la base de datos*\n`;
-      response += `Tu pedido ha sido registrado y ser revisado por los administradores.\n`;
-    } else if (archivosEnviados > 0) {
-      response += `\n *Pedido completado automticamente!* `;
-    }
-
-    return { success: true, message: response };
-  } catch (error) {
-    console.error("Error en handlePedido:", error);
-    return { success: false, message: "Error al procesar pedido." };
-  }
-}
-
-/**
- * /pedidos - Muestra los pedidos del usuario
- */
-export async function handlePedidos(usuario, grupo) {
-  try {
-    const pedidos = await db.all(
-      "SELECT * FROM pedidos WHERE usuario = ? ORDER BY fecha DESC LIMIT 10",
-      [usuario],
-    );
-
-    if (pedidos.length === 0) {
-      return { success: true, message: " No tienes pedidos registrados." };
-    }
-
-    let message = ` *Tus pedidos (${pedidos.length}):*\n\n`;
-    pedidos.forEach((pedido, index) => {
-      const fecha = new Date(pedido.fecha).toLocaleDateString();
-      const estado =
-        pedido.estado === "pendiente"
-          ? ""
-          : pedido.estado === "completado"
-            ? ""
-            : "";
-      message += `${index + 1}. ${estado} ${pedido.texto}\n`;
-      message += `    ${fecha} - Estado: ${pedido.estado}\n\n`;
-    });
-
-    return { success: true, message };
-  } catch (error) {
-    return { success: false, message: "Error al obtener pedidos." };
-  }
-}
-
-// =====================
-// AI: Gemini helpers and commands (consolidated)
-// =====================
-
-// No cacheamos la API key a nivel de módulo. Algunos entrypoints cargan
-// dotenv más tarde; resolverla en tiempo de ejecución evita fallos.
-function resolveGeminiApiKey() {
-  return (
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GENAI_API_KEY ||
-    null
-  );
-}
-function resolveModelCandidates() {
-  const fromEnv = (process.env.GEMINI_MODEL || '').trim();
-  const base = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-001',
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro-latest',
-    'gemini-1.5-pro',
-  ];
-  return fromEnv ? [fromEnv, ...base.filter((m) => m !== fromEnv)] : base;
-}
-
-const GEMINI_ENDPOINT_FACTORIES = [
-  (model) => `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent`,
-  (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-];
-
-async function generateWithGemini({ apiKey, prompt }) {
-  const models = resolveModelCandidates();
-  const headers = { 'Content-Type': 'application/json' };
-  const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }] };
-  let lastError = null;
-  for (const makeUrl of GEMINI_ENDPOINT_FACTORIES) {
-    for (const model of models) {
-      const url = makeUrl(model) + `?key=${apiKey}`;
-      try {
-        const response = await axios.post(url, body, { headers, timeout: 15000 });
-        const text = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) return { text, model, endpoint: url.includes('/v1/') ? 'v1' : 'v1beta' };
-        lastError = new Error('Respuesta vacía de la IA');
-      } catch (err) {
-        const msg = err?.response?.data?.error?.message || err?.message || String(err);
-        const code = err?.response?.status;
-        if (msg?.toLowerCase?.().includes('not found') || msg?.toLowerCase?.().includes('not supported') || code === 404) {
-          lastError = new Error(`${msg}`);
-          continue;
-        }
-        lastError = new Error(`${msg}`);
-      }
-    }
-  }
-  throw lastError || new Error('No se pudo generar respuesta con Gemini');
-}
-
-export async function analyzeContentWithAI(content, filename = "") {
-  try {
-    const apiKey = resolveGeminiApiKey();
-    if (!apiKey) {
-      return { success: false, error: "GEMINI_API_KEY no configurada" };
-    }
-
-    const prompt = `
-Analiza el siguiente contenido de un mensaje de WhatsApp y clasificalo:
-
-Contenido del mensaje: "${content}"
-Nombre del archivo: "${filename}"
-
-Responde en formato JSON con la siguiente estructura:
-{
-  "tipo": "manhwa|serie|extra|ilustracion|pack|anime|otros",
-  "titulo": "Ttulo detectado o null",
-  "capitulo": "Nmero de captulo detectado o null",
-  "confianza": 0-100,
-  "descripcion": "Breve descripcin del contenido"
-}
-
-Reglas de clasificacin:
-- Si menciona "manhwa", "manga", "comic"  tipo: "manhwa"
-- Si menciona "serie", "episodio", "temporada"  tipo: "serie"
-- Si menciona "ilustracion", "fanart", "arte"  tipo: "ilustracion"
-- Si menciona "pack", "coleccion"  tipo: "pack"
-- Si menciona "anime", "animacion"  tipo: "anime"
-- Por defecto: "extra"
-
-Busca nmeros que parezcan captulos (ej: "cap 45", "episodio 12", "volumen 3").
-Extrae ttulos que parezcan nombres de obras.
-`;
-
-    const { text: aiResponse, model } = await generateWithGemini({ apiKey, prompt });
-    if (!aiResponse)
-      return { success: false, error: "No se recibi respuesta de la IA" };
-
-    let analysis;
-    try {
-      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) analysis = JSON.parse(jsonMatch[0]);
-      else throw new Error("No se encontro JSON valido");
-    } catch (parseError) {
-      console.error("Error parseando respuesta AI:", parseError);
-      return { success: false, error: "Error parseando respuesta de la IA" };
-    }
-
-    return {
-      success: true,
-      analysis: {
-        tipo: analysis.tipo || "extra",
-        titulo: analysis.titulo || null,
-        capitulo: analysis.capitulo || null,
-        confianza: analysis.confianza || 50,
-        descripcion: analysis.descripcion || content,
-      },
-      model,
-    };
-  } catch (error) {
-    const detail = error?.response?.data?.error?.message || error?.message;
-    console.error("Error en analyzeContentWithAI:", detail);
-    return { success: false, error: detail };
-  }
-}
-
-export async function chatWithAI(message, context = "") {
-  try {
-    const apiKey = resolveGeminiApiKey();
-    if (!apiKey) {
-      return { success: false, error: "GEMINI_API_KEY no est configurada" };
-    }
-
-    const prompt = `
-Eres un asistente de IA amigable para un bot de WhatsApp llamado KONMI-BOT.
-Contexto: ${context}
-
-Pregunta del usuario: ${message}
-
-Responde de forma clara, concisa y til. Si la pregunta es sobre manhwas, series, o contenido multimedia, s especfico.
-Mantn un tono amigable y profesional.
-`;
-
-    const { text: aiResponse, model } = await generateWithGemini({ apiKey, prompt });
-    if (!aiResponse)
-      return { success: false, error: "No se recibi respuesta de la IA" };
-
-    return { success: true, response: aiResponse, model };
-  } catch (error) {
-    const detail = error?.response?.data?.error?.message || error?.message;
-    console.error("Error en chatWithAI:", detail);
-    return { success: false, error: detail };
-  }
-}
-
-export async function analyzeManhwaContent(content) {
-  try {
-    const apiKey = resolveGeminiApiKey();
-    if (!apiKey) {
-      return { success: false, error: "GEMINI_API_KEY no configurada" };
-    }
-
-    const prompt = `
-Analiza si el siguiente contenido es de un manhwa y extrae informacin:
-
-Contenido: "${content}"
-
-Responde en formato JSON:
-{
-  "es_manhwa": true/false,
-  "titulo": "Ttulo del manhwa o null",
-  "capitulo": "Nmero de captulo o null",
-  "autor": "Autor si se menciona o null",
-  "genero": "Gnero si se detecta o null"
-}
-`;
-
-    const { text: aiResponse, model } = await generateWithGemini({ apiKey, prompt });
-    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-    const analysis = JSON.parse(jsonMatch[0]);
-
-    return { success: true, analysis, model };
-  } catch (error) {
-    const detail = error?.response?.data?.error?.message || error?.message;
-    return { success: false, error: detail };
-  }
-}
-
-// =====================
-// Provider handlers (consolidated)
-// =====================
-
-export async function processProviderMessage(message, groupJid, groupName) {
-  try {
-    const grupo = await db("grupos_autorizados").where("jid", groupJid).first();
-    if (!grupo) throw new Error("No es grupo proveedor");
-
-    const usuario = message.key.participant || message.key.remoteJid;
-    const fecha = new Date().toISOString();
-
-    const hasMedia =
-      message.message.imageMessage ||
-      message.message.videoMessage ||
-      message.message.documentMessage ||
-      message.message.audioMessage;
-
-    if (!hasMedia)
-      return { success: false, message: "No hay media para procesar" };
-
-    const messageText =
-      message.message.conversation ||
-      message.message.extendedTextMessage?.text ||
-      message.message.imageMessage?.caption ||
-      message.message.videoMessage?.caption ||
-      message.message.documentMessage?.caption ||
-      "Media sin descripcin";
-
-    const categoria = "auto";
-    const result = await processWhatsAppMedia(message, categoria, usuario);
-    if (!result.success)
-      return { success: false, message: "Error procesando media" };
-
-    let tipoClasificado = "extra";
-    let capituloDetectado = null;
-    let tituloDetectado = null;
-
-    try {
-      const aiAnalysis = await analyzeContentWithAI(
-        messageText,
-        result.filename,
-      );
-      if (aiAnalysis.success && aiAnalysis.analysis) {
-        tipoClasificado = aiAnalysis.analysis.tipo || tipoClasificado;
-        capituloDetectado = aiAnalysis.analysis.capitulo;
-        tituloDetectado = aiAnalysis.analysis.titulo;
-      }
-    } catch (aiError) {
-      console.error("Error en anlisis AI:", aiError);
-    }
-
-    const tipoNormalizado = normalizeAporteTipo(tipoClasificado);
-    let carpetaDestino = tipoNormalizado;
-    if (tituloDetectado)
-      carpetaDestino = `${tipoNormalizado}/${sanitizeFilename(tituloDetectado)}`;
-    if (capituloDetectado)
-      carpetaDestino = `${carpetaDestino}/Capitulo ${capituloDetectado}`;
-
-    const storagePath = path.join(
-      process.cwd(),
-      "storage",
-      "media",
-      carpetaDestino,
-    );
-    if (!fs.existsSync(storagePath))
-      fs.mkdirSync(storagePath, { recursive: true });
-
-    const archivoActual = result.filepath;
-    const archivoNuevo = path.join(storagePath, path.basename(archivoActual));
-    if (archivoActual !== archivoNuevo) {
-      fs.renameSync(archivoActual, archivoNuevo);
-      result.filepath = archivoNuevo;
-    }
-
-    const aporteData = {
-      contenido: tituloDetectado || result.filename,
-      tipo: tipoNormalizado,
-      usuario,
-      grupo: groupJid,
-      descripcion: messageText,
-      archivo_path: result.filepath,
-      estado: "pendiente",
-      fuente: "auto_proveedor",
-      metadata: JSON.stringify({
-        proveedor: grupo.proveedor,
-        capitulo: capituloDetectado,
-        titulo: tituloDetectado,
-        carpeta: carpetaDestino,
-        mediaType: result.mediaType,
-        size: result.size,
-        grupoNombre: groupName,
-      }),
-      fecha,
-      updated_at: fecha,
-    };
-
-    const [aporteId] = await db("aportes").insert(aporteData);
-    const aporte = await db("aportes").where({ id: aporteId }).first();
-
-    return {
-      success: true,
-      message: "Aporte automtico procesado correctamente",
-      aporte,
-      description: `Media clasificada como ${tipoNormalizado}${tituloDetectado ? ` - ${tituloDetectado}` : ""}${capituloDetectado ? ` Cap ${capituloDetectado}` : ""}`,
-    };
-  } catch (error) {
-    console.error("Error en processProviderMessage:", error);
-    return { success: false, message: error.message };
-  }
-}
-
-function sanitizeFilename(filename) {
-  return filename.replace(/[^a-zA-Z0-9\s\-_]/g, "_").replace(/\s+/g, "_");
-}
-
-export async function getProviderStats() {
-  try {
-    await ensureGruposTable();
-    const total = await db("grupos_autorizados")
-      .where({ tipo: "proveedor" })
-      .count("jid as count")
-      .first();
-    return { totalProviders: Number(total?.count || 0) };
-  } catch (error) {
-    console.error("Error getting provider stats:", error);
-    return { totalProviders: 0, error: error.message };
-  }
-}
-
-export async function getProviderAportes() {
-  try {
-    const aportes = await db("aportes")
-      .where("fuente", "auto_proveedor")
-      .select("tipo", "contenido", "fecha", "grupo")
-      .orderBy("fecha", "desc")
-      .limit(20);
-    return { success: true, aportes };
-  } catch (error) {
-    console.error("Error getting provider aportes:", error);
-    return { success: false, error: error.message, aportes: [] };
-  }
-}
-
-// Helper function to ensure tables exist
-async function ensureGruposTable() {
-  const has = await db.schema.hasTable("grupos_autorizados");
-  if (!has) {
-    await db.schema.createTable("grupos_autorizados", (t) => {
-      t.increments("id").primary();
-      t.string("jid").notNullable().unique();
-      t.string("nombre").defaultTo("");
-      t.text("descripcion").defaultTo("");
-      t.boolean("bot_enabled").defaultTo(true);
-      t.boolean("es_proveedor").defaultTo(false);
-      t.string("tipo").defaultTo("normal");
-      t.integer("usuario_id").nullable();
-      t.timestamp("created_at").defaultTo(db.fn.now());
-      t.timestamp("updated_at").defaultTo(db.fn.now());
-    });
-  }
-}
-
-// =====================
-// COMMAND HANDLERS
-// =====================
-
-/**
- * Handler para el comando /ai o /ia
- * Interactúa con Gemini AI para responder preguntas
- */
-export async function handleIA(pregunta, usuario, grupo) {
-  try {
-    console.log(`🤖 Comando /ai recibido de ${usuario}: "${pregunta}"`);
-
-    const aiResult = await chatWithAI(
-      pregunta,
-      `Usuario: ${usuario}, Grupo: ${grupo}`,
-    );
-
-    if (!aiResult.success) {
-      const reason = aiResult.error?.includes("no está configurada")
-        ? "La función de IA no está configurada. Por favor establece GEMINI_API_KEY en el servidor."
-        : aiResult.error || "La IA no pudo procesar tu solicitud.";
-      return {
-        success: false,
-        message: `⚠️ ${reason}`,
-      };
-    }
-
-    const finalResponse = `🤖 *Respuesta de IA:*\n\n${aiResult.response}\n\n_Procesado por ${aiResult.model || "Gemini AI"}_`;
-
-    // Registrar en logs
-    try {
-      await db("logs").insert({
-        tipo: "ai_command",
-        comando: "/ai",
-        usuario,
-        grupo,
-        fecha: new Date().toISOString(),
-        detalles: JSON.stringify({
-          pregunta,
-          respuesta: aiResult.response,
-          modelo: aiResult.model || "gemini-1.5-flash",
-          timestamp: new Date().toISOString(),
-        }),
+  if (row.status === "deleted") {
+    await db("subbots")
+      .where({ id: row.id })
+      .update({
+        status: "pending",
+        is_active: false,
       });
-    } catch (logError) {
-      console.warn("Error guardando log de IA:", logError);
-    }
-
-    return { success: true, message: finalResponse };
-  } catch (error) {
-    console.error("❌ Error en comando /ai:", error);
-    return {
-      success: false,
-      message: `⚠️ Error procesando comando /ai: ${error.message}\n\n_Intenta reformular tu pregunta._`,
-    };
   }
-}
 
-/**
- * Handler para el comando /myaportes
- * Muestra los aportes del usuario
- */
-export async function handleMyAportes(usuario, grupo) {
-  try {
-    console.log(`📋 Comando /myaportes recibido de ${usuario}`);
+  const code = row.code;
+  const connectionType =
+    /pair/i.test(text || "") || /code/i.test(text || "")
+      ? "pairing"
+      : "qr";
 
-    const aportes = await db("aportes")
-      .where({ usuario })
-      .orderBy("fecha", "desc")
-      .limit(10);
+  await db("subbots").where({ id: row.id }).update({
+    connection_type: connectionType,
+    last_activity: db.fn.now(),
+  });
 
-    if (aportes.length === 0) {
-      return {
-        success: true,
-        message:
-          "📭 *Mis Aportes*\n\nℹ️ No tienes aportes registrados aún.\n\n➕ Usa `/addaporte [contenido]` para agregar uno.",
-      };
-    }
+  const sessionData = await loadSubbotSession(code);
 
-    let message = "📋 *Mis Aportes*\n\n";
-    aportes.forEach((aporte, index) => {
-      message += `${index + 1}. **${aporte.contenido}**\n`;
-      message += `   • Tipo: ${aporte.tipo}\n`;
-      message += `   • Estado: ${aporte.estado || "pendiente"}\n`;
-      message += `   • Fecha: ${new Date(aporte.fecha).toLocaleDateString("es-ES")}\n\n`;
+  const startResult = await startSubbot({
+    code,
+    ownerPhone: row.user_phone,
+    connectionType,
+    sessionData,
+  });
+
+  if (!startResult || !startResult.success) {
+    await sock.sendMessage(remoteJid, {
+      text:
+        "⚠️ No se pudo iniciar tu subbot. Intenta más tarde o contacta soporte.",
     });
-
-    message += `_Total: ${aportes.length} aportes_`;
-
-    return { success: true, message };
-  } catch (error) {
-    console.error("❌ Error en /myaportes:", error);
-    return {
-      success: false,
-      message: "⚠️ Error obteniendo tus aportes. Intenta más tarde.",
-    };
+    return { success: false };
   }
-}
 
-/**
- * Handler para el comando /aportes
- * Muestra todos los aportes disponibles
- */
-export async function handleAportes(usuario, grupo, isGroup = false) {
-  try {
-    console.log(`📚 Comando /aportes recibido de ${usuario}`);
+  markSubbotOnline(code, startResult.sessionData || null);
 
-    let query = db("aportes").orderBy("fecha", "desc").limit(20);
-
-    // Si es un grupo, mostrar solo aportes de ese grupo
-    if (isGroup && grupo) {
-      query = query.where({ grupo });
-    }
-
-    const aportes = await query;
-
-    if (aportes.length === 0) {
-      return {
-        success: true,
-        message:
-          "📭 *Lista de Aportes*\n\nℹ️ No hay aportes disponibles en este momento.\n\n➕ Usa `/addaporte [contenido]` para agregar uno.",
-      };
-    }
-
-    let message = "📚 *Lista de Aportes*\n\n";
-    aportes.forEach((aporte, index) => {
-      message += `${index + 1}. **${aporte.contenido}**\n`;
-      message += `   • Tipo: ${aporte.tipo}\n`;
-      message += `   • Estado: ${aporte.estado || "pendiente"}\n`;
-      message += `   👤 Por: ${aporte.usuario?.split("@")[0] || "Anónimo"}\n`;
-      message += `   🗓️ ${new Date(aporte.fecha).toLocaleDateString("es-ES")}\n\n`;
-    });
-
-    message += `_Total: ${aportes.length} aportes_`;
-
-    return { success: true, message };
-  } catch (error) {
-    console.error("❌ Error en /aportes:", error);
-    return {
-      success: false,
-      message: "⚠️ Error obteniendo aportes. Intenta más tarde.",
-    };
+  if (startResult.sessionData) {
+    await saveSubbotSession(code, startResult.sessionData);
   }
-}
 
-/**
- * Handler para el comando /addaporte
- * Agrega un nuevo aporte
- */
-export async function handleAddAporte(
-  contenido,
-  tipo,
-  usuario,
-  grupo,
-  fecha,
-  archivoPath = null,
-) {
-  try {
-    console.log(`➕ Comando /addaporte recibido de ${usuario}: "${contenido}"`);
+  const messages = [];
+  messages.push(
+    `✅ Tu subbot se está iniciando.\n\n` +
+      `📛 *Código:* ${code}\n` +
+      `👤 *Usuario:* ${row.user_name || "Sin nombre"}\n` +
+      `📱 *Teléfono:* ${row.user_phone}\n`,
+  );
 
-    const result = await addAporte({
-      contenido,
-      tipo,
-      usuario,
-      grupo,
-      fecha,
-      mediaPath: archivoPath,
-      estado: "pendiente",
-    });
-
-    if (result.success) {
-      let message = "✅ *Aporte registrado correctamente*\n\n";
-      message += `📝 **Contenido:** ${contenido}\n`;
-      message += `🏷️ **Tipo:** ${tipo}\n`;
-      if (archivoPath) {
-        message += `📎 **Archivo:** Adjunto\n`;
-      }
-      message += `📅 **Fecha:** ${new Date(fecha).toLocaleString("es-ES")}\n\n`;
-      message += "✨ Tu aporte será revisado y publicado pronto.";
-
-      return { success: true, message };
+  if (startResult.qrCode) {
+    try {
+      const qrImageBuffer = await QRCode.toBuffer(startResult.qrCode, {
+        type: "png",
+        width: 512,
+        margin: 1,
+      });
+      await sock.sendMessage(remoteJid, {
+        image: qrImageBuffer,
+        caption:
+          "📲 Escanea este QR para vincular tu subbot.\n" +
+          "⏳ Tienes 1 minuto antes de que expire.",
+      });
+    } catch (err) {
+      console.error("Error generando QR:", err);
+      messages.push(
+        "⚠️ No se pudo generar el código QR. Intenta más tarde o pide un /code.",
+      );
     }
-
-    return result;
-  } catch (error) {
-    console.error("❌ Error en /addaporte:", error);
-    return {
-      success: false,
-      message: "⚠️ Error agregando aporte. Intenta más tarde.",
-    };
   }
-}
 
-/**
- * Handler para el comando /aporteestado
- * Cambia el estado de un aporte (solo admins)
- */
-export async function handleAporteEstado(
-  aporteId,
-  nuevoEstado,
-  usuario,
-  grupo,
-) {
-  try {
-    console.log(
-      `🔄 Comando /aporteestado recibido de ${usuario}: ID=${aporteId}, Estado=${nuevoEstado}`,
+  if (startResult.pairingCode) {
+    messages.push(
+      `🔑 *Código de vinculación:* \`${startResult.pairingCode}\`\n` +
+        `📌 Úsalo en tu WhatsApp para conectar el subbot.`,
     );
+  }
 
-    // Verificar que el usuario sea admin
-    const whatsappNumber = usuario.split("@")[0];
-    const user = await db("usuarios")
-      .where({ whatsapp_number: whatsappNumber })
-      .select("rol")
-      .first();
+  messages.push(
+    "ℹ️ Una vez conectado, tu subbot aparecerá como *online* en /mybots.",
+  );
 
-    if (!user || (user.rol !== "admin" && user.rol !== "owner")) {
-      return {
-        success: false,
-        message:
-          "❌ Solo los administradores pueden cambiar el estado de los aportes.",
-      };
+  await sock.sendMessage(remoteJid, { text: messages.join("\n") });
+
+  await emitSubbotEvent(code, "subbot_started", {
+    connectionType,
+    owner: row.user_phone,
+  });
+
+  return { success: true };
+}
+
+async function handleStopSubbot(ctx) {
+  const { sock, remoteJid, sender, text } = ctx;
+  const usuario = sender || ctx.participant || remoteJid;
+  const cleanPhone = normalizePhone(usuario);
+
+  await initDatabase();
+
+  const rows = await db("subbots")
+    .select("*")
+    .where({ user_phone: cleanPhone })
+    .andWhereNot("status", "deleted");
+
+  if (!rows || rows.length === 0) {
+    await sock.sendMessage(remoteJid, {
+      text: "ℹ️ No tienes subbots activos o registrados.",
+    });
+    return { success: false };
+  }
+
+  let code = null;
+  const tokens = String(text || "").split(/\s+/).filter(Boolean);
+  const explicitCode = tokens[1];
+
+  if (explicitCode) {
+    const found = rows.find((r) => r.code === explicitCode);
+    if (!found) {
+      await sock.sendMessage(remoteJid, {
+        text: `⚠️ No se encontró el subbot con código: ${explicitCode}.`,
+      });
+      return { success: false };
     }
+    code = explicitCode;
+  } else if (rows.length === 1) {
+    code = rows[0].code;
+  } else {
+    await sock.sendMessage(remoteJid, {
+      text:
+        "Tienes más de un subbot. Especifica cuál detener:\n" +
+        rows.map((r) => `• ${r.code} (${r.status})`).join("\n"),
+    });
+    return { success: false };
+  }
 
-    // Validar estado
-    const estadosValidos = ["pendiente", "aprobado", "rechazado", "publicado"];
-    if (!estadosValidos.includes(nuevoEstado.toLowerCase())) {
-      return {
-        success: false,
-        message: `⚠️ Estado inválido. Estados válidos: ${estadosValidos.join(", ")}`,
-      };
+  try {
+    await stopSubbot(code);
+  } catch (err) {
+    console.error("Error deteniendo runtime de subbot:", err);
+  }
+
+  markSubbotOffline(code);
+
+  await db("subbots")
+    .where({ code })
+    .update({
+      is_active: false,
+      status: "stopped",
+      last_activity: db.fn.now(),
+    });
+
+  await sock.sendMessage(remoteJid, {
+    text: `🛑 Subbot ${code} detenido correctamente.`,
+  });
+
+  await emitSubbotEvent(code, "subbot_stopped", { code });
+
+  return { success: true };
+}
+
+async function handleListSubbots(ctx) {
+  const { sock, remoteJid, sender } = ctx;
+  const usuario = sender || ctx.participant || remoteJid;
+  const cleanPhone = normalizePhone(usuario);
+
+  await initDatabase();
+
+  const rows = await db("subbots")
+    .select("*")
+    .where({ user_phone: cleanPhone })
+    .andWhereNot("status", "deleted")
+    .orderBy("created_at", "desc");
+
+  if (!rows || rows.length === 0) {
+    await sock.sendMessage(remoteJid, {
+      text:
+        "ℹ️ No tienes subbots aún.\n" +
+        "Usa /qr para crear y vincular tu primer subbot.",
+    });
+    return { success: true };
+  }
+
+  const lines = [];
+  lines.push("🤖 *Tus Subbots*");
+  lines.push("");
+
+  for (const row of rows) {
+    const fm = formatSubbotRow(row);
+    const online = fm.online ? "🟢" : "⚫";
+    const status = fm.status || "desconocido";
+
+    lines.push(
+      `${online} *${fm.code}* — ${status}\n` +
+        `   Tel: ${fm.user_phone}\n` +
+        (fm.lastHeartbeat
+          ? `   Último: ${new Date(fm.lastHeartbeat).toLocaleString(
+              "es-ES",
+            )}\n`
+          : ""),
+    );
+  }
+
+  await sock.sendMessage(remoteJid, { text: lines.join("\n") });
+  return { success: true };
+}
+
+async function handleMyBots(ctx) {
+  return handleListSubbots(ctx);
+}
+
+async function handleSubbotStatus(ctx) {
+  const { sock, remoteJid, sender, text } = ctx;
+  const usuario = sender || ctx.participant || remoteJid;
+  const cleanPhone = normalizePhone(usuario);
+
+  await initDatabase();
+
+  const rows = await db("subbots")
+    .select("*")
+    .where({ user_phone: cleanPhone })
+    .andWhereNot("status", "deleted")
+    .orderBy("created_at", "desc");
+
+  if (!rows || rows.length === 0) {
+    await sock.sendMessage(remoteJid, {
+      text:
+        "ℹ️ No tienes subbots aún.\n" +
+        "Usa /qr para crear y vincular tu primer subbot.",
+    });
+    return { success: true };
+  }
+
+  const tokens = String(text || "").split(/\s+/).filter(Boolean);
+  const explicitCode = tokens[1];
+
+  let row = null;
+  if (explicitCode) {
+    row = rows.find((r) => r.code === explicitCode);
+    if (!row) {
+      await sock.sendMessage(remoteJid, {
+        text: `⚠️ No se encontró el subbot con código: ${explicitCode}.`,
+      });
+      return { success: false };
     }
+  } else {
+    row = rows[0];
+  }
 
-    // Actualizar estado
-    const updated = await db("aportes")
-      .where({ id: parseInt(aporteId) })
-      .update({ estado: nuevoEstado.toLowerCase() });
+  const status = getRuntimeStatus(row.code);
+  const fm = formatSubbotRow(row);
 
-    if (updated === 0) {
-      return {
-        success: false,
-        message: `⚠️ No se encontró el aporte con ID ${aporteId}`,
-      };
-    }
+  const lines = [];
+  lines.push(`🤖 *Estado de ${fm.code}*`);
+  lines.push("");
+  lines.push(`• Online runtime: ${status.online ? "🟢 Sí" : "⚫ No"}`);
+  lines.push(`• Sesiones activas: ${status.sessions}`);
+  lines.push(`• Mensajes procesados: ${status.messages}`);
+  lines.push("");
+  lines.push(`• Estado DB: ${fm.status}`);
+  lines.push(`• Teléfono: ${fm.user_phone}`);
+  lines.push(
+    `• Última actividad: ${
+      fm.last_activity
+        ? new Date(fm.last_activity).toLocaleString("es-ES")
+        : "N/D"
+    }`,
+  );
 
-    return {
-      success: true,
-      message: `✅ Estado del aporte #${aporteId} actualizado a: **${nuevoEstado}**`,
-    };
-  } catch (error) {
-    console.error("❌ Error en /aporteestado:", error);
-    return {
-      success: false,
-      message: "⚠️ Error actualizando estado del aporte.",
-    };
+  await sock.sendMessage(remoteJid, { text: lines.join("\n") });
+  return { success: true };
+}
+
+// ---------------------------------------------------
+// Sistema de aportes, pedidos y media
+// ---------------------------------------------------
+async function ensureAportesTables() {
+  const hasUsers = await db.schema.hasTable("usuarios");
+  if (!hasUsers) {
+    await db.schema.createTable("usuarios", (table) => {
+      table.increments("id").primary();
+      table.string("phone").notNullable().unique();
+      table.string("name").nullable();
+      table.timestamp("created_at").defaultTo(db.fn.now());
+    });
+  }
+
+  const hasAportes = await db.schema.hasTable("aportes");
+  if (!hasAportes) {
+    await db.schema.createTable("aportes", (table) => {
+      table.increments("id").primary();
+      table.integer("usuario_id").unsigned().references("id").inTable("usuarios");
+      table.string("type").notNullable();
+      table.text("content").nullable();
+      table.string("media_path").nullable();
+      table.string("media_type").nullable();
+      table.string("source_chat").nullable();
+      table.string("message_id").nullable();
+      table.string("status").defaultTo("pending");
+      table.json("metadata").nullable();
+      table.timestamp("created_at").defaultTo(db.fn.now());
+    });
+  }
+
+  const hasPedidos = await db.schema.hasTable("pedidos");
+  if (!hasPedidos) {
+    await db.schema.createTable("pedidos", (table) => {
+      table.increments("id").primary();
+      table.integer("usuario_id").unsigned().references("id").inTable("usuarios");
+      table.string("title").notNullable();
+      table.text("description").nullable();
+      table.string("status").defaultTo("open");
+      table.json("metadata").nullable();
+      table.timestamp("created_at").defaultTo(db.fn.now());
+    });
   }
 }
 
-/**
- * Handler para el comando /lock
- * Bloquea el grupo (solo admins)
- */
-export async function handleLock(usuario, grupo, isGroup) {
-  try {
-    if (!isGroup) {
-      return {
-        success: false,
-        message: "⚠️ Este comando solo funciona en grupos.",
-      };
-    }
+async function ensureBaseTables() {
+  await ensureAportesTables();
+}
 
-    // Verificar que el usuario sea admin del grupo
-    const whatsappNumber = usuario.split("@")[0];
-    const user = await db("usuarios")
-      .where({ whatsapp_number: whatsappNumber })
-      .select("rol")
-      .first();
+// Usuario helpers
+async function ensureUser(phone, name) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) throw new Error("Número inválido");
 
-    if (!user || (user.rol !== "admin" && user.rol !== "owner")) {
-      return {
-        success: false,
-        message: "❌ Solo los administradores pueden bloquear el grupo.",
-      };
-    }
+  let user = await db("usuarios").where({ phone: normalized }).first();
+  if (!user) {
+    const [id] = await db("usuarios").insert(
+      {
+        phone: normalized,
+        name: name || null,
+      },
+      ["id"],
+    );
+    user = await db("usuarios").where({ id: id.id || id }).first();
+  } else if (name && !user.name) {
+    await db("usuarios").where({ id: user.id }).update({ name });
+    user.name = name;
+  }
+  return user;
+}
 
-    return {
-      success: true,
-      message:
-        "🔒 *Grupo bloqueado*\n\nSolo los administradores pueden enviar mensajes.",
-    };
-  } catch (error) {
-    console.error("❌ Error en /lock:", error);
-    return {
-      success: false,
-      message: "⚠️ Error bloqueando el grupo.",
-    };
+// Aportes
+export async function handleAddAporte(ctx) {
+  const { sock, remoteJid, sender, pushName, message } = ctx;
+  await ensureBaseTables();
+
+  const phone = sender || ctx.participant || remoteJid;
+  const user = await ensureUser(phone, pushName);
+
+  const processed = await processWhatsAppMedia(sock, message, {
+    basePath: "./media/aportes",
+  });
+
+  if (!processed || (!processed.text && !processed.filePath)) {
+    await sock.sendMessage(remoteJid, {
+      text: "⚠️ No encontré contenido válido en tu mensaje para registrar como aporte.",
+    });
+    return { success: false };
+  }
+
+  const metadata = {
+    mimetype: processed.mimetype || null,
+    size: processed.size || null,
+    originalName: processed.originalName || null,
+  };
+
+  const [id] = await db("aportes").insert(
+    {
+      usuario_id: user.id,
+      type: processed.filePath ? "media" : "text",
+      content: processed.text || null,
+      media_path: processed.filePath || null,
+      media_type: processed.mimetype || null,
+      source_chat: remoteJid,
+      message_id: message.key?.id || null,
+      status: "pending",
+      metadata,
+    },
+    ["id"],
+  );
+
+  await sock.sendMessage(remoteJid, {
+    text:
+      "✅ ¡Gracias por tu aporte!\n" +
+      `ID: ${id.id || id}\n` +
+      "Será revisado y utilizado para mejorar el contenido del bot.",
+  });
+
+  return { success: true, aporteId: id.id || id };
+}
+
+export async function handleAportes(ctx) {
+  const { sock, remoteJid, sender } = ctx;
+  await ensureBaseTables();
+
+  const phone = sender || ctx.participant || remoteJid;
+  const user = await ensureUser(phone, ctx.pushName);
+
+  const rows = await db("aportes")
+    .select("*")
+    .where({ usuario_id: user.id })
+    .orderBy("created_at", "desc")
+    .limit(10);
+
+  if (!rows || rows.length === 0) {
+    await sock.sendMessage(remoteJid, {
+      text: "ℹ️ No tienes aportes registrados todavía.",
+    });
+    return { success: true, aportes: [] };
+  }
+
+  let text = "📚 *Tus Aportes Recientes*\n\n";
+  for (const r of rows) {
+    const createdAt = new Date(r.created_at).toLocaleString("es-ES");
+    const typeLabel = r.type === "media" ? "🖼 Media" : "💬 Texto";
+    text += `• [${r.id}] ${typeLabel} — ${r.status || "pending"}\n   ${createdAt}\n`;
+  }
+
+  await sock.sendMessage(remoteJid, { text });
+
+  return { success: true, aportes: rows };
+}
+
+export async function handleMyAportes(ctx) {
+  return handleAportes(ctx);
+}
+
+// Pedidos
+export async function handlePedido(ctx) {
+  const { sock, remoteJid, sender, pushName, text } = ctx;
+  await ensureBaseTables();
+
+  const phone = sender || ctx.participant || remoteJid;
+  const user = await ensureUser(phone, pushName);
+
+  const body = (text || "").trim().replace(/^\/pedido\b\s*/i, "");
+  if (!body) {
+    await sock.sendMessage(remoteJid, {
+      text:
+        "📝 Para crear un pedido, usa:\n" +
+        "/pedido *Título del pedido* - descripción opcional",
+    });
+    return { success: false };
+  }
+
+  let title = body;
+  let description = null;
+  const dashIndex = body.indexOf("-");
+  if (dashIndex > 0) {
+    title = body.slice(0, dashIndex).trim();
+    description = body.slice(dashIndex + 1).trim() || null;
+  }
+
+  const [id] = await db("pedidos").insert(
+    {
+      usuario_id: user.id,
+      title,
+      description,
+      status: "open",
+    },
+    ["id"],
+  );
+
+  await sock.sendMessage(remoteJid, {
+    text:
+      "✅ Pedido creado correctamente.\n" +
+      `ID: ${id.id || id}\n` +
+      `Título: ${title}`,
+  });
+
+  return { success: true, pedidoId: id.id || id };
+}
+
+export async function handlePedidos(ctx) {
+  const { sock, remoteJid, sender } = ctx;
+  await ensureBaseTables();
+
+  const phone = sender || ctx.participant || remoteJid;
+  const user = await ensureUser(phone, ctx.pushName);
+
+  const rows = await db("pedidos")
+    .select("*")
+    .where({ usuario_id: user.id })
+    .orderBy("created_at", "desc")
+    .limit(10);
+
+  if (!rows || rows.length === 0) {
+    await sock.sendMessage(remoteJid, {
+      text: "ℹ️ No tienes pedidos registrados todavía.",
+    });
+    return { success: true, pedidos: [] };
+  }
+
+  let text = "📌 *Tus Pedidos Recientes*\n\n";
+  for (const r of rows) {
+    const createdAt = new Date(r.created_at).toLocaleString("es-ES");
+    const status = r.status || "open";
+    text += `• [${r.id}] ${r.title} — ${status}\n   ${createdAt}\n`;
+  }
+
+  await sock.sendMessage(remoteJid, { text });
+
+  return { success: true, pedidos: rows };
+}
+
+// ---------------------------------------------------
+// Proveedores (proveedores, contenidos, etc.)
+// ---------------------------------------------------
+async function ensureProveedoresTables() {
+  const hasProv = await db.schema.hasTable("proveedores");
+  if (!hasProv) {
+    await db.schema.createTable("proveedores", (table) => {
+      table.increments("id").primary();
+      table.string("phone").notNullable().unique();
+      table.string("name").nullable();
+      table.string("role").defaultTo("provider");
+      table.boolean("active").defaultTo(true);
+      table.timestamp("created_at").defaultTo(db.fn.now());
+    });
+  }
+
+  const hasContent = await db.schema.hasTable("proveedor_contenidos");
+  if (!hasContent) {
+    await db.schema.createTable("proveedor_contenidos", (table) => {
+      table.increments("id").primary();
+      table.integer("proveedor_id").unsigned().references("id").inTable("proveedores");
+      table.string("type").notNullable();
+      table.text("content").nullable();
+      table.string("media_path").nullable();
+      table.string("media_type").nullable();
+      table.json("metadata").nullable();
+      table.timestamp("created_at").defaultTo(db.fn.now());
+    });
   }
 }
 
-/**
- * Handler para el comando /unlock
- * Desbloquea el grupo (solo admins)
- */
-export async function handleUnlock(usuario, grupo, isGroup) {
-  try {
-    if (!isGroup) {
-      return {
-        success: false,
-        message: "⚠️ Este comando solo funciona en grupos.",
-      };
-    }
-
-    // Verificar que el usuario sea admin del grupo
-    const whatsappNumber = usuario.split("@")[0];
-    const user = await db("usuarios")
-      .where({ whatsapp_number: whatsappNumber })
-      .select("rol")
-      .first();
-
-    if (!user || (user.rol !== "admin" && user.rol !== "owner")) {
-      return {
-        success: false,
-        message: "❌ Solo los administradores pueden desbloquear el grupo.",
-      };
-    }
-
-    return {
-      success: true,
-      message:
-        "🔓 *Grupo desbloqueado*\n\nTodos los miembros pueden enviar mensajes.",
-    };
-  } catch (error) {
-    console.error("❌ Error en /unlock:", error);
-    return {
-      success: false,
-      message: "⚠️ Error desbloqueando el grupo.",
-    };
-  }
+async function ensureProveedoresBase() {
+  await ensureProveedoresTables();
 }
 
-/**
- * Handler para el comando /tag
- * Menciona a todos en el grupo (solo admins)
- */
-export async function handleTag(messageText, usuario, grupo) {
-  try {
-    console.log(`📢 Comando /tag recibido de ${usuario}`);
+async function ensureProveedor(phone, name) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) throw new Error("Número inválido");
 
-    const whatsappNumber = usuario.split("@")[0];
-    const user = await db("usuarios")
-      .where({ whatsapp_number: whatsappNumber })
-      .select("rol")
-      .first();
-
-    if (!user || (user.rol !== "admin" && user.rol !== "owner")) {
-      return {
-        success: false,
-        message: "❌ Solo los administradores pueden usar este comando.",
-      };
-    }
-
-    const mensaje = messageText.substring(4).trim() || "Todos mencionados";
-
-    return {
-      success: true,
-      message: `📢 *Anuncio:*\n\n${mensaje}`,
-      tagAll: true,
-    };
-  } catch (error) {
-    console.error("❌ Error en /tag:", error);
-    return {
-      success: false,
-      message: "⚠️ Error enviando anuncio.",
-    };
+  let prov = await db("proveedores").where({ phone: normalized }).first();
+  if (!prov) {
+    const [id] = await db("proveedores").insert(
+      {
+        phone: normalized,
+        name: name || null,
+        role: "provider",
+        active: true,
+      },
+      ["id"],
+    );
+    prov = await db("proveedores").where({ id: id.id || id }).first();
+  } else if (name && !prov.name) {
+    await db("proveedores").where({ id: prov.id }).update({ name });
+    prov.name = name;
   }
+  return prov;
 }
 
-/**
- * Handler para el comando /whoami
- * Muestra información del usuario
- */
-export async function handleWhoami(usuario, grupo) {
-  try {
-    console.log(`👤 Comando /whoami recibido de ${usuario}`);
+export async function handleAportar(ctx) {
+  const { sock, remoteJid, sender, pushName, message } = ctx;
+  await ensureProveedoresBase();
 
-    const whatsappNumber = usuario.split("@")[0];
-    const user = await db("usuarios")
-      .where({ whatsapp_number: whatsappNumber })
-      .select("username", "rol", "fecha_registro")
-      .first();
+  const phone = sender || ctx.participant || remoteJid;
+  const prov = await ensureProveedor(phone, pushName);
 
-    let message = "👤 *Tu Información*\n\n";
-    message += `📱 **WhatsApp:** ${whatsappNumber}\n`;
+  const processed = await processWhatsAppMedia(sock, message, {
+    basePath: "./media/proveedores",
+  });
 
-    if (user) {
-      message += `👨💼 **Usuario:** ${user.username}\n`;
-      message += `🎭 **Rol:** ${user.rol}\n`;
-      message += `📅 **Registrado:** ${new Date(user.fecha_registro).toLocaleDateString("es-ES")}\n`;
-    } else {
-      message += "\n⚠️ No estás registrado en el sistema.\n";
-      message += "Usa `/registrar [username]` para registrarte.";
-    }
-
-    return { success: true, message };
-  } catch (error) {
-    console.error("❌ Error en /whoami:", error);
-    return {
-      success: false,
-      message: "⚠️ Error obteniendo tu información.",
-    };
+  if (!processed || (!processed.text && !processed.filePath)) {
+    await sock.sendMessage(remoteJid, {
+      text: "⚠️ No encontré contenido válido en tu mensaje para registrar como aporte.",
+    });
+    return { success: false };
   }
+
+  const metadata = {
+    mimetype: processed.mimetype || null,
+    size: processed.size || null,
+    originalName: processed.originalName || null,
+  };
+
+  const [id] = await db("proveedor_contenidos").insert(
+    {
+      proveedor_id: prov.id,
+      type: processed.filePath ? "media" : "text",
+      content: processed.text || null,
+      media_path: processed.filePath || null,
+      media_type: processed.mimetype || null,
+      metadata,
+    },
+    ["id"],
+  );
+
+  await sock.sendMessage(remoteJid, {
+    text:
+      "✅ ¡Gracias por tu contenido como proveedor!\n" +
+      `ID: ${id.id || id}\n` +
+      "Será revisado y utilizado por el equipo.",
+  });
+
+  return { success: true, contenidoId: id.id || id };
 }
 
-/**
- * Handler para el comando /debugadmin
- * Información de depuración para admins
- */
-export async function handleDebugAdmin(usuario, grupo) {
+export async function handleProveedorAportes(ctx) {
+  const { sock, remoteJid, sender } = ctx;
+  await ensureProveedoresBase();
+
+  const phone = sender || ctx.participant || remoteJid;
+  const prov = await ensureProveedor(phone, ctx.pushName);
+
+  const rows = await db("proveedor_contenidos")
+    .select("*")
+    .where({ proveedor_id: prov.id })
+    .orderBy("created_at", "desc")
+    .limit(10);
+
+  if (!rows || rows.length === 0) {
+    await sock.sendMessage(remoteJid, {
+      text: "ℹ️ No tienes aportes registrados todavía como proveedor.",
+    });
+    return { success: true, contenidos: [] };
+  }
+
+  let text = "📦 *Tus Aportes como Proveedor*\n\n";
+  for (const r of rows) {
+    const createdAt = new Date(r.created_at).toLocaleString("es-ES");
+    const typeLabel = r.type === "media" ? "🖼 Media" : "💬 Texto";
+    text += `• [${r.id}] ${typeLabel}\n   ${createdAt}\n`;
+  }
+
+  await sock.sendMessage(remoteJid, { text });
+
+  return { success: true, contenidos: rows };
+}
+
+// ---------------------------------------------------
+// Funciones de soporte para admins (ej: /debugadmin)
+// ---------------------------------------------------
+export async function handleDebugAdmin(ctx) {
+  const { sock, remoteJid, sender } = ctx;
+
+  const usuario = sender || ctx.participant || remoteJid;
+  const normalized = normalizePhone(usuario);
+  const superadmin = await isSuperAdmin(normalized);
+
+  if (!superadmin) {
+    await sock.sendMessage(remoteJid, {
+      text: "❌ No tienes permisos para usar este comando.",
+    });
+    return { success: false };
+  }
+
   try {
-    console.log(`🔍 Comando /debugadmin recibido de ${usuario}`);
-
-    const whatsappNumber = usuario.split("@")[0];
-    const user = await db("usuarios")
-      .where({ whatsapp_number: whatsappNumber })
-      .select("rol")
-      .first();
-
-    if (!user || user.rol !== "owner") {
-      return {
-        success: false,
-        message: "❌ Solo el owner puede usar este comando.",
-      };
-    }
-
     const stats = {
       aportes: await db("aportes").count("* as count").first(),
       pedidos: await db("pedidos").count("* as count").first(),
@@ -2026,4 +1013,685 @@ export async function handleDebugAdmin(usuario, grupo) {
       message: "⚠️ Error obteniendo información del sistema.",
     };
   }
+}
+
+// =========================
+// Router principal unificado (migrado desde router.js)
+// =========================
+
+/* ========================
+   Helpers
+   ======================== */
+
+function onlyDigits(v) { return String(v || '').replace(/\D/g, '') }
+
+function normalizeDigits(userOrJid) {
+  try {
+    let s = String(userOrJid || '')
+    const at = s.indexOf('@')
+    if (at > 0) s = s.slice(0, at)
+    const col = s.indexOf(':')
+    if (col > 0) s = s.slice(0, col)
+    return s.replace(/\D/g, '')
+  } catch {
+    return onlyDigits(userOrJid)
+  }
+}
+
+function isAdminFlag(p) {
+  try {
+    return !!(
+      p &&
+      (
+        p.admin === 'admin' ||
+        p.admin === 'superadmin' ||
+        p.admin === true ||
+        p.isAdmin === true ||
+        p.isSuperAdmin === true
+      )
+    )
+  } catch {
+    return false
+  }
+}
+
+async function isBotAdminInGroup(sock, groupJid) {
+  try {
+    const meta = await antibanSystem.queryGroupMetadata(sock, groupJid)
+    const bot = normalizeDigits(sock?.user?.id || '')
+    const me = (meta?.participants || []).find(x => normalizeDigits(x?.id || x?.jid) === bot)
+    return isAdminFlag(me)
+  } catch { return false }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+
+async function tryImportModuleWithRetries(modulePath, opts = {}) {
+  const retries = Number.isFinite(Number(opts.retries)) ? Number(opts.retries) : 3
+  const timeoutMs = Number.isFinite(Number(opts.timeoutMs)) ? Number(opts.timeoutMs) : 20000
+  const backoffMs = Number.isFinite(Number(opts.backoffMs)) ? Number(opts.backoffMs) : 1500
+
+  const start = Date.now()
+  let resolvedPath = modulePath
+
+  try {
+    if (modulePath.startsWith('.') || modulePath.startsWith('/') || /^[A-Za-z]:\\/.test(modulePath)) {
+      const abs = path.isAbsolute(modulePath) ? modulePath : path.resolve(process.cwd(), modulePath)
+      resolvedPath = pathToFileURL(abs).href
+    }
+  } catch { }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const now = Date.now()
+      if (now - start > timeoutMs) {
+        throw new Error(`timeout importing ${modulePath} after ${timeoutMs}ms`)
+      }
+      const mod = await import(resolvedPath)
+      return mod
+    } catch (e) {
+      if (attempt >= retries) throw e
+      await sleep(backoffMs * attempt)
+    }
+  }
+
+  throw new Error(`Could not import module ${modulePath} after ${retries} attempts`)
+}
+
+/* ========================
+   extractText y parseCommand
+   ======================== */
+
+function extractText(message) {
+  try {
+    if (!message || typeof message !== 'object') return ''
+    const m = message.message || message
+
+    if (m.conversation) return m.conversation
+
+    if (m.extendedTextMessage && m.extendedTextMessage.text) return m.extendedTextMessage.text
+
+    if (m.imageMessage && m.imageMessage.caption) return m.imageMessage.caption
+
+    if (m.videoMessage && m.videoMessage.caption) return m.videoMessage.caption
+
+    const intResp = m.buttonsResponseMessage ||
+      m.listResponseMessage ||
+      m.templateButtonReplyMessage ||
+      m.interactiveResponseMessage ||
+      m.interactiveMessage
+
+    if (intResp) {
+      if (intResp.buttonsResponseMessage?.selectedButtonId) {
+        return String(intResp.buttonsResponseMessage.selectedButtonId).trim()
+      }
+
+      if (intResp.templateButtonReplyMessage?.selectedId) {
+        return String(intResp.templateButtonReplyMessage.selectedId).trim()
+      }
+
+      if (intResp.listResponseMessage?.singleSelectReply?.selectedRowId) {
+        return String(intResp.listResponseMessage.singleSelectReply.selectedRowId).trim()
+      }
+
+      if (intResp.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+        try {
+          const params = JSON.parse(intResp.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson)
+          const id = params?.id || params?.command || params?.rowId || params?.row_id
+          if (id && typeof id === 'string') return String(id).trim()
+        } catch { }
+      }
+
+      if (intResp.body?.text) {
+        return String(intResp.body.text).trim()
+      }
+    }
+
+    const keys = Object.keys(m)
+    const firstKey = keys[0]
+    if (firstKey && typeof firstKey === 'string') {
+      const maybeTxt = m[firstKey]?.text || m[firstKey]?.caption
+      if (maybeTxt) return String(maybeTxt).trim()
+    }
+
+    return ''
+  } catch {
+    return ''
+  }
+}
+
+function parseCommand(text) {
+  if (!text || typeof text !== 'string') {
+    return { command: null, args: [] }
+  }
+
+  const trimmed = text.trim()
+  const prefixMatch = trimmed.match(/^([\/!.#?$~])\s*/)
+  let cmd = trimmed
+  if (prefixMatch) {
+    cmd = trimmed.slice(prefixMatch[0].length)
+  }
+
+  if (!cmd) return { command: null, args: [] }
+
+  const parts = cmd.split(/\s+/)
+  const command = '/' + parts[0].toLowerCase()
+  const args = parts.slice(1)
+
+  return { command, args }
+}
+
+/* ========================
+   traceEnabled & summarizePayload
+   ======================== */
+
+function traceEnabled() {
+  try {
+    return String(process.env.TRACE_ROUTER || '').toLowerCase() === 'true'
+  } catch {
+    return false
+  }
+}
+
+function summarizePayload(payload) {
+  try {
+    if (!payload) return 'null'
+    if (typeof payload === 'string') {
+      return payload.length > 80 ? payload.slice(0, 77) + '...' : payload
+    }
+    if (payload.text) {
+      const t = String(payload.text)
+      return t.length > 80 ? t.slice(0, 77) + '...' : t
+    }
+    const keys = Object.keys(payload)
+    if (payload.image) return '[image] ' + (payload.caption || '')
+    if (payload.video) return '[video] ' + (payload.caption || '')
+    if (payload.audio) return '[audio]'
+    if (payload.sticker) return '[sticker]'
+    if (payload.buttons) return '[buttons] ' + (payload.text || '')
+    if (payload.sections) return '[list] ' + (payload.title || '')
+    if (payload.interactiveMessage) return 'interactiveMessage'
+    if (payload.viewOnceMessage?.message?.interactiveMessage) return 'interactiveMessage'
+    if (payload.listMessage) return 'listMessage'
+    if (payload.templateButtons) return 'templateButtons'
+    if (payload.image) return 'image'
+    if (payload.video) return 'video'
+    if (payload.audio) return 'audio'
+    if (payload.sticker) return 'sticker'
+    if (payload.text) return 'text'
+    return keys.slice(0, 5).join(',')
+  } catch { return 'payload' }
+}
+
+async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
+  let e1 = null, e2 = null
+  try { await sock.sendMessage(jid, payload, opts); return true } catch (err) { e1 = err }
+  try {
+    const txt = (payload && payload.text) ? payload.text : '⚠️ No pude enviar respuesta. Intenta de nuevo.'
+    await sock.sendMessage(jid, { text: txt }, opts)
+    return true
+  } catch (err2) {
+    e2 = err2
+  }
+
+  try {
+    if (traceEnabled()) console.warn('[router.send] failed:', summarizePayload(payload), e1?.message || e1, '|', e2?.message || e2)
+  } catch { }
+
+  if (!silentOnFail) {
+    try { await sock.sendMessage(jid, { text: '⚠️ No pude enviar respuesta. Usa /help' }) } catch { }
+  }
+  return false
+}
+
+function toMediaInput(value) {
+  if (!value) return null
+  if (Buffer.isBuffer(value)) return value
+  if (typeof value === 'string') {
+
+    if (/^https?:\/\//i.test(value)) {
+      return { url: value }
+    }
+
+    try {
+      if (fs.existsSync(value)) {
+        return fs.readFileSync(value)
+      }
+    } catch { }
+
+    return value
+  }
+
+  if (typeof value === 'object') {
+    if (value.url || value.path || value.buffer) return value
+  }
+
+  return null
+}
+
+function buildSendOptions(result, ctx) {
+  const opts = {}
+  if (!result || typeof result !== 'object') return opts
+
+  if (result.quoted && ctx?.message?.key) {
+    opts.quoted = ctx.message
+  }
+  if (Array.isArray(result.mentions)) {
+    opts.mentions = result.mentions
+  }
+  return opts
+}
+
+function buildVCard(result) {
+  try {
+    const name = result.vcardName || result.name || 'Contacto'
+    const number = result.vcardNumber || result.number
+    const waid = result.vcardWaid || number?.replace(/\D/g, '')
+    if (!number) return null
+
+    const vcardLines = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `FN:${name}`,
+      waid
+        ? `item1.TEL;waid=${waid}:${number}`
+        : `TEL:${number}`,
+      'END:VCARD'
+    ]
+
+    return vcardLines.join('\n')
+  } catch {
+    return null
+  }
+}
+
+async function sendListFixed(sock, jid, result, ctx) {
+  const sections = Array.isArray(result.sections) ? result.sections : []
+  if (!sections.length) {
+    return safeSend(sock, jid, { text: result.text || result.message || '⚠️ Lista vacía' })
+  }
+
+  const rows = []
+  for (const s of sections) {
+    const r = Array.isArray(s.rows) ? s.rows : []
+    for (const row of r) {
+      if (!row || !row.rowId) continue
+      rows.push({
+        title: row.title || row.rowId,
+        rowId: row.rowId,
+        description: row.description || ''
+      })
+    }
+  }
+
+  if (!rows.length) {
+    return safeSend(sock, jid, { text: result.text || result.message || '⚠️ Lista sin elementos' })
+  }
+
+  const listSections = [{
+    title: result.sectionTitle || 'Opciones',
+    rows
+  }]
+
+  const listMsg = {
+    text: result.text || result.message || 'Selecciona una opción:',
+    footer: result.footer || 'Lista',
+    title: result.title || '',
+    buttonText: result.buttonText || 'Elegir',
+    sections: listSections
+  }
+
+  return safeSend(sock, jid, listMsg, buildSendOptions(result, ctx))
+}
+
+async function sendButtonsFixed(sock, jid, result, ctx) {
+  const buttons = Array.isArray(result.buttons) ? result.buttons : []
+  if (!buttons.length) {
+    return safeSend(sock, jid, { text: result.text || result.message || '⚠️ No hay botones disponibles' })
+  }
+
+  const btns = buttons.map((b, idx) => ({
+    buttonId: b.id || `btn_${idx + 1}`,
+    buttonText: { displayText: b.text || b.label || `Opción ${idx + 1}` },
+    type: 1
+  }))
+
+  const btnMsg = {
+    text: result.text || result.message || 'Elige una opción:',
+    footer: result.footer || '',
+    buttons: btns,
+    headerType: 1
+  }
+
+  return safeSend(sock, jid, btnMsg, buildSendOptions(result, ctx))
+}
+
+/* ========================
+   sendResult - ACTUALIZADO ✅
+   ======================== */
+
+async function sendResult(sock, jid, result, ctx) {
+  console.log('[DEBUG] sendResult called with result:', result ? 'present' : 'null', 'type:', result?.type || 'text')
+
+  if (!result) {
+    await safeSend(sock, jid, { text: '✅ Listo.' }, buildSendOptions(result, ctx))
+    return
+  }
+
+  const opts = buildSendOptions(result, ctx)
+  const targetJid = jid
+
+  if (typeof result === 'string') {
+    await safeSend(sock, targetJid, { text: result }, opts)
+    return
+  }
+
+  if (result.message && (!result.type || result.type === 'text')) {
+    await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts)
+    return
+  }
+
+  if (result.type === 'reaction' && result.emoji) {
+    try {
+      const key = ctx?.message?.key
+      if (key) {
+        await sock.sendMessage(targetJid, {
+          react: { text: result.emoji, key }
+        })
+      }
+    } catch { }
+    return
+  }
+
+  if (result.type === 'vcard') {
+    const vcard = buildVCard(result)
+    if (!vcard) {
+      await safeSend(sock, targetJid, { text: '⚠️ No se pudo construir el contacto.' }, opts)
+      return
+    }
+
+    const contactMsg = {
+      contacts: {
+        displayName: result.vcardName || result.name || 'Contacto',
+        contacts: [{
+          displayName: result.vcardName || result.name || 'Contacto',
+          vcard
+        }]
+      }
+    }
+
+    await safeSend(sock, targetJid, contactMsg, opts)
+    return
+  }
+
+  if (result.type === 'list' || result.sections) {
+    await sendListFixed(sock, targetJid, result, ctx)
+    return
+  }
+
+  if (result.type === 'buttons' || result.buttons) {
+    await sendButtonsFixed(sock, targetJid, result, ctx)
+    return
+  }
+
+  if (result.type === 'image') {
+    const img = toMediaInput(result.image || result.media || result.file)
+    if (!img) {
+      await safeSend(sock, targetJid, { text: '⚠️ No se pudo cargar la imagen.' }, opts)
+      return
+    }
+
+    const msg = {
+      image: img,
+      caption: result.caption || result.text || result.message || ''
+    }
+
+    await safeSend(sock, targetJid, msg, opts)
+    return
+  }
+
+  if (result.type === 'video') {
+    const vid = toMediaInput(result.video || result.media || result.file)
+    if (!vid) {
+      await safeSend(sock, targetJid, { text: '⚠️ No se pudo cargar el video.' }, opts)
+      return
+    }
+
+    const msg = {
+      video: vid,
+      caption: result.caption || result.text || result.message || ''
+    }
+
+    await safeSend(sock, targetJid, msg, opts)
+    return
+  }
+
+  if (result.type === 'audio') {
+    const aud = toMediaInput(result.audio || result.media || result.file)
+    if (!aud) {
+      await safeSend(sock, targetJid, { text: '⚠️ No se pudo cargar el audio.' }, opts)
+      return
+    }
+
+    const msg = {
+      audio: aud,
+      mimetype: result.mimetype || 'audio/mpeg'
+    }
+
+    await safeSend(sock, targetJid, msg, opts)
+    return
+  }
+
+  if (result.type === 'sticker') {
+    const stk = toMediaInput(result.sticker || result.media || result.file)
+    if (!stk) {
+      await safeSend(sock, targetJid, { text: '⚠️ No se pudo cargar el sticker.' }, opts)
+      return
+    }
+
+    const msg = {
+      sticker: stk
+    }
+
+    await safeSend(sock, targetJid, msg, opts)
+    return
+  }
+
+  if (result.payload && typeof result.payload === 'object') {
+    const payload = { ...result.payload }
+    if (!payload.text && result.text) payload.text = result.text
+    await safeSend(sock, targetJid, payload, opts)
+    return
+  }
+
+  await safeSend(sock, targetJid, { text: result.text || '✅ Listo' }, opts)
+}
+
+/* ========================
+   dispatch
+   ======================== */
+
+export async function dispatch(ctx = {}) {
+  const { sock, remoteJid, isGroup } = ctx
+  if (!sock || !remoteJid) return false
+
+  try {
+    const textForGlobal = (ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || ''
+    const trimmed = textForGlobal.trim().toLowerCase()
+    const isBotGlobalCmd = /^([\/!.#?$~]\s*)?bot\s+global\b/.test(trimmed)
+    const on = await isBotGloballyActive()
+    if (!on && !isBotGlobalCmd) return false
+  } catch { }
+
+  if (isGroup) {
+    const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
+    if (!botEnabled) {
+      const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
+      const firstToken = (text || '').trim().split(/\s+/)[0].toLowerCase()
+      const isBotCommand = firstToken === '/bot' || firstToken === 'bot'
+      if (!isBotCommand) return false
+    }
+  }
+
+  const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
+  const parsed = parseCommand(text)
+  let command = parsed.command
+  const args = parsed.args || []
+
+  if (isGroup && command) {
+    try {
+      const senderJid = ctx.sender || ctx.participant || ctx.remoteJid
+      if (senderJid) {
+        const userKey = onlyDigits(senderJid)
+        const banned = await db('group_bans')
+          .where({
+            group_jid: remoteJid,
+            user_jid: userKey
+          })
+          .first()
+
+        if (banned && command !== '/ban' && command !== '/unban') {
+          return false
+        }
+      }
+    } catch (e) {
+      appLogger.error('Error comprobando bans de grupo:', e)
+    }
+  }
+
+  if (traceEnabled()) {
+    const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
+    console.log(
+      `[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp ? 'sí' : 'no'} | De: ${ctx.senderNumber || ctx.sender || '?'} | Owner: ${ctx.isOwner}`,
+    )
+  }
+
+  if (!command) {
+    try {
+      const msg = ctx.message?.message || {}
+      const isListSelection =
+        !!msg.listResponseMessage ||
+        !!msg.buttonsResponseMessage ||
+        !!msg.templateButtonReplyMessage ||
+        !!msg.interactiveResponseMessage ||
+        !!msg.interactiveMessage
+
+      if (isListSelection) {
+        console.log('[router] ⚠️ Selección de lista/botón detectada pero no se extrajo comando')
+        console.log('[router] Claves del mensaje:', Object.keys(msg))
+
+        const raw = String(text || '').trim()
+        if (raw && !raw.startsWith('/')) {
+          console.log('[router] Usaremos raw como comando implícito:', raw)
+          command = raw.split(/\s+/)[0]
+        }
+      }
+    } catch { }
+    if (!command) return false
+  }
+
+  console.log(`[DEBUG] Command found: ${command}, checking registry...`)
+
+  let registry = null
+  try {
+    if (global.__COMMAND_REGISTRY && global.__COMMAND_REGISTRY.timestamp) {
+      registry = global.__COMMAND_REGISTRY.registry || null
+    } else {
+      const registryModulePath = path.resolve(__dirname, './src/commands/registry/index.js')
+      console.log('[registry] attempting to preload registry module:', registryModulePath)
+      const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 4, timeoutMs: 20000, backoffMs: 1500 })
+      const get = mod?.getCommandRegistry
+      registry = typeof get === 'function' ? get() : null
+      global.__COMMAND_REGISTRY = { registry, loadedFrom: registryModulePath, timestamp: Date.now() }
+      if (registry) console.log('[registry] precargado OK')
+      else console.warn('[registry] módulo cargado pero no devolvió registry (getCommandRegistry missing)')
+    }
+  } catch (e) {
+    console.error('[registry] unexpected error while loading registry:', e && (e.message || e))
+  }
+  console.log('[DEBUG] Registry loaded:', !!registry, 'has command:', registry?.has(command))
+
+  if (!registry || !registry.has(command)) {
+    console.log(`[DEBUG] Command ${command} not found in registry, checking lazy fallbacks...`)
+    const lazy = new Map()
+    lazy.set('/debugbot', async (ctx2) => (await import('./src/commands/admin.js')).debugBot(ctx2))
+    lazy.set('/admins', async (ctx2) => (await import('./src/commands/groups.js')).admins(ctx2))
+    lazy.set('/debugadmin', async (ctx2) => (await import('./src/commands/groups.js')).debugadmin(ctx2))
+    lazy.set('/whoami', async (ctx2) => (await import('./src/commands/groups.js')).whoami(ctx2))
+    lazy.set('/bot', async (ctx2) => (await import('./src/commands/bot-control.js')).bot(ctx2))
+    lazy.set('/help', async (ctx2) => {
+      const keys = Array.from(lazy.keys()).sort()
+      const text2 = '📋 Comandos disponibles\n\n' + keys.map(k => `• ${k}`).join('\n')
+      return { success: true, message: text2, quoted: true }
+    })
+
+    if (lazy.has(command)) {
+      console.log(`[DEBUG] Using lazy fallback for ${command}`)
+      try {
+        const params = { ...ctx, text, command, args, fecha: new Date().toISOString() }
+        const out = await antibanMiddleware.wrapCommand(
+          () => lazy.get(command)(params),
+          command
+        )
+        console.log('[DEBUG] Lazy command executed, result:', out)
+        await sendResult(sock, remoteJid, out, ctx)
+        return true
+      } catch (e) {
+        console.log('[DEBUG] Error in lazy command:', e?.message || e)
+        await safeSend(sock, remoteJid, { text: `⚠️ Error ejecutando ${command}: ${e?.message || e}` })
+        return true
+      }
+    }
+
+    console.log('[DEBUG] No handler found for command', command)
+    return false
+  }
+
+  const entry = registry.get(command)
+  console.log('[DEBUG] Found registry entry for', command, '::', !!entry)
+  const params = { ...ctx, text, command, args, fecha: new Date().toISOString() }
+
+  try {
+    console.log('[DEBUG] Executing registry command', command, '...')
+    const result = await antibanMiddleware.wrapCommand(
+      () => entry.handler(params),
+      command
+    )
+    console.log('[DEBUG] Registry command executed, result type:', typeof result, 'keys:', result ? Object.keys(result) : 'null')
+
+    const isSuccess = result?.success !== false && !result?.error
+    const reactionEmoji = isSuccess ? '✅' : '❌'
+
+    try {
+      await sock.sendMessage(remoteJid, {
+        react: { text: reactionEmoji, key: ctx.message.key }
+      })
+    } catch { }
+
+    console.log('[DEBUG] Sending result to', remoteJid, '...')
+    if (Array.isArray(result)) {
+      for (const r of result) await sendResult(sock, remoteJid, r, ctx)
+    } else {
+      await sendResult(sock, remoteJid, result, ctx)
+    }
+
+    console.log('[DEBUG] Result sent successfully')
+    return true
+  } catch (e) {
+    console.log('[DEBUG] Registry command failed:', e?.message || e)
+    try {
+      await sock.sendMessage(remoteJid, {
+        react: { text: '❌', key: ctx.message.key }
+      })
+    } catch { }
+
+    await safeSend(sock, remoteJid, { text: `⚠️ Error ejecutando ${command}: ${e?.message || e}` })
+    return true
+  }
+}
+
+// Adaptador para mantener compatibilidad con la API anterior
+export async function routeCommand(ctx = {}) {
+  const handled = await dispatch(ctx);
+  return { handled: !!handled };
 }

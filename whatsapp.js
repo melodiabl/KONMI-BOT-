@@ -304,8 +304,6 @@ let pairingCodeRequestedForSession = false
 let lastQRGenerated = 0
 
 // Comandos especiales que pueden puentear algunos filtros.
-// Nota: el control de apagado global se maneja mÃ¡s abajo con un chequeo
-// explÃ­cito de "/bot global on".
 const controlSet = new Set([
   '/activate', '/activar',
   '/deactivate', '/desactivar',
@@ -313,19 +311,15 @@ const controlSet = new Set([
   '/bot'
 ])
 
-let routerPath = './src/commands/router.js'
+// 🔁 AHORA EL ROUTER PRINCIPAL ES handler.js
+let routerPath = './handler.js'
 export function setMessageRouterModulePath(p) {
   routerPath = String(p || routerPath)
 }
+
 const processedMessageIds = new Set()
 
 /* ===== Getters y Chequeo de Sesión ===== */
-
-/**
- * Verifica si existen credenciales guardadas en la ruta de autenticación.
- * @param {string} [authPath] - Ruta donde se guardan las credenciales.
- * @returns {object} Estado de la sesión.
- */
 export async function checkSessionState(authPath = null) {
   const effectivePath = authPath || path.resolve(process.env.AUTH_DIR || DEFAULT_AUTH_DIR)
   const credsPath = path.join(effectivePath, 'creds.json')
@@ -640,7 +634,7 @@ export async function connectToWhatsApp(
             logMessage('WARN', 'PAIRING', 'No se pudo generar el código.')
           }
         } catch (e) {
-          logMessage('ERROR', 'PAIRING', 'Error durante la solicitud de vinculación', { error: e?.message || e, stack: e?.stack })
+          logMessage('ERROR', 'PAIRING', 'Error durante la solicitud de vinculación', { error: e?.message || e, stack: e?.stack || e })
         }
       }
 
@@ -733,7 +727,6 @@ export async function connectToWhatsApp(
         }
         return mgr
       }
-      // Si BOT_IGNORE_GATING no esta en true, se aplica el filtro global/grupo
       const ignoreGating = String(process.env.BOT_IGNORE_GATING || 'false').toLowerCase() === 'true'
 
       for (const m of messages) {
@@ -1039,7 +1032,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   logMessage('DEBUG', 'ADMIN-CHECK', `botJidRaw inicial: ${botJidRaw}`)
   logMessage('DEBUG', 'ADMIN-CHECK', `jidNormalizedUser disponible: ${typeof jidNormalizedUser === 'function'}`)
 
-  // Método 1: Usar jidNormalizedUser
   if (botJidRaw && typeof jidNormalizedUser === 'function') {
     try {
       botJid = jidNormalizedUser(botJidRaw)
@@ -1049,7 +1041,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     }
   }
 
-  // Método 2: Usar jidDecode como fallback
   if (botJid === botJidRaw && typeof jidDecode === 'function') {
     try {
       const decoded = jidDecode(botJidRaw)
@@ -1063,7 +1054,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     }
   }
 
-  // Método 3: Fallback manual
   if (botJid === botJidRaw && botJidRaw) {
     const match = String(botJidRaw).match(/^(\d+)/)
     if (match) {
@@ -1099,7 +1089,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   }
   const isOwner = !!(ownerNumber && senderNumber && senderNumber === ownerNumber)
 
-  // ✅ LOG INICIAL DEL MENSAJE (simple JSON)
   logMessage('INFO', messageType, `Mensaje recibido [${messageSource}]`, {
     remoteJid,
     text: rawText.substring(0, 100),
@@ -1107,7 +1096,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     messageId: message.key.id
   })
 
-  // 🎨 LOG EN RECUADRO SOLO PARA MENSAJES
   prettyPrintMessageLog({
     remoteJid,
     senderNumber,
@@ -1129,7 +1117,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   let isBotAdmin = false
   let groupMetadata = null
 
-  // ✅ LOGS PARA COMANDOS DE ADMIN
   if (isCommand) {
     const commandName = rawText.split(/\s+/)[0]
     logMessage('COMMAND', messageType, `Comando detectado: ${commandName}`, {
@@ -1157,7 +1144,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
         groupName: groupMetadata?.subject || 'Sin nombre'
       })
 
-      // ✅ FUNCIÓN HELPER: Verificar si un participante coincide con el bot
       const isParticipantBot = (participant) => {
         if (!participant) return false
 
@@ -1165,16 +1151,10 @@ export async function handleMessage(message, customSock = null, prefix = '', run
         const pLid = participant.lid
         const pJid = participant.jid
 
-        // Método 1: Comparación directa
         if (pid === botJid || pid === botJidRaw) return true
-
-        // Método 2: Comparar LID
         if (pLid && (pLid === botJid || pLid === botJidRaw)) return true
-
-        // Método 3: Comparar JID
         if (pJid && (pJid === botJid || pJid === botJidRaw)) return true
 
-        // Método 4: Extraer y comparar números
         if (botNumber) {
           const pidNum = onlyDigits(pid || '')
           const pLidNum = pLid ? onlyDigits(pLid) : null
@@ -1185,7 +1165,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
           }
         }
 
-        // Método 5: Normalizar y comparar
         if (typeof jidNormalizedUser === 'function') {
           try {
             const normalizedBot = jidNormalizedUser(botJid)
@@ -1197,15 +1176,12 @@ export async function handleMessage(message, customSock = null, prefix = '', run
             if (normalizedPid === normalizedBot || normalizedPid === normalizedBotRaw) return true
             if (normalizedPLid && (normalizedPLid === normalizedBot || normalizedPLid === normalizedBotRaw)) return true
             if (normalizedPJid && (normalizedPJid === normalizedBot || normalizedPJid === normalizedBotRaw)) return true
-          } catch (e) {
-            // Ignorar errores
-          }
+          } catch (e) {}
         }
 
         return false
       }
 
-      // Buscar sender
       const participantInfo = (groupMetadata.participants || []).find((p) => {
         return p.id === sender || p.lid === sender || p.jid === sender
       })
@@ -1218,7 +1194,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
         adminLevel: participantInfo?.admin || 'member'
       })
 
-      // ✅ BUSCAR BOT
       let botInfo = (groupMetadata.participants || []).find(isParticipantBot)
 
       if (botInfo) {
@@ -1241,7 +1216,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
           }))
         })
 
-        // Workaround para owner
         if (isOwner) {
           logMessage('INFO', 'ADMIN', 'WORKAROUND: Asumiendo permisos de admin (sender es owner)')
           isBotAdmin = true
@@ -1262,7 +1236,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     }
   }
 
-  // Propagate display name
   const pushName = message?.pushName || null
   let usuarioName = null
   try {
