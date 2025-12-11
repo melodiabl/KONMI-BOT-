@@ -754,14 +754,12 @@ async function sendResult(sock, jid, result, ctx) {
   /* ============ BOTONES - ACTUALIZADO ✅ ============ */
   if (result.type === 'buttons' && Array.isArray(result.buttons)) {
     if (await sendButtonsFixed(sock, targetJid, result, opts)) return
-    // El fallback ya está incluido en sendButtonsFixed
     return
   }
 
   /* ============ LISTA - ACTUALIZADO ✅ ============ */
   if (result.type === 'list' && Array.isArray(result.sections)) {
     if (await sendListFixed(sock, targetJid, result, opts)) return
-    // El fallback ya está incluido en sendListFixed
     return
   }
 
