@@ -89,7 +89,7 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
 }
 
 /* ========================
-   Resto del router (original)
+   Resto del router
    ======================== */
 
 function extractText(message) {
@@ -333,11 +333,20 @@ async function sendResult(sock, jid, result, ctx) {
   // Evitar quoted=true por compatibilidad; solo aceptar objeto explícito
   const opts = buildSendOptions(result)
 
-  // El bot ahora responde en grupos sin requerir ser admin
-  // Los comandos que requieren admin verifican permisos individualmente
   let targetJid = jid
-  if (typeof result === 'string') { await safeSend(sock, targetJid, { text: result }, opts); return }
-  if (result.message) { await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts); return }
+
+  // string simple
+  if (typeof result === 'string') {
+    await safeSend(sock, targetJid, { text: result }, opts)
+    return
+  }
+
+  // Usar result.message solo si NO es un resultado interactivo, o si type es text/undefined
+  if (result.message && (!result.type || result.type === 'text')) {
+    await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts)
+    return
+  }
+
   // Reacciones y presencia
   if (result.type === 'reaction' && result.emoji) {
     const key = result.key || result.quoted?.key || ctx?.message?.key
@@ -363,10 +372,26 @@ async function sendResult(sock, jid, result, ctx) {
       return
     }
   }
-  if (result.type === 'image' && result.image) { await safeSend(sock, targetJid, { image: toMediaInput(result.image), caption: result.caption, mentions: result.mentions }, opts); return }
-  if (result.type === 'video' && result.video) { await safeSend(sock, targetJid, { video: toMediaInput(result.video), caption: result.caption, mentions: result.mentions }, opts); return }
-  if (result.type === 'audio' && result.audio) { await safeSend(sock, targetJid, { audio: toMediaInput(result.audio), mimetype: result.mimetype || 'audio/mpeg', ptt: !!result.ptt }, opts); return }
-  if (result.type === 'sticker' && result.sticker) { await safeSend(sock, targetJid, { sticker: toMediaInput(result.sticker) }, opts, true); return }
+
+  // Media
+  if (result.type === 'image' && result.image) {
+    await safeSend(sock, targetJid, { image: toMediaInput(result.image), caption: result.caption, mentions: result.mentions }, opts)
+    return
+  }
+  if (result.type === 'video' && result.video) {
+    await safeSend(sock, targetJid, { video: toMediaInput(result.video), caption: result.caption, mentions: result.mentions }, opts)
+    return
+  }
+  if (result.type === 'audio' && result.audio) {
+    await safeSend(sock, targetJid, { audio: toMediaInput(result.audio), mimetype: result.mimetype || 'audio/mpeg', ptt: !!result.ptt }, opts)
+    return
+  }
+  if (result.type === 'sticker' && result.sticker) {
+    await safeSend(sock, targetJid, { sticker: toMediaInput(result.sticker) }, opts, true)
+    return
+  }
+
+  // Spotify combinado
   if (result.type === 'spotify') {
     let sentPrimary = false
     if (result.image) {
@@ -380,6 +405,8 @@ async function sendResult(sock, jid, result, ctx) {
     }
     return
   }
+
+  // Encuestas
   if (result.type === 'poll') {
     const options = Array.isArray(result.options) && result.options.length ? result.options : ['Sí', 'No']
     const multi = result.allowMultiple === true || Number(result.selectableCount) > 1
@@ -397,6 +424,8 @@ async function sendResult(sock, jid, result, ctx) {
     }
     return
   }
+
+  // Ubicación
   if (result.type === 'location') {
     const lat = Number(result.lat ?? result.latitude ?? 0)
     const lon = Number(result.lon ?? result.lng ?? result.longitude ?? 0)
@@ -416,6 +445,7 @@ async function sendResult(sock, jid, result, ctx) {
     }
     return
   }
+
   if (result.type === 'liveLocation') {
     const lat = Number(result.lat ?? result.latitude ?? 0)
     const lon = Number(result.lon ?? result.lng ?? result.longitude ?? 0)
@@ -427,6 +457,8 @@ async function sendResult(sock, jid, result, ctx) {
     }
     return
   }
+
+  // Contactos
   if (result.type === 'contact') {
     const vcard = buildVCard(result.contact)
     if (vcard) {
@@ -494,7 +526,6 @@ async function sendResult(sock, jid, result, ctx) {
   }
 
   // 🔹 LISTA INTERACTIVA SIEMPRE (también en grupos)
-  // Lista interactiva - Formato nativo de @itsukichan/baileys
   if (result.type === 'list' && Array.isArray(result.sections)) {
     const mapSections = (result.sections || []).map((sec) => ({
       title: sec.title || undefined,
@@ -533,7 +564,14 @@ async function sendResult(sock, jid, result, ctx) {
   // Contenido crudo (interactiveMessage / nativeFlow)
   if (result.type === 'content' && result.content && typeof result.content === 'object') {
     const payload = { ...result.content }
-    try { if (payload.viewOnceMessage?.message?.interactiveMessage) payload.viewOnceMessage.message.interactiveMessage.contextInfo = { ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo||{}), mentionedJid: result.mentions } } catch {}
+    try {
+      if (payload.viewOnceMessage?.message?.interactiveMessage) {
+        payload.viewOnceMessage.message.interactiveMessage.contextInfo = {
+          ...(payload.viewOnceMessage.message.interactiveMessage.contextInfo || {}),
+          mentionedJid: result.mentions,
+        }
+      }
+    } catch {}
     // Si falla Native Flow, degradar a texto con botones simples
     if (!(await safeSend(sock, targetJid, payload, opts, true))) {
       try {
@@ -541,10 +579,10 @@ async function sendResult(sock, jid, result, ctx) {
         const buttons = payload?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage?.buttons || []
         const lines = [body]
         for (const b of buttons) {
-          const meta = JSON.parse(b.buttonParamsJson||'{}')
+          const meta = JSON.parse(b.buttonParamsJson || '{}')
           const label = meta.display_text || 'Acción'
           const id = meta.id || meta.copy_code || meta.url || ''
-          lines.push(`• ${label}${id?` → ${id}`:''}`)
+          lines.push(`• ${label}${id ? ` → ${id}` : ''}`)
         }
         await safeSend(sock, targetJid, { text: lines.join('\n') }, opts)
       } catch {
@@ -553,6 +591,7 @@ async function sendResult(sock, jid, result, ctx) {
     }
     return
   }
+
   // fallback
   await safeSend(sock, targetJid, { text: result.text || '✅ Listo' }, opts)
 }
@@ -649,6 +688,7 @@ export async function dispatch(ctx = {}) {
       }
     } catch {}
   }
+
   // fromMe sin prefijo → habilitable por env
   try {
     const allowNoPrefix = String(process.env.FROMME_ALLOW_NO_PREFIX || 'false').toLowerCase() === 'true'
@@ -657,6 +697,7 @@ export async function dispatch(ctx = {}) {
       if (parts.length) command = `/${(parts.shift() || '').toLowerCase()}`
     }
   } catch {}
+
   // Palabras sin prefijo comunes (help/menu) → habilitable por env
   // Pero NO procesar mensajes propios para evitar bucles infinitos
   try {
@@ -670,6 +711,7 @@ export async function dispatch(ctx = {}) {
       }
     }
   } catch {}
+
   if (!command) {
     // Acciones directas: url|https://...
     if (/^url\|/i.test(text)) {
@@ -690,7 +732,7 @@ export async function dispatch(ctx = {}) {
     } else {
       // Preload registry with retries and cache it
       try {
-        const registryModulePath = path.resolve(__dirname, './registry/index.js') // <-- usa __dirname (definido arriba)
+        const registryModulePath = path.resolve(__dirname, './registry/index.js')
         console.log('[registry] attempting to preload registry module:', registryModulePath)
         const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 4, timeoutMs: 20000, backoffMs: 1500 })
         const get = mod?.getCommandRegistry
@@ -754,20 +796,23 @@ export async function dispatch(ctx = {}) {
     console.log(`[DEBUG] Registry command executed, result type:`, typeof result, 'keys:', result ? Object.keys(result) : 'null')
 
     // Add reaction based on success/failure
-    const isSuccess = result?.success !== false && !result?.error;
-    const reactionEmoji = isSuccess ? '✅' : '❌';
+    const isSuccess = result?.success !== false && !result?.error
+    const reactionEmoji = isSuccess ? '✅' : '❌'
 
     try {
       await sock.sendMessage(remoteJid, {
         react: { text: reactionEmoji, key: ctx.message.key }
-      });
+      })
     } catch (reactionError) {
       // Ignore reaction errors
     }
 
     console.log(`[DEBUG] Sending result to ${remoteJid}...`)
-    if (Array.isArray(result)) { for (const r of result) await sendResult(sock, remoteJid, r, ctx) }
-    else await sendResult(sock, remoteJid, result, ctx)
+    if (Array.isArray(result)) {
+      for (const r of result) await sendResult(sock, remoteJid, r, ctx)
+    } else {
+      await sendResult(sock, remoteJid, result, ctx)
+    }
     console.log(`[DEBUG] Result sent successfully`)
 
     // Add delivery confirmation for media commands
@@ -775,7 +820,7 @@ export async function dispatch(ctx = {}) {
       try {
         await sock.sendMessage(remoteJid, {
           react: { text: '📤', key: ctx.message.key }
-        });
+        })
       } catch (deliveryError) {
         // Ignore delivery reaction errors
       }
@@ -788,7 +833,7 @@ export async function dispatch(ctx = {}) {
     try {
       await sock.sendMessage(remoteJid, {
         react: { text: '❌', key: ctx.message.key }
-      });
+      })
     } catch (reactionError) {
       // Ignore reaction errors
     }
@@ -799,3 +844,4 @@ export async function dispatch(ctx = {}) {
 }
 
 export default { dispatch }
+
