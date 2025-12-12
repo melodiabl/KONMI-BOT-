@@ -1398,8 +1398,6 @@ async function isBotAdminInGroup(sock, groupJid) {
   } catch { return false }
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
-
 async function tryImportModuleWithRetries(modulePath, opts = {}) {
   const retries = Number.isFinite(Number(opts.retries)) ? Number(opts.retries) : 3
   const timeoutMs = Number.isFinite(Number(opts.timeoutMs)) ? Number(opts.timeoutMs) : 20000
