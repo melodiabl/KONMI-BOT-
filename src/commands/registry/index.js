@@ -292,6 +292,10 @@ async function buildHelp(ctx) {
   };
 }
 
+export function getCommandRegistry() {
+  return registry
+}
+
 register([
   // Ayuda y menú principal
   { command: '/help', handler: (ctx) => menu.help(ctx), category: 'info', description: 'Mostrar ayuda y comandos disponibles' },
@@ -460,10 +464,11 @@ register([
 
   // Resto de comandos exactamente igual...
   // (El resto del registro continúa sin cambios)
-])
 
-export function getCommandRegistry() {
-  return registry
-}
+  // Comandos de menú y ayuda centralizados
+  { command: '/help', handler: buildHelp, category: 'info', description: 'Muestra el menú de ayuda interactivo' },
+  { command: '/ayuda', aliasOf: '/help', category: 'info' },
+  { command: '/menu', handler: menu.menu, category: 'info', description: 'Muestra el menú principal de botones' },
+])
 
 export default { getCommandRegistry }

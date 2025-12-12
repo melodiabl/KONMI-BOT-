@@ -1800,330 +1800,170 @@ async function sendButtonsFixed(sock, jid, result, ctx) {
 }
 
 /* ========================
-   sendResult - ACTUALIZADO ✅
+   sendResult - MÁS ROBUSTO Y SILENCIOSO
    ======================== */
-
 async function sendResult(sock, jid, result, ctx) {
-  console.log('[DEBUG] sendResult called with result:', result ? 'present' : 'null', 'type:', result?.type || 'text')
+  if (!sock || !jid) return;
 
-  if (!result) {
-    await safeSend(sock, jid, { text: '✅ Listo.' }, buildSendOptions(result, ctx))
-    return
-  }
+  try {
+    if (!result) {
+      await safeSend(sock, jid, { text: '✅ Listo.' }, buildSendOptions(result, ctx), true);
+      return;
+    }
 
-  const opts = buildSendOptions(result, ctx)
-  const targetJid = jid
+    const opts = buildSendOptions(result, ctx);
+    const targetJid = jid;
 
-  if (typeof result === 'string') {
-    await safeSend(sock, targetJid, { text: result }, opts)
-    return
-  }
+    if (typeof result === 'string') {
+      await safeSend(sock, targetJid, { text: result }, opts);
+      return;
+    }
 
-  if (result.message && (!result.type || result.type === 'text')) {
-    await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts)
-    return
-  }
+    if (result.message && (!result.type || result.type === 'text')) {
+      await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts);
+      return;
+    }
 
-  if (result.type === 'reaction' && result.emoji) {
-    try {
-      const key = ctx?.message?.key
-      if (key) {
-        await sock.sendMessage(targetJid, {
-          react: { text: result.emoji, key }
-        })
+    if (result.type === 'reaction' && result.emoji) {
+      const key = ctx?.message?.key;
+      if (key) await sock.sendMessage(targetJid, { react: { text: result.emoji, key } });
+      return;
+    }
+
+    if (result.type === 'vcard') {
+      const vcard = buildVCard(result);
+      if (vcard) {
+        const contactMsg = {
+          contacts: {
+            displayName: result.vcardName || result.name || 'Contacto',
+            contacts: [{ displayName: result.vcardName || result.name || 'Contacto', vcard }]
+          }
+        };
+        await safeSend(sock, targetJid, contactMsg, opts);
+      } else {
+        await safeSend(sock, targetJid, { text: '⚠️ No se pudo construir el contacto.' }, opts);
       }
-    } catch { }
-    return
-  }
-
-  if (result.type === 'vcard') {
-    const vcard = buildVCard(result)
-    if (!vcard) {
-      await safeSend(sock, targetJid, { text: '⚠️ No se pudo construir el contacto.' }, opts)
-      return
+      return;
     }
 
-    const contactMsg = {
-      contacts: {
-        displayName: result.vcardName || result.name || 'Contacto',
-        contacts: [{
-          displayName: result.vcardName || result.name || 'Contacto',
-          vcard
-        }]
+    if (result.type === 'list' || result.sections) {
+      await sendListFixedV2(sock, targetJid, result, ctx);
+      return;
+    }
+
+    if (result.type === 'buttons' || result.buttons) {
+      await sendButtonsFixedV2(sock, targetJid, result, ctx);
+      return;
+    }
+
+    const mediaTypes = ['image', 'video', 'audio', 'sticker'];
+    const mediaType = mediaTypes.find(t => result.type === t && (result[t] || result.media || result.file));
+
+    if (mediaType) {
+      const media = toMediaInput(result[mediaType] || result.media || result.file);
+      if (media) {
+        const msg = { [mediaType]: media };
+        if (result.caption) msg.caption = result.caption;
+        if (result.mimetype) msg.mimetype = result.mimetype;
+        await safeSend(sock, targetJid, msg, opts);
+      } else {
+        await safeSend(sock, targetJid, { text: `⚠️ No se pudo cargar el ${mediaType}.` }, opts);
       }
+      return;
     }
 
-    await safeSend(sock, targetJid, contactMsg, opts)
-    return
+    if (result.payload && typeof result.payload === 'object') {
+      const payload = { ...result.payload };
+      if (!payload.text && result.text) payload.text = result.text;
+      await safeSend(sock, targetJid, payload, opts);
+      return;
+    }
+
+    await safeSend(sock, targetJid, { text: result.text || '✅ Listo' }, opts);
+  } catch (error) {
+    // Silenciar errores para no crashear el subbot
   }
-
-  if (result.type === 'list' || result.sections) {
-    await sendListFixedV2(sock, targetJid, result, ctx)
-    return
-  }
-
-  if (result.type === 'buttons' || result.buttons) {
-    await sendButtonsFixedV2(sock, targetJid, result, ctx)
-    return
-  }
-
-  if (result.type === 'image') {
-    const img = toMediaInput(result.image || result.media || result.file)
-    if (!img) {
-      await safeSend(sock, targetJid, { text: '⚠️ No se pudo cargar la imagen.' }, opts)
-      return
-    }
-
-    const msg = {
-      image: img,
-      caption: result.caption || result.text || result.message || ''
-    }
-
-    await safeSend(sock, targetJid, msg, opts)
-    return
-  }
-
-  if (result.type === 'video') {
-    const vid = toMediaInput(result.video || result.media || result.file)
-    if (!vid) {
-      await safeSend(sock, targetJid, { text: '⚠️ No se pudo cargar el video.' }, opts)
-      return
-    }
-
-    const msg = {
-      video: vid,
-      caption: result.caption || result.text || result.message || ''
-    }
-
-    await safeSend(sock, targetJid, msg, opts)
-    return
-  }
-
-  if (result.type === 'audio') {
-    const aud = toMediaInput(result.audio || result.media || result.file)
-    if (!aud) {
-      await safeSend(sock, targetJid, { text: '⚠️ No se pudo cargar el audio.' }, opts)
-      return
-    }
-
-    const msg = {
-      audio: aud,
-      mimetype: result.mimetype || 'audio/mpeg'
-    }
-
-    await safeSend(sock, targetJid, msg, opts)
-    return
-  }
-
-  if (result.type === 'sticker') {
-    const stk = toMediaInput(result.sticker || result.media || result.file)
-    if (!stk) {
-      await safeSend(sock, targetJid, { text: '⚠️ No se pudo cargar el sticker.' }, opts)
-      return
-    }
-
-    const msg = {
-      sticker: stk
-    }
-
-    await safeSend(sock, targetJid, msg, opts)
-    return
-  }
-
-  if (result.payload && typeof result.payload === 'object') {
-    const payload = { ...result.payload }
-    if (!payload.text && result.text) payload.text = result.text
-    await safeSend(sock, targetJid, payload, opts)
-    return
-  }
-
-  await safeSend(sock, targetJid, { text: result.text || '✅ Listo' }, opts)
 }
 
+
 /* ========================
-   dispatch
+   dispatch - REFACTORIZADO Y ESTABLE
    ======================== */
+export async function dispatch(ctx = {}, runtimeContext = {}) {
+  const { sock, remoteJid, isGroup } = ctx;
+  if (!sock || !remoteJid) return false;
 
-export async function dispatch(ctx = {}) {
-  const { sock, remoteJid, isGroup } = ctx
-  if (!sock || !remoteJid) return false
+  const effectiveCtx = { ...ctx, ...runtimeContext };
 
   try {
-    const textForGlobal = (ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || ''
-    const trimmed = textForGlobal.trim().toLowerCase()
-    const isBotGlobalCmd = /^([\/!.#?$~]\s*)?bot\s+global\b/.test(trimmed)
-    const on = await isBotGloballyActive()
-    if (!on && !isBotGlobalCmd) return false
-  } catch { }
+    const textForGlobal = (ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || '';
+    const on = await isBotGloballyActive();
+    if (!on && !/^\/?bot\s+global\b/i.test(textForGlobal)) return false;
 
-  if (isGroup) {
-    const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true)
-    if (!botEnabled) {
-      const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
-      const firstToken = (text || '').trim().split(/\s+/)[0].toLowerCase()
-      const isBotCommand = firstToken === '/bot' || firstToken === 'bot'
-      if (!isBotCommand) return false
+    if (isGroup && !ctx.fromMe) {
+      const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true);
+      if (!botEnabled && !/^\/?bot\b/i.test(textForGlobal)) return false;
     }
-  }
 
-  const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message))
-  const parsed = parseCommand(text)
-  let command = parsed.command
-  const args = parsed.args || []
+    const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message));
+    const parsed = parseCommand(text);
+    let command = parsed.command;
+    const args = parsed.args || [];
 
-  if (isGroup && command) {
-    try {
-      const senderJid = ctx.sender || ctx.participant || ctx.remoteJid
+    if (!command) return false;
+
+    if (isGroup) {
+      const senderJid = ctx.sender || ctx.participant || ctx.remoteJid;
       if (senderJid) {
-        const userKey = onlyDigits(senderJid)
-        const banned = await db('group_bans')
-          .where({ group_id: remoteJid })
-          .andWhere(q => {
-            if (userKey) {
-              q.where('user_jid', userKey).orWhere('user_jid', senderJid)
-            } else {
-              q.where('user_jid', senderJid)
-            }
-          })
-          .first()
-
-        if (banned && command !== '/ban' && command !== '/unban') {
-          return false
-        }
+        const banned = await db('group_bans').where({ group_id: remoteJid, user_jid: onlyDigits(senderJid) }).first();
+        if (banned && command !== '/unban') return false;
       }
-    } catch (e) {
-      appLogger.error('Error comprobando bans de grupo:', e)
     }
-  }
 
-  if (traceEnabled()) {
-    const isGrp = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
-    console.log(
-      `[router] Comando: ${command || '(ninguno)'} | Grupo: ${isGrp ? 'sí' : 'no'} | De: ${ctx.senderNumber || ctx.sender || '?'} | Owner: ${ctx.isOwner}`,
-    )
-  }
-
-  if (!command) {
-    try {
-      const msg = ctx.message?.message || {}
-      const isListSelection =
-        !!msg.listResponseMessage ||
-        !!msg.buttonsResponseMessage ||
-        !!msg.templateButtonReplyMessage ||
-        !!msg.interactiveResponseMessage ||
-        !!msg.interactiveMessage
-
-      if (isListSelection) {
-        console.log('[router] ⚠️ Selección de lista/botón detectada pero no se extrajo comando')
-        console.log('[router] Claves del mensaje:', Object.keys(msg))
-
-        const raw = String(text || '').trim()
-        if (raw && !raw.startsWith('/')) {
-          console.log('[router] Usaremos raw como comando implícito:', raw)
-          command = raw.split(/\s+/)[0]
-        }
-      }
-    } catch { }
-    if (!command) return false
-  }
-
-  console.log(`[DEBUG] Command found: ${command}, checking registry...`)
-
-  let registry = null
-  try {
-    if (global.__COMMAND_REGISTRY && global.__COMMAND_REGISTRY.timestamp) {
-      registry = global.__COMMAND_REGISTRY.registry || null
-    } else {
-      const registryModulePath = path.resolve(__dirname, './src/commands/registry/index.js')
-      console.log('[registry] attempting to preload registry module:', registryModulePath)
-      const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 4, timeoutMs: 20000, backoffMs: 1500 })
-      const get = mod?.getCommandRegistry
-      registry = typeof get === 'function' ? get() : null
-      global.__COMMAND_REGISTRY = { registry, loadedFrom: registryModulePath, timestamp: Date.now() }
-      if (registry) console.log('[registry] precargado OK')
-      else console.warn('[registry] módulo cargado pero no devolvió registry (getCommandRegistry missing)')
-    }
-  } catch (e) {
-    console.error('[registry] unexpected error while loading registry:', e && (e.message || e))
-  }
-  console.log('[DEBUG] Registry loaded:', !!registry, 'has command:', registry?.has(command))
-
-  if (!registry || !registry.has(command)) {
-    console.log(`[DEBUG] Command ${command} not found in registry, checking lazy fallbacks...`)
-    const lazy = new Map()
-    lazy.set('/debugbot', async (ctx2) => (await import('./src/commands/admin.js')).debugBot(ctx2))
-    lazy.set('/admins', async (ctx2) => (await import('./src/commands/groups.js')).admins(ctx2))
-    lazy.set('/debugadmin', async (ctx2) => (await import('./src/commands/groups.js')).debugadmin(ctx2))
-    lazy.set('/whoami', async (ctx2) => (await import('./src/commands/groups.js')).whoami(ctx2))
-    lazy.set('/bot', async (ctx2) => (await import('./src/commands/bot-control.js')).bot(ctx2))
-    lazy.set('/help', async (ctx2) => {
-      const keys = Array.from(lazy.keys()).sort()
-      const text2 = '📋 Comandos disponibles\n\n' + keys.map(k => `• ${k}`).join('\n')
-      return { success: true, message: text2, quoted: true }
-    })
-
-    if (lazy.has(command)) {
-      console.log(`[DEBUG] Using lazy fallback for ${command}`)
+    let registry = global.__COMMAND_REGISTRY?.registry;
+    if (!registry) {
       try {
-        const params = { ...ctx, text, command, args, fecha: new Date().toISOString() }
-        const out = await antibanMiddleware.wrapCommand(
-          () => lazy.get(command)(params),
-          command
-        )
-        console.log('[DEBUG] Lazy command executed, result:', out)
-        await sendResult(sock, remoteJid, out, ctx)
-        return true
+        const registryModulePath = path.resolve(__dirname, './src/commands/registry/index.js');
+        const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 2, timeoutMs: 10000, backoffMs: 500 });
+        const get = mod?.getCommandRegistry;
+        registry = typeof get === 'function' ? get() : null;
+        if (registry) global.__COMMAND_REGISTRY = { registry, loadedFrom: registryModulePath, timestamp: Date.now() };
       } catch (e) {
-        console.log('[DEBUG] Error in lazy command:', e?.message || e)
-        await safeSend(sock, remoteJid, { text: `⚠️ Error ejecutando ${command}: ${e?.message || e}` })
-        return true
+        // Fallback a lazy-loading si el pre-load falla.
       }
     }
 
-    console.log('[DEBUG] No handler found for command', command)
-    return false
-  }
-
-  const entry = registry.get(command)
-  console.log('[DEBUG] Found registry entry for', command, '::', !!entry)
-  const params = { ...ctx, text, command, args, fecha: new Date().toISOString() }
-
-  try {
-    console.log('[DEBUG] Executing registry command', command, '...')
-    const result = await antibanMiddleware.wrapCommand(
-      () => entry.handler(params),
-      command
-    )
-    console.log('[DEBUG] Registry command executed, result type:', typeof result, 'keys:', result ? Object.keys(result) : 'null')
-
-    const isSuccess = result?.success !== false && !result?.error
-    const reactionEmoji = isSuccess ? '✅' : '❌'
-
-    try {
-      await sock.sendMessage(remoteJid, {
-        react: { text: reactionEmoji, key: ctx.message.key }
-      })
-    } catch { }
-
-    console.log('[DEBUG] Sending result to', remoteJid, '...')
-    if (Array.isArray(result)) {
-      for (const r of result) await sendResult(sock, remoteJid, r, ctx)
-    } else {
-      await sendResult(sock, remoteJid, result, ctx)
+    const entry = registry?.get(command);
+    if (!entry || typeof entry.handler !== 'function') {
+      return false; // Comando no encontrado, no hacer nada.
     }
 
-    console.log('[DEBUG] Result sent successfully')
-    return true
-  } catch (e) {
-    console.log('[DEBUG] Registry command failed:', e?.message || e)
-    try {
-      await sock.sendMessage(remoteJid, {
-        react: { text: '❌', key: ctx.message.key }
-      })
-    } catch { }
+    const params = { ...effectiveCtx, text, command, args, fecha: new Date().toISOString() };
 
-    await safeSend(sock, remoteJid, { text: `⚠️ Error ejecutando ${command}: ${e?.message || e}` })
-    return true
+    try {
+      const result = await antibanMiddleware.wrapCommand(() => entry.handler(params), command);
+      const isSuccess = result?.success !== false && !result?.error;
+
+      try {
+        await sock.sendMessage(remoteJid, { react: { text: isSuccess ? '✅' : '❌', key: ctx.message.key } });
+      } catch { /* ignorar error de reacción */ }
+
+      if (Array.isArray(result)) {
+        for (const r of result) await sendResult(sock, remoteJid, r, ctx);
+      } else {
+        await sendResult(sock, remoteJid, result, ctx);
+      }
+      return true;
+    } catch (e) {
+      try {
+        await sock.sendMessage(remoteJid, { react: { text: '❌', key: ctx.message.key } });
+      } catch { /* ignorar */ }
+
+      await safeSend(sock, remoteJid, { text: `⚠️ Error ejecutando ${command}: ${e?.message || e}` });
+      return true; // Se manejó el error, así que cuenta como 'handled'.
+    }
+  } catch (error) {
+    return false; // Error en la lógica de pre-validación.
   }
 }
 
