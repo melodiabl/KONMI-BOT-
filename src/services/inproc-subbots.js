@@ -24,7 +24,9 @@ const SUBBOT_IDLE_TIMEOUT_MS = parseInt(
 ); // 24 horas por defecto
 const MAX_SUBBOT_DIRS = parseInt(process.env.MAX_SUBBOT_DIRS ?? "60", 10);
 
+// Usar un EventEmitter centralizado que NO interfiera con el bot principal
 const eventBus = new EventEmitter();
+eventBus.setMaxListeners(100);
 const activeSubbots = new Map();
 const listenersByCode = new Map();
 
@@ -112,8 +114,6 @@ function buildSubbotRecord({
 function sanitiseTarget(number) {
   return typeof number === "string" ? number.replace(/[^0-9]/g, "") : "";
 }
-
-eventBus.setMaxListeners(50);
 
 export function onSubbotEvent(eventName, handler) {
   if (typeof handler !== "function") return () => {};
