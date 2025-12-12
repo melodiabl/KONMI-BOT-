@@ -1915,8 +1915,17 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     if (isGroup) {
       const senderJid = ctx.sender || ctx.participant || ctx.remoteJid;
       if (senderJid) {
-        const banned = await db('group_bans').where({ group_id: remoteJid, user_jid: onlyDigits(senderJid) }).first();
-        if (banned && command !== '/unban') return false;
+        try {
+          const banned = await db('group_bans')
+            .where({ group_id: remoteJid, user_jid: onlyDigits(senderJid) })
+            .first();
+          if (banned && command !== '/unban') return false;
+        } catch (e) {
+          // Si la tabla group_bans no existe o falla la consulta, no bloqueamos el comando
+          if (traceEnabled()) {
+            console.warn('[dispatch] fallback sin group_bans:', e?.message || e);
+          }
+        }
       }
     }
 
