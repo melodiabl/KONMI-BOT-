@@ -69,8 +69,34 @@ const LOG_COLORS = {
   DEFAULT: ANSI.fg.white
 }
 
+const LOG_MODE = (process.env.LOG_MODE || 'minimal').toLowerCase()
+const MINIMAL_LOGS = LOG_MODE === 'minimal' || LOG_MODE === 'chat'
+const ALLOWED_SOURCES = new Set(['DM', 'GROUP', 'CHANNEL'])
+const ALLOWED_LEVELS = new Set(['ERROR', 'WARN'])
+
+const PINO_LEVEL_MAP = {
+  ERROR: 'error',
+  WARN: 'warn',
+  DEBUG: 'debug',
+  INFO: 'info',
+  SUCCESS: 'info',
+  ADMIN: 'info',
+  GROUP: 'info',
+  DM: 'info',
+  CHANNEL: 'info',
+  COMMAND: 'info',
+  METADATA: 'debug'
+}
+
 const SHOW_LOG_DETAILS =
   (process.env.LOG_DETAILS || "").toLowerCase() === "true"
+
+const shouldLog = (level, source) => {
+  if (!MINIMAL_LOGS) return true
+  if (ALLOWED_LEVELS.has(level)) return true
+  if (ALLOWED_SOURCES.has(source)) return true
+  return false
+}
 
 function formatLog(level, source, message, data = null) {
   const timestamp = new Date().toISOString()
@@ -92,7 +118,20 @@ function formatLog(level, source, message, data = null) {
 }
 
 function logMessage(level, source, message, data = null) {
+  if (!shouldLog(level, source)) return
   const formattedLog = formatLog(level, source, message, data)
+
+  const pinoLevel = PINO_LEVEL_MAP[level] || 'info'
+  try {
+    if (typeof logger?.[pinoLevel] === 'function') {
+      logger[pinoLevel](
+        { scope: source, level, ...(data || {}) },
+        message
+      )
+    }
+  } catch (e) {
+    // Silenciar fallos de logger estructurado para no romper el flujo
+  }
 
   switch (level) {
     case 'ERROR':
@@ -112,7 +151,9 @@ function logMessage(level, source, message, data = null) {
 function prettyPrintMessageLog(info) {
   const {
     remoteJid,
+    chatName,
     senderNumber,
+    senderName,
     text,
     isCommand,
     isGroup,
@@ -128,15 +169,16 @@ function prettyPrintMessageLog(info) {
       : LOG_COLORS.DM
 
   const reset = ANSI.reset
-
   const title = isChannel
-    ? '📣 MENSAJE DE CANAL'
+    ? 'MENSAJE DE CANAL'
     : isGroup
-      ? '👥 MENSAJE DE GRUPO'
-      : '💬 MENSAJE PRIVADO'
+      ? 'MENSAJE DE GRUPO'
+      : 'MENSAJE PRIVADO'
 
   const who = fromMe ? 'BOT' : 'USUARIO'
   const tipo = isChannel ? 'CANAL' : isGroup ? 'GRUPO' : 'PRIVADO'
+  const displayChat = getDisplayChat(remoteJid, chatName)
+  const senderLabel = senderName || senderNumber || 'desconocido'
 
   const cleanText = (text || '').replace(/\s+/g, ' ').trim()
   const contentWidth = maxWidth - 2
@@ -149,21 +191,21 @@ function prettyPrintMessageLog(info) {
   const pad = (s = '') =>
     (s.length > contentWidth ? s.slice(0, contentWidth) : s.padEnd(contentWidth, ' '))
 
+  const border = '-'.repeat(contentWidth)
   const lines = [
-    `${color}╔${'═'.repeat(maxWidth)}╗`,
-    `${color}║${reset}${pad(title)}${color}║`,
-    `${color}╠${'═'.repeat(maxWidth)}╣`,
-    `${color}║${reset}${pad(`🧾 JID: ${remoteJid || '-'}`)}${color}║`,
-    `${color}║${reset}${pad(`👤 De: ${senderNumber || 'desconocido'} (${who})`)}${color}║`,
-    `${color}║${reset}${pad(`📂 Tipo: ${tipo}`)}${color}║`,
-    `${color}║${reset}${pad(`⚡ Comando: ${isCommand ? 'Sí' : 'No'}`)}${color}║`,
-    `${color}╠${'═'.repeat(maxWidth)}╣`,
-    `${color}║${reset}${pad(preview)}${color}║`,
-    `${color}╚${'═'.repeat(maxWidth)}╝${reset}`
+    `${color}+${border}+${reset}`,
+    `${color}|${reset} ${pad(title)} ${color}|${reset}`,
+    `${color}|${reset} ${pad(`Chat: ${displayChat}`)} ${color}|${reset}`,
+    `${color}|${reset} ${pad(`De: ${senderLabel} (${who})`)} ${color}|${reset}`,
+    `${color}|${reset} ${pad(`Tipo: ${tipo} | Comando: ${isCommand ? 'Si' : 'No'}`)} ${color}|${reset}`,
+    `${color}+${border}+${reset}`,
+    `${color}|${reset} ${pad(preview)} ${color}|${reset}`,
+    `${color}+${border}+${reset}`
   ]
 
   console.log(lines.join('\n'))
 }
+
 
 /* ===== Utils mínimas ===== */
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
@@ -171,6 +213,84 @@ const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
 export const sanitizePhoneNumberInput = (v) => {
   const digits = onlyDigits(v)
   return digits || null
+}
+
+// Cache de nombres de chats/contactos para logs legibles
+const chatNameCache = new Map()
+
+const normalizeName = (value) => {
+  if (!value) return null
+  const clean = String(value).trim()
+  return clean.length ? clean : null
+}
+
+function cacheChatName(jid, ...candidates) {
+  if (!jid) return chatNameCache.get(jid) || null
+  const picked = candidates.map(normalizeName).find(Boolean)
+  if (picked) {
+    chatNameCache.set(jid, picked)
+    return picked
+  }
+  return chatNameCache.get(jid) || null
+}
+
+async function resolveChatName(jid, sockRef, hintName = null) {
+  if (!jid) return null
+  if (chatNameCache.has(jid)) return chatNameCache.get(jid)
+
+  if (hintName) {
+    const cached = cacheChatName(jid, hintName)
+    if (cached) return cached
+  }
+
+  if (jid.endsWith('@g.us') && typeof sockRef?.groupMetadata === 'function') {
+    try {
+      const meta = await sockRef.groupMetadata(jid)
+      const name = cacheChatName(jid, meta?.subject)
+      if (name) return name
+    } catch (e) {
+      // Silenciar errores de metadata para no romper el flujo
+    }
+  }
+
+  if (!jid.endsWith('@g.us')) {
+    const digits = onlyDigits(jid)
+    if (digits) {
+      cacheChatName(jid, `+${digits}`)
+    }
+  }
+
+  return chatNameCache.get(jid) || null
+}
+
+function getDisplayChat(jid, name) {
+  if (!jid) return '-'
+  return name ? `${name} (${jid})` : jid
+}
+
+function attachNameListeners(sockInstance) {
+  if (!sockInstance?.ev?.on) return
+  const safeSet = (jid, ...names) => cacheChatName(jid, ...names)
+
+  sockInstance.ev.on('contacts.upsert', (contacts = []) => {
+    contacts.forEach((c) => safeSet(c.id || c.jid, c.notify, c.name, c.verifiedName, c.pushName))
+  })
+
+  sockInstance.ev.on('contacts.update', (contacts = []) => {
+    contacts.forEach((c) => safeSet(c.id || c.jid, c.notify, c.name, c.verifiedName, c.pushName))
+  })
+
+  sockInstance.ev.on('groups.upsert', (groups = []) => {
+    groups.forEach((g) => safeSet(g.id || g.jid, g.subject, g.name))
+  })
+
+  sockInstance.ev.on('groups.update', (groups = []) => {
+    groups.forEach((g) => safeSet(g.id || g.jid, g.subject, g.name))
+  })
+
+  sockInstance.ev.on('chats.upsert', (chats = []) => {
+    chats.forEach((c) => safeSet(c.id || c.jid, c.name, c.subject, c.title, c.pushName))
+  })
 }
 
 /**
@@ -554,6 +674,9 @@ export async function connectToWhatsApp(
     logMessage('ERROR', 'EVENTS', 'Error registrando creds.update', { error: e.message })
     throw e
   }
+
+  // Mapear nombres de grupos/contactos para logs legibles
+  attachNameListeners(sock)
 
   // ====== PRELOAD: router/module de comandos ======
   ;(async () => {
@@ -1033,6 +1156,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     msgObj.videoMessage?.caption ||
     ''
   ).trim()
+  const pushName = message?.pushName || msgObj?.pushName || null
 
   const isCommand = /^[\\/!.#?$~]/.test(rawText)
   const cmdFirst = isCommand ? rawText.split(/\s+/)[0] : ""
@@ -1122,6 +1246,10 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   } catch {
     senderNumber = onlyDigits(sender || '')
   }
+  const chatName = await resolveChatName(remoteJid, s, isGroup ? null : pushName)
+  const senderName = await resolveChatName(sender, s, pushName)
+  const chatDisplay = getDisplayChat(remoteJid, chatName)
+  const senderLabel = senderName || senderNumber || sender || 'desconocido'
 
   let ownerNumber = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '')
   if (!ownerNumber && botNumber) {
@@ -1129,25 +1257,39 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   }
   const isOwner = !!(ownerNumber && senderNumber && senderNumber === ownerNumber)
 
+  const allowMessageLog = shouldLog('INFO', messageType)
+
   logMessage('INFO', messageType, `Mensaje recibido [${messageSource}]`, {
     remoteJid,
+    chatName,
+    chatDisplay,
+    senderNumber,
+    senderName,
     text: rawText.substring(0, 100),
     isCommand,
     messageId: message.key.id
   })
 
-  prettyPrintMessageLog({
-    remoteJid,
-    senderNumber,
-    text: rawText,
-    isCommand,
-    isGroup,
-    isChannel,
-    fromMe
-  })
+  if (allowMessageLog) {
+    prettyPrintMessageLog({
+      remoteJid,
+      chatName,
+      senderNumber,
+      senderName,
+      text: rawText,
+      isCommand,
+      isGroup,
+      isChannel,
+      fromMe
+    })
+  }
 
   logMessage('INFO', 'USER-INFO', 'Identificación de usuario', {
+    remoteJid,
+    chatName,
+    chatDisplay,
     senderNumber,
+    senderName,
     ownerNumber,
     isOwner,
     botNumber
@@ -1177,6 +1319,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 
       logMessage('INFO', 'METADATA', `Obteniendo metadata del grupo: ${remoteJid}`)
       groupMetadata = await s.groupMetadata(remoteJid)
+      cacheChatName(remoteJid, groupMetadata?.subject)
 
       logMessage('METADATA', 'GROUP', `Metadata obtenida exitosamente`, {
         groupId: remoteJid,
