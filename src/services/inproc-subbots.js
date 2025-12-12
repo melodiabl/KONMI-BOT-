@@ -9,22 +9,14 @@ import logger from "../config/logger.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Anchor to backend directory so it doesn't depend on process.cwd()
 const SUBBOT_BASE_DIR = path.resolve(__dirname, "storage", "subbots");
 
 const SUBBOTS_ENABLED = String(process.env.SUBBOTS_ENABLED ?? "true").toLowerCase() !== "false";
 const MAX_ACTIVE_SUBBOTS = parseInt(process.env.MAX_ACTIVE_SUBBOTS ?? "5", 10);
-const MAX_SUBBOTS_PER_USER = parseInt(
-  process.env.MAX_SUBBOTS_PER_USER ?? "2",
-  10,
-);
-const SUBBOT_IDLE_TIMEOUT_MS = parseInt(
-  process.env.SUBBOT_IDLE_TIMEOUT_MS ?? String(5 * 60 * 1000),
-  10,
-); // 5 minutos por defecto (reducido de 24 horas)
+const MAX_SUBBOTS_PER_USER = parseInt(process.env.MAX_SUBBOTS_PER_USER ?? "2", 10);
+const SUBBOT_IDLE_TIMEOUT_MS = parseInt(process.env.SUBBOT_IDLE_TIMEOUT_MS ?? String(5 * 60 * 1000), 10);
 const MAX_SUBBOT_DIRS = parseInt(process.env.MAX_SUBBOT_DIRS ?? "30", 10);
 
-// Usar un EventEmitter centralizado que NO interfiera con el bot principal
 const eventBus = new EventEmitter();
 eventBus.setMaxListeners(100);
 const activeSubbots = new Map();
@@ -48,10 +40,6 @@ function cleanupSubbotStorageLimit() {
           const stats = fs.statSync(dirPath);
           return { name: entry.name, dirPath, mtimeMs: stats.mtimeMs };
         } catch (error) {
-          logger.warn("No se pudo obtener información de directorio de subbot", {
-            code: entry.name,
-            error: error?.message,
-          });
           return null;
         }
       })
@@ -67,20 +55,12 @@ function cleanupSubbotStorageLimit() {
       try {
         fs.rmSync(entry.dirPath, { recursive: true, force: true });
         excess -= 1;
-        logger.info(
-          `🗑️ Directorio de subbot ${entry.name} eliminado para liberar espacio`,
-        );
       } catch (error) {
-        logger.warn("No se pudo eliminar directorio de subbot", {
-          code: entry.name,
-          error: error?.message,
-        });
+        // Silenciar
       }
     }
   } catch (error) {
-    logger.warn("Error durante la limpieza de directorios de subbots", {
-      error: error?.message,
-    });
+    // Silenciar
   }
 }
 
@@ -182,7 +162,7 @@ export async function stopSubbot(code) {
   try {
     entry.processRef?.kill("SIGTERM");
   } catch (error) {
-    logger.warn(`Error al detener subbot ${code}:`, error);
+    // Silenciar
   }
   activeSubbots.delete(code);
   unregisterSubbotListeners(code);
@@ -209,8 +189,7 @@ export async function launchSubbot(options = {}) {
     if (MAX_ACTIVE_SUBBOTS > 0 && activeSubbots.size >= MAX_ACTIVE_SUBBOTS) {
       return {
         success: false,
-        error:
-          "Capacidad máxima de subbots en ejecución alcanzada. Intenta más tarde.",
+        error: "Capacidad máxima de subbots en ejecución alcanzada. Intenta más tarde.",
       };
     }
 
@@ -228,7 +207,6 @@ export async function launchSubbot(options = {}) {
 
     ensureDirectory(SUBBOT_BASE_DIR);
     cleanupSubbotStorageLimit();
-    // Allow injecting specific directory to reuse existing credentials
     const subbotDir = options.baseDir
       ? path.resolve(options.baseDir)
       : options.authDir
@@ -254,8 +232,6 @@ export async function launchSubbot(options = {}) {
         SUB_METADATA: JSON.stringify(metadata),
         SUB_DISPLAY: metadata.customPairingDisplay || "KONMI-BOT",
       },
-      // Si no está en modo verbose, no heredar stdout/stderr para que
-      // los QR/códigos de subbots no aparezcan en los logs del proceso padre.
       stdio: verboseSubbots
         ? ["inherit", "inherit", "inherit", "ipc"]
         : ["ignore", "ignore", "ignore", "ipc"],
@@ -274,7 +250,6 @@ export async function launchSubbot(options = {}) {
     });
 
     const publicRecord = { ...subbotRecord };
-
     let timeoutHandle = null;
 
     activeSubbots.set(code, {
@@ -290,10 +265,6 @@ export async function launchSubbot(options = {}) {
     const emit = (event, data) => {
       const current = activeSubbots.get(code) || publicRecord;
       if (event === "error" && eventBus.listenerCount("error") === 0) {
-        logger.error("Evento error de subbot sin listeners registrados", {
-          subbot: current,
-          data,
-        });
         return;
       }
       eventBus.emit(event, { subbot: current, data });
@@ -312,8 +283,6 @@ export async function launchSubbot(options = {}) {
       emit("stopped", { reason, info });
     };
 
-    // 🔧 CORRECCIÓN CRÍTICA: Re-emitir TODOS los eventos al eventBus
-    // IMPORTANTE: Este listener DEBE registrarse INMEDIATAMENTE después del fork
     child.on("message", (message) => {
       try {
         if (!message || typeof message.event !== "string") {
@@ -322,7 +291,6 @@ export async function launchSubbot(options = {}) {
         
         const info = activeSubbots.get(code) || publicRecord;
 
-        // Actualizar estado interno según el evento
         if (message.event === "connected") {
           info.status = "connected";
           info.connectedAt = new Date().toISOString();
@@ -353,18 +321,17 @@ export async function launchSubbot(options = {}) {
               force: true,
             });
           } catch (cleanupError) {
-            // Silenciar error de limpieza
+            // Silenciar
           }
         }
 
-        // Emitir evento al eventBus
         eventBus.emit(message.event, {
           subbot: { ...info },
           data: message.data || null,
         });
         
       } catch (err) {
-        logger.error(`Error procesando mensaje de subbot ${code}:`, err?.message || err);
+        // Silenciar
       }
     });
 
@@ -386,7 +353,6 @@ export async function launchSubbot(options = {}) {
     });
 
     child.on("error", (error) => {
-      logger.error("Error en proceso de subbot:", error);
       eventBus.emit("error", {
         subbot: { ...publicRecord },
         data: { message: error.message },
@@ -400,16 +366,10 @@ export async function launchSubbot(options = {}) {
 
     if (idleTimeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
-        logger.warn(
-          `Subbot ${code} superó el tiempo máximo de espera (${idleTimeoutMs}ms), finalizando proceso`,
-        );
         try {
           child.kill("SIGTERM");
         } catch (error) {
-          logger.warn("No se pudo finalizar subbot tras timeout", {
-            code,
-            error: error?.message,
-          });
+          // Silenciar
         }
         eventBus.emit("error", {
           subbot: { ...publicRecord },
@@ -429,7 +389,6 @@ export async function launchSubbot(options = {}) {
       subbot: publicRecord,
     };
   } catch (error) {
-    logger.error("No se pudo lanzar el subbot:", error);
     return {
       success: false,
       error: error.message || "Error desconocido",
