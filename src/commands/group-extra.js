@@ -9,16 +9,25 @@ export async function tagall(ctx){
     const parts = meta?.participants || []
     const mentions = parts.map(p => p.id).slice(0, 200)
     const chunks = []
-    for (let i=0; i<mentions.length; i+=25) chunks.push(mentions.slice(i, i+25))
-    let idx = 1
-    for (const chunk of chunks) {
-      const text = chunk.map(j=>`@${String(j).split('@')[0]}`).join(' ')
-      await sock.sendMessage(remoteJid, { text, mentions: chunk })
-      idx++
+    const getName = (jid) => {
+      try {
+        const p = parts.find(x => x?.id === jid)
+        return p?.notify || p?.name || null
+      } catch { return null }
     }
-    return { success:true, message:`👥 Taggeados ${mentions.length} miembros`, quoted:true }
-  } catch { return { success:false, message:'⚠️ No pude mencionar a todos', quoted:true } }
+    for (let i=0; i<mentions.length; i+=25) chunks.push(mentions.slice(i, i+25))
+    for (const chunk of chunks) {
+      const text = chunk.map(j=>{
+        const num = String(j).split('@')[0]
+        const name = getName(j)
+        return name ? `@${num} (${name})` : `@${num}`
+      }).join(' ')
+      await sock.sendMessage(remoteJid, { text, mentions: chunk })
+    }
+    return { success:true, message:`?? Taggeados ${mentions.length} miembros`, quoted:true }
+  } catch { return { success:false, message:'?? No pude mencionar a todos', quoted:true } }
 }
+
 
 import { getTheme } from '../utils/utils/theme.js'
 
