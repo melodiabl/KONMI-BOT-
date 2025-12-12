@@ -285,7 +285,6 @@ export async function launchSubbot(options = {}) {
       timeoutHandle: null,
     });
     
-    console.log(`[inproc-subbots] 🚀 Child process forked para subbot ${code}, PID: ${child.pid}`);
     eventBus.emit("launching", { subbot: { ...publicRecord } });
 
     const emit = (event, data) => {
@@ -331,35 +330,30 @@ export async function launchSubbot(options = {}) {
             clearTimeout(info.timeoutHandle);
             info.timeoutHandle = null;
           }
-          logger.info(`✅ Subbot ${code} conectado`);
         }
         
         if (message.event === "disconnected") {
           info.status = "disconnected";
           info.disconnectedAt = new Date().toISOString();
-          logger.warn(`⚪ Subbot ${code} desconectado`);
         }
         
         if (message.event === "error") {
           info.status = "error";
           info.error = message.data?.message || "Error desconocido";
-          logger.error(`❌ Error en subbot ${code}: ${info.error}`);
         }
         
         if (message.event === "logged_out") {
           info.status = "logged_out";
           info.disconnectedAt = new Date().toISOString();
           info.error = message.data?.message || "Sesión cerrada desde WhatsApp";
-          logger.warn(`🚪 Subbot ${code} cerró sesión`);
           try {
             const dirToRemove = info?.dir || path.join(SUBBOT_BASE_DIR, code);
             fs.rmSync(dirToRemove, {
               recursive: true,
               force: true,
             });
-            logger.info(`🗑️ Credenciales del subbot ${code} eliminadas`);
           } catch (cleanupError) {
-            logger.warn(`No se pudo eliminar directorio del subbot ${code}`, { error: cleanupError?.message });
+            // Silenciar error de limpieza
           }
         }
 
