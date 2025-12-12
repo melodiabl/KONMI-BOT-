@@ -1529,7 +1529,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 
     if (typeof dispatch === 'function') {
       logMessage('INFO', 'DISPATCH', 'Ejecutando dispatch del mensaje')
-      const handled = await dispatch(ctx)
+      const handled = await dispatch(ctx, runtimeContext)
       logMessage('INFO', 'DISPATCH', `Mensaje procesado: ${handled === true ? 'HANDLED' : 'NOT_HANDLED'}`)
 
       const replyFallback = String(process.env.REPLY_ON_UNMATCHED || 'false').toLowerCase() === 'true'
