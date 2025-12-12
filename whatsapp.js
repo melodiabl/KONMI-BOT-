@@ -472,6 +472,47 @@ export async function checkSessionState(authPath = null) {
   return { hasCreds: false, authPath: effectivePath }
 }
 
+export async function clearWhatsAppSession(authPath = null) {
+  const baseDir = authPath || savedAuthPath || (process.env.AUTH_DIR || DEFAULT_AUTH_DIR)
+  const resolved = path.resolve(baseDir)
+
+  try {
+    await teardownSocket()
+  } catch (e) {
+    logMessage('WARN', 'SESSION', 'Error al cerrar el socket antes de limpiar', { error: e?.message })
+  }
+
+  qrCode = null
+  qrCodeImage = null
+  currentPairingCode = null
+  currentPairingNumber = null
+  currentPairingGeneratedAt = null
+  currentPairingExpiresAt = null
+  pairingTargetNumber = null
+  connectionStatus = 'disconnected'
+
+  try {
+    if (fs.existsSync(resolved)) {
+      fs.rmSync(resolved, { recursive: true, force: true })
+      logMessage('SUCCESS', 'SESSION', `Sesion limpiada en ${resolved}`)
+    } else {
+      logMessage('INFO', 'SESSION', `No hay datos de sesion en ${resolved} para limpiar`)
+    }
+  } catch (e) {
+    logMessage('ERROR', 'SESSION', 'No se pudo limpiar la sesion de WhatsApp', { error: e?.message })
+    throw e
+  }
+
+  try {
+    fs.mkdirSync(resolved, { recursive: true })
+  } catch (e) {
+    logMessage('WARN', 'SESSION', 'No se pudo recrear el directorio de sesion', { error: e?.message })
+  }
+
+  savedAuthPath = resolved
+  return resolved
+}
+
 export const getSocket = () => sock
 export const getQRCode = () => qrCode
 export const getQRCodeImage = () => qrCodeImage
