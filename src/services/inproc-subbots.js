@@ -13,16 +13,16 @@ const __dirname = path.dirname(__filename);
 const SUBBOT_BASE_DIR = path.resolve(__dirname, "storage", "subbots");
 
 const SUBBOTS_ENABLED = String(process.env.SUBBOTS_ENABLED ?? "true").toLowerCase() !== "false";
-const MAX_ACTIVE_SUBBOTS = parseInt(process.env.MAX_ACTIVE_SUBBOTS ?? "10", 10);
+const MAX_ACTIVE_SUBBOTS = parseInt(process.env.MAX_ACTIVE_SUBBOTS ?? "5", 10);
 const MAX_SUBBOTS_PER_USER = parseInt(
-  process.env.MAX_SUBBOTS_PER_USER ?? "10",
+  process.env.MAX_SUBBOTS_PER_USER ?? "2",
   10,
 );
 const SUBBOT_IDLE_TIMEOUT_MS = parseInt(
-  process.env.SUBBOT_IDLE_TIMEOUT_MS ?? String(24 * 60 * 60 * 1000),
+  process.env.SUBBOT_IDLE_TIMEOUT_MS ?? String(5 * 60 * 1000),
   10,
-); // 24 horas por defecto
-const MAX_SUBBOT_DIRS = parseInt(process.env.MAX_SUBBOT_DIRS ?? "60", 10);
+); // 5 minutos por defecto (reducido de 24 horas)
+const MAX_SUBBOT_DIRS = parseInt(process.env.MAX_SUBBOT_DIRS ?? "30", 10);
 
 // Usar un EventEmitter centralizado que NO interfiera con el bot principal
 const eventBus = new EventEmitter();
@@ -318,14 +318,10 @@ export async function launchSubbot(options = {}) {
     child.on("message", (message) => {
       try {
         if (!message || typeof message.event !== "string") {
-          console.log(`[inproc-subbots] ⚠️ Mensaje inválido recibido del subbot ${code}:`, message);
           return;
         }
         
         const info = activeSubbots.get(code) || publicRecord;
-
-        console.log(`[inproc-subbots] 📨 Mensaje del subbot ${code}: ${message.event}`, 
-          message.data ? `con data: ${JSON.stringify(message.data).substring(0, 100)}` : '(sin data)');
 
         // Actualizar estado interno según el evento
         if (message.event === "connected") {
@@ -335,53 +331,46 @@ export async function launchSubbot(options = {}) {
             clearTimeout(info.timeoutHandle);
             info.timeoutHandle = null;
           }
+          logger.info(`✅ Subbot ${code} conectado`);
         }
         
         if (message.event === "disconnected") {
           info.status = "disconnected";
           info.disconnectedAt = new Date().toISOString();
+          logger.warn(`⚪ Subbot ${code} desconectado`);
         }
         
         if (message.event === "error") {
           info.status = "error";
           info.error = message.data?.message || "Error desconocido";
+          logger.error(`❌ Error en subbot ${code}: ${info.error}`);
         }
         
         if (message.event === "logged_out") {
           info.status = "logged_out";
           info.disconnectedAt = new Date().toISOString();
           info.error = message.data?.message || "Sesión cerrada desde WhatsApp";
+          logger.warn(`🚪 Subbot ${code} cerró sesión`);
           try {
             const dirToRemove = info?.dir || path.join(SUBBOT_BASE_DIR, code);
             fs.rmSync(dirToRemove, {
               recursive: true,
               force: true,
             });
-            logger.info(
-              `🗑️ Credenciales del subbot ${code} eliminadas tras logout`,
-            );
+            logger.info(`🗑️ Credenciales del subbot ${code} eliminadas`);
           } catch (cleanupError) {
-            logger.warn(
-              `No se pudo eliminar directorio del subbot ${code} tras logout`,
-              { error: cleanupError?.message },
-            );
+            logger.warn(`No se pudo eliminar directorio del subbot ${code}`, { error: cleanupError?.message });
           }
         }
 
-        // 🔧 CRÍTICO: Re-emitir TODOS los eventos al eventBus (incluyendo pairing_code, qr_ready, etc.)
-        // Esto debe estar FUERA de los if statements para capturar TODOS los eventos
-        console.log(`[inproc-subbots] 📢 Emitiendo '${message.event}' al eventBus global (${eventBus.listenerCount(message.event)} listeners)`);
+        // Emitir evento al eventBus
         eventBus.emit(message.event, {
           subbot: { ...info },
           data: message.data || null,
         });
-        console.log(`[inproc-subbots] ✅ Evento '${message.event}' emitido correctamente`);
         
       } catch (err) {
-        logger.error(
-          "Error procesando mensaje de subbot:",
-          err?.message || err,
-        );
+        logger.error(`Error procesando mensaje de subbot ${code}:`, err?.message || err);
       }
     });
 
