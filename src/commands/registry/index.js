@@ -293,6 +293,12 @@ async function buildHelp(ctx) {
 }
 
 register([
+  // Ayuda y menú principal
+  { command: '/help', handler: (ctx) => menu.help(ctx), category: 'info', description: 'Mostrar ayuda y comandos disponibles' },
+  { command: '/ayuda', aliasOf: '/help', category: 'info' },
+  { command: '/comandos', aliasOf: '/help', category: 'info' },
+  { command: '/menu', handler: (ctx) => menu.menu(ctx), category: 'interactive', description: 'Menú interactivo con accesos rápidos' },
+
   // Inteligencia Artificial
   { command: '/ai', handler: (ctx) => ai.ai(ctx), category: 'ai', description: 'Chat con IA Gemini avanzado' },
   { command: '/ia', aliasOf: '/ai', category: 'ai' },
