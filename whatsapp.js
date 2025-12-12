@@ -450,6 +450,14 @@ export function setMessageRouterModulePath(p) {
 
 const processedMessageIds = new Set()
 
+// Limpieza periódica de IDs procesados para evitar fugas de memoria
+setInterval(() => {
+  if (processedMessageIds.size > 2000) {
+    processedMessageIds.clear()
+    logMessage('INFO', 'SYSTEM', 'Limpiando caché de IDs de mensajes procesados')
+  }
+}, 10 * 60 * 1000) // Cada 10 minutos
+
 /* ===== Getters y Chequeo de Sesión ===== */
 export async function checkSessionState(authPath = null) {
   const effectivePath = authPath || path.resolve(process.env.AUTH_DIR || DEFAULT_AUTH_DIR)
@@ -1321,9 +1329,9 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 
   if (isGroup) {
     try {
-      const shouldFetchMetadata = isCommand && ADMIN_COMMANDS.has(normalizedCmd)
+      const shouldFetchMetadata = isCommand // && ADMIN_COMMANDS.has(normalizedCmd)
       if (!shouldFetchMetadata) {
-        logMessage('DEBUG', 'METADATA', 'Saltando consulta de metadata (no es comando admin)')
+        logMessage('DEBUG', 'METADATA', 'Saltando consulta de metadata (no es comando)')
         throw new Error('skip_metadata_fetch')
       }
 
