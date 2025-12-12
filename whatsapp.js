@@ -1419,7 +1419,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     }
   }
 
-  const pushName = message?.pushName || null
   let usuarioName = null
   try {
     if (isGroup && groupMetadata && Array.isArray(groupMetadata.participants)) {
