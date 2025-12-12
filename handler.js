@@ -39,6 +39,8 @@ import { getGeminiModel, hasGeminiApiKey } from "./src/services/gemini-client.js
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 const SESSION_DIR = "./sessions/subbots";
 const activeSubbots = new Map();
 const subbotSessions = new Map();

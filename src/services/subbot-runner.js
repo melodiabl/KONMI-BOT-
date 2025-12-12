@@ -84,7 +84,7 @@ async function start() {
   try {
     // Pre-cargar el registry de comandos
     try {
-      const registryPath = path.resolve(path.dirname(__dirname), 'src/commands/registry/index.js');
+      const registryPath = path.resolve(path.dirname(__dirname), 'commands/registry/index.js');
       const registryMod = await import(registryPath);
       if (typeof registryMod.getCommandRegistry === 'function') {
         global.__COMMAND_REGISTRY = {
