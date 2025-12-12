@@ -1,9 +1,9 @@
 // commands/moderation.js
-// Sistema de advertencias por grupo con logging mejorado y metadata real
+// Sistema de advertencias con context-builder
 
 import logger from '../config/logger.js'
 import db from '../database/db.js'
-import { getGroupRoles } from '../utils/utils/group-helper.js'
+import { buildCommandContext, validateAdminInGroup, logContext } from '../utils/context-builder.js'
 import {
   extractTargetJid,
   onlyDigits,
@@ -11,16 +11,11 @@ import {
   errorResponse,
   logCommandExecution,
   logCommandError,
-  validateAdminPermission,
   extractUserInfo,
-  formatUserList,
 } from '../utils/command-helpers.js'
 
 let warningsTableInitialized = false
 
-/**
- * Asegura que la tabla de advertencias existe
- */
 async function ensureWarningsTable() {
   if (warningsTableInitialized) return
 
@@ -36,50 +31,35 @@ async function ensureWarningsTable() {
         t.timestamp('updated_at').defaultTo(db.fn.now())
         t.unique(['group_id', 'user_jid'])
       })
-      logger.info(
-        { scope: 'database', table: 'group_warnings' },
-        '✅ Tabla group_warnings creada exitosamente'
-      )
+      logger.info({ scope: 'database', table: 'group_warnings' }, '✅ Tabla group_warnings creada')
     }
     warningsTableInitialized = true
   } catch (e) {
-    logger.error(
-      { scope: 'database', table: 'group_warnings', error: e.message },
-      `❌ Error al crear tabla group_warnings: ${e.message}`
-    )
+    logger.error({ scope: 'database', table: 'group_warnings', error: e.message }, `❌ Error creando tabla: ${e.message}`)
     throw e
   }
 }
 
-/**
- * Aplica una advertencia a un usuario
- */
 export async function warn(ctx) {
   try {
-    const { remoteJid, sender } = ctx
+    const fullCtx = await buildCommandContext(ctx.sock, ctx.message, ctx.remoteJid, ctx.sender, ctx.pushName)
+    logContext(fullCtx, 'warn_command')
 
-    // Validar permisos
-    const permCheck = await validateAdminPermission(ctx, 'warn')
-    if (!permCheck.allowed) {
-      return permCheck.response
+    const adminCheck = await validateAdminInGroup(fullCtx)
+    if (!adminCheck.valid) {
+      logCommandExecution('warn', fullCtx, false, { reason: adminCheck.reason })
+      return errorResponse(adminCheck.message, { command: 'warn', reason: adminCheck.reason })
     }
 
-    // Extraer usuario objetivo
-    const targetJid = extractTargetJid(ctx)
+    const targetJid = extractTargetJid(fullCtx)
     if (!targetJid) {
-      logCommandExecution('warn', ctx, false, { reason: 'no_target' })
-      return errorResponse('❌ Uso: /warn @usuario o responde a un mensaje con /warn.', {
-        command: 'warn',
-        reason: 'no_target',
-      })
+      logCommandExecution('warn', fullCtx, false, { reason: 'no_target' })
+      return errorResponse('❌ Uso: /warn @usuario o responde a un mensaje con /warn.', { command: 'warn', reason: 'no_target' })
     }
 
-    if (targetJid === sender) {
-      logCommandExecution('warn', ctx, false, { reason: 'self_warn' })
-      return errorResponse('🚫 No puedes advertirte a ti mismo.', {
-        command: 'warn',
-        reason: 'self_warn',
-      })
+    if (targetJid === fullCtx.sender) {
+      logCommandExecution('warn', fullCtx, false, { reason: 'self_warn' })
+      return errorResponse('🚫 No puedes advertirte a ti mismo.', { command: 'warn', reason: 'self_warn' })
     }
 
     await ensureWarningsTable()
@@ -87,9 +67,8 @@ export async function warn(ctx) {
     const userKey = onlyDigits(targetJid)
     const userInfo = extractUserInfo(targetJid)
 
-    // Buscar advertencia existente
     const row = await db('group_warnings')
-      .where({ group_id: remoteJid })
+      .where({ group_id: fullCtx.remoteJid })
       .andWhere((q) => {
         if (userKey) {
           q.where('user_jid', userKey).orWhere('user_jid', targetJid)
@@ -107,71 +86,45 @@ export async function warn(ctx) {
         .update({ count: newCount, updated_at: db.fn.now() })
     } else {
       await db('group_warnings').insert({
-        group_id: remoteJid,
+        group_id: fullCtx.remoteJid,
         user_jid: userKey || targetJid,
         count: 1,
       })
     }
 
-    const executor = extractUserInfo(sender)
+    const executor = extractUserInfo(fullCtx.sender)
     logger.info(
-      {
-        scope: 'command',
-        command: 'warn',
-        target: userInfo.number,
-        executor: executor.number,
-        warningCount: newCount,
-        group: remoteJid,
-      },
-      `⚠️ Advertencia aplicada a ${userInfo.mention} | Total: ${newCount} | Por: ${executor.mention}`
+      { scope: 'command', command: 'warn', target: userInfo.number, executor: executor.number, warningCount: newCount, group: fullCtx.remoteJid },
+      `⚠️ Advertencia a ${userInfo.mention} | Total: ${newCount} | Por: ${executor.mention}`
     )
 
-    logCommandExecution('warn', ctx, true, {
-      target: userInfo.number,
-      warningCount: newCount,
+    logCommandExecution('warn', fullCtx, true, { target: userInfo.number, warningCount: newCount })
+
+    return successResponse(`⚠️ Advertencia para ${userInfo.mention}. Este usuario ahora tiene ${newCount} advertencia(s).`, {
+      mentions: [targetJid],
+      metadata: { target: userInfo.number, warningCount: newCount, executor: executor.number },
     })
-
-    return successResponse(
-      `⚠️ Advertencia para ${userInfo.mention}. Este usuario ahora tiene ${newCount} advertencia(s).`,
-      {
-        mentions: [targetJid],
-        metadata: {
-          target: userInfo.number,
-          warningCount: newCount,
-          executor: executor.number,
-        },
-      }
-    )
   } catch (e) {
     logCommandError('warn', ctx, e)
-    return errorResponse('⚠️ Error al aplicar la advertencia. Intenta de nuevo.', {
-      command: 'warn',
-      error: e.message,
-    })
+    return errorResponse('⚠️ Error al aplicar advertencia.', { command: 'warn', error: e.message })
   }
 }
 
-/**
- * Elimina todas las advertencias de un usuario
- */
 export async function unwarn(ctx) {
   try {
-    const { remoteJid, sender } = ctx
+    const fullCtx = await buildCommandContext(ctx.sock, ctx.message, ctx.remoteJid, ctx.sender, ctx.pushName)
+    logContext(fullCtx, 'unwarn_command')
 
-    // Validar permisos
-    const permCheck = await validateAdminPermission(ctx, 'unwarn')
-    if (!permCheck.allowed) {
-      return permCheck.response
+    const adminCheck = await validateAdminInGroup(fullCtx)
+    if (!adminCheck.valid) {
+      logCommandExecution('unwarn', fullCtx, false, { reason: adminCheck.reason })
+      return errorResponse(adminCheck.message, { command: 'unwarn', reason: adminCheck.reason })
     }
 
-    // Extraer usuario objetivo
-    const targetJid = extractTargetJid(ctx)
+    const targetJid = extractTargetJid(fullCtx)
     if (!targetJid) {
-      logCommandExecution('unwarn', ctx, false, { reason: 'no_target' })
-      return errorResponse('❌ Uso: /unwarn @usuario o responde a un mensaje con /unwarn.', {
-        command: 'unwarn',
-        reason: 'no_target',
-      })
+      logCommandExecution('unwarn', fullCtx, false, { reason: 'no_target' })
+      return errorResponse('❌ Uso: /unwarn @usuario o responde a un mensaje con /unwarn.', { command: 'unwarn', reason: 'no_target' })
     }
 
     await ensureWarningsTable()
@@ -179,9 +132,8 @@ export async function unwarn(ctx) {
     const userKey = onlyDigits(targetJid)
     const userInfo = extractUserInfo(targetJid)
 
-    // Eliminar advertencias
     const deleted = await db('group_warnings')
-      .where({ group_id: remoteJid })
+      .where({ group_id: fullCtx.remoteJid })
       .andWhere((q) => {
         if (userKey) {
           q.where('user_jid', userKey).orWhere('user_jid', targetJid)
@@ -192,81 +144,50 @@ export async function unwarn(ctx) {
       .del()
 
     if (deleted === 0) {
-      logCommandExecution('unwarn', ctx, false, { reason: 'no_warnings', target: userInfo.number })
-      return errorResponse(`❌ ${userInfo.mention} no tenía advertencias registradas.`, {
-        command: 'unwarn',
-        reason: 'no_warnings',
-        target: userInfo.number,
-        mentions: [targetJid],
-      })
+      logCommandExecution('unwarn', fullCtx, false, { reason: 'no_warnings', target: userInfo.number })
+      return errorResponse(`❌ ${userInfo.mention} no tenía advertencias registradas.`, { command: 'unwarn', reason: 'no_warnings', target: userInfo.number, mentions: [targetJid] })
     }
 
-    const executor = extractUserInfo(sender)
+    const executor = extractUserInfo(fullCtx.sender)
     logger.info(
-      {
-        scope: 'command',
-        command: 'unwarn',
-        target: userInfo.number,
-        executor: executor.number,
-        warningsRemoved: deleted,
-        group: remoteJid,
-      },
+      { scope: 'command', command: 'unwarn', target: userInfo.number, executor: executor.number, warningsRemoved: deleted, group: fullCtx.remoteJid },
       `✅ Advertencias eliminadas para ${userInfo.mention} (${deleted}) | Por: ${executor.mention}`
     )
 
-    logCommandExecution('unwarn', ctx, true, {
-      target: userInfo.number,
-      warningsRemoved: deleted,
-    })
+    logCommandExecution('unwarn', fullCtx, true, { target: userInfo.number, warningsRemoved: deleted })
 
     return successResponse(`✅ Se han eliminado todas las advertencias para ${userInfo.mention}.`, {
       mentions: [targetJid],
-      metadata: {
-        target: userInfo.number,
-        warningsRemoved: deleted,
-        executor: executor.number,
-      },
+      metadata: { target: userInfo.number, warningsRemoved: deleted, executor: executor.number },
     })
   } catch (e) {
     logCommandError('unwarn', ctx, e)
-    return errorResponse('⚠️ Error al quitar las advertencias. Intenta de nuevo.', {
-      command: 'unwarn',
-      error: e.message,
-    })
+    return errorResponse('⚠️ Error al quitar advertencias.', { command: 'unwarn', error: e.message })
   }
 }
 
-/**
- * Lista todas las advertencias del grupo
- */
 export async function warns(ctx) {
   try {
-    const { remoteJid, isGroup } = ctx
+    const fullCtx = await buildCommandContext(ctx.sock, ctx.message, ctx.remoteJid, ctx.sender, ctx.pushName)
+    logContext(fullCtx, 'warns_command')
 
-    if (!isGroup) {
-      return errorResponse('❌ Este comando solo funciona en grupos.', {
-        command: 'warns',
-        reason: 'not_in_group',
-      })
+    if (!fullCtx.isGroup) {
+      return errorResponse('❌ Este comando solo funciona en grupos.', { command: 'warns', reason: 'not_in_group' })
     }
 
     await ensureWarningsTable()
 
     const rows = await db('group_warnings')
-      .where({ group_id: remoteJid })
+      .where({ group_id: fullCtx.remoteJid })
       .orderBy('count', 'desc')
       .limit(50)
 
     if (!rows || rows.length === 0) {
-      logCommandExecution('warns', ctx, true, { warningCount: 0 })
-      return successResponse('✅ No hay advertencias registradas en este grupo.', {
-        metadata: { warningCount: 0 },
-      })
+      logCommandExecution('warns', fullCtx, true, { warningCount: 0 })
+      return successResponse('✅ No hay advertencias registradas en este grupo.', { metadata: { warningCount: 0 } })
     }
 
-    const mentions = rows
-      .map((r) => r.user_jid)
-      .filter((jid) => jid && (jid.includes('@') || /^\d+$/.test(jid)))
+    const mentions = rows.map((r) => r.user_jid).filter((jid) => jid && (jid.includes('@') || /^\d+$/.test(jid)))
 
     const list = rows
       .map((r, i) => {
@@ -279,58 +200,37 @@ export async function warns(ctx) {
     const message = `📋 *Advertencias en este grupo*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${list}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📊 Total: ${rows.length} usuario(s) con advertencias`
 
     logger.info(
-      {
-        scope: 'command',
-        command: 'warns',
-        group: remoteJid,
-        warningCount: rows.length,
-      },
+      { scope: 'command', command: 'warns', group: fullCtx.remoteJid, warningCount: rows.length },
       `📋 Lista de advertencias consultada | Total: ${rows.length}`
     )
 
-    logCommandExecution('warns', ctx, true, { warningCount: rows.length })
+    logCommandExecution('warns', fullCtx, true, { warningCount: rows.length })
 
     return successResponse(message, {
       mentions,
       metadata: {
         warningCount: rows.length,
-        warnings: rows.map((r) => ({
-          user: r.user_jid,
-          count: r.count,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        })),
+        warnings: rows.map((r) => ({ user: r.user_jid, count: r.count, createdAt: r.created_at, updatedAt: r.updated_at })),
       },
     })
   } catch (e) {
     logCommandError('warns', ctx, e)
-    return errorResponse('⚠️ Error al obtener la lista de advertencias. Intenta de nuevo.', {
-      command: 'warns',
-      error: e.message,
-    })
+    return errorResponse('⚠️ Error al obtener lista de advertencias.', { command: 'warns', error: e.message })
   }
 }
 
-/**
- * Obtiene advertencias de un usuario específico
- */
 export async function userWarnings(ctx) {
   try {
-    const { remoteJid, isGroup } = ctx
+    const fullCtx = await buildCommandContext(ctx.sock, ctx.message, ctx.remoteJid, ctx.sender, ctx.pushName)
+    logContext(fullCtx, 'userwarnings_command')
 
-    if (!isGroup) {
-      return errorResponse('❌ Este comando solo funciona en grupos.', {
-        command: 'userwarnings',
-        reason: 'not_in_group',
-      })
+    if (!fullCtx.isGroup) {
+      return errorResponse('❌ Este comando solo funciona en grupos.', { command: 'userwarnings', reason: 'not_in_group' })
     }
 
-    const targetJid = extractTargetJid(ctx)
+    const targetJid = extractTargetJid(fullCtx)
     if (!targetJid) {
-      return errorResponse('❌ Uso: /userwarnings @usuario o responde a un mensaje.', {
-        command: 'userwarnings',
-        reason: 'no_target',
-      })
+      return errorResponse('❌ Uso: /userwarnings @usuario o responde a un mensaje.', { command: 'userwarnings', reason: 'no_target' })
     }
 
     await ensureWarningsTable()
@@ -339,7 +239,7 @@ export async function userWarnings(ctx) {
     const userInfo = extractUserInfo(targetJid)
 
     const row = await db('group_warnings')
-      .where({ group_id: remoteJid })
+      .where({ group_id: fullCtx.remoteJid })
       .andWhere((q) => {
         if (userKey) {
           q.where('user_jid', userKey).orWhere('user_jid', targetJid)
@@ -350,42 +250,25 @@ export async function userWarnings(ctx) {
       .first()
 
     if (!row) {
-      logCommandExecution('userwarnings', ctx, true, {
-        target: userInfo.number,
-        warningCount: 0,
-      })
+      logCommandExecution('userwarnings', fullCtx, true, { target: userInfo.number, warningCount: 0 })
       return successResponse(`✅ ${userInfo.mention} no tiene advertencias.`, {
         mentions: [targetJid],
-        metadata: {
-          target: userInfo.number,
-          warningCount: 0,
-        },
+        metadata: { target: userInfo.number, warningCount: 0 },
       })
     }
 
     const warningText = row.count === 1 ? 'advertencia' : 'advertencias'
     const message = `⚠️ ${userInfo.mention} tiene ${row.count} ${warningText}\n📅 Última actualización: ${new Date(row.updated_at).toLocaleString()}`
 
-    logCommandExecution('userwarnings', ctx, true, {
-      target: userInfo.number,
-      warningCount: row.count,
-    })
+    logCommandExecution('userwarnings', fullCtx, true, { target: userInfo.number, warningCount: row.count })
 
     return successResponse(message, {
       mentions: [targetJid],
-      metadata: {
-        target: userInfo.number,
-        warningCount: row.count,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      },
+      metadata: { target: userInfo.number, warningCount: row.count, createdAt: row.created_at, updatedAt: row.updated_at },
     })
   } catch (e) {
     logCommandError('userwarnings', ctx, e)
-    return errorResponse('⚠️ Error al obtener advertencias del usuario.', {
-      command: 'userwarnings',
-      error: e.message,
-    })
+    return errorResponse('⚠️ Error al obtener advertencias del usuario.', { command: 'userwarnings', error: e.message })
   }
 }
 

@@ -1,30 +1,10 @@
 // commands/ban.js
- // Sistema de ban por grupo con validaciones mejoradas
+// Sistema de ban por grupo con context-builder mejorado
 
+import logger from '../config/logger.js'
 import db from '../database/db.js'
-import { getGroupRoles } from '../utils/utils/group-helper.js'
-
-const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
-
-/**
- * Valida si un JID tiene formato válido
- * @param {string} jid - JID a validar
- * @returns {boolean}
- */
-function isValidJid(jid) {
-  if (!jid || typeof jid !== 'string') return false
-  const match = jid.match(/^(\d+)@s\.whatsapp\.net$/)
-  return !!match && match[1].length >= 10
-}
-
-/**
- * Valida si un número de teléfono es válido
- * @param {string} digits - Solo dígitos
- * @returns {boolean}
- */
-function isValidPhoneNumber(digits) {
-  return digits && digits.length >= 10 && digits.length <= 15
-}
+import { buildCommandContext, validateAdminInGroup, validateBotAdminInGroup, logContext } from '../utils/context-builder.js'
+import { successResponse, errorResponse, logCommandExecution, logCommandError, extractUserInfo, extractTargetJid, onlyDigits } from '../utils/command-helpers.js'
 
 let bansTableInitialized = false
 
@@ -41,172 +21,93 @@ async function ensureBansTable() {
         t.timestamp('created_at').defaultTo(db.fn.now())
         t.unique(['group_id', 'user_jid'])
       })
-      console.log('✅ Tabla group_bans creada exitosamente')
+      logger.info({ scope: 'database', table: 'group_bans' }, '✅ Tabla group_bans creada')
     }
     bansTableInitialized = true
   } catch (e) {
-    console.error('❌ Error al crear tabla group_bans:', e.message)
+    logger.error({ scope: 'database', table: 'group_bans', error: e.message }, `❌ Error creando tabla: ${e.message}`)
     throw e
   }
 }
 
-/**
- * Extrae el JID del usuario objetivo desde el contexto
- * @param {object} ctx - Contexto del comando
- * @returns {string|null} JID válido o null
- */
-function extractTargetJid(ctx) {
-  const { message, args } = ctx
-  const quoted = message?.message?.extendedTextMessage?.contextInfo
-
-  // Intenta obtener desde menciones en mensaje citado
-  if (quoted?.mentionedJid?.length > 0) {
-    const jid = quoted.mentionedJid[0]
-    if (isValidJid(jid)) return jid
-  }
-
-  // Intenta obtener desde participante del mensaje citado
-  if (quoted?.participant) {
-    if (isValidJid(quoted.participant)) return quoted.participant
-  }
-
-  // Intenta obtener desde argumentos
-  if (Array.isArray(args) && args.length > 0) {
-    const mention = String(args[0] || '').replace('@', '').trim()
-    const digits = onlyDigits(mention)
-
-    if (isValidPhoneNumber(digits)) {
-      return `${digits}@s.whatsapp.net`
-    }
-  }
-
-  return null
-}
-
-/**
- * Verifica si el usuario tiene permisos de administrador
- * @param {object} ctx - Contexto del comando
- * @returns {Promise<boolean>}
- */
-async function checkAdminPermission(ctx) {
-  const { isOwner, isAdmin, sock, remoteJid, sender } = ctx
-
-  if (isOwner) return true
-  if (isAdmin) return true
-
-  // Verifica roles en el grupo si es necesario
-  if (sock && remoteJid && sender) {
-    try {
-      const roles = await getGroupRoles(sock, remoteJid, sender)
-      return roles.isAdmin || roles.isSuperAdmin
-    } catch (e) {
-      console.error('⚠️ Error al verificar roles del grupo:', e.message)
-      return false
-    }
-  }
-
-  return false
-}
-
-/**
- * Banea a un usuario del bot en el grupo
- * @param {object} ctx - Contexto del comando
- * @returns {Promise<object>}
- */
 export async function ban(ctx) {
-  const { isGroup, remoteJid, sender, sock } = ctx
-
-  if (!isGroup) {
-    return {
-      success: false,
-      message: '❌ Este comando solo funciona en grupos.',
-    }
-  }
-
   try {
-    const hasPermission = await checkAdminPermission(ctx)
-    if (!hasPermission) {
-      return {
-        success: false,
-        message: '🚫 Solo los administradores o el owner pueden banear usuarios del bot.',
-      }
+    const fullCtx = await buildCommandContext(ctx.sock, ctx.message, ctx.remoteJid, ctx.sender, ctx.pushName)
+    logContext(fullCtx, 'ban_command')
+
+    const adminCheck = await validateAdminInGroup(fullCtx)
+    if (!adminCheck.valid) {
+      logCommandExecution('ban', fullCtx, false, { reason: adminCheck.reason })
+      return errorResponse(adminCheck.message, { command: 'ban', reason: adminCheck.reason })
     }
 
-    const targetJid = extractTargetJid(ctx)
+    const botAdminCheck = await validateBotAdminInGroup(fullCtx)
+    if (!botAdminCheck.valid) {
+      logCommandExecution('ban', fullCtx, false, { reason: botAdminCheck.reason })
+      return errorResponse(botAdminCheck.message, { command: 'ban', reason: botAdminCheck.reason })
+    }
+
+    const targetJid = extractTargetJid(fullCtx)
     if (!targetJid) {
-      return {
-        success: false,
-        message: '❌ Uso: /ban @usuario o responde a un mensaje con /ban.',
-      }
+      logCommandExecution('ban', fullCtx, false, { reason: 'no_target' })
+      return errorResponse('❌ Uso: /ban @usuario o responde a un mensaje con /ban.', { command: 'ban', reason: 'no_target' })
     }
 
-    if (targetJid === sender) {
-      return {
-        success: false,
-        message: '🚫 No puedes banearte a ti mismo.',
-      }
+    if (targetJid === fullCtx.sender) {
+      logCommandExecution('ban', fullCtx, false, { reason: 'self_ban' })
+      return errorResponse('🚫 No puedes banearte a ti mismo.', { command: 'ban', reason: 'self_ban' })
     }
 
     await ensureBansTable()
 
     const userKey = onlyDigits(targetJid)
     await db('group_bans')
-      .insert({ group_id: remoteJid, user_jid: userKey || targetJid })
+      .insert({ group_id: fullCtx.remoteJid, user_jid: userKey || targetJid })
       .onConflict(['group_id', 'user_jid'])
       .ignore()
 
-    const userName = targetJid.split('@')[0]
-    return {
-      success: true,
-      message: `✅ Usuario @${userName} ha sido baneado del uso del bot en este grupo.`,
+    const targetInfo = extractUserInfo(targetJid)
+    const executorInfo = extractUserInfo(fullCtx.sender)
+
+    logger.info(
+      { scope: 'command', command: 'ban', target: targetInfo.number, executor: executorInfo.number, group: fullCtx.remoteJid },
+      `✅ Usuario ${targetInfo.mention} baneado por ${executorInfo.mention}`
+    )
+
+    logCommandExecution('ban', fullCtx, true, { target: targetInfo.number })
+
+    return successResponse(`✅ Usuario ${targetInfo.mention} ha sido baneado del uso del bot en este grupo.`, {
       mentions: [targetJid],
-    }
+      metadata: { target: targetInfo.number, executor: executorInfo.number },
+    })
   } catch (e) {
-    console.error('❌ Error en /ban:', e.message)
-    return {
-      success: false,
-      message: '⚠️ Ocurrió un error al banear al usuario. Intenta de nuevo.',
-    }
+    logCommandError('ban', ctx, e)
+    return errorResponse('⚠️ Error al banear. Intenta de nuevo.', { command: 'ban', error: e.message })
   }
 }
 
-/**
- * Desbanea a un usuario del bot en el grupo
- * @param {object} ctx - Contexto del comando
- * @returns {Promise<object>}
- */
 export async function unban(ctx) {
-  const { isGroup, remoteJid, sender, sock } = ctx
-
-  if (!isGroup) {
-    return {
-      success: false,
-      message: '❌ Este comando solo funciona en grupos.',
-    }
-  }
-
   try {
-    const hasPermission = await checkAdminPermission(ctx)
-    if (!hasPermission) {
-      return {
-        success: false,
-        message: '🚫 Solo los administradores o el owner pueden desbanear usuarios del bot.',
-      }
+    const fullCtx = await buildCommandContext(ctx.sock, ctx.message, ctx.remoteJid, ctx.sender, ctx.pushName)
+    logContext(fullCtx, 'unban_command')
+
+    const adminCheck = await validateAdminInGroup(fullCtx)
+    if (!adminCheck.valid) {
+      logCommandExecution('unban', fullCtx, false, { reason: adminCheck.reason })
+      return errorResponse(adminCheck.message, { command: 'unban', reason: adminCheck.reason })
     }
 
-    const targetJid = extractTargetJid(ctx)
+    const targetJid = extractTargetJid(fullCtx)
     if (!targetJid) {
-      return {
-        success: false,
-        message: '❌ Uso: /unban @usuario o responde a un mensaje con /unban.',
-      }
+      logCommandExecution('unban', fullCtx, false, { reason: 'no_target' })
+      return errorResponse('❌ Uso: /unban @usuario o responde a un mensaje con /unban.', { command: 'unban', reason: 'no_target' })
     }
 
     await ensureBansTable()
 
     const userKey = onlyDigits(targetJid)
     const deleted = await db('group_bans')
-      .where({ group_id: remoteJid })
+      .where({ group_id: fullCtx.remoteJid })
       .andWhere((q) => {
         if (userKey) {
           q.where('user_jid', userKey).orWhere('user_jid', targetJid)
@@ -217,64 +118,47 @@ export async function unban(ctx) {
       .del()
 
     if (!deleted) {
-      const userName = targetJid.split('@')[0]
-      return {
-        success: false,
-        message: `❌ El usuario @${userName} no estaba baneado en este grupo.`,
-        mentions: [targetJid],
-      }
+      const targetInfo = extractUserInfo(targetJid)
+      logCommandExecution('unban', fullCtx, false, { reason: 'not_banned', target: targetInfo.number })
+      return errorResponse(`❌ ${targetInfo.mention} no estaba baneado en este grupo.`, { command: 'unban', reason: 'not_banned', mentions: [targetJid] })
     }
 
-    const userName = targetJid.split('@')[0]
-    return {
-      success: true,
-      message: `✅ Usuario @${userName} ha sido desbaneado del uso del bot en este grupo.`,
+    const targetInfo = extractUserInfo(targetJid)
+    const executorInfo = extractUserInfo(fullCtx.sender)
+
+    logger.info(
+      { scope: 'command', command: 'unban', target: targetInfo.number, executor: executorInfo.number, group: fullCtx.remoteJid },
+      `✅ Usuario ${targetInfo.mention} desbaneado por ${executorInfo.mention}`
+    )
+
+    logCommandExecution('unban', fullCtx, true, { target: targetInfo.number })
+
+    return successResponse(`✅ Usuario ${targetInfo.mention} ha sido desbaneado del uso del bot en este grupo.`, {
       mentions: [targetJid],
-    }
+      metadata: { target: targetInfo.number, executor: executorInfo.number },
+    })
   } catch (e) {
-    console.error('❌ Error en /unban:', e.message)
-    return {
-      success: false,
-      message: '⚠️ Ocurrió un error al desbanear al usuario. Intenta de nuevo.',
-    }
+    logCommandError('unban', ctx, e)
+    return errorResponse('⚠️ Error al desbanear. Intenta de nuevo.', { command: 'unban', error: e.message })
   }
 }
 
-/**
- * Lista todos los usuarios baneados en el grupo
- * @param {object} ctx - Contexto del comando
- * @returns {Promise<object>}
- */
 export async function bans(ctx) {
-  const { isGroup, remoteJid, sender, sock } = ctx
-
-  if (!isGroup) {
-    return {
-      success: false,
-      message: '❌ Este comando solo funciona en grupos.',
-    }
-  }
-
   try {
-    const hasPermission = await checkAdminPermission(ctx)
-    if (!hasPermission) {
-      return {
-        success: false,
-        message: '🚫 Solo los administradores o el owner pueden ver la lista de baneados.',
-      }
+    const fullCtx = await buildCommandContext(ctx.sock, ctx.message, ctx.remoteJid, ctx.sender, ctx.pushName)
+    logContext(fullCtx, 'bans_command')
+
+    if (!fullCtx.isGroup) {
+      return errorResponse('❌ Este comando solo funciona en grupos.', { command: 'bans', reason: 'not_in_group' })
     }
 
     await ensureBansTable()
 
-    const rows = await db('group_bans')
-      .where({ group_id: remoteJid })
-      .orderBy('created_at', 'asc')
+    const rows = await db('group_bans').where({ group_id: fullCtx.remoteJid }).orderBy('created_at', 'asc')
 
     if (!rows || rows.length === 0) {
-      return {
-        success: true,
-        message: '✅ No hay usuarios baneados en este grupo.',
-      }
+      logCommandExecution('bans', fullCtx, true, { count: 0 })
+      return successResponse('✅ No hay usuarios baneados en este grupo.', { metadata: { count: 0 } })
     }
 
     const lines = rows.map((r, i) => {
@@ -282,23 +166,18 @@ export async function bans(ctx) {
       return `${i + 1}. @${num}`
     })
 
-    const mentions = rows
-      .map((r) => r.user_jid)
-      .filter((jid) => isValidJid(jid) || /^\d+$/.test(jid))
+    const mentions = rows.map((r) => r.user_jid).filter((jid) => jid && (jid.includes('@') || /^\d+$/.test(jid)))
 
-    const text = `📋 *Usuarios baneados del bot en este grupo*\n\n${lines.join('\n')}`
+    const text = `📋 *Usuarios baneados del bot en este grupo*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${lines.join('\n')}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📊 Total: ${rows.length}`
 
-    return {
-      success: true,
-      message: text,
-      mentions: mentions.length > 0 ? mentions : undefined,
-    }
+    logger.info({ scope: 'command', command: 'bans', group: fullCtx.remoteJid, count: rows.length }, `📋 Lista de baneados consultada | Total: ${rows.length}`)
+
+    logCommandExecution('bans', fullCtx, true, { count: rows.length })
+
+    return successResponse(text, { mentions, metadata: { count: rows.length } })
   } catch (e) {
-    console.error('❌ Error en /bans:', e.message)
-    return {
-      success: false,
-      message: '⚠️ Ocurrió un error al obtener la lista de baneados. Intenta de nuevo.',
-    }
+    logCommandError('bans', ctx, e)
+    return errorResponse('⚠️ Error al obtener lista de baneados.', { command: 'bans', error: e.message })
   }
 }
 
