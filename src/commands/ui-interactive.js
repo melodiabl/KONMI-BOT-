@@ -25,19 +25,20 @@ export function createButtonMenu(config) {
   // Limitar a 3 botones (límite de WhatsApp)
   const limitedButtons = buttons.slice(0, 3)
 
-  // Formato moderno (buttonsMessage)
+    // Formato Baileys buttonsMessage (compatible en grupos y privados)
   const payload = {
     type: 'buttons',
-    text: body || 'Selecciona una opción',
+    text: body || 'Selecciona una opci?n',
     footer: footer || '',
     buttons: limitedButtons.map((btn, idx) => ({
-      text: btn.text || btn.displayText || `Opción ${idx + 1}`,
-      id: btn.id || btn.command || `btn_${idx}`,
-      type: 'quick_reply'
-    }))
+      buttonId: btn.id || btn.command || btn.buttonId || `btn_${idx}`,
+      buttonText: { displayText: btn.text || btn.displayText || btn.title || `Opci?n ${idx + 1}` },
+      type: 1
+    })),
+    headerType: 1
   }
 
-  if (title) payload.header = title
+  if (title) payload.title = title
   if (mentions.length > 0) payload.mentions = mentions
 
   return payload
