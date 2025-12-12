@@ -1,5 +1,5 @@
 // commands/groups.js
-// Administración de grupos
+// Administración de grupos - VERSIÓN CORREGIDA
 
 import db from '../database/db.js'
 import { getGroupRoles, getGroupMetadataCached } from '../utils/utils/group-helper.js'
@@ -20,18 +20,36 @@ async function ensureGroupsTable() {
   }
 }
 
+// ✅ HELPER: Verificar si el usuario es admin (usa ctx.isAdmin primero)
+function isUserAdmin(ctx) {
+  // Primero intentar usar el isAdmin del contexto (ya calculado en whatsapp.js)
+  if (ctx.isAdmin === true) return true
+
+  // Si es owner, automáticamente es admin
+  if (ctx.isOwner === true) return true
+
+  // Si no está definido o es false, retornar false
+  return false
+}
+
+// ✅ HELPER: Verificar si el bot es admin
+function isBotGroupAdmin(ctx) {
+  // Usar el isBotAdmin del contexto
+  return ctx.isBotAdmin === true
+}
+
 export async function kick(ctx) {
   const { isGroup, remoteJid, args, sock, message, sender, fromMe } = ctx
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
 
   try {
-    if (!fromMe) {
-      const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
-      if (!isAdmin) return { success: false, message: '⛔ No tienes permisos de administrador para hacer esto.' }
-      if (!isBotAdmin) return { success: false, message: '⛔ El bot necesita ser administrador para poder expulsar miembros.' }
-    } else {
-      const { isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
-      if (!isBotAdmin) return { success: false, message: '⛔ El bot necesita ser administrador para poder expulsar miembros.' }
+    // ✅ Verificar permisos usando helpers
+    if (!fromMe && !isUserAdmin(ctx)) {
+      return { success: false, message: '⛔ No tienes permisos de administrador para hacer esto.' }
+    }
+
+    if (!isBotGroupAdmin(ctx)) {
+      return { success: false, message: '⛔ El bot necesita ser administrador para poder expulsar miembros.' }
     }
 
     let targetJid =
@@ -64,9 +82,14 @@ export async function promote(ctx) {
   if (!isGroup) return { success: false, message: 'ℹ️ Comando solo para grupos.' }
 
   try {
-    const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
-    if (!isAdmin) return { success: false, message: '⛔ No eres administrador.' }
-    if (!isBotAdmin) return { success: false, message: '⛔ El bot no es administrador.' }
+    // ✅ Verificar permisos
+    if (!isUserAdmin(ctx)) {
+      return { success: false, message: '⛔ No eres administrador.' }
+    }
+
+    if (!isBotGroupAdmin(ctx)) {
+      return { success: false, message: '⛔ El bot no es administrador.' }
+    }
 
     const targetJid =
       first(message?.message?.extendedTextMessage?.contextInfo?.mentionedJid) ||
@@ -94,9 +117,14 @@ export async function demote(ctx) {
   if (!isGroup) return { success: false, message: 'ℹ️ Comando solo para grupos.' }
 
   try {
-    const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
-    if (!isAdmin) return { success: false, message: '⛔ No eres administrador.' }
-    if (!isBotAdmin) return { success: false, message: '⛔ El bot no es administrador.' }
+    // ✅ Verificar permisos
+    if (!isUserAdmin(ctx)) {
+      return { success: false, message: '⛔ No eres administrador.' }
+    }
+
+    if (!isBotGroupAdmin(ctx)) {
+      return { success: false, message: '⛔ El bot no es administrador.' }
+    }
 
     const targetJid =
       first(message?.message?.extendedTextMessage?.contextInfo?.mentionedJid) ||
@@ -124,9 +152,14 @@ export async function lock(ctx) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
 
   try {
-    const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
-    if (!isAdmin) return { success: false, message: '⛔ No tienes permisos de administrador.' }
-    if (!isBotAdmin) return { success: false, message: '⛔ El bot necesita ser administrador.' }
+    // ✅ Verificar permisos
+    if (!isUserAdmin(ctx)) {
+      return { success: false, message: '⛔ No tienes permisos de administrador.' }
+    }
+
+    if (!isBotGroupAdmin(ctx)) {
+      return { success: false, message: '⛔ El bot necesita ser administrador.' }
+    }
 
     await sock.groupSettingUpdate(remoteJid, 'announcement')
     return { success: true, message: '🔒 Grupo bloqueado. Solo administradores pueden enviar mensajes.' }
@@ -141,9 +174,18 @@ export async function unlock(ctx) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
 
   try {
-    const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
-    if (!isAdmin) return { success: false, message: '⛔ No tienes permisos de administrador.' }
-    if (!isBotAdmin) return { success: false, message: '⛔ El bot necesita ser administrador.' }
+    // ✅ CORRECCIÓN: Verificar permisos usando helpers
+    console.log('[unlock] DEBUG - ctx.isAdmin:', ctx.isAdmin)
+    console.log('[unlock] DEBUG - ctx.isOwner:', ctx.isOwner)
+    console.log('[unlock] DEBUG - ctx.isBotAdmin:', ctx.isBotAdmin)
+
+    if (!isUserAdmin(ctx)) {
+      return { success: false, message: '⛔ No tienes permisos de administrador.' }
+    }
+
+    if (!isBotGroupAdmin(ctx)) {
+      return { success: false, message: '⛔ El bot necesita ser administrador.' }
+    }
 
     await sock.groupSettingUpdate(remoteJid, 'not_announcement')
     return { success: true, message: '🔓 Grupo desbloqueado. Todos los miembros pueden enviar mensajes.' }
@@ -157,8 +199,10 @@ export async function tag(ctx) {
   const { message, remoteJid, sock, args, sender } = ctx
 
   try {
-    const { isAdmin } = await getGroupRoles(sock, remoteJid, sender)
-    if (!isAdmin) return { success: false, message: '⛔ Solo los administradores pueden usar /tag.' }
+    // ✅ Verificar permisos
+    if (!isUserAdmin(ctx)) {
+      return { success: false, message: '⛔ Solo los administradores pueden usar /tag.' }
+    }
 
     const metadata = await getGroupMetadataCached(sock, remoteJid)
     const participants = metadata?.participants || []
@@ -201,8 +245,10 @@ export async function addGroup(ctx) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
 
   try {
-    const { isAdmin } = await getGroupRoles(sock, remoteJid, sender)
-    if (!isAdmin) return { success: false, message: '⛔ Solo los administradores pueden usar este comando.' }
+    // ✅ Verificar permisos
+    if (!isUserAdmin(ctx)) {
+      return { success: false, message: '⛔ Solo los administradores pueden usar este comando.' }
+    }
 
     await ensureGroupsTable()
     const existing = await db('grupos_autorizados').where({ jid: remoteJid }).first()
@@ -223,8 +269,10 @@ export async function delGroup(ctx) {
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
 
   try {
-    const { isAdmin } = await getGroupRoles(sock, remoteJid, sender)
-    if (!isAdmin) return { success: false, message: '⛔ Solo los administradores pueden usar este comando.' }
+    // ✅ Verificar permisos
+    if (!isUserAdmin(ctx)) {
+      return { success: false, message: '⛔ Solo los administradores pueden usar este comando.' }
+    }
 
     await ensureGroupsTable()
     await db('grupos_autorizados').where({ jid: remoteJid }).update({ bot_enabled: false })
@@ -235,4 +283,102 @@ export async function delGroup(ctx) {
   }
 }
 
-export default { addGroup, delGroup, kick, promote, demote, lock, unlock, tag, admins }
+// ✅ NUEVO: Comando de debug para verificar permisos
+export async function whoami(ctx) {
+  const { sender, isOwner, isAdmin, isBotAdmin, isGroup } = ctx
+
+  const lines = [
+    '👤 *Tu información*',
+    '',
+    `📱 Número: ${sender}`,
+    `👑 Owner: ${isOwner ? 'Sí' : 'No'}`,
+  ]
+
+  if (isGroup) {
+    lines.push(`🛡️ Admin del grupo: ${isAdmin ? 'Sí' : 'No'}`)
+    lines.push(`🤖 Bot es admin: ${isBotAdmin ? 'Sí' : 'No'}`)
+  }
+
+  return { success: true, message: lines.join('\n') }
+}
+
+// ✅ NUEVO: Debug de grupo completo
+export async function debuggroup(ctx) {
+  const { sock, remoteJid, sender, isOwner, isAdmin, isBotAdmin } = ctx
+
+  if (!isOwner && !isAdmin) {
+    return { success: false, message: '⛔ Solo admins u owner pueden usar este comando.' }
+  }
+
+  try {
+    const metadata = await getGroupMetadataCached(sock, remoteJid)
+    const participants = metadata?.participants || []
+    const admins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+
+    const lines = [
+      '🔍 *Debug del Grupo*',
+      '',
+      `📛 Nombre: ${metadata?.subject || 'Sin nombre'}`,
+      `🆔 ID: ${remoteJid}`,
+      `👥 Miembros: ${participants.length}`,
+      `👑 Admins: ${admins.length}`,
+      '',
+      '*Tu estatus:*',
+      `🛡️ Admin: ${isAdmin ? 'Sí ✅' : 'No ❌'}`,
+      `👑 Owner: ${isOwner ? 'Sí ✅' : 'No ❌'}`,
+      '',
+      '*Bot:*',
+      `🤖 Admin: ${isBotAdmin ? 'Sí ✅' : 'No ❌'}`,
+    ]
+
+    return { success: true, message: lines.join('\n') }
+  } catch (e) {
+    return { success: false, message: `⚠️ Error: ${e.message}` }
+  }
+}
+
+// ✅ NUEVO: Debug de permisos de admin
+export async function debugadmin(ctx) {
+  const { sock, remoteJid, sender, isGroup } = ctx
+
+  if (!isGroup) {
+    return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
+  }
+
+  try {
+    // Obtener roles usando el helper
+    const roles = await getGroupRoles(sock, remoteJid, sender)
+
+    const lines = [
+      '🔍 *Debug de Admin*',
+      '',
+      `📱 Tu JID: ${sender}`,
+      `🛡️ isAdmin (helper): ${roles.isAdmin ? 'Sí' : 'No'}`,
+      `🤖 isBotAdmin (helper): ${roles.isBotAdmin ? 'Sí' : 'No'}`,
+      '',
+      '*Contexto:*',
+      `🛡️ ctx.isAdmin: ${ctx.isAdmin ? 'Sí' : 'No'}`,
+      `🤖 ctx.isBotAdmin: ${ctx.isBotAdmin ? 'Sí' : 'No'}`,
+      `👑 ctx.isOwner: ${ctx.isOwner ? 'Sí' : 'No'}`,
+    ]
+
+    return { success: true, message: lines.join('\n') }
+  } catch (e) {
+    return { success: false, message: `⚠️ Error: ${e.message}` }
+  }
+}
+
+export default {
+  addGroup,
+  delGroup,
+  kick,
+  promote,
+  demote,
+  lock,
+  unlock,
+  tag,
+  admins,
+  whoami,
+  debuggroup,
+  debugadmin
+}

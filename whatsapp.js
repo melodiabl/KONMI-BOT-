@@ -1167,7 +1167,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     })
   }
 
-  if (false && isGroup) {
+  if (isGroup) {
     try {
       const shouldFetchMetadata = isCommand && ADMIN_COMMANDS.has(normalizedCmd)
       if (!shouldFetchMetadata) {
