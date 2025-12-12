@@ -2056,11 +2056,6 @@ export async function dispatch(ctx = {}) {
     lazy.set('/debugadmin', async (ctx2) => (await import('./src/commands/groups.js')).debugadmin(ctx2))
     lazy.set('/whoami', async (ctx2) => (await import('./src/commands/groups.js')).whoami(ctx2))
     lazy.set('/bot', async (ctx2) => (await import('./src/commands/bot-control.js')).bot(ctx2))
-    lazy.set('/help', async (ctx2) => {
-      const keys = Array.from(lazy.keys()).sort()
-      const text2 = '📋 Comandos disponibles\n\n' + keys.map(k => `• ${k}`).join('\n')
-      return { success: true, message: text2, quoted: true }
-    })
 
     if (lazy.has(command)) {
       console.log(`[DEBUG] Using lazy fallback for ${command}`)
