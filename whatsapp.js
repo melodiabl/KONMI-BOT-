@@ -686,8 +686,28 @@ export async function connectToWhatsApp(
   // Mapear nombres de grupos/contactos para logs legibles
   attachNameListeners(sock)
 
-  // ====== PRELOAD: router/module de comandos ======
+  // ====== PRELOAD: Registry y Router ======
   ;(async () => {
+    // 1. Pre-cargar Registry
+    try {
+      const registryModulePath = path.resolve(__dirname, './src/commands/registry/index.js');
+      logMessage('INFO', 'REGISTRY', `Pre-cargando command registry desde: ${registryModulePath}`);
+      const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 3, timeoutMs: 15000, backoffMs: 1000 });
+      const get = mod?.getCommandRegistry;
+      if (typeof get === 'function') {
+        const registry = get();
+        global.__COMMAND_REGISTRY = { registry, loadedFrom: registryModulePath, timestamp: Date.now() };
+        logMessage('SUCCESS', 'REGISTRY', `Registry pre-cargado con ${registry.size} comandos.`);
+      } else {
+        logMessage('WARN', 'REGISTRY', 'El módulo de registry no exporta getCommandRegistry.');
+        global.__COMMAND_REGISTRY = null;
+      }
+    } catch (e) {
+      logMessage('ERROR', 'REGISTRY', 'Fallo crítico al pre-cargar el command registry', { error: e?.message || e });
+      global.__COMMAND_REGISTRY = null;
+    }
+
+    // 2. Pre-cargar Router (dispatch)
     try {
       const resolved = path.isAbsolute(routerPath) ? routerPath : path.resolve(__dirname, routerPath)
       logMessage('INFO', 'ROUTER', `Intentando pre-cargar router: ${resolved}`)

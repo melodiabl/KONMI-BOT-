@@ -1920,20 +1920,13 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       }
     }
 
-    let registry = global.__COMMAND_REGISTRY?.registry;
+    const registry = global.__COMMAND_REGISTRY?.registry;
     if (!registry) {
-      try {
-        const registryModulePath = path.resolve(__dirname, './src/commands/registry/index.js');
-        const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 2, timeoutMs: 10000, backoffMs: 500 });
-        const get = mod?.getCommandRegistry;
-        registry = typeof get === 'function' ? get() : null;
-        if (registry) global.__COMMAND_REGISTRY = { registry, loadedFrom: registryModulePath, timestamp: Date.now() };
-      } catch (e) {
-        // Fallback a lazy-loading si el pre-load falla.
-      }
+      // Si el registry no está pre-cargado, no podemos hacer nada.
+      return false;
     }
 
-    const entry = registry?.get(command);
+    const entry = registry.get(command);
     if (!entry || typeof entry.handler !== 'function') {
       return false; // Comando no encontrado, no hacer nada.
     }
