@@ -319,7 +319,7 @@ logger.system = {
   startup: (version) => {
     const line = '─'.repeat(50)
     console.log(`\n${chalk.cyan(line)}`)
-    console.log(`${chalk.cyan('🚀 KONMI BOT - BACKEND')} ${chalk.gray(`(${version || 'desconocido}')}`)`)
+    console.log(`${chalk.cyan('🚀 KONMI BOT - BACKEND')} ${chalk.gray(`(${version || 'desconocido'})`)}`)
     console.log(`${chalk.cyan(line)}\n`)
     logger.info({ scope: 'system', event: 'startup', version }, '🚀 Sistema iniciado')
   },
