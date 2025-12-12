@@ -21,13 +21,18 @@ async function ensureGroupsTable() {
 }
 
 export async function kick(ctx) {
-  const { isGroup, remoteJid, args, sock, message, sender } = ctx
+  const { isGroup, remoteJid, args, sock, message, sender, fromMe } = ctx
   if (!isGroup) return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
 
   try {
-    const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
-    if (!isAdmin) return { success: false, message: '⛔ No tienes permisos de administrador para hacer esto.' }
-    if (!isBotAdmin) return { success: false, message: '⛔ El bot necesita ser administrador para poder expulsar miembros.' }
+    if (!fromMe) {
+      const { isAdmin, isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
+      if (!isAdmin) return { success: false, message: '⛔ No tienes permisos de administrador para hacer esto.' }
+      if (!isBotAdmin) return { success: false, message: '⛔ El bot necesita ser administrador para poder expulsar miembros.' }
+    } else {
+      const { isBotAdmin } = await getGroupRoles(sock, remoteJid, sender)
+      if (!isBotAdmin) return { success: false, message: '⛔ El bot necesita ser administrador para poder expulsar miembros.' }
+    }
 
     let targetJid =
       first(message?.message?.extendedTextMessage?.contextInfo?.mentionedJid) ||

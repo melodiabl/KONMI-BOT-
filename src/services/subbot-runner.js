@@ -82,6 +82,21 @@ async function start() {
   console.log(`[SUBBOT-RUNNER ${CODE}] 🔐 usePairing: ${usePairing}`);
 
   try {
+    // Pre-cargar el registry de comandos
+    try {
+      const registryPath = path.resolve(path.dirname(__dirname), 'src/commands/registry/index.js');
+      const registryMod = await import(registryPath);
+      if (typeof registryMod.getCommandRegistry === 'function') {
+        global.__COMMAND_REGISTRY = {
+          registry: registryMod.getCommandRegistry(),
+          timestamp: Date.now()
+        };
+        console.log(`[SUBBOT-RUNNER ${CODE}] ✅ Registry de comandos cargado`);
+      }
+    } catch (e) {
+      console.warn(`[SUBBOT-RUNNER ${CODE}] ⚠️ No se pudo pre-cargar registry:`, e?.message);
+    }
+
     console.log(`[SUBBOT-RUNNER ${CODE}] 📞 Llamando a connectToWhatsApp...`);
     const sock = await connectToWhatsApp(authDir, usePairing, TARGET);
     console.log(`[SUBBOT-RUNNER ${CODE}] ✅ connectToWhatsApp completado`);
