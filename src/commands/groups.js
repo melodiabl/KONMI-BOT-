@@ -368,6 +368,65 @@ export async function debugadmin(ctx) {
   }
 }
 
+// ✅ Comando para verificar si el bot REALMENTE puede ejecutar acciones
+export async function testBotAdmin(ctx) {
+  const { sock, remoteJid, isGroup } = ctx
+
+  if (!isGroup) {
+    return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
+  }
+
+  try {
+    // Intentar obtener metadata (requiere permisos básicos)
+    const metadata = await sock.groupMetadata(remoteJid)
+
+    // Buscar el bot en participantes
+    const botNumber = normalizePhoneNumber(sock?.user?.id)
+    const botParticipant = (metadata?.participants || []).find(p =>
+      normalizePhoneNumber(p.id) === botNumber
+    )
+
+    const isAdmin = botParticipant?.admin === 'admin' ||
+                    botParticipant?.admin === 'superadmin'
+
+    const lines = [
+      '🧪 *Test de Permisos del Bot*',
+      '',
+      '✅ Metadata obtenida correctamente',
+      `📊 Bot encontrado: ${botParticipant ? 'Sí' : 'No'}`,
+      `🛡️ Rol: ${botParticipant?.admin || 'member'}`,
+      `🤖 Es admin: ${isAdmin ? 'Sí ✅' : 'No ❌'}`,
+      '',
+      '*Acciones disponibles:*',
+      `${isAdmin ? '✅' : '❌'} Expulsar miembros`,
+      `${isAdmin ? '✅' : '❌'} Promover/degradar admins`,
+      `${isAdmin ? '✅' : '❌'} Cambiar configuración del grupo`,
+      `${isAdmin ? '✅' : '❌'} Cambiar nombre/descripción`,
+      '',
+      isAdmin
+        ? '✨ El bot tiene todos los permisos necesarios'
+        : '⚠️ Hazme admin para usar comandos administrativos'
+    ]
+
+    return { success: true, message: lines.join('\n') }
+  } catch (e) {
+    return {
+      success: false,
+      message: `⚠️ Error verificando permisos: ${e.message}`
+    }
+  }
+}
+
+function normalizePhoneNumber(jidOrNumber) {
+  if (!jidOrNumber) return null
+  let str = String(jidOrNumber)
+  const atIndex = str.indexOf('@')
+  if (atIndex > 0) str = str.slice(0, atIndex)
+  const colonIndex = str.indexOf(':')
+  if (colonIndex > 0) str = str.slice(0, colonIndex)
+  return str.replace(/\D/g, '') || null
+}
+
 export default {
   addGroup,
   delGroup,
@@ -380,5 +439,6 @@ export default {
   admins,
   whoami,
   debuggroup,
-  debugadmin
+  debugadmin,
+  testBotAdmin
 }
