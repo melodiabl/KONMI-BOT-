@@ -416,6 +416,42 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
   }
 }
 
+async function preloadModules() {
+    // 1. Pre-cargar Registry
+    try {
+      const registryModulePath = path.resolve(__dirname, './src/commands/registry/index.js');
+      logMessage('INFO', 'REGISTRY', `Pre-cargando command registry desde: ${registryModulePath}`);
+      const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 3, timeoutMs: 15000, backoffMs: 1000 });
+      const get = mod?.getCommandRegistry;
+      if (typeof get === 'function') {
+        const registry = get();
+        global.__COMMAND_REGISTRY = { registry, loadedFrom: registryModulePath, timestamp: Date.now() };
+        logMessage('SUCCESS', 'REGISTRY', `Registry pre-cargado con ${registry.size} comandos.`);
+      } else {
+        logMessage('WARN', 'REGISTRY', 'El módulo de registry no exporta getCommandRegistry.');
+        global.__COMMAND_REGISTRY = null;
+      }
+    } catch (e) {
+      logMessage('ERROR', 'REGISTRY', 'Fallo crítico al pre-cargar el command registry', { error: e?.message || e });
+      global.__COMMAND_REGISTRY = null;
+    }
+
+    // 2. Pre-cargar Router (dispatch)
+    try {
+      const resolved = path.isAbsolute(routerPath) ? routerPath : path.resolve(__dirname, routerPath)
+      logMessage('INFO', 'ROUTER', `Intentando pre-cargar router: ${resolved}`)
+      const mod = await tryImportModuleWithRetries(resolved, { retries: 4, timeoutMs: 20000, backoffMs: 1500 })
+      global.__APP_ROUTER_MODULE = mod
+      global.__APP_DISPATCH = mod?.dispatch || mod?.default?.dispatch || mod?.default
+      if (global.__APP_DISPATCH) logMessage('SUCCESS', 'ROUTER', 'dispatch precargado correctamente')
+      else logMessage('WARN', 'ROUTER', 'router cargado pero no expone dispatch')
+    } catch (e) {
+      logMessage('ERROR', 'ROUTER', 'fallo al pre-cargar router', { error: e?.message || e })
+      global.__APP_ROUTER_MODULE = null
+      global.__APP_DISPATCH = null;
+    }
+}
+
 /* ===== Variables globales ===== */
 let sock = null
 let jidDecode
@@ -686,42 +722,8 @@ export async function connectToWhatsApp(
   // Mapear nombres de grupos/contactos para logs legibles
   attachNameListeners(sock)
 
-  // ====== PRELOAD: Registry y Router ======
-  ;(async () => {
-    // 1. Pre-cargar Registry
-    try {
-      const registryModulePath = path.resolve(__dirname, './src/commands/registry/index.js');
-      logMessage('INFO', 'REGISTRY', `Pre-cargando command registry desde: ${registryModulePath}`);
-      const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 3, timeoutMs: 15000, backoffMs: 1000 });
-      const get = mod?.getCommandRegistry;
-      if (typeof get === 'function') {
-        const registry = get();
-        global.__COMMAND_REGISTRY = { registry, loadedFrom: registryModulePath, timestamp: Date.now() };
-        logMessage('SUCCESS', 'REGISTRY', `Registry pre-cargado con ${registry.size} comandos.`);
-      } else {
-        logMessage('WARN', 'REGISTRY', 'El módulo de registry no exporta getCommandRegistry.');
-        global.__COMMAND_REGISTRY = null;
-      }
-    } catch (e) {
-      logMessage('ERROR', 'REGISTRY', 'Fallo crítico al pre-cargar el command registry', { error: e?.message || e });
-      global.__COMMAND_REGISTRY = null;
-    }
-
-    // 2. Pre-cargar Router (dispatch)
-    try {
-      const resolved = path.isAbsolute(routerPath) ? routerPath : path.resolve(__dirname, routerPath)
-      logMessage('INFO', 'ROUTER', `Intentando pre-cargar router: ${resolved}`)
-      const mod = await tryImportModuleWithRetries(resolved, { retries: 4, timeoutMs: 20000, backoffMs: 1500 })
-      global.__APP_ROUTER_MODULE = mod
-      global.__APP_DISPATCH = mod?.dispatch || mod?.default?.dispatch || mod?.default || null
-      if (global.__APP_DISPATCH) logMessage('SUCCESS', 'ROUTER', 'dispatch precargado correctamente')
-      else logMessage('WARN', 'ROUTER', 'router cargado pero no expone dispatch')
-    } catch (e) {
-      logMessage('ERROR', 'ROUTER', 'fallo al pre-cargar router', { error: e?.message || e })
-      global.__APP_ROUTER_MODULE = null
-      global.__APP_DISPATCH = null
-    }
-  })()
+  // ====== PRELOAD: Cargar módulos ANTES de registrar eventos ======
+  await preloadModules();
 
   // ====== EVENTO: connection.update ======
   try {
@@ -1329,6 +1331,11 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   let isBotAdmin = false
   let groupMetadata = null
 
+  // CACHÉ DE METADATA (para evitar rate-limit)
+  const METADATA_CACHE_TTL = 1 * 60 * 1000; // 1 minuto
+  global.__metadataCache = global.__metadataCache || new Map();
+  const cacheKey = remoteJid;
+
   if (isCommand) {
     const commandName = rawText.split(/\s+/)[0]
     logMessage('COMMAND', messageType, `Comando detectado: ${commandName}`, {
@@ -1343,12 +1350,21 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     try {
       const shouldFetchMetadata = isCommand && ADMIN_COMMANDS.has(normalizedCmd)
       if (!shouldFetchMetadata) {
-        logMessage('DEBUG', 'METADATA', 'Saltando consulta de metadata (no es comando admin)')
         throw new Error('skip_metadata_fetch')
       }
 
-      logMessage('INFO', 'METADATA', `Obteniendo metadata del grupo: ${remoteJid}`)
-      groupMetadata = await s.groupMetadata(remoteJid)
+      const cached = global.__metadataCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < METADATA_CACHE_TTL)) {
+        groupMetadata = cached.data;
+        logMessage('DEBUG', 'METADATA', `Usando metadata de caché para ${remoteJid}`);
+      } else {
+        logMessage('INFO', 'METADATA', `Obteniendo metadata fresca para ${remoteJid}`);
+        groupMetadata = await s.groupMetadata(remoteJid);
+        global.__metadataCache.set(cacheKey, { data: groupMetadata, timestamp: Date.now() });
+      }
+
+      if (!groupMetadata) throw new Error('No se pudo obtener metadata');
+
       cacheChatName(remoteJid, groupMetadata?.subject)
 
       logMessage('METADATA', 'GROUP', `Metadata obtenida exitosamente`, {
