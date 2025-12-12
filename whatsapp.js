@@ -71,8 +71,16 @@ const LOG_COLORS = {
 
 const LOG_MODE = (process.env.LOG_MODE || 'minimal').toLowerCase()
 const MINIMAL_LOGS = LOG_MODE === 'minimal' || LOG_MODE === 'chat'
-const ALLOWED_SOURCES = new Set(['DM', 'GROUP', 'CHANNEL'])
-const ALLOWED_LEVELS = new Set(['ERROR', 'WARN'])
+const CHAT_SOURCES = new Set(['DM', 'GROUP', 'CHANNEL'])
+const CHAT_LEVELS = new Set(['INFO'])
+const ERROR_LEVELS = new Set(['ERROR', 'WARN'])
+
+// En modo minimal reducimos el nivel base de pino para evitar spam estructurado
+try {
+  if (MINIMAL_LOGS && logger && typeof logger.level === 'string') {
+    logger.level = 'warn'
+  }
+} catch {}
 
 const PINO_LEVEL_MAP = {
   ERROR: 'error',
@@ -93,8 +101,8 @@ const SHOW_LOG_DETAILS =
 
 const shouldLog = (level, source) => {
   if (!MINIMAL_LOGS) return true
-  if (ALLOWED_LEVELS.has(level)) return true
-  if (ALLOWED_SOURCES.has(source)) return true
+  if (ERROR_LEVELS.has(level)) return true
+  if (CHAT_SOURCES.has(source) && CHAT_LEVELS.has(level)) return true
   return false
 }
 
@@ -1257,18 +1265,20 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   }
   const isOwner = !!(ownerNumber && senderNumber && senderNumber === ownerNumber)
 
-  const allowMessageLog = shouldLog('INFO', messageType)
+  const allowMessageLog = shouldLog('INFO', messageType) && (!MINIMAL_LOGS || !fromMe)
 
-  logMessage('INFO', messageType, `Mensaje recibido [${messageSource}]`, {
-    remoteJid,
-    chatName,
-    chatDisplay,
-    senderNumber,
-    senderName,
-    text: rawText.substring(0, 100),
-    isCommand,
-    messageId: message.key.id
-  })
+  if (allowMessageLog) {
+    logMessage('INFO', messageType, `Mensaje recibido [${messageSource}]`, {
+      remoteJid,
+      chatName,
+      chatDisplay,
+      senderNumber,
+      senderName,
+      text: rawText.substring(0, 100),
+      isCommand,
+      messageId: message.key.id
+    })
+  }
 
   if (allowMessageLog) {
     prettyPrintMessageLog({
