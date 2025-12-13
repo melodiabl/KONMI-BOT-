@@ -1,6 +1,7 @@
 // backend/services/subbot-runner.js - VERSIÓN CORREGIDA
 import 'dotenv/config';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import qrcodeTerminal from 'qrcode-terminal';
 
@@ -204,19 +205,47 @@ async function start() {
 
     // Conectar al WhatsApp
     vlog('Conectando a WhatsApp...');
-    const sock = await connectToWhatsApp(authDir, usePairing, TARGET, connectOptions);
-
-    if (!sock) {
-      throw new Error('No se pudo crear el socket de WhatsApp');
-    }
-
-    vlog('✅ Socket creado correctamente');
-
+    let sock = null;
     let lastQR = null;
     let pairingRequested = false;
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+    let connecting = false;
+
+    const readCredsRegistered = () => {
+      try {
+        const credsPath = path.join(authDir, 'creds.json');
+        if (!fs.existsSync(credsPath)) return false;
+        const raw = fs.readFileSync(credsPath, 'utf8');
+        const json = JSON.parse(raw);
+        return !!json?.registered;
+      } catch {
+        return false;
+      }
+    };
+
+    const clearReconnect = () => {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      reconnectAttempts = 0;
+    };
+
+    const scheduleReconnect = (reason) => {
+      if (reconnectTimer || connecting) return;
+      reconnectAttempts = Math.min(reconnectAttempts + 1, 8);
+      const backoff = Math.min(30_000, 1000 * Math.pow(2, reconnectAttempts));
+      vlog(`🔁 Reintentando conexión en ${backoff}ms... (${reason || 'close'})`);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectAndBind(true).catch(() => {});
+      }, backoff);
+    };
 
     const requestPairingIfNeeded = async () => {
       if (!usePairing || pairingRequested) return;
+      if (!sock) return;
 
       const targetDigits = onlyDigits(TARGET);
       if (!targetDigits) {
@@ -261,184 +290,196 @@ async function start() {
       }
     };
 
-    // Fallback: si no llegan eventos a tiempo, solicitar el pairing igualmente
-    if (usePairing) {
-      setTimeout(() => { requestPairingIfNeeded().catch(() => {}); }, 2500);
-    }
+    const bindSocket = (s) => {
+      // ====== EVENTO: connection.update ======
+      s.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-    // ====== EVENTO: connection.update ======
-    sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
-
-      // Pairing Code (solo para modo code)
-      if (usePairing && !pairingRequested) {
-        if (connection !== 'open' && connection !== 'connecting') return;
-        await requestPairingIfNeeded();
-      }
-
-      // QR para modo QR
-      if (qr && !usePairing && qr !== lastQR) {
-        lastQR = qr;
-        try {
-          qrcodeTerminal.generate(qr, { small: true });
-          const QRCode = await import('qrcode');
-          const dataUrl = await QRCode.default.toDataURL(qr);
-          sendToParent('qr_ready', {
-            qrCode: qr,
-            qrImage: dataUrl.split(',')[1]
-          });
-        } catch (e) {
-          sendToParent('error', {
-            message: 'Error generando QR',
-            reason: e.message
-          });
+        // Pairing Code (solo para modo code)
+        if (usePairing && !pairingRequested) {
+          if (connection === 'open' || connection === 'connecting') {
+            await requestPairingIfNeeded();
+          }
         }
-      }
 
-      // Conectado
-      if (connection === 'open') {
-        const botNumber = normalizeDigitsFromJid(sock.user?.id) || null;
-        vlog(`✅ Subbot ${CODE} conectado exitosamente`);
-        sendToParent('connected', {
-          jid: sock.user?.id,
-          number: botNumber ? `+${botNumber}` : null,
-          digits: botNumber,
-          displayName: DISPLAY
-        });
-      }
-
-      // Desconectado
-      if (connection === 'close') {
-        const statusCode =
-          lastDisconnect?.error?.output?.statusCode ||
-          lastDisconnect?.error?.code ||
-          null;
-        const reason = lastDisconnect?.error?.message || 'Desconocido';
-        const isLoggedOut =
-          statusCode === 401 ||
-          statusCode === 403 ||
-          /logged out/i.test(reason || '');
-
-        if (isLoggedOut) {
-          vlog(`❌ Subbot ${CODE} cerró sesión desde WhatsApp`);
-          sendToParent('logged_out', { reason });
-          process.exit(0);
-        } else {
-          vlog(`⚠️ Subbot ${CODE} desconectado: ${reason}`);
-          sendToParent('disconnected', { reason, statusCode });
-        }
-      }
-    });
-
-    // Pairing code se solicita manualmente (connection.update) para evitar depender de eventos internos.
-
-    // ====== EVENTO: messages.upsert - MANEJO CORRECTO ======
-    sock.ev.on('messages.upsert', async ({ messages = [] }) => {
-      for (const m of messages) {
-        try {
-          const remoteJid = m.key?.remoteJid || '';
-          const fromMe = !!m.key?.fromMe;
-          const isGroup = remoteJid.endsWith('@g.us');
-
-          // Extraer texto del mensaje
-          const text = extractText(m);
-
-          // ✅ Verificar si el bot está globalmente activo
-          if (!fromMe) {
-            const on = await isBotGloballyActive();
-            const isBotGlobalOnCmd = /^\/bot\s+global\s+on\b/i.test(text);
-
-            if (!on && !isBotGlobalOnCmd) {
-              vlog(`⏭️ Bot globalmente desactivado, ignorando mensaje`);
-              continue;
-            }
-          }
-
-          // ✅ Verificar si el bot está activo en el grupo específico
-          if (isGroup && !fromMe) {
-            const isActive = await isBotActiveInGroup(CODE, remoteJid);
-            if (!isActive) {
-              vlog(`⏭️ Bot desactivado en grupo ${remoteJid}, ignorando`);
-              continue;
-            }
-          }
-
-          // ✅ CORRECCIÓN CRÍTICA: Construir contexto completo
-          const senderJid = isGroup ? (m.key.participant || remoteJid) : remoteJid;
-          const senderNumber = normalizeDigitsFromJid(senderJid);
-          const isCommand = /^[\\/!.#?$~]/.test(text || '');
-          const envOwner = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '');
-
-          let isAdmin = false;
-          let isBotAdmin = false;
-          let groupMetadata = null;
-          if (isGroup && isCommand) {
-            try {
-              const roles = await getGroupRoles(sock, remoteJid, senderJid);
-              isAdmin = !!roles?.isAdmin;
-              isBotAdmin = !!roles?.isBotAdmin;
-              groupMetadata = roles?.metadata || null;
-            } catch {}
-          }
-
-          const ctx = {
-            sock,
-            message: m,
-            key: m.key,
-            remoteJid,
-            sender: senderJid,
-            participant: m.key.participant || null,
-            pushName: m.pushName || null,
-            text,
-            isGroup,
-            fromMe,
-            senderNumber,
-            usuarioNumber: senderNumber,
-            isOwner: !!(envOwner && senderNumber && senderNumber === envOwner),
-            isAdmin,
-            isBotAdmin,
-            groupMetadata,
-            // ✅ Información del subbot
-            isSubbot: true,
-            subbotCode: CODE,
-            subbotType: TYPE,
-            subbotDir: DIR,
-            subbotMetadata: SUBBOT_METADATA
-          };
-
-          // ✅ CORRECCIÓN CRÍTICA: Usar dispatch directamente
-          vlog(`📨 Procesando mensaje: ${text.substring(0, 50)}...`);
-
+        // QR para modo QR
+        if (qr && !usePairing && qr !== lastQR) {
+          lastQR = qr;
           try {
-            const handled = await dispatch(ctx, {
+            qrcodeTerminal.generate(qr, { small: true });
+            const QRCode = await import('qrcode');
+            const dataUrl = await QRCode.default.toDataURL(qr);
+            sendToParent('qr_ready', {
+              qrCode: qr,
+              qrImage: dataUrl.split(',')[1]
+            });
+          } catch (e) {
+            sendToParent('error', {
+              message: 'Error generando QR',
+              reason: e.message
+            });
+          }
+        }
+
+        // Conectado
+        if (connection === 'open') {
+          clearReconnect();
+          const botNumber = normalizeDigitsFromJid(s.user?.id) || null;
+          vlog(`✅ Subbot ${CODE} conectado exitosamente`);
+          sendToParent('connected', {
+            jid: s.user?.id,
+            number: botNumber ? `+${botNumber}` : null,
+            digits: botNumber,
+            displayName: DISPLAY
+          });
+        }
+
+        // Desconectado
+        if (connection === 'close') {
+          const statusCode =
+            lastDisconnect?.error?.output?.statusCode ||
+            lastDisconnect?.error?.code ||
+            null;
+          const reason = lastDisconnect?.error?.message || 'Desconocido';
+
+          if (statusCode === 428) {
+            // Esperando que el usuario termine el vínculo (no forzar reconexión)
+            vlog(`⏳ Esperando vinculación (status 428)`);
+            sendToParent('disconnected', { reason: 'waiting_pairing', statusCode });
+            return;
+          }
+
+          const isLoggedOut =
+            statusCode === 401 ||
+            statusCode === 403 ||
+            /logged out/i.test(reason || '');
+
+          if (isLoggedOut) {
+            vlog(`❌ Subbot ${CODE} cerró sesión desde WhatsApp`);
+            sendToParent('logged_out', { reason });
+            process.exit(0);
+          } else {
+            vlog(`⚠️ Subbot ${CODE} desconectado: ${reason}`);
+            sendToParent('disconnected', { reason, statusCode });
+
+            // Si aún no está registrado, permitir re-solicitar pairing en el siguiente intento
+            if (usePairing && !readCredsRegistered()) {
+              pairingRequested = false;
+            }
+
+            lastQR = null;
+            scheduleReconnect(reason);
+          }
+        }
+      });
+
+      // ====== EVENTO: messages.upsert - MANEJO CORRECTO ======
+      s.ev.on('messages.upsert', async ({ messages = [] }) => {
+        for (const m of messages) {
+          try {
+            const remoteJid = m.key?.remoteJid || '';
+            const fromMe = !!m.key?.fromMe;
+            const isGroup = remoteJid.endsWith('@g.us');
+
+            const text = extractText(m);
+
+            if (!fromMe) {
+              const on = await isBotGloballyActive();
+              const isBotGlobalOnCmd = /^\/bot\s+global\s+on\b/i.test(text);
+              if (!on && !isBotGlobalOnCmd) continue;
+            }
+
+            if (isGroup && !fromMe) {
+              const isActive = await isBotActiveInGroup(CODE, remoteJid);
+              if (!isActive) continue;
+            }
+
+            const senderJid = isGroup ? (m.key.participant || remoteJid) : remoteJid;
+            const senderNumber = normalizeDigitsFromJid(senderJid);
+            const isCommand = /^[\\/!.#?$~]/.test(text || '');
+            const envOwner = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '');
+
+            let isAdmin = false;
+            let isBotAdmin = false;
+            let groupMetadata = null;
+            if (isGroup && isCommand) {
+              try {
+                const roles = await getGroupRoles(s, remoteJid, senderJid);
+                isAdmin = !!roles?.isAdmin;
+                isBotAdmin = !!roles?.isBotAdmin;
+                groupMetadata = roles?.metadata || null;
+              } catch {}
+            }
+
+            const ctx = {
+              sock: s,
+              message: m,
+              key: m.key,
+              remoteJid,
+              sender: senderJid,
+              participant: m.key.participant || null,
+              pushName: m.pushName || null,
+              text,
+              isGroup,
+              fromMe,
+              senderNumber,
+              usuarioNumber: senderNumber,
+              isOwner: !!(envOwner && senderNumber && senderNumber === envOwner),
+              isAdmin,
+              isBotAdmin,
+              groupMetadata,
               isSubbot: true,
               subbotCode: CODE,
               subbotType: TYPE,
               subbotDir: DIR,
               subbotMetadata: SUBBOT_METADATA
-            });
+            };
 
-            if (handled) {
-              vlog(`✅ Mensaje procesado correctamente`);
-            } else {
-              vlog(`⏭️ Mensaje no manejado (no es comando o no coincide)`);
+            try {
+              await dispatch(ctx, {
+                isSubbot: true,
+                subbotCode: CODE,
+                subbotType: TYPE,
+                subbotDir: DIR,
+                subbotMetadata: SUBBOT_METADATA
+              });
+            } catch (dispatchError) {
+              sendToParent('error', {
+                message: `Error procesando comando: ${dispatchError?.message}`,
+                command: text.split(/\s+/)[0]
+              });
             }
-          } catch (dispatchError) {
-            vlog(`❌ Error en dispatch:`, dispatchError?.message);
-            sendToParent('error', {
-              message: `Error procesando comando: ${dispatchError?.message}`,
-              command: text.split(/\s+/)[0]
-            });
+          } catch (e) {
+            sendToParent('error', { message: `Error en message handler: ${e?.message}` });
           }
-
-        } catch (e) {
-          vlog('❌ Error procesando mensaje:', e?.message || e);
-          sendToParent('error', {
-            message: `Error en message handler: ${e?.message}`
-          });
         }
+      });
+    };
+
+    const connectAndBind = async (isReconnect = false) => {
+      if (connecting) return;
+      connecting = true;
+      try {
+        if (isReconnect) {
+          lastQR = null;
+        }
+
+        sock = await connectToWhatsApp(authDir, usePairing, TARGET, connectOptions);
+        if (!sock) throw new Error('No se pudo crear el socket de WhatsApp');
+
+        vlog(isReconnect ? '✅ Reconectado' : '✅ Socket creado correctamente');
+        bindSocket(sock);
+
+        // Fallback: si no llegan eventos a tiempo, solicitar el pairing igualmente
+        if (usePairing) {
+          setTimeout(() => { requestPairingIfNeeded().catch(() => {}); }, 2500);
+        }
+      } finally {
+        connecting = false;
       }
-    });
+    };
+
+    await connectAndBind(false);
 
     // Notificar que el subbot está listo
     sendToParent('initialized', { code: CODE });
