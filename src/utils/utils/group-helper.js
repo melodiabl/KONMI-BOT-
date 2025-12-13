@@ -64,7 +64,23 @@ export async function safeGetGroupMetadata(socket, groupJid) {
   try {
     return await antibanSystem.queryGroupMetadata(socket, groupJid)
   } catch (error) {
-    logger.error(`Failed to get group metadata for ${groupJid}:`, error.message)
+    const message = error?.message || String(error)
+    logger.warn(`antibanSystem.queryGroupMetadata falló para ${groupJid}: ${message}`)
+
+    // Fallback directo a Baileys para evitar falsos positivos de admin/botAdmin.
+    try {
+      if (socket && typeof socket.groupMetadata === 'function') {
+        return await socket.groupMetadata(groupJid)
+      }
+    } catch (fallbackError) {
+      logger.error(
+        `Failed to get group metadata for ${groupJid}:`,
+        fallbackError?.message || String(fallbackError)
+      )
+      throw fallbackError
+    }
+
+    logger.error(`Failed to get group metadata for ${groupJid}:`, message)
     throw error
   }
 }
@@ -73,7 +89,23 @@ export async function safeGetGroupParticipants(socket, groupJid) {
   try {
     return await antibanSystem.fetchGroupParticipants(socket, groupJid)
   } catch (error) {
-    logger.error(`Failed to get participants for ${groupJid}:`, error.message)
+    const message = error?.message || String(error)
+    logger.warn(`antibanSystem.fetchGroupParticipants falló para ${groupJid}: ${message}`)
+
+    try {
+      if (socket && typeof socket.groupMetadata === 'function') {
+        const metadata = await socket.groupMetadata(groupJid)
+        return Array.isArray(metadata?.participants) ? metadata.participants : []
+      }
+    } catch (fallbackError) {
+      logger.error(
+        `Failed to get participants for ${groupJid}:`,
+        fallbackError?.message || String(fallbackError)
+      )
+      throw fallbackError
+    }
+
+    logger.error(`Failed to get participants for ${groupJid}:`, message)
     throw error
   }
 }

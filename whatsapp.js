@@ -1452,6 +1452,61 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     botNumber = onlyDigits(botJid || '');
   }
 
+  // Normalizadores para comparar JIDs / LIDs sin falsos positivos (p.ej. @lid sin dÃ­gitos)
+  const normalizeComparableKey = (userOrJid) => {
+    try {
+      const raw = String(userOrJid || '').trim().toLowerCase()
+      if (!raw) return { type: 'none', value: '' }
+
+      // Eliminar sufijos de dispositivo (:xx) para que id/lid comparen correctamente
+      let normalized = raw
+      const colon = normalized.indexOf(':')
+      if (colon > 0) normalized = normalized.slice(0, colon)
+
+      // Para dÃ­gitos usar la parte antes del @ (si existe)
+      let base = normalized
+      const at = base.indexOf('@')
+      if (at > 0) base = base.slice(0, at)
+
+      const digits = base.replace(/[^0-9]/g, '')
+      if (digits) return { type: 'digits', value: digits }
+
+      // Fallback: comparar string completo (incluye @lid o dominio)
+      return { type: 'raw', value: normalized }
+    } catch {
+      return { type: 'none', value: '' }
+    }
+  }
+
+  const sameUser = (a, b) => {
+    if (!a || !b) return false
+    const ka = normalizeComparableKey(a)
+    const kb = normalizeComparableKey(b)
+    if (!ka.value || !kb.value) return false
+    if (ka.type === 'digits' && kb.type === 'digits') return ka.value === kb.value
+    return ka.value === kb.value
+  }
+
+  const isAdminFlag = (p) => {
+    try {
+      if (!p) return false
+      const admin = String(p.admin || p.privilege || '').toLowerCase()
+      if (admin === 'admin' || admin === 'superadmin' || admin === 'owner') return true
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  const participantMatches = (participant, target) => {
+    if (!participant || !target) return false
+    return (
+      sameUser(participant.id, target) ||
+      sameUser(participant.jid, target) ||
+      sameUser(participant.lid, target)
+    )
+  }
+
   const sender = isGroup ? message.key.participant || remoteJid : remoteJid;
   let senderNumber = null;
   try {
@@ -1508,31 +1563,14 @@ export async function handleMessage(message, customSock = null, prefix = '', run
       groupMetadata = await s.groupMetadata(remoteJid);
       cacheChatName(remoteJid, groupMetadata?.subject);
 
-      const isParticipantBot = (participant) => {
-        if (!participant) return false;
-        const pid = participant.id;
-        const pLid = participant.lid;
-        if (pid === botJid || pid === botJidRaw) return true;
-        if (pLid && (pLid === botJid || pLid === botJidRaw)) return true;
-        if (botNumber) {
-          const pidNum = onlyDigits(pid || '');
-          const pLidNum = pLid ? onlyDigits(pLid) : null;
-          if (pidNum === botNumber || pLidNum === botNumber) return true;
-        }
-        return false;
-      };
+      const participants = Array.isArray(groupMetadata?.participants) ? groupMetadata.participants : []
 
-      const participantInfo = (groupMetadata.participants || []).find((p) => {
-        return p.id === sender || p.lid === sender;
-      });
-      isAdmin = !!participantInfo && (participantInfo.admin === 'admin' || participantInfo.admin === 'superadmin');
+      const participantInfo = participants.find((p) => participantMatches(p, sender))
+      isAdmin = isAdminFlag(participantInfo)
 
-      let botInfo = (groupMetadata.participants || []).find(isParticipantBot);
-      if (botInfo) {
-        isBotAdmin = botInfo.admin === 'admin' || botInfo.admin === 'superadmin';
-      } else if (isOwner) {
-        isBotAdmin = true;
-      }
+      const botIds = [botJid, botJidRaw, s.user?.lid].filter(Boolean)
+      const botInfo = participants.find((p) => botIds.some((id) => participantMatches(p, id)))
+      isBotAdmin = isAdminFlag(botInfo) || !!isOwner
     } catch (e) {
       logMessage('WARN', 'METADATA', `Error obteniendo metadata: ${e.message}`);
     }
@@ -1541,7 +1579,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   let usuarioName = null;
   try {
     if (isGroup && groupMetadata && Array.isArray(groupMetadata.participants)) {
-      const p = groupMetadata.participants.find((x) => x?.id === sender);
+      const p = groupMetadata.participants.find((x) => participantMatches(x, sender));
       usuarioName = p?.notify || p?.name || null;
     }
   } catch (e) {}

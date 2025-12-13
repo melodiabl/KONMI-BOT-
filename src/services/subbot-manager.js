@@ -939,7 +939,7 @@ export async function restoreActiveSubbots() {
     const targetDigits = getPhoneDigits(row.target_number);
     const launchResult = await launchSubbot({
       code: row.code,
-      type: row.method === "code" ? "code" : "qr",
+      type: (row.method || row.type) === "code" ? "code" : "qr",
       createdBy: ownerDigits || targetDigits || "unknown",
       targetNumber: targetDigits || null,
       authDir: authDir,
