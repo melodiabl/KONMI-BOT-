@@ -16,7 +16,7 @@ import {
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SUBBOTS_BASE_DIR = path.resolve(__dirname, "..", "..", "storage", "subbots");
+const SUBBOTS_BASE_DIR = path.resolve(__dirname, "storage", "subbots");
 let globalRuntimeSyncReady = false;
 let tableReady = false;
 
@@ -186,6 +186,7 @@ export async function cleanOrphanSubbots() {
   await ensureTable();
   const rows = await db("subbots").select("id", "code", "auth_path");
   logger.info("🧹 [Limpieza] Buscando subbots huérfanos...");
+  logger.info(`📂 SUBBOTS_BASE_DIR: ${SUBBOTS_BASE_DIR}`);
   let removed = 0;
 
   for (const row of rows) {
@@ -195,6 +196,7 @@ export async function cleanOrphanSubbots() {
 
     // Valida no solo el directorio de autenticación, sino también el archivo de credenciales
     if (!fs.existsSync(authDir) || !fs.existsSync(credsPath)) {
+      logger.warn(`⚠️ Subbot ${row.code} marcado para eliminación. AuthDir: ${authDir}, Creds: ${credsPath} (Exists: ${fs.existsSync(credsPath)})`);
       await db("subbots").where({ id: row.id }).del();
       removed += 1;
 

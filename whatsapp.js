@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'url'
 import logger from './src/config/logger.js'
 import { isSuperAdmin, setPrimaryOwner } from './src/config/global-config.js'
 import { initStore } from './src/utils/utils/store.js'
+import { extractText } from './src/utils/text-extractor.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -648,9 +649,25 @@ export async function connectToWhatsApp(
   jidNormalizedUser = baileyJidNormalizedUser
 
   savedAuthPath = path.resolve(authPath)
-  fs.mkdirSync(savedAuthPath, { recursive: true })
+  try {
+    fs.mkdirSync(savedAuthPath, { recursive: true })
+    logMessage('DEBUG', 'AUTH', `Directorio de auth creado/verificado: ${savedAuthPath}`)
+  } catch (e) {
+    logMessage('ERROR', 'AUTH', `Error creando directorio auth: ${savedAuthPath}`, { error: e.message })
+  }
 
   const { state, saveCreds } = await useMultiFileAuthState(savedAuthPath)
+
+  // Wrapper para loguear saveCreds
+  const saveCredsWrapped = async () => {
+    try {
+      logMessage('DEBUG', 'AUTH', `Guardando credenciales en ${savedAuthPath}`)
+      await saveCreds()
+      logMessage('DEBUG', 'AUTH', `Credenciales guardadas exitosamente`)
+    } catch (e) {
+      logMessage('ERROR', 'AUTH', `Error guardando credenciales`, { error: e.message })
+    }
+  }
 
   const waVersion = await resolveWaVersion(fetchLatestBaileysVersion)
   const browser = Browsers.macOS('Chrome')
@@ -736,7 +753,7 @@ export async function connectToWhatsApp(
 
   // ============ REGISTRAR EVENTOS ============
   try {
-    sock.ev.on('creds.update', saveCreds)
+    sock.ev.on('creds.update', saveCredsWrapped)
     logMessage('SUCCESS', 'EVENTS', 'Evento creds.update registrado')
   } catch (e) {
     logMessage('ERROR', 'EVENTS', 'Error registrando creds.update', { error: e.message })
@@ -1215,165 +1232,6 @@ export async function requestMainBotPairingCode() {
 // ==========================================================
 // ✅ FUNCIÓN CORREGIDA: handleMessage con LOGS DETALLADOS + RECUADRO
 // ==========================================================
-function extractTextFromMessage(message) {
-  try {
-    const normalizeIncomingText = (text) => {
-      try {
-        if (text == null) return ''
-        let s = String(text)
-        s = s.normalize('NFKC')
-        s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '')
-        s = s.replace(/\r\n/g, '\n')
-        return s.trim()
-      } catch {
-        return String(text || '').trim()
-      }
-    }
-
-    const pick = (obj) => {
-      if (!obj || typeof obj !== 'object') return '';
-
-      // 1. Texto normal primero
-      const base = (
-        obj.conversation ||
-        obj.extendedTextMessage?.text ||
-        obj.imageMessage?.caption ||
-        obj.videoMessage?.caption ||
-        obj.documentMessage?.caption ||
-        obj.documentWithCaptionMessage?.message?.documentMessage?.caption ||
-        ''
-      );
-      if (base) return normalizeIncomingText(base);
-
-      // 2. Botones clásicos
-      const btnId =
-        obj.buttonsResponseMessage?.selectedButtonId ||
-        obj.templateButtonReplyMessage?.selectedId ||
-        obj.buttonReplyMessage?.selectedButtonId;
-      if (btnId) return normalizeIncomingText(btnId);
-
-      // 3. LISTA CLÁSICA - CRÍTICO PARA GRUPOS
-      const listResp = obj.listResponseMessage;
-      if (listResp) {
-        const rowId =
-          listResp.singleSelectReply?.selectedRowId ||
-          listResp.singleSelectReply?.selectedId ||
-          listResp.title;
-        if (rowId) return normalizeIncomingText(rowId);
-      }
-
-      // 4. RESPUESTA INTERACTIVA (nuevo formato WhatsApp)
-      const intResp = obj.interactiveResponseMessage;
-      if (intResp) {
-        // 4a. Native Flow Response
-        if (intResp.nativeFlowResponseMessage?.paramsJson) {
-          try {
-            const params = JSON.parse(intResp.nativeFlowResponseMessage.paramsJson);
-            const id = params?.id || params?.command || params?.rowId || params?.row_id;
-            if (id && typeof id === 'string') return normalizeIncomingText(id);
-          } catch { }
-        }
-
-        // 4b. List Response dentro de Interactive
-        if (intResp.listResponseMessage?.singleSelectReply) {
-          const rowId = intResp.listResponseMessage.singleSelectReply.selectedRowId;
-          if (rowId && typeof rowId === 'string') return normalizeIncomingText(rowId);
-        }
-
-        // 4c. Body text (último recurso)
-        if (intResp.body?.text) {
-          return normalizeIncomingText(intResp.body.text);
-        }
-      }
-
-      // 5. MENSAJE INTERACTIVO (estructura de envío)
-      const intMsg = obj.interactiveMessage;
-      if (intMsg) {
-        // 5a. Reply con selectedRowId
-        const selectedRowId =
-          intMsg.replyMessage?.selectedRowId ||
-          intMsg.selectedRowId ||
-          intMsg.nativeFlowResponseMessage?.selectedRowId;
-
-        if (selectedRowId && typeof selectedRowId === 'string') {
-          return normalizeIncomingText(selectedRowId);
-        }
-
-        // 5b. Display text
-        const displayText =
-          intMsg.replyMessage?.selectedDisplayText ||
-          intMsg.body?.selectedDisplayText ||
-          intMsg.body?.text;
-        if (displayText && typeof displayText === 'string') {
-          return normalizeIncomingText(displayText);
-        }
-
-        // 5c. Native Flow Buttons
-        const nativeFlowMsg = intMsg.nativeFlowMessage;
-        if (nativeFlowMsg && Array.isArray(nativeFlowMsg.buttons)) {
-          for (const btn of nativeFlowMsg.buttons) {
-            if (btn.buttonParamsJson) {
-              try {
-                const params = JSON.parse(btn.buttonParamsJson);
-                const id =
-                  params?.selectedButtonId ||
-                  params?.response?.selectedRowId ||
-                  params?.id ||
-                  params?.command;
-                if (id) return normalizeIncomingText(id);
-              } catch { }
-            }
-          }
-        }
-
-        // 5d. Params JSON directo
-        const paramsJson = intMsg.nativeFlowResponseMessage?.paramsJson;
-        if (paramsJson && typeof paramsJson === 'string') {
-          try {
-            const params = JSON.parse(paramsJson);
-            const id = params?.id || params?.command || params?.rowId || params?.row_id;
-            if (id) return normalizeIncomingText(id);
-          } catch { }
-        }
-      }
-
-      return '';
-    };
-
-    const m = message?.message || {};
-    let out = pick(m);
-    if (out) return out;
-
-    // Revisar mensajes anidados (viewOnce / ephemeral)
-    const inner =
-      m.viewOnceMessage?.message ||
-      m.viewOnceMessageV2?.message ||
-      m.ephemeralMessage?.message ||
-      m.documentWithCaptionMessage?.message ||
-      null;
-
-    if (inner) {
-      out = pick(inner);
-      if (out) return out;
-
-      const inner2 =
-        inner.viewOnceMessage?.message ||
-        inner.viewOnceMessageV2?.message ||
-        inner.ephemeralMessage?.message ||
-        null;
-
-      if (inner2) {
-        out = pick(inner2);
-        if (out) return out;
-      }
-    }
-
-    return '';
-  } catch (e) {
-    logMessage('ERROR', 'EXTRACT-TEXT', 'Error extrayendo texto', { error: e?.message });
-    return '';
-  }
-}
 
 // ============================================
 // REEMPLAZAR LA FUNCIÓN handleMessage COMPLETA
@@ -1392,7 +1250,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const fromMe = !!message?.key?.fromMe;
 
   // ✅ USAR LA FUNCIÓN CORRECTA DE EXTRACCIÓN
-  const rawText = extractTextFromMessage(message);
+  const rawText = extractText(message);
   const pushName = message?.pushName || null;
 
   // ✅ LOG DE DEBUG CRÍTICO
