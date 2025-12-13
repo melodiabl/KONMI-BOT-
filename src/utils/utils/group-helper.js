@@ -16,6 +16,29 @@ const normalizeDigits = (userOrJid) => {
   }
 }
 
+const normalizeComparableKey = (userOrJid) => {
+  try {
+    const raw = String(userOrJid || '').trim()
+    if (!raw) return { type: 'none', value: '' }
+
+    const lower = raw.toLowerCase()
+    let base = lower
+
+    const at = base.indexOf('@')
+    if (at > 0) base = base.slice(0, at)
+    const col = base.indexOf(':')
+    if (col > 0) base = base.slice(0, col)
+
+    const digits = base.replace(/[^0-9]/g, '')
+    if (digits) return { type: 'digits', value: digits }
+
+    // Fallback para IDs tipo @lid (no tienen dígitos): comparar el string completo normalizado.
+    return { type: 'raw', value: lower }
+  } catch {
+    return { type: 'none', value: '' }
+  }
+}
+
 const isAdminFlag = (p) => {
   try {
     if (!p) return false
@@ -30,7 +53,11 @@ const isAdminFlag = (p) => {
 
 const sameUser = (a, b) => {
   if (!a || !b) return false
-  return normalizeDigits(a) === normalizeDigits(b)
+  const ka = normalizeComparableKey(a)
+  const kb = normalizeComparableKey(b)
+  if (!ka.value || !kb.value) return false
+  if (ka.type === 'digits' && kb.type === 'digits') return ka.value === kb.value
+  return ka.value === kb.value
 }
 
 export async function safeGetGroupMetadata(socket, groupJid) {
@@ -112,16 +139,21 @@ export async function getGroupRoles(socket, groupJid, senderJid) {
     const metadata = await safeGetGroupMetadata(socket, groupJid)
     const participants = Array.isArray(metadata?.participants) ? metadata.participants : []
 
-    const senderInfo = participants.find((p) =>
-      sameUser(p.id || p.jid || p.lid, senderJid)
-    )
+    const participantMatches = (p, target) => {
+      if (!p || !target) return false
+      return (
+        sameUser(p.id, target) ||
+        sameUser(p.jid, target) ||
+        sameUser(p.lid, target)
+      )
+    }
+
+    const senderInfo = participants.find((p) => participantMatches(p, senderJid))
 
     const isAdmin = isAdminFlag(senderInfo)
 
-    const botJid = socket?.user?.id || null
-    const botInfo = participants.find((p) =>
-      sameUser(p.id || p.jid || p.lid, botJid)
-    )
+    const botIds = [socket?.user?.id, socket?.user?.lid].filter(Boolean)
+    const botInfo = participants.find((p) => botIds.some((id) => participantMatches(p, id)))
 
     const isBotAdmin = isAdminFlag(botInfo)
 
