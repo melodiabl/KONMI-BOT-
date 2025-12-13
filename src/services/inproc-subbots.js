@@ -9,7 +9,9 @@ import logger from "../config/logger.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SUBBOT_BASE_DIR = path.resolve(__dirname, "storage", "subbots");
+// Usar storage/subbots en la RAÍZ del proyecto (compatible con server.js static /storage).
+const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
+const SUBBOT_BASE_DIR = path.resolve(PROJECT_ROOT, "storage", "subbots");
 
 const SUBBOTS_ENABLED = String(process.env.SUBBOTS_ENABLED ?? "true").toLowerCase() !== "false";
 const MAX_ACTIVE_SUBBOTS = parseInt(process.env.MAX_ACTIVE_SUBBOTS ?? "5", 10);
