@@ -693,6 +693,18 @@ async function ensureRuntimeSyncListeners() {
       customPairing: !!data.customCodeUsed,
     };
     await updateSubbotMetadata(subbot.code, metaPatch);
+
+    // Estado intermedio para panel/UI (evita quedar en "pending")
+    try {
+      await db("subbots")
+        .where({ code: subbot.code })
+        .update({
+          status: "waiting_pairing",
+          is_online: false,
+          is_active: true,
+          updated_at: db.fn.now(),
+        });
+    } catch {}
   });
 
   wrap("qr_ready", async (subbot, data) => {
@@ -702,6 +714,18 @@ async function ensureRuntimeSyncListeners() {
       qrImage: data?.qrImage || null,
       qrGeneratedAt: new Date().toISOString(),
     });
+
+    // Estado intermedio para panel/UI (evita quedar en "pending")
+    try {
+      await db("subbots")
+        .where({ code: subbot.code })
+        .update({
+          status: "waiting_scan",
+          is_online: false,
+          is_active: true,
+          updated_at: db.fn.now(),
+        });
+    } catch {}
   });
 
   wrap("connected", async (subbot, data) => {

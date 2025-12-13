@@ -215,6 +215,57 @@ async function start() {
     let lastQR = null;
     let pairingRequested = false;
 
+    const requestPairingIfNeeded = async () => {
+      if (!usePairing || pairingRequested) return;
+
+      const targetDigits = onlyDigits(TARGET);
+      if (!targetDigits) {
+        pairingRequested = true;
+        sendToParent('error', { message: 'SUB_TARGET inválido para pairing code' });
+        return;
+      }
+
+      pairingRequested = true;
+      try {
+        await sleep(1500);
+        if (typeof sock.requestPairingCode !== 'function') {
+          throw new Error('Baileys no soporta requestPairingCode()');
+        }
+
+        const custom = String(process.env.SUBBOT_CUSTOM_PAIRING_CODE || process.env.CUSTOM_PAIRING_CODE || 'KONMIBOT');
+
+        let code = null;
+        try {
+          code = await sock.requestPairingCode(targetDigits, custom);
+        } catch (_) {
+          code = await sock.requestPairingCode(targetDigits);
+        }
+
+        if (code) {
+          const formatted = String(code).toUpperCase().replace(/[-\\s]/g, '');
+          const grouped = (formatted.match(/.{1,4}/g) || [formatted]).join('-');
+          sendToParent('pairing_code', {
+            pairingCode: grouped,
+            code: grouped,
+            identificationCode: CODE,
+            displayCode: DISPLAY,
+            targetNumber: targetDigits,
+            customCodeUsed: true
+          });
+        }
+      } catch (e) {
+        sendToParent('error', {
+          message: 'Error solicitando pairing code',
+          reason: e?.message || String(e)
+        });
+      }
+    };
+
+    // Fallback: si no llegan eventos a tiempo, solicitar el pairing igualmente
+    if (usePairing) {
+      setTimeout(() => { requestPairingIfNeeded().catch(() => {}); }, 2500);
+    }
+
     // ====== EVENTO: connection.update ======
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
@@ -222,48 +273,7 @@ async function start() {
       // Pairing Code (solo para modo code)
       if (usePairing && !pairingRequested) {
         if (connection !== 'open' && connection !== 'connecting') return;
-
-        const targetDigits = onlyDigits(TARGET);
-        if (!targetDigits) {
-          pairingRequested = true;
-          sendToParent('error', { message: 'SUB_TARGET inválido para pairing code' });
-          return;
-        }
-
-        pairingRequested = true;
-        try {
-          await sleep(1500);
-          if (typeof sock.requestPairingCode !== 'function') {
-            throw new Error('Baileys no soporta requestPairingCode()');
-          }
-
-          const custom = String(process.env.SUBBOT_CUSTOM_PAIRING_CODE || process.env.CUSTOM_PAIRING_CODE || 'KONMIBOT');
-
-          let code = null;
-          try {
-            code = await sock.requestPairingCode(targetDigits, custom);
-          } catch (_) {
-            code = await sock.requestPairingCode(targetDigits);
-          }
-
-          if (code) {
-            const formatted = String(code).toUpperCase().replace(/[-\\s]/g, '');
-            const grouped = (formatted.match(/.{1,4}/g) || [formatted]).join('-');
-            sendToParent('pairing_code', {
-              pairingCode: grouped,
-              code: grouped,
-              identificationCode: CODE,
-              displayCode: DISPLAY,
-              targetNumber: targetDigits,
-              customCodeUsed: true
-            });
-          }
-        } catch (e) {
-          sendToParent('error', {
-            message: 'Error solicitando pairing code',
-            reason: e?.message || String(e)
-          });
-        }
+        await requestPairingIfNeeded();
       }
 
       // QR para modo QR
@@ -299,9 +309,15 @@ async function start() {
 
       // Desconectado
       if (connection === 'close') {
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const statusCode =
+          lastDisconnect?.error?.output?.statusCode ||
+          lastDisconnect?.error?.code ||
+          null;
         const reason = lastDisconnect?.error?.message || 'Desconocido';
-        const isLoggedOut = statusCode === 401 || /logged out/i.test(reason || '');
+        const isLoggedOut =
+          statusCode === 401 ||
+          statusCode === 403 ||
+          /logged out/i.test(reason || '');
 
         if (isLoggedOut) {
           vlog(`❌ Subbot ${CODE} cerró sesión desde WhatsApp`);
