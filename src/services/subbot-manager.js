@@ -16,7 +16,7 @@ import {
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SUBBOTS_BASE_DIR = path.join(__dirname, "storage", "subbots");
+const SUBBOTS_BASE_DIR = path.resolve(__dirname, "..", "..", "storage", "subbots");
 let globalRuntimeSyncReady = false;
 let tableReady = false;
 
