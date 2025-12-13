@@ -180,6 +180,18 @@ async function main() {
         console.log('⏳ Solicitando código de emparejamiento...');
 
         try {
+            const session = await checkSessionState(authPath);
+            if (session.hasCreds) {
+                const confirm = await ask('⚠ Ya existe una sesión. ¿Quieres borrarla y vincular de nuevo? (s/n) [n]: ');
+                if (confirm.toLowerCase() !== 's') {
+                    console.log('Abordando vinculación. Intentando reconectar con la sesión existente...');
+                    await connectToWhatsApp(authPath, false, null);
+                    await startWebServer(config);
+                    rl.close();
+                    return;
+                }
+                 console.log('Borrando sesión existente...');
+            }
             // Para pairing, usar SIEMPRE sesión limpia para evitar errores loggedOut
             try {
                 await clearWhatsAppSession(authPath);
