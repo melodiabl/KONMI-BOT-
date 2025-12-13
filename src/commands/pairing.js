@@ -73,17 +73,17 @@ async function extractPhoneNumber(ctx) {
 export async function qr(ctx) {
   try {
     const { isOwner, sock, remoteJid } = ctx || {};
-    
+
     const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
     if (access === 'owner' && !isOwner) {
       return { success:false, message:'⛔ Solo el owner puede usar /qr (subbots).', quoted: true }
     }
-    
+
     const owner = await extractPhoneNumber(ctx);
     if (!owner) {
       return { success:false, message:'❌ No pude detectar un número válido en formato internacional (8-15 dígitos). Usa /code <tu_numero_en_formato_internacional>.' }
     }
-    
+
     const res = await generateSubbotQR(owner, { displayName: 'KONMI-BOT' });
     const code = res?.code;
     if (!code) return { success:false, message:'❌ Error al crear el subbot QR' };
@@ -108,7 +108,7 @@ export async function qr(ctx) {
           await sock?.sendMessage?.(remoteJid, { text: parts.join('\n') })
         } catch {}
       }
-      
+
       const onQRReady = (payload) => {
         try { clearTimeout(timeout); detachSubbotListeners(code, (ev, handler) => ev === 'qr_ready' && handler === onQRReady) } catch {}
         const data = payload?.data || payload;
@@ -144,7 +144,7 @@ export async function qr(ctx) {
           resolve({ success:false, message:'⚠️ QR no disponible' });
         }
       };
-      
+
       try {
         detachAll = attachSubbotListeners(code, [
           { event: 'qr_ready', handler: onQRReady },
@@ -163,15 +163,15 @@ export async function qr(ctx) {
 export async function code(ctx) {
   try {
     const { isOwner, sock, remoteJid, pushName, usuarioName } = ctx || {};
-    
+
     const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
     if (access === 'owner' && !isOwner) {
       return { success:false, message:'⛔ Solo el owner puede usar /code (subbots).', quoted: true }
     }
-    
+
     const phone = await extractPhoneNumber(ctx);
     if (!phone) {
-      const hint = Array.isArray(ctx?.args) && ctx.args.length ? 
+      const hint = Array.isArray(ctx?.args) && ctx.args.length ?
         '❌ El número proporcionado no es válido. Debe tener 8-15 dígitos (formato internacional sin el +).' :
         '❌ No pude detectar tu número de WhatsApp. Por favor, proporciona tu número: /code <tu_numero>';
       return { success:false, message:hint }
@@ -181,7 +181,7 @@ export async function code(ctx) {
     return await new Promise(async (resolve) => {
       let globalHandler = null;
       let codeValue = null;
-      
+
       const timeout = setTimeout(() => {
         if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
         resolve({ success:false, message:'⏱️ Timeout esperando código de vinculación (60s). Intenta de nuevo.' })
@@ -191,19 +191,19 @@ export async function code(ctx) {
       globalHandler = async (payload) => {
         try {
           const subbotCode = payload?.subbot?.code;
-          
+
           // Solo procesar si es NUESTRO subbot
           if (!codeValue || subbotCode !== codeValue) return;
 
           // Limpiar timeout y listener
           clearTimeout(timeout);
           if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
-          
+
           const data = payload?.data || {};
           const pairingCode = data.pairingCode || data.code;
-          
+
           console.log(`[pairing.js] 🎯 Código recibido para ${codeValue}: ${pairingCode}`);
-          
+
           if (!pairingCode) {
             resolve({ success:false, message:'⚠️ No se recibió código de vinculación' });
             return;
@@ -217,7 +217,7 @@ export async function code(ctx) {
               const onConnected = async (connPayload) => {
                 try {
                   if (connPayload?.subbot?.code !== codeValue) return;
-                  
+
                   const connData = connPayload?.data || {}
                   const linked = String(connData?.digits || connData?.number || connData?.jid || '').replace(/\D/g,'')
                   const parts = [
@@ -233,7 +233,7 @@ export async function code(ctx) {
                       text: `ÐYZ% ${displayName}, ¶­ya eres un subbot mÇ­s de la comunidad!`,
                     })
                   }
-                  
+
                   const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
                   if (isGroup) {
                     const mention = phone ? `${phone}@s.whatsapp.net` : undefined
@@ -247,7 +247,7 @@ export async function code(ctx) {
 
                     if (displayName && mention) {
                       await sock.sendMessage(remoteJid, {
-                        text: `ÐYZ% @${phone} (${displayName}), ¶­ya eres un subbot mÇ­s de la comunidad!`,
+                        text: ` @${phone} (${displayName}), ya eres un subbot mas de la comunidad!`,
                         mentions: [mention],
                       })
                     }
@@ -310,13 +310,13 @@ export async function code(ctx) {
         // 1. Registrar listener PRIMERO
         onSubbotEvent('pairing_code', globalHandler);
         console.log('[pairing.js] 📡 Listener global registrado para pairing_code');
-        
+
         // 2. DESPUÉS crear el subbot
         const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT' });
         codeValue = res?.code;
-        
+
         console.log(`[pairing.js] 🚀 Subbot creado con código: ${codeValue}`);
-        
+
         if (!codeValue) {
           clearTimeout(timeout);
           if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
