@@ -10,6 +10,8 @@ import { connectToWhatsApp } from '../../whatsapp.js';
 // ✅ CORRECCIÓN 2: Importar el dispatcher directamente desde handler.js
 import { dispatch } from '../../handler.js';
 
+import { getGroupRoles } from '../utils/utils/group-helper.js';
+
 // ✅ CORRECCIÓN 3: Importar utilidades de subbot-manager
 import {
   isBotGloballyActive,
@@ -61,6 +63,25 @@ function sendToParent(event, data) {
     }
   }
 }
+
+function onlyDigits(v) {
+  return String(v || '').replace(/[^0-9]/g, '');
+}
+
+function normalizeDigitsFromJid(jid) {
+  try {
+    let s = String(jid || '');
+    const at = s.indexOf('@');
+    if (at > 0) s = s.slice(0, at);
+    const colon = s.indexOf(':');
+    if (colon > 0) s = s.slice(0, colon);
+    return s.replace(/[^0-9]/g, '');
+  } catch {
+    return onlyDigits(jid);
+  }
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ✅ CORRECCIÓN 4: Extraer texto de mensajes de forma robusta
 function extractText(message) {
@@ -156,6 +177,13 @@ function extractText(message) {
 async function start() {
   const authDir = path.join(DIR, 'auth');
   const usePairing = TYPE === 'code';
+  const connectOptions = {
+    autoReconnect: false,
+    registerConnectionHandler: false,
+    registerMessageHandler: false,
+    printQRInTerminal: false,
+    mode: 'subbot',
+  };
 
   try {
     // ✅ Pre-cargar el registry de comandos ANTES de conectar
@@ -176,7 +204,7 @@ async function start() {
 
     // Conectar al WhatsApp
     vlog('Conectando a WhatsApp...');
-    const sock = await connectToWhatsApp(authDir, usePairing, TARGET);
+    const sock = await connectToWhatsApp(authDir, usePairing, TARGET, connectOptions);
 
     if (!sock) {
       throw new Error('No se pudo crear el socket de WhatsApp');
@@ -185,10 +213,58 @@ async function start() {
     vlog('✅ Socket creado correctamente');
 
     let lastQR = null;
+    let pairingRequested = false;
 
     // ====== EVENTO: connection.update ======
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
+
+      // Pairing Code (solo para modo code)
+      if (usePairing && !pairingRequested) {
+        if (connection !== 'open' && connection !== 'connecting') return;
+
+        const targetDigits = onlyDigits(TARGET);
+        if (!targetDigits) {
+          pairingRequested = true;
+          sendToParent('error', { message: 'SUB_TARGET inválido para pairing code' });
+          return;
+        }
+
+        pairingRequested = true;
+        try {
+          await sleep(1500);
+          if (typeof sock.requestPairingCode !== 'function') {
+            throw new Error('Baileys no soporta requestPairingCode()');
+          }
+
+          const custom = String(process.env.SUBBOT_CUSTOM_PAIRING_CODE || process.env.CUSTOM_PAIRING_CODE || 'KONMIBOT');
+
+          let code = null;
+          try {
+            code = await sock.requestPairingCode(targetDigits, custom);
+          } catch (_) {
+            code = await sock.requestPairingCode(targetDigits);
+          }
+
+          if (code) {
+            const formatted = String(code).toUpperCase().replace(/[-\\s]/g, '');
+            const grouped = (formatted.match(/.{1,4}/g) || [formatted]).join('-');
+            sendToParent('pairing_code', {
+              pairingCode: grouped,
+              code: grouped,
+              identificationCode: CODE,
+              displayCode: DISPLAY,
+              targetNumber: targetDigits,
+              customCodeUsed: true
+            });
+          }
+        } catch (e) {
+          sendToParent('error', {
+            message: 'Error solicitando pairing code',
+            reason: e?.message || String(e)
+          });
+        }
+      }
 
       // QR para modo QR
       if (qr && !usePairing && qr !== lastQR) {
@@ -211,11 +287,11 @@ async function start() {
 
       // Conectado
       if (connection === 'open') {
-        const botNumber = sock.user?.id?.split(':')[0] || null;
+        const botNumber = normalizeDigitsFromJid(sock.user?.id) || null;
         vlog(`✅ Subbot ${CODE} conectado exitosamente`);
         sendToParent('connected', {
           jid: sock.user?.id,
-          number: `+${botNumber}`,
+          number: botNumber ? `+${botNumber}` : null,
           digits: botNumber,
           displayName: DISPLAY
         });
@@ -238,31 +314,7 @@ async function start() {
       }
     });
 
-    // ====== EVENTO: Pairing Code (solo para modo code) ======
-    if (usePairing) {
-      const handlePairingCode = (code) => {
-        if (!code) return;
-        vlog(`🔐 Código de vinculación generado: ${code}`);
-        const payload = {
-          pairingCode: code,
-          code,
-          identificationCode: CODE,
-          displayCode: DISPLAY,
-          targetNumber: TARGET
-        };
-        sendToParent('pairing_code', payload);
-      };
-
-      sock.ev.on('creds.update', (update) => {
-        if (update?.pairingCode) handlePairingCode(update.pairingCode);
-      });
-
-      sock.ev.on('pairing_code', handlePairingCode);
-
-      sock.ev.on('pairing_code_ready', (data) => {
-        handlePairingCode(data?.code || data?.pairingCode || data);
-      });
-    }
+    // Pairing code se solicita manualmente (connection.update) para evitar depender de eventos internos.
 
     // ====== EVENTO: messages.upsert - MANEJO CORRECTO ======
     sock.ev.on('messages.upsert', async ({ messages = [] }) => {
@@ -296,17 +348,40 @@ async function start() {
           }
 
           // ✅ CORRECCIÓN CRÍTICA: Construir contexto completo
+          const senderJid = isGroup ? (m.key.participant || remoteJid) : remoteJid;
+          const senderNumber = normalizeDigitsFromJid(senderJid);
+          const isCommand = /^[\\/!.#?$~]/.test(text || '');
+          const envOwner = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '');
+
+          let isAdmin = false;
+          let isBotAdmin = false;
+          let groupMetadata = null;
+          if (isGroup && isCommand) {
+            try {
+              const roles = await getGroupRoles(sock, remoteJid, senderJid);
+              isAdmin = !!roles?.isAdmin;
+              isBotAdmin = !!roles?.isBotAdmin;
+              groupMetadata = roles?.metadata || null;
+            } catch {}
+          }
+
           const ctx = {
             sock,
             message: m,
             key: m.key,
             remoteJid,
-            sender: isGroup ? (m.key.participant || remoteJid) : remoteJid,
+            sender: senderJid,
             participant: m.key.participant || null,
             pushName: m.pushName || null,
             text,
             isGroup,
             fromMe,
+            senderNumber,
+            usuarioNumber: senderNumber,
+            isOwner: !!(envOwner && senderNumber && senderNumber === envOwner),
+            isAdmin,
+            isBotAdmin,
+            groupMetadata,
             // ✅ Información del subbot
             isSubbot: true,
             subbotCode: CODE,

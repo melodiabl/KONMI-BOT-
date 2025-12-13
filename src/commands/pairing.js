@@ -89,11 +89,28 @@ export async function qr(ctx) {
     if (!code) return { success:false, message:'❌ Error al crear el subbot QR' };
 
     return await new Promise((resolve) => {
-      let detach = null;
-      const timeout = setTimeout(() => { try { detach?.() } catch {}; resolve({ success:false, message:'⏱️ Timeout esperando QR (60s). Intenta de nuevo.' }) }, 60000);
+      let detachAll = null;
+      const timeout = setTimeout(() => { try { detachAll?.() } catch {}; resolve({ success:false, message:'⏱️ Timeout esperando QR (60s). Intenta de nuevo.' }) }, 60000);
+
+      const onConnected = async (payload) => {
+        try {
+          detachSubbotListeners(code, (ev, handler) => ev === 'connected' && handler === onConnected)
+        } catch {}
+
+        try {
+          const data = payload?.data || payload || {}
+          const linked = String(data?.digits || data?.number || data?.jid || '').replace(/\D/g, '')
+          const parts = [
+            '✅ Subbot conectado exitosamente',
+            `🆔 SubBot: ${code}`,
+            linked ? `📱 Vinculado: +${linked}` : null,
+          ].filter(Boolean)
+          await sock?.sendMessage?.(remoteJid, { text: parts.join('\n') })
+        } catch {}
+      }
       
       const onQRReady = (payload) => {
-        try { clearTimeout(timeout); detach?.() } catch {}
+        try { clearTimeout(timeout); detachSubbotListeners(code, (ev, handler) => ev === 'qr_ready' && handler === onQRReady) } catch {}
         const data = payload?.data || payload;
         if (data?.qrImage) {
           try {
@@ -129,7 +146,10 @@ export async function qr(ctx) {
       };
       
       try {
-        detach = attachSubbotListeners(code, [{ event: 'qr_ready', handler: onQRReady }]);
+        detachAll = attachSubbotListeners(code, [
+          { event: 'qr_ready', handler: onQRReady },
+          { event: 'connected', handler: onConnected },
+        ]);
       } catch (e) {
         clearTimeout(timeout);
         resolve({ success:false, message:`⚠️ Error registrando listeners: ${e?.message||e}` });
@@ -193,6 +213,7 @@ export async function code(ctx) {
           try {
             const dmJid = phone ? `${phone}@s.whatsapp.net` : (remoteJid || null)
             if (sock && dmJid) {
+              let detachConnected = null
               const onConnected = async (connPayload) => {
                 try {
                   if (connPayload?.subbot?.code !== codeValue) return;
@@ -232,10 +253,12 @@ export async function code(ctx) {
                     }
                   }
                 } finally {
-                  offSubbotEvent('connected', onConnected);
+                  try { detachConnected?.() } catch {}
                 }
               }
-              onSubbotEvent('connected', onConnected)
+              try {
+                detachConnected = attachSubbotListeners(codeValue, [{ event: 'connected', handler: onConnected }])
+              } catch {}
             }
           } catch (e) {
             console.error('[pairing.js] Error registrando onConnected:', e);

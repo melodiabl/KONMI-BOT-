@@ -11,7 +11,7 @@ import QRCode from 'qrcode'
 import qrTerminal from 'qrcode-terminal'
 import { fileURLToPath, pathToFileURL } from 'url'
 import logger from './src/config/logger.js'
-import { setPrimaryOwner } from './src/config/global-config.js'
+import { isSuperAdmin, setPrimaryOwner } from './src/config/global-config.js'
 import { initStore } from './src/utils/utils/store.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -433,6 +433,8 @@ let savedAuthPath = null
 let authMethod = 'qr'
 let pairingCodeRequestedForSession = false
 let lastQRGenerated = 0
+let reconnectTimer = null
+let reconnectAttempts = 0
 
 // Comandos especiales que pueden puentear algunos filtros.
 const controlSet = new Set([
@@ -628,7 +630,8 @@ async function saveQrArtifacts(qr, outDir) {
 export async function connectToWhatsApp(
   authPath = (process.env.AUTH_DIR || DEFAULT_AUTH_DIR),
   usePairingCode = false,
-  phoneNumber = null
+  phoneNumber = null,
+  options = {}
 ) {
   const baileysAPI = await loadBaileys()
   const {
@@ -676,6 +679,14 @@ export async function connectToWhatsApp(
 
   const finalAuthMethod = isRegistered ? 'existing_session' : authMethod
 
+  const autoReconnect = options?.autoReconnect !== false
+  const registerConnectionHandler = options?.registerConnectionHandler !== false
+  const registerMessageHandler = options?.registerMessageHandler !== false
+  const printQRInTerminalOpt =
+    typeof options?.printQRInTerminal === 'boolean'
+      ? options.printQRInTerminal
+      : (finalAuthMethod === 'qr')
+
   const QUIET = String(process.env.QUIET_LOGS || 'false').toLowerCase() === 'true'
   const infoLog = (...a) => { if (!QUIET) console.log(...a) }
 
@@ -695,7 +706,7 @@ export async function connectToWhatsApp(
     auth: state,
     store,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: finalAuthMethod === 'qr',
+    printQRInTerminal: printQRInTerminalOpt,
     browser,
     version: waVersion,
     markOnlineOnConnect: false,
@@ -733,27 +744,31 @@ export async function connectToWhatsApp(
   }
 
   // Mapear nombres de grupos/contactos para logs legibles
-  attachNameListeners(sock)
+  try {
+    if (registerMessageHandler) attachNameListeners(sock)
+  } catch {}
 
   // ====== PRELOAD: router/module de comandos ======
-  ;(async () => {
-    try {
-      const resolved = path.isAbsolute(routerPath) ? routerPath : path.resolve(__dirname, routerPath)
-      logMessage('INFO', 'ROUTER', `Intentando pre-cargar router: ${resolved}`)
-      const mod = await tryImportModuleWithRetries(resolved, { retries: 4, timeoutMs: 20000, backoffMs: 1500 })
-      global.__APP_ROUTER_MODULE = mod
-      global.__APP_DISPATCH = mod?.dispatch || mod?.default?.dispatch || mod?.default || null
-      if (global.__APP_DISPATCH) logMessage('SUCCESS', 'ROUTER', 'dispatch precargado correctamente')
-      else logMessage('WARN', 'ROUTER', 'router cargado pero no expone dispatch')
-    } catch (e) {
-      logMessage('ERROR', 'ROUTER', 'fallo al pre-cargar router', { error: e?.message || e })
-      global.__APP_ROUTER_MODULE = null
-      global.__APP_DISPATCH = null
-    }
-  })()
+  if (registerMessageHandler) {
+    ;(async () => {
+      try {
+        const resolved = path.isAbsolute(routerPath) ? routerPath : path.resolve(__dirname, routerPath)
+        logMessage('INFO', 'ROUTER', `Intentando pre-cargar router: ${resolved}`)
+        const mod = await tryImportModuleWithRetries(resolved, { retries: 4, timeoutMs: 20000, backoffMs: 1500 })
+        global.__APP_ROUTER_MODULE = mod
+        global.__APP_DISPATCH = mod?.dispatch || mod?.default?.dispatch || mod?.default || null
+        if (global.__APP_DISPATCH) logMessage('SUCCESS', 'ROUTER', 'dispatch precargado correctamente')
+        else logMessage('WARN', 'ROUTER', 'router cargado pero no expone dispatch')
+      } catch (e) {
+        logMessage('ERROR', 'ROUTER', 'fallo al pre-cargar router', { error: e?.message || e })
+        global.__APP_ROUTER_MODULE = null
+        global.__APP_DISPATCH = null
+      }
+    })()
+  }
 
   // ====== EVENTO: connection.update ======
-  try {
+  if (registerConnectionHandler) try {
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr, isNewLogin } = update || {}
       const isAuthenticated = !!state?.creds?.registered || connection === 'open'
@@ -827,6 +842,11 @@ export async function connectToWhatsApp(
         qrCode = null
         qrCodeImage = null
         pairingCodeRequestedForSession = false
+        reconnectAttempts = 0
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer)
+          reconnectTimer = null
+        }
         logMessage('SUCCESS', 'CONNECTION', 'Bot conectado exitosamente')
 
         try {
@@ -841,7 +861,9 @@ export async function connectToWhatsApp(
           const botNum = normalizeJidDigits(sock?.user?.id)
           if (botNum) {
             global.BOT_BASE_NUMBER = botNum
-            setPrimaryOwner(botNum, 'Owner (Base)')
+            const envOwner = normalizeJidDigits(process.env.OWNER_WHATSAPP_NUMBER || '')
+            const primaryOwner = envOwner || botNum
+            setPrimaryOwner(primaryOwner, envOwner ? 'Owner (Env)' : 'Owner (Base)')
             logMessage('INFO', 'BOT', `Bot número: ${botNum}`)
           }
         } catch (e) {
@@ -893,11 +915,20 @@ export async function connectToWhatsApp(
         }
 
         if (shouldReconnect) {
-          const backoff = 5000
+          if (!autoReconnect) {
+            logMessage('WARN', 'CONNECTION', 'Conexion cerrada. Auto-reconnect deshabilitado.')
+            return
+          }
+
+          if (reconnectTimer) return
+
+          reconnectAttempts = Math.min(reconnectAttempts + 1, 8)
+          const backoff = Math.min(30_000, 1000 * Math.pow(2, reconnectAttempts))
           logMessage('WARN', 'CONNECTION', `Conexión cerrada (status ${status || '?'}: ${msg || 'sin detalles'}). Auto-reintentando en ${backoff}ms...`)
 
-          setTimeout(() => {
-            connectToWhatsApp(savedAuthPath, false, null).catch((e) => {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null
+            connectToWhatsApp(savedAuthPath, false, null, options).catch((e) => {
               logMessage('ERROR', 'RECONNECT', 'Fallo al reconectar', { error: e?.message })
             })
           }, backoff)
@@ -905,6 +936,11 @@ export async function connectToWhatsApp(
           logMessage('ERROR', 'CONNECTION', 'Sesión cerrada permanentemente (LoggedOut/401/403). Por favor, inicia sesión de nuevo.')
           qrCode = null
           qrCodeImage = null
+          reconnectAttempts = 0
+          if (reconnectTimer) {
+            clearTimeout(reconnectTimer)
+            reconnectTimer = null
+          }
         }
         return
       }
@@ -916,7 +952,7 @@ export async function connectToWhatsApp(
   }
 
   // ====== EVENTO: messages.upsert ======
-  try {
+  if (registerMessageHandler) try {
     sock.ev.on('messages.upsert', async ({ messages = [] }) => {
       let mgr = null
       const ensureMgr = async () => {
@@ -1047,7 +1083,7 @@ export async function connectToWhatsApp(
   }
 
   // ====== EVENTO: group-participants.update ======
-  try {
+  if (registerMessageHandler) try {
     sock.ev.on('group-participants.update', async (ev) => {
       try {
         const { id: jid, action, participants } = ev
@@ -1432,11 +1468,10 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const chatDisplay = getDisplayChat(remoteJid, chatName);
   const senderLabel = senderName || senderNumber || sender || 'desconocido';
 
-  let ownerNumber = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '');
-  if (!ownerNumber && botNumber) {
-    ownerNumber = botNumber;
-  }
-  const isOwner = !!(ownerNumber && senderNumber && senderNumber === ownerNumber);
+  const envOwnerNumber = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '');
+  const isOwner =
+    !!(envOwnerNumber && senderNumber && senderNumber === envOwnerNumber) ||
+    (typeof isSuperAdmin === 'function' ? !!isSuperAdmin(sender) : false);
 
   const allowMessageLog = shouldLog('INFO', messageType) && (!MINIMAL_LOGS || !fromMe);
 
