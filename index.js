@@ -71,6 +71,17 @@ import {
     sanitizePhoneNumberInput
 } from "./whatsapp.js";
 
+async function restoreSubbotsOnBoot() {
+    try {
+        const mod = await import("./src/services/subbot-manager.js");
+        const clean = await mod.cleanOrphanSubbots?.().catch(() => 0);
+        const restored = await mod.restoreActiveSubbots?.().catch(() => 0);
+        console.log(`♻️ Subbots autostart (boot): restaurados=${restored || 0}, limpieza=${clean || 0}`);
+    } catch (e) {
+        console.warn("⚠️ Subbots autostart (boot) falló:", e?.message || e);
+    }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -118,6 +129,9 @@ async function main() {
     // ✅ CORRECCIÓN 3: Usar la ruta robusta ('session_data/baileys_full')
     const DEFAULT_AUTH_DIR = path.join(__dirname, 'session_data', 'baileys_full');
     const authPath = path.resolve(process.env.AUTH_DIR || DEFAULT_AUTH_DIR);
+
+    // Autostart de subbots al arrancar el proceso (no depender de que el bot principal conecte).
+    await restoreSubbotsOnBoot();
 
     // ===============================================
     // ✅ CORRECCIÓN 4: Lógica de Chequeo de Sesión

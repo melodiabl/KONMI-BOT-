@@ -174,6 +174,7 @@ export async function launchSubbot(options = {}) {
   const code = options.code || generateSubbotCode();
   const createdBy = options.createdBy || "unknown";
   const targetNumber = sanitiseTarget(options.targetNumber || "");
+  const ignoreLimits = options.ignoreLimits === true;
   const metadata = {
     ...(options.metadata || {}),
     createdBy,
@@ -186,14 +187,14 @@ export async function launchSubbot(options = {}) {
     if (!SUBBOTS_ENABLED) {
       return { success: false, error: "Subbots deshabilitados por configuración (SUBBOTS_ENABLED=false)." };
     }
-    if (MAX_ACTIVE_SUBBOTS > 0 && activeSubbots.size >= MAX_ACTIVE_SUBBOTS) {
+    if (!ignoreLimits && MAX_ACTIVE_SUBBOTS > 0 && activeSubbots.size >= MAX_ACTIVE_SUBBOTS) {
       return {
         success: false,
         error: "Capacidad máxima de subbots en ejecución alcanzada. Intenta más tarde.",
       };
     }
 
-    if (MAX_SUBBOTS_PER_USER > 0) {
+    if (!ignoreLimits && MAX_SUBBOTS_PER_USER > 0) {
       const userActive = Array.from(activeSubbots.values()).filter(
         (info) => info.createdBy === createdBy,
       ).length;

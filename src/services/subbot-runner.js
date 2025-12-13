@@ -84,6 +84,19 @@ function normalizeDigitsFromJid(jid) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function normalizeIncomingText(text) {
+  try {
+    if (text == null) return ''
+    let s = String(text)
+    s = s.normalize('NFKC')
+    s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '')
+    s = s.replace(/\r\n/g, '\n')
+    return s.trim()
+  } catch {
+    return String(text || '').trim()
+  }
+}
+
 // ✅ CORRECCIÓN 4: Extraer texto de mensajes de forma robusta
 function extractText(message) {
   try {
@@ -98,14 +111,14 @@ function extractText(message) {
         obj.videoMessage?.caption ||
         ''
       );
-      if (base) return String(base).trim();
+      if (base) return normalizeIncomingText(base);
 
       // Botones clásicos
       const btnId =
         obj.buttonsResponseMessage?.selectedButtonId ||
         obj.templateButtonReplyMessage?.selectedId ||
         obj.buttonReplyMessage?.selectedButtonId;
-      if (btnId) return String(btnId).trim();
+      if (btnId) return normalizeIncomingText(btnId);
 
       // Lista clásica
       const listResp = obj.listResponseMessage;
@@ -114,7 +127,7 @@ function extractText(message) {
           listResp.singleSelectReply?.selectedRowId ||
           listResp.singleSelectReply?.selectedId ||
           listResp.title;
-        if (rowId) return String(rowId).trim();
+        if (rowId) return normalizeIncomingText(rowId);
       }
 
       // Respuesta interactiva
@@ -124,17 +137,17 @@ function extractText(message) {
           try {
             const params = JSON.parse(intResp.nativeFlowResponseMessage.paramsJson);
             const id = params?.id || params?.command || params?.rowId || params?.row_id;
-            if (id && typeof id === 'string') return String(id).trim();
+            if (id && typeof id === 'string') return normalizeIncomingText(id);
           } catch {}
         }
 
         if (intResp.listResponseMessage?.singleSelectReply) {
           const rowId = intResp.listResponseMessage.singleSelectReply.selectedRowId;
-          if (rowId && typeof rowId === 'string') return String(rowId).trim();
+          if (rowId && typeof rowId === 'string') return normalizeIncomingText(rowId);
         }
 
         if (intResp.body?.text) {
-          return String(intResp.body.text).trim();
+          return normalizeIncomingText(intResp.body.text);
         }
       }
 
@@ -211,6 +224,20 @@ async function start() {
     let reconnectTimer = null;
     let reconnectAttempts = 0;
     let connecting = false;
+    const gateNotice = new Map();
+
+    const canNotifyGate = (key, ttlMs = 10_000) => {
+      try {
+        const now = Date.now();
+        const last = gateNotice.get(key) || 0;
+        if (now - last < ttlMs) return false;
+        gateNotice.set(key, now);
+        if (gateNotice.size > 5000) gateNotice.clear();
+        return true;
+      } catch {
+        return true;
+      }
+    };
 
     const readCredsRegistered = () => {
       try {
@@ -382,19 +409,32 @@ async function start() {
             const isGroup = remoteJid.endsWith('@g.us');
 
             const text = extractText(m);
+            const isCommandAttempt = /^[\\/!.#?$~]/.test(text || '');
+            const senderJid = isGroup ? (m.key.participant || remoteJid) : remoteJid;
 
             if (!fromMe) {
               const on = await isBotGloballyActive();
               const isBotGlobalOnCmd = /^\/bot\s+global\s+on\b/i.test(text);
-              if (!on && !isBotGlobalOnCmd) continue;
+              if (!on && !isBotGlobalOnCmd) {
+                // Para comandos, dejar que dispatch devuelva el motivo (no quedarse "muerto").
+                if (!isCommandAttempt) continue;
+              }
             }
 
             if (isGroup && !fromMe) {
               const isActive = await isBotActiveInGroup(CODE, remoteJid);
-              if (!isActive) continue;
+              if (!isActive) {
+                if (isCommandAttempt && canNotifyGate(`${remoteJid}|${senderJid}|group_off`)) {
+                  try {
+                    await s.sendMessage(remoteJid, {
+                      text: 'Subbot desactivado en este grupo (panel/config).'
+                    }, { quoted: m });
+                  } catch {}
+                }
+                continue;
+              }
             }
 
-            const senderJid = isGroup ? (m.key.participant || remoteJid) : remoteJid;
             const senderNumber = normalizeDigitsFromJid(senderJid);
             const isCommand = /^[\\/!.#?$~]/.test(text || '');
             const envOwner = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER || '');

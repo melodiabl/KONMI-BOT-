@@ -940,6 +940,7 @@ export async function restoreActiveSubbots() {
     const launchResult = await launchSubbot({
       code: row.code,
       type: (row.method || row.type) === "code" ? "code" : "qr",
+      ignoreLimits: true,
       createdBy: ownerDigits || targetDigits || "unknown",
       targetNumber: targetDigits || null,
       authDir: authDir,
