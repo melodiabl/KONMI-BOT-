@@ -184,7 +184,13 @@ async function ensureTable() {
 
 export async function cleanOrphanSubbots() {
   await ensureTable();
-  const rows = await db("subbots").select("id", "code", "auth_path");
+  const rows = await db("subbots").select(
+    "id",
+    "code",
+    "auth_path",
+    "is_active",
+    "status",
+  );
   logger.info("🧹 [Limpieza] Buscando subbots huérfanos...");
   logger.info(`📂 SUBBOTS_BASE_DIR: ${SUBBOTS_BASE_DIR}`);
   let removed = 0;
@@ -194,9 +200,13 @@ export async function cleanOrphanSubbots() {
       row.auth_path || path.join(SUBBOTS_BASE_DIR, row.code, "auth");
     const credsPath = path.join(authDir, "creds.json");
 
-    // Valida no solo el directorio de autenticación, sino también el archivo de credenciales
-    if (!fs.existsSync(authDir) || !fs.existsSync(credsPath)) {
-      logger.warn(`⚠️ Subbot ${row.code} marcado para eliminación. AuthDir: ${authDir}, Creds: ${credsPath} (Exists: ${fs.existsSync(credsPath)})`);
+    const isWorking = row.is_active || row.status === "connected";
+    const hasCreds = fs.existsSync(credsPath);
+
+    if (!hasCreds && !isWorking) {
+      logger.warn(
+        `⚠️ Subbot ${row.code} marcado para eliminación (huérfano sin credenciales). AuthDir: ${authDir}`,
+      );
       await db("subbots").where({ id: row.id }).del();
       removed += 1;
 

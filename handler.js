@@ -1350,677 +1350,746 @@ export async function handleDebugAdmin(ctx) {
 }
 
 // =========================
-// Router principal unificado (migrado desde router.js)
+
+// NEW, SELF-CONTAINED COMMAND DISPATCHER
+
 // =========================
 
-/* ========================
-   Helpers
-   ======================== */
 
-function onlyDigits(v) { return String(v || '').replace(/\D/g, '') }
 
-function normalizeDigits(userOrJid) {
+// =========================
+
+// Helpers
+
+// =========================
+
+function createButtonMenu(config) {
+
+  const { title, body, footer, buttons = [], mentions = [] } = config || {}
+
+
+
+  if (!buttons || buttons.length === 0) {
+
+    return {
+
+      type: 'text',
+
+      text: body || 'Menú sin opciones disponibles'
+
+    }
+
+  }
+
+
+
+  const limitedButtons = buttons.slice(0, 3)
+
+
+
+  const ensureSlash = (id) => {
+
+    const s = String(id || '').trim()
+
+    if (!s) return '/help'
+
+    return s.startsWith('/') ? s : `/${s}`
+
+  }
+
+
+
+  const payload = {
+
+    type: 'buttons',
+
+    text: body || 'Selecciona una opci?n',
+
+    footer: footer || '',
+
+    buttons: limitedButtons.map((btn, idx) => ({
+
+      buttonId: ensureSlash(btn.id || btn.command || btn.buttonId || btn.rowId || (btn.copy ? `/copy ${btn.copy}` : null) || '/help'),
+
+      buttonText: { displayText: btn.text || btn.displayText || btn.title || `Opci?n ${idx + 1}` },
+
+      type: 1
+
+    })),
+
+    headerType: 1
+
+  }
+
+
+
+  if (title) payload.title = title
+
+  if (mentions.length > 0) payload.mentions = mentions
+
+
+
+  return payload
+
+}
+
+
+
+async function sendInteractiveButtons(...args) {
+
+    const normalizeButtonsArgs = (args = []) => {
+
+        if (args.length === 1 && typeof args[0] === "object" && !Array.isArray(args[0])) return args[0] || {};
+
+        if (args.length === 2 && typeof args[0] === "string" && Array.isArray(args[1])) return { body: args[0], buttons: args[1] };
+
+        if (args.length === 3 && typeof args[2] === "object") return args[2] || {};
+
+        if (args.length >= 1) return { body: String(args[0] || ""), buttons: Array.isArray(args[1]) ? args[1] : [] };
+
+        return {};
+
+    }
+
+    const cfg = normalizeButtonsArgs(args);
+
+    const { title, body, footer, buttons = [], mentions } = cfg || {};
+
+
+
+    return createButtonMenu({
+
+        title,
+
+        body: body || cfg.text || cfg.message || title,
+
+        footer,
+
+        mentions,
+
+        buttons: (buttons || []).map(btn => ({
+
+        text: btn.text || btn.buttonText || btn.title || btn.displayText,
+
+        id: btn.id || btn.command || btn.buttonId || btn.rowId || btn.url
+
+        }))
+
+    });
+
+}
+
+
+
+function humanBytes(n) {
+
+  const u = ['B','KB','MB','GB','TB'];
+
+  let i = 0; let v = Math.max(0, Number(n)||0);
+
+  while (v >= 1024 && i < u.length-1) { v/=1024; i++; }
+
+  return `${v.toFixed(1)} ${u[i]}`;
+
+}
+
+
+
+function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
+
+function normalizeDigits(userOrJid){
+
   try {
+
     let s = String(userOrJid || '')
-    const at = s.indexOf('@')
-    if (at > 0) s = s.slice(0, at)
-    const col = s.indexOf(':')
-    if (col > 0) s = s.slice(0, col)
+
+    const at = s.indexOf('@'); if (at > 0) s = s.slice(0, at)
+
+    const colon = s.indexOf(':'); if (colon > 0) s = s.slice(0, colon)
+
     return s.replace(/\D/g, '')
-  } catch {
-    return onlyDigits(userOrJid)
+
+  } catch { return onlyDigits(userOrJid) }
+
+}
+
+function isOwner(usuario){
+
+  try { const env = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER||''); if (env && normalizeDigits(usuario)===env) return true } catch {}
+
+  try { const base = onlyDigits(global.BOT_BASE_NUMBER||''); if (base && normalizeDigits(usuario)===base) return true } catch {}
+
+  try { const first = Array.isArray(global.owner)&&global.owner[0]?.[0]; if (first && normalizeDigits(usuario)===onlyDigits(first)) return true } catch {}
+
+  return false
+
+}
+
+
+
+
+
+// =========================
+
+// Command Handlers
+
+// =========================
+
+
+
+async function menu(ctx) {
+
+  const who = (ctx && (ctx.sender || ctx.usuario || ctx.remoteJid)) || ''
+
+  const whoTag = typeof who === 'string' && who.includes('@') ? who.split('@')[0] : String(who)
+
+
+
+  const buttons = [
+
+    { text: '📋 Todos los Comandos', command: '/help' },
+
+    { text: '🤖 Mis Sub-bots', command: '/mybots' },
+
+    { text: '📥 Descargar Media', command: '/video' },
+
+    { text: '🎯 Interactivos', command: '/poll' },
+
+    { text: '🛠️ Utilidades', command: '/status' },
+
+    { text: '📱 Copiar Código', command: '/copy' },
+
+  ]
+
+
+
+  if (ctx.isOwner) {
+
+    buttons.push({ text: '👑 Panel Admin', command: '/admin' })
+
   }
+
+
+
+  return sendInteractiveButtons(`🤖 *KONMI BOT v2.0*\n\n¡Hola, @${whoTag}! 👋\n\nSelecciona una opción para empezar:`, buttons)
+
 }
 
-function isAdminFlag(p) {
-  try {
-    return !!(
-      p &&
-      (
-        p.admin === 'admin' ||
-        p.admin === 'superadmin' ||
-        p.admin === true ||
-        p.isAdmin === true ||
-        p.isSuperAdmin === true
-      )
-    )
-  } catch {
-    return false
+
+
+async function status(ctx) {
+
+    const { getConnectionStatus, getBotStatus } = await import('./whatsapp.js');
+
+    const st = getConnectionStatus();
+
+    const bot = getBotStatus();
+
+    const mem = process.memoryUsage();
+
+    const os = await import('os');
+
+    const load = os.loadavg?.() || [];
+
+
+
+    const buttons = [
+
+        { text: '📊 Estado Completo', command: '/status-full' },
+
+        { text: '🖥️ Info del Servidor', command: '/serverinfo' },
+
+        { text: '🔧 Hardware', command: '/hardware' },
+
+        { text: '⏱️ Runtime', command: '/runtime' },
+
+        { text: '⚡ Ping', command: '/ping' },
+
+    ];
+
+
+
+    let msg = '📊 *ESTADO DEL BOT*\n\n';
+
+    msg += `🤖 Conexión: ${bot.connected ? '✅ Conectado' : '❌ ' + bot.connectionStatus}\n`;
+
+    if (bot.pairingNumber) msg += `🔢 Pairing: ${bot.pairingNumber}\n`;
+
+    if (bot.qrCode) msg += `📱 QR: ✅ Disponible\n`;
+
+    msg += `⏰ Uptime: ${st.status === 'connected' ? Math.round(process.uptime()) + 's' : '0s'}\n`;
+
+    msg += `💾 Memoria: RSS ${humanBytes(mem.rss)}, Heap ${humanBytes(mem.heapUsed)}\n`;
+
+    if (load.length) msg += `⚡ Carga CPU: ${load.map(n=>n.toFixed(2)).join(' | ')}\n\n`;
+
+    msg += 'Selecciona una opción para más detalles:';
+
+
+
+    return sendInteractiveButtons(msg, buttons);
+
+}
+
+
+
+
+
+// Placeholder for buildHelp until I can get all dependencies.
+
+async function buildHelp(ctx) {
+
+    return { success: true, message: 'Help command is under construction.' };
+
+}
+
+
+
+async function mybots({ usuario }){
+
+  try{
+
+    const phone = normalizeDigits(usuario)
+
+    const rows = await listUserSubbots(phone)
+
+
+
+    if(!rows.length) return { success:true, message:'📦 No tienes subbots creados.' }
+
+
+
+    let msg = `🤖 *Mis Subbots* (${rows.length})\n\n`
+
+    rows.forEach((r,i)=>{
+
+      const online = (r.status||'').toLowerCase()==='connected' || r.is_active===1 || r.is_active===true || r.is_online===true
+
+      const type = r.type || r.method || r.connection_type || 'qr'
+
+      const metadata = typeof r.metadata === 'string' ? JSON.parse(r.metadata || '{}') : r.metadata || {}
+
+
+
+      // CORRECCIÓN: Para tipo 'code', mostrar el código de pairing como principal
+
+      const pairingCode = metadata.pairingCode || '-'
+
+      const pushName = metadata.creatorPushName || 'Sin nombre'
+
+      const displayName = `KONMISUB(${pushName})`
+
+
+
+      msg += `${i+1}. *Código:* ${pairingCode}\n`
+
+      msg += `   *Identificación:* ${displayName}\n`
+
+      msg += `   *Tipo:* ${type}\n`
+
+      msg += `   *Estado:* ${online?'🟢 Online':'⚪ Offline'}\n`
+
+      msg += '\n'
+
+    })
+
+
+
+    return { success:true, message: msg.trim() }
+
+  }catch(e){
+
+    console.error('Error en mybots:', e)
+
+    return { success:false, message:'⚠️ Error listando tus subbots.' }
+
   }
+
 }
 
-async function isBotAdminInGroup(sock, groupJid) {
-  try {
-    const meta = await antibanSystem.queryGroupMetadata(sock, groupJid)
-    const bot = normalizeDigits(sock?.user?.id || '')
-    const me = (meta?.participants || []).find(x => normalizeDigits(x?.id || x?.jid) === bot)
-    return isAdminFlag(me)
-  } catch { return false }
+
+
+async function bots({ usuario }){
+
+  if (!isOwner(usuario)) {
+
+    return { success:false, message:'⛔ Solo el owner puede ver todos los subbots del sistema.' }
+
+  }
+
+
+
+  try{
+
+    const rows = await listAllSubbots()
+
+
+
+    if(!rows.length) return { success:true, message:'📦 No hay subbots en el sistema.' }
+
+
+
+    let msg = `🤖 *Todos los Subbots del Sistema* (${rows.length})\n\n`
+
+    rows.forEach((r,i)=>{
+
+      const online = (r.status||'').toLowerCase()==='connected' || r.is_active===1 || r.is_active===true || r.is_online===true
+
+      const type = r.type || r.method || r.connection_type || 'qr'
+
+      const metadata = typeof r.metadata === 'string' ? JSON.parse(r.metadata || '{}') : r.metadata || {}
+
+
+
+      const pairingCode = metadata.pairingCode || '-'
+
+      const pushName = metadata.creatorPushName || 'Sin nombre'
+
+      const displayName = `KONMISUB(${pushName})`
+
+      const ownerNumber = r.owner_number || 'Desconocido'
+
+
+
+      msg += `${i+1}. *Código:* ${pairingCode}\n`
+
+      msg += `   *Identificación:* ${displayName}\n`
+
+      msg += `   *Owner:* ${ownerNumber}\n`
+
+      msg += `   *Tipo:* ${type}\n`
+
+      msg += `   *Estado:* ${online?'🟢 Online':'⚪ Offline'}\n`
+
+      msg += '\n'
+
+    })
+
+
+
+    return { success:true, message: msg.trim() }
+
+  }catch(e){
+
+    console.error('Error en bots:', e)
+
+    return { success:false, message:'⚠️ Error listando subbots del sistema.' }
+
+  }
+
 }
 
-async function tryImportModuleWithRetries(modulePath, opts = {}) {
-  const retries = Number.isFinite(Number(opts.retries)) ? Number(opts.retries) : 3
-  const timeoutMs = Number.isFinite(Number(opts.timeoutMs)) ? Number(opts.timeoutMs) : 20000
-  const backoffMs = Number.isFinite(Number(opts.backoffMs)) ? Number(opts.backoffMs) : 1500
 
-  const start = Date.now()
-  let resolvedPath = modulePath
 
-  try {
-    if (modulePath.startsWith('.') || modulePath.startsWith('/') || /^[A-Za-z]:\\/.test(modulePath)) {
-      const abs = path.isAbsolute(modulePath) ? modulePath : path.resolve(process.cwd(), modulePath)
-      resolvedPath = pathToFileURL(abs).href
+
+
+// =========================
+
+// New Dispatcher
+
+// =========================
+
+
+
+const commandMap = new Map();
+
+
+
+function registerCommand(command, handler, aliases = []) {
+
+    commandMap.set(command, handler);
+
+    for (const alias of aliases) {
+
+        commandMap.set(alias, handler);
+
     }
-  } catch { }
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const now = Date.now()
-      if (now - start > timeoutMs) {
-        throw new Error(`timeout importing ${modulePath} after ${timeoutMs}ms`)
-      }
-      const mod = await import(resolvedPath)
-      return mod
-    } catch (e) {
-      if (attempt >= retries) throw e
-      await sleep(backoffMs * attempt)
-    }
-  }
-
-  throw new Error(`Could not import module ${modulePath} after ${retries} attempts`)
 }
 
-/* ========================
-   extractText y parseCommand
-   ======================== */
+
+
+registerCommand('/menu', menu);
+
+registerCommand('/help', buildHelp, ['/ayuda', '/comandos']);
+
+registerCommand('/status', status);
+
+registerCommand('/ping', () => ({ success: true, message: '🏓 Pong' }));
+
+registerCommand('/mybots', mybots, ['/mibots']);
+
+registerCommand('/bots', bots);
+
+
+
+
 
 function normalizeIncomingText(text) {
+
   try {
+
     if (text == null) return ''
+
     let s = String(text)
+
     s = s.normalize('NFKC')
+
     s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '')
+
     s = s.replace(/\r\n/g, '\n')
+
     return s.trim()
+
   } catch {
+
     return String(text || '').trim()
+
   }
+
 }
 
+
+
 function extractText(message) {
+
   try {
+
     const pick = (obj) => {
+
       if (!obj || typeof obj !== 'object') return ''
 
-      // 1. Texto normal primero
       const base = (
+
         obj.conversation ||
+
         obj.extendedTextMessage?.text ||
+
         obj.imageMessage?.caption ||
+
         obj.videoMessage?.caption ||
+
         ''
+
       )
+
       if (base) return normalizeIncomingText(base)
 
-      // 2. Botones clasicos
       const btnId =
+
         obj.buttonsResponseMessage?.selectedButtonId ||
+
         obj.templateButtonReplyMessage?.selectedId ||
+
         obj.buttonReplyMessage?.selectedButtonId
+
       if (btnId) return normalizeIncomingText(btnId)
 
-      // 3. LISTA CLASIICA - CRITICO PARA GRUPOS
       const listResp = obj.listResponseMessage
+
       if (listResp) {
+
         const rowId =
+
           listResp.singleSelectReply?.selectedRowId ||
+
           listResp.singleSelectReply?.selectedId ||
+
           listResp.title
+
         if (rowId) return normalizeIncomingText(rowId)
-      }
 
-      // 4. RESPUESTA INTERACTIVA (nuevo formato WhatsApp)
-      const intResp = obj.interactiveResponseMessage
-      if (intResp) {
-        // 4a. Native Flow Response
-        if (intResp.nativeFlowResponseMessage?.paramsJson) {
-          try {
-            const params = JSON.parse(intResp.nativeFlowResponseMessage.paramsJson)
-            const id = params?.id || params?.command || params?.rowId || params?.row_id
-            if (id && typeof id === 'string') return normalizeIncomingText(id)
-          } catch { }
-        }
-
-        // 4b. List Response dentro de Interactive
-        if (intResp.listResponseMessage?.singleSelectReply) {
-          const rowId = intResp.listResponseMessage.singleSelectReply.selectedRowId
-          if (rowId && typeof rowId === 'string') return normalizeIncomingText(rowId)
-        }
-
-        // 4c. Body text (Ãºltimo recurso)
-        if (intResp.body?.text) {
-          return normalizeIncomingText(intResp.body.text)
-        }
-      }
-
-      // 5. MENSAJE INTERACTIVO (estructura de envi­o)
-      const intMsg = obj.interactiveMessage
-      if (intMsg) {
-        // 5a. Reply con selectedRowId
-        const selectedRowId =
-          intMsg.replyMessage?.selectedRowId ||
-          intMsg.selectedRowId ||
-          intMsg.nativeFlowResponseMessage?.selectedRowId
-
-        if (selectedRowId && typeof selectedRowId === 'string') {
-          return normalizeIncomingText(selectedRowId)
-        }
-
-        // 5b. Display text
-        const displayText =
-          intMsg.replyMessage?.selectedDisplayText ||
-          intMsg.body?.selectedDisplayText ||
-          intMsg.body?.text
-        if (displayText && typeof displayText === 'string') {
-          return normalizeIncomingText(displayText)
-        }
-
-        // 5c. Native Flow Buttons
-        const nativeFlowMsg = intMsg.nativeFlowMessage
-        if (nativeFlowMsg && Array.isArray(nativeFlowMsg.buttons)) {
-          for (const btn of nativeFlowMsg.buttons) {
-            if (btn.buttonParamsJson) {
-              try {
-                const params = JSON.parse(btn.buttonParamsJson)
-                const id =
-                  params?.selectedButtonId ||
-                  params?.response?.selectedRowId ||
-                  params?.id ||
-                  params?.command
-                if (id) return normalizeIncomingText(id)
-              } catch { }
-            }
-          }
-        }
-
-        // 5d. Params JSON directo
-        const paramsJson = intMsg.nativeFlowResponseMessage?.paramsJson
-        if (paramsJson && typeof paramsJson === 'string') {
-          try {
-            const params = JSON.parse(paramsJson)
-            const id = params?.id || params?.command || params?.rowId || params?.row_id
-            if (id) return normalizeIncomingText(id)
-          } catch { }
-        }
       }
 
       return ''
+
     }
 
     const m = message?.message || {}
+
     let out = pick(m)
+
     if (out) return out
 
-    // Revisar mensajes anidados (viewOnce / ephemeral)
-    const inner =
-      m.viewOnceMessage?.message ||
-      m.ephemeralMessage?.message ||
-      m.documentWithCaptionMessage?.message ||
-      null
+    const inner = m.viewOnceMessage?.message || m.ephemeralMessage?.message || m.documentWithCaptionMessage?.message || null
 
     if (inner) {
+
       out = pick(inner)
+
       if (out) return out
 
-      const inner2 =
-        inner.viewOnceMessage?.message ||
-        inner.ephemeralMessage?.message ||
-        null
-
-      if (inner2) {
-        out = pick(inner2)
-        if (out) return out
-      }
     }
 
     return ''
+
   } catch (e) {
-    console.error('[extractText] error:', e?.message)
+
     return ''
+
   }
+
 }
 
+
+
 function parseCommand(text) {
+
   const raw = normalizeIncomingText(text)
+
   if (!raw) return { command: '', args: [] }
 
-  const prefixes = Array.from(
-    new Set(
-      ((process.env.CMD_PREFIXES || '/!.#?$~').split('')).concat(['/', '!', '.']),
-    ),
-  )
+  const prefixes = Array.from(new Set(((process.env.CMD_PREFIXES || '/!.#?$~').split('')).concat(['/', '!', '.'])))
+
   const s = raw.replace(/^\s+/, '')
 
   if (s.startsWith('/')) {
+
     const parts = s.slice(1).trim().split(/\s+/)
+
     return { command: `/${(parts.shift() || '').toLowerCase()}`, args: parts }
+
   }
 
   if (prefixes.includes(s[0])) {
+
     const parts = s.slice(1).trim().split(/\s+/)
+
     const token = (parts.shift() || '').toLowerCase().replace(/^[\/.!#?$~]+/, '')
+
     return { command: `/${token}`, args: parts }
-  }
 
-  if (s.startsWith('btn_')) return { command: '', args: [] }
-  if (s.startsWith('copy_')) return { command: '/handlecopy', args: [s] }
-
-  if (s.startsWith('todo_')) {
-    const parts = s.split('_')
-    if (parts.length >= 3) {
-      const action = parts[1]
-      const listId = parts.slice(2).join('_')
-      return { command: `/todo-${action}`, args: [listId] }
-    }
   }
 
   return { command: '', args: [] }
+
 }
 
-/* ========================
-   traceEnabled & summarizePayload
-   ======================== */
 
-function traceEnabled() {
-  try {
-    return String(process.env.TRACE_ROUTER || '').toLowerCase() === 'true'
-  } catch {
-    return false
-  }
-}
 
-function summarizePayload(payload) {
-  try {
-    if (!payload) return 'null'
-    if (typeof payload === 'string') {
-      return payload.length > 80 ? payload.slice(0, 77) + '...' : payload
-    }
-    if (payload.text) {
-      const t = String(payload.text)
-      return t.length > 80 ? t.slice(0, 77) + '...' : t
-    }
-    const keys = Object.keys(payload)
-    if (payload.image) return '[image] ' + (payload.caption || '')
-    if (payload.video) return '[video] ' + (payload.caption || '')
-    if (payload.audio) return '[audio]'
-    if (payload.sticker) return '[sticker]'
-    if (payload.buttons) return '[buttons] ' + (payload.text || '')
-    if (payload.sections) return '[list] ' + (payload.title || '')
-    if (payload.interactiveMessage) return 'interactiveMessage'
-    if (payload.viewOnceMessage?.message?.interactiveMessage) return 'interactiveMessage'
-    if (payload.listMessage) return 'listMessage'
-    if (payload.templateButtons) return 'templateButtons'
-    if (payload.image) return 'image'
-    if (payload.video) return 'video'
-    if (payload.audio) return 'audio'
-    if (payload.sticker) return 'sticker'
-    if (payload.text) return 'text'
-    return keys.slice(0, 5).join(',')
-  } catch { return 'payload' }
-}
-
-async function safeSend(sock, jid, payload, opts = {}, silentOnFail = false) {
-  let e1 = null, e2 = null
-  try { await sock.sendMessage(jid, payload, opts); return true } catch (err) { e1 = err }
-  try {
-    const txt = (payload && payload.text) ? payload.text : '⚠️ No pude enviar respuesta. Intenta de nuevo.'
-    await sock.sendMessage(jid, { text: txt }, opts)
-    return true
-  } catch (err2) {
-    e2 = err2
-  }
-
-  try {
-    if (traceEnabled()) console.warn('[router.send] failed:', summarizePayload(payload), e1?.message || e1, '|', e2?.message || e2)
-  } catch { }
-
-  if (!silentOnFail) {
-    try { await sock.sendMessage(jid, { text: '⚠️ No pude enviar respuesta. Usa /help' }) } catch { }
-  }
-  return false
-}
-
-function toMediaInput(value) {
-  if (!value) return null
-  if (Buffer.isBuffer(value)) return value
-  if (typeof value === 'string') {
-
-    if (/^https?:\/\//i.test(value)) {
-      return { url: value }
-    }
-
-    try {
-      if (fs.existsSync(value)) {
-        return fs.readFileSync(value)
-      }
-    } catch { }
-
-    return value
-  }
-
-  if (typeof value === 'object') {
-    if (value.url || value.path || value.buffer) return value
-  }
-
-  return null
-}
-
-function buildSendOptions(result, ctx) {
-  const opts = {}
-  if (!result || typeof result !== 'object') return opts
-
-  if (result.quoted && ctx?.message?.key) {
-    opts.quoted = ctx.message
-  }
-  if (Array.isArray(result.mentions)) {
-    opts.mentions = result.mentions
-  }
-  return opts
-}
-
-function buildVCard(result) {
-  try {
-    const name = result.vcardName || result.name || 'Contacto'
-    const number = result.vcardNumber || result.number
-    const waid = result.vcardWaid || number?.replace(/\D/g, '')
-    if (!number) return null
-
-    const vcardLines = [
-      'BEGIN:VCARD',
-      'VERSION:3.0',
-      `FN:${name}`,
-      waid
-        ? `item1.TEL;waid=${waid}:${number}`
-        : `TEL:${number}`,
-      'END:VCARD'
-    ]
-
-    return vcardLines.join('\n')
-  } catch {
-    return null
-  }
-}
-
-async function sendListFixed(sock, jid, result, ctx) {
-  const sections = Array.isArray(result.sections) ? result.sections : []
-  if (!sections.length) {
-    return safeSend(sock, jid, { text: result.text || result.message || '⚠️ Lista vacía' })
-  }
-
-  const rows = []
-  for (const s of sections) {
-    const r = Array.isArray(s.rows) ? s.rows : []
-    for (const row of r) {
-      if (!row || !row.rowId) continue
-      rows.push({
-        title: row.title || row.rowId,
-        rowId: row.rowId,
-        description: row.description || ''
-      })
-    }
-  }
-
-  if (!rows.length) {
-    return safeSend(sock, jid, { text: result.text || result.message || '⚠️ Lista sin elementos' })
-  }
-
-  const listSections = [{
-    title: result.sectionTitle || 'Opciones',
-    rows
-  }]
-
-  const listMsg = {
-    text: result.text || result.message || 'Selecciona una opción:',
-    footer: result.footer || 'Lista',
-    title: result.title || '',
-    buttonText: result.buttonText || 'Elegir',
-    sections: listSections
-  }
-
-  return safeSend(sock, jid, listMsg, buildSendOptions(result, ctx))
-}
-
-async function sendButtonsFixed(sock, jid, result, ctx) {
-  const buttons = Array.isArray(result.buttons) ? result.buttons : []
-  if (!buttons.length) {
-    return safeSend(sock, jid, { text: result.text || result.message || '⚠️ No hay botones disponibles' })
-  }
-
-  const btns = buttons.map((b, idx) => ({
-    buttonId: b.id || `btn_${idx + 1}`,
-    buttonText: { displayText: b.text || b.label || `Opción ${idx + 1}` },
-    type: 1
-  }))
-
-  const btnMsg = {
-    text: result.text || result.message || 'Elige una opción:',
-    footer: result.footer || '',
-    buttons: btns,
-    headerType: 1
-  }
-
-  return safeSend(sock, jid, btnMsg, buildSendOptions(result, ctx))
-}
-
-/* ========================
-   sendResult - MÁS ROBUSTO Y SILENCIOSO
-   ======================== */
 async function sendResult(sock, jid, result, ctx) {
+
   if (!sock || !jid) return;
 
+
+
   try {
+
     if (!result) {
-      await safeSend(sock, jid, { text: '✅ Listo.' }, buildSendOptions(result, ctx), true);
+
+      await sock.sendMessage(jid, { text: '✅ Listo.' });
+
       return;
+
     }
 
-    const opts = buildSendOptions(result, ctx);
-    const targetJid = jid;
+
 
     if (typeof result === 'string') {
-      await safeSend(sock, targetJid, { text: result }, opts);
+
+      await sock.sendMessage(jid, { text: result });
+
       return;
+
     }
 
-    // Payload directo (por ejemplo: flujos/menus ya construidos)
-    if (result.type === 'content' && result.content && typeof result.content === 'object') {
-      await safeSend(sock, targetJid, result.content, opts);
-      return;
+    
+
+    if (result.type === 'buttons') {
+
+        const payload = createButtonMenu(result);
+
+        await sock.sendMessage(jid, payload);
+
+        return;
+
     }
 
-    if (result.message && (!result.type || result.type === 'text')) {
-      await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts);
-      return;
-    }
 
-    if (result.type === 'reaction' && result.emoji) {
-      const key = ctx?.message?.key;
-      if (key) await sock.sendMessage(targetJid, { react: { text: result.emoji, key } });
-      return;
-    }
 
-    if (result.type === 'vcard') {
-      const vcard = buildVCard(result);
-      if (vcard) {
-        const contactMsg = {
-          contacts: {
-            displayName: result.vcardName || result.name || 'Contacto',
-            contacts: [{ displayName: result.vcardName || result.name || 'Contacto', vcard }]
-          }
-        };
-        await safeSend(sock, targetJid, contactMsg, opts);
-      } else {
-        await safeSend(sock, targetJid, { text: '⚠️ No se pudo construir el contacto.' }, opts);
-      }
-      return;
-    }
+    const message = result.message || result.text || '✅ Listo';
 
-    if (result.type === 'list' || result.sections) {
-      await sendListFixedV2(sock, targetJid, result, ctx);
-      return;
-    }
+    await sock.sendMessage(jid, { text: message });
 
-    if (result.type === 'buttons' || result.buttons) {
-      await sendButtonsFixedV2(sock, targetJid, result, ctx);
-      return;
-    }
 
-    const mediaTypes = ['image', 'video', 'audio', 'sticker'];
-    const mediaType = mediaTypes.find(t => result.type === t && (result[t] || result.media || result.file));
 
-    if (mediaType) {
-      const media = toMediaInput(result[mediaType] || result.media || result.file);
-      if (media) {
-        const msg = { [mediaType]: media };
-        if (result.caption) msg.caption = result.caption;
-        if (result.mimetype) msg.mimetype = result.mimetype;
-        await safeSend(sock, targetJid, msg, opts);
-      } else {
-        await safeSend(sock, targetJid, { text: `⚠️ No se pudo cargar el ${mediaType}.` }, opts);
-      }
-      return;
-    }
-
-    if (result.payload && typeof result.payload === 'object') {
-      const payload = { ...result.payload };
-      if (!payload.text && result.text) payload.text = result.text;
-      await safeSend(sock, targetJid, payload, opts);
-      return;
-    }
-
-    await safeSend(sock, targetJid, { text: result.text || '✅ Listo' }, opts);
   } catch (error) {
-    // Silenciar errores para no crashear el subbot
+
+    console.error("Error in sendResult:", error);
+
   }
+
 }
 
 
-/* ========================
-   dispatch - REFACTORIZADO Y ESTABLE
-   ======================== */
+
 export async function dispatch(ctx = {}, runtimeContext = {}) {
+
   const { sock, remoteJid, isGroup } = ctx;
+
   if (!sock || !remoteJid) return false;
+
+
 
   const effectiveCtx = { ...ctx, ...runtimeContext };
 
-  try {
-    const textForGlobal = normalizeIncomingText((ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || '');
-    const isCommandAttempt = /^[\/!.#?$~]/.test(textForGlobal);
-    const gateKey = `${remoteJid}|${ctx?.sender || ctx?.participant || ''}`;
-    const canNotifyGate = () => {
-      try {
-        globalThis.__GATE_NOTICE = globalThis.__GATE_NOTICE || new Map();
-        const now = Date.now();
-        const last = globalThis.__GATE_NOTICE.get(gateKey) || 0;
-        if (now - last < 10000) return false;
-        globalThis.__GATE_NOTICE.set(gateKey, now);
-        if (globalThis.__GATE_NOTICE.size > 5000) globalThis.__GATE_NOTICE.clear();
-        return true;
-      } catch {
-        return true;
-      }
-    };
-    const on = await isBotGloballyActive();
-    if (!on && !/^\/?bot\s+global\b/i.test(textForGlobal)) {
-      if (isCommandAttempt && canNotifyGate()) {
-        await safeSend(sock, remoteJid, { text: 'Bot desactivado globalmente. Usa `/bot global on` (owner).' }, {}, true);
-        return true;
-      }
-      return false;
-    }
 
-    if (isGroup && !ctx.fromMe) {
-      const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true);
-      if (!botEnabled && !/^\/?bot\b/i.test(textForGlobal)) {
-        if (isCommandAttempt && canNotifyGate()) {
-          await safeSend(sock, remoteJid, { text: 'Bot desactivado en este grupo. Usa `/bot on` (admin/owner).' }, {}, true);
-          return true;
-        }
-        return false;
-      }
-    }
+
+  try {
 
     const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message));
-    const parsed = parseCommand(text);
-    let command = parsed.command;
-    const args = parsed.args || [];
+
+    const { command, args } = parseCommand(text);
+
+
 
     if (!command) return false;
 
-    if (isGroup) {
-      const senderJid = ctx.sender || ctx.participant || ctx.remoteJid;
-      if (senderJid) {
-        try {
-          const banned = await db('group_bans')
-            .where({ group_id: remoteJid, user_jid: onlyDigits(senderJid) })
-            .first();
-          if (banned && command !== '/unban') return false;
-        } catch (e) {
-          // Si la tabla group_bans no existe o falla la consulta, no bloqueamos el comando
-          if (traceEnabled()) {
-            console.warn('[dispatch] fallback sin group_bans:', e?.message || e);
-          }
-        }
-      }
+
+
+    const handler = commandMap.get(command);
+
+
+
+    if (handler && typeof handler === 'function') {
+
+        const params = { ...effectiveCtx, text, command, args };
+
+        const result = await handler(params);
+
+        await sendResult(sock, remoteJid, result, ctx);
+
+        return true;
+
     }
 
-    let registry = global.__COMMAND_REGISTRY?.registry;
-    if (!registry) {
-      try {
-        const registryModulePath = path.resolve(__dirname, './src/commands/registry/index.js');
-        const mod = await tryImportModuleWithRetries(registryModulePath, { retries: 2, timeoutMs: 10000, backoffMs: 500 });
-        const get = mod?.getCommandRegistry;
-        registry = typeof get === 'function' ? get() : null;
-        if (registry) global.__COMMAND_REGISTRY = { registry, loadedFrom: registryModulePath, timestamp: Date.now() };
-      } catch (e) {
-        // Fallback a lazy-loading si el pre-load falla.
-      }
-    }
+    
 
-    const entry = registry?.get(command);
-    if (!entry || typeof entry.handler !== 'function') {
-      return false; // Comando no encontrado, no hacer nada.
-    }
+    return false; // Command not found
 
-    const params = { ...effectiveCtx, text, command, args, fecha: new Date().toISOString() };
+  } catch (error) {
+
+    console.error("Error in dispatch:", error);
 
     try {
-      const result = await antibanMiddleware.wrapCommand(() => entry.handler(params), command);
-      const isSuccess = result?.success !== false && !result?.error;
 
-      try {
-        await sock.sendMessage(remoteJid, { react: { text: isSuccess ? '✅' : '❌', key: ctx.message.key } });
-      } catch { /* ignorar error de reacción */ }
+        await sock.sendMessage(remoteJid, { text: `⚠️ Error ejecutando el comando: ${error?.message || error}` });
 
-      if (Array.isArray(result)) {
-        for (const r of result) await sendResult(sock, remoteJid, r, ctx);
-      } else {
-        await sendResult(sock, remoteJid, result, ctx);
-      }
-      return true;
     } catch (e) {
-      try {
-        await sock.sendMessage(remoteJid, { react: { text: '❌', key: ctx.message.key } });
-      } catch { /* ignorar */ }
 
-      await safeSend(sock, remoteJid, { text: `⚠️ Error ejecutando ${command}: ${e?.message || e}` });
-      return true; // Se manejó el error, así que cuenta como 'handled'.
+        // ignore
+
     }
-  } catch (error) {
-    return false; // Error en la lógica de pre-validación.
+
+    return true; // Error was handled
+
   }
+
 }
+
+
+
+
 
 // =========================
 // IA (Gemini) y adaptador de compatibilidad
