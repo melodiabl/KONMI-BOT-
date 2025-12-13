@@ -224,6 +224,7 @@ async function start() {
     let reconnectTimer = null;
     let reconnectAttempts = 0;
     let connecting = false;
+    const processedMessageIds = new Set();
     const gateNotice = new Map();
 
     const canNotifyGate = (key, ttlMs = 10_000) => {
@@ -404,6 +405,13 @@ async function start() {
       s.ev.on('messages.upsert', async ({ messages = [] }) => {
         for (const m of messages) {
           try {
+            const id = m?.key?.id;
+            if (id) {
+              if (processedMessageIds.has(id)) continue;
+              processedMessageIds.add(id);
+              if (processedMessageIds.size > 2000) processedMessageIds.clear();
+            }
+
             const remoteJid = m.key?.remoteJid || '';
             const fromMe = !!m.key?.fromMe;
             const isGroup = remoteJid.endsWith('@g.us');

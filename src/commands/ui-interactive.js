@@ -26,12 +26,18 @@ export function createButtonMenu(config) {
   const limitedButtons = buttons.slice(0, 3)
 
     // Formato Baileys buttonsMessage (compatible en grupos y privados)
+  const ensureSlash = (id) => {
+    const s = String(id || '').trim()
+    if (!s) return '/help'
+    return s.startsWith('/') ? s : `/${s}`
+  }
+
   const payload = {
     type: 'buttons',
     text: body || 'Selecciona una opci?n',
     footer: footer || '',
     buttons: limitedButtons.map((btn, idx) => ({
-      buttonId: btn.id || btn.command || btn.buttonId || `btn_${idx}`,
+      buttonId: ensureSlash(btn.id || btn.command || btn.buttonId || btn.rowId || (btn.copy ? `/copy ${btn.copy}` : null) || '/help'),
       buttonText: { displayText: btn.text || btn.displayText || btn.title || `Opci?n ${idx + 1}` },
       type: 1
     })),

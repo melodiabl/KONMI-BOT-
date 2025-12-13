@@ -1832,6 +1832,12 @@ async function sendResult(sock, jid, result, ctx) {
       return;
     }
 
+    // Payload directo (por ejemplo: flujos/menus ya construidos)
+    if (result.type === 'content' && result.content && typeof result.content === 'object') {
+      await safeSend(sock, targetJid, result.content, opts);
+      return;
+    }
+
     if (result.message && (!result.type || result.type === 'text')) {
       await safeSend(sock, targetJid, { text: result.message, mentions: result.mentions }, opts);
       return;
@@ -2265,6 +2271,12 @@ async function sendButtonsFixedV2(sock, jid, result, ctx) {
     return safeSend(sock, jid, { text: result.text || result.message || 'No hay botones disponibles' }, opts)
   }
 
+  const ensureSlash = (id) => {
+    const s = String(id || '').trim()
+    if (!s) return '/help'
+    return s.startsWith('/') ? s : `/${s}`
+  }
+
   const classicPayload = {
     text: result.text || '',
     footer: result.footer,
@@ -2277,7 +2289,7 @@ async function sendButtonsFixedV2(sock, jid, result, ctx) {
         index: i + 1,
         quickReplyButton: {
           displayText: text,
-          id: b.id || b.command || b.buttonId || `/btn_${i + 1}`
+          id: ensureSlash(b.id || b.command || b.buttonId || b.rowId || (b.copy ? `/copy ${b.copy}` : null) || '/help')
         }
       }
     }),
@@ -2297,7 +2309,7 @@ async function sendButtonsFixedV2(sock, jid, result, ctx) {
           nativeFlowMessage: {
             buttons: buttons.map((b, i) => {
               const text = b.text || b.title || b.displayText || 'Acción'
-              const id = b.id || b.command || b.buttonId || `/btn_${i + 1}`
+              const id = ensureSlash(b.id || b.command || b.buttonId || b.rowId || (b.copy ? `/copy ${b.copy}` : null) || '/help')
 
               if (b.url) {
                 return {

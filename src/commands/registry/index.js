@@ -301,6 +301,11 @@ register([
   { command: '/help', handler: (ctx) => menu.help(ctx), category: 'info', description: 'Mostrar ayuda y comandos disponibles' },
   { command: '/ayuda', aliasOf: '/help', category: 'info' },
   { command: '/comandos', aliasOf: '/help', category: 'info' },
+
+  // Interactivos utilitarios (botones/copy)
+  { command: '/copy', handler: (ctx) => uiInteractive.copyCode(ctx), category: 'interactive', description: 'Generar texto copiable' },
+  { command: '/copiar', aliasOf: '/copy', category: 'interactive' },
+  { command: '/handlecopy', handler: (ctx) => uiInteractive.handleCopyButton(ctx), category: 'interactive', description: 'Handler interno para copy_*' },
   { command: '/menu', handler: (ctx) => menu.menu(ctx), category: 'interactive', description: 'Menú interactivo con accesos rápidos' },
 
   // Inteligencia Artificial
