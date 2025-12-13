@@ -191,7 +191,10 @@ export async function cleanOrphanSubbots() {
   for (const row of rows) {
     const authDir =
       row.auth_path || path.join(SUBBOTS_BASE_DIR, row.code, "auth");
-    if (!fs.existsSync(authDir)) {
+    const credsPath = path.join(authDir, "creds.json");
+
+    // Valida no solo el directorio de autenticación, sino también el archivo de credenciales
+    if (!fs.existsSync(authDir) || !fs.existsSync(credsPath)) {
       await db("subbots").where({ id: row.id }).del();
       removed += 1;
 
@@ -916,6 +919,7 @@ export async function restoreActiveSubbots() {
       this.where({ is_active: true }).orWhereIn("status", [
         "connected",
         "reconnecting",
+        "disconnected", // <-- Incluir desconectados en la restauración
         "waiting_scan",
         "waiting_pairing",
       ]);
