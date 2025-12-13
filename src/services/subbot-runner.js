@@ -1,23 +1,18 @@
-// src/services/subbot-runner.js - VERSIÓN FINAL CORREGIDA
+// src/services/subbot-runner.js - PERSISTENCIA CORREGIDA
 import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import qrcodeTerminal from 'qrcode-terminal';
 
-// ✅ Importar funciones necesarias
 import { connectToWhatsApp } from '../../whatsapp.js';
 import { dispatch } from '../../handler.js';
 import { getGroupRoles } from '../utils/utils/group-helper.js';
 import { isBotGloballyActive, isBotActiveInGroup } from './subbot-manager.js';
 
-// ✅ IMPORTAR EXTRACTOR UNIFICADO
-import { extractText, isCommand } from '../utils/text-extractor.js';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Variables de entorno del subbot
 const CODE = process.env.SUB_CODE;
 const TYPE = process.env.SUB_TYPE || 'qr';
 const DIR = process.env.SUB_DIR;
@@ -25,23 +20,20 @@ const TARGET = process.env.SUB_TARGET || null;
 const DISPLAY = process.env.SUB_DISPLAY || 'KONMI-BOT';
 const RAW_METADATA = process.env.SUB_METADATA || '{}';
 
-// Logger condicional
 const vlog = (...a) => {
   const verbose = /^(1|true|yes)$/i.test(process.env.SUBBOT_VERBOSE || '');
   if (verbose) console.log(`[SUBBOT ${CODE}]`, ...a);
 };
 
-// Parsear metadata
 let SUBBOT_METADATA = {};
 try {
   SUBBOT_METADATA = JSON.parse(RAW_METADATA);
 } catch (e) {
-  vlog('Metadata inválido, usando default.');
+  vlog('Invalid metadata, using default.');
 }
 
-// Validaciones básicas
 if (!CODE || !DIR) {
-  process.send?.({ event: 'error', data: { message: 'Falta SUB_CODE o SUB_DIR' } });
+  process.send?.({ event: 'error', data: { message: 'Missing SUB_CODE or SUB_DIR' } });
   process.exit(1);
 }
 
@@ -49,14 +41,11 @@ if (!process.send) {
   process.exit(1);
 }
 
-// Helper para enviar mensajes al padre
 function sendToParent(event, data) {
   if (process.send) {
     try {
       process.send({ event, data });
-    } catch (error) {
-      // Canal cerrado, ignorar
-    }
+    } catch (error) {}
   }
 }
 
@@ -77,14 +66,202 @@ function normalizeDigitsFromJid(jid) {
   }
 }
 
+// ===== EXTRACCIÓN DE TEXTO INTEGRADA =====
+function normalizeText(text) {
+  try {
+    if (text == null) return '';
+    let s = String(text);
+    s = s.normalize('NFKC');
+    s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '');
+    s = s.replace(/\r\n/g, '\n');
+    s = s.replace(/ {2,}/g, ' ');
+    return s.trim();
+  } catch {
+    return String(text || '').trim();
+  }
+}
+
+function extractText(message) {
+  try {
+    if (!message || typeof message !== 'object') return '';
+    const m = message?.message || message;
+    if (!m || typeof m !== 'object') return '';
+
+    const extract = (obj) => {
+      if (!obj || typeof obj !== 'object') return '';
+
+      const basic = (
+        obj.conversation ||
+        obj.extendedTextMessage?.text ||
+        obj.imageMessage?.caption ||
+        obj.videoMessage?.caption ||
+        obj.documentMessage?.caption ||
+        obj.documentWithCaptionMessage?.message?.documentMessage?.caption ||
+        obj.audioMessage?.caption ||
+        ''
+      );
+      if (basic) return normalizeText(basic);
+
+      const btn = (
+        obj.buttonsResponseMessage?.selectedButtonId ||
+        obj.templateButtonReplyMessage?.selectedId ||
+        obj.buttonReplyMessage?.selectedButtonId ||
+        ''
+      );
+      if (btn) return normalizeText(btn);
+
+      const list = obj.listResponseMessage;
+      if (list) {
+        const rowId = (
+          list.singleSelectReply?.selectedRowId ||
+          list.singleSelectReply?.selectedId ||
+          list.title ||
+          ''
+        );
+        if (rowId) return normalizeText(rowId);
+      }
+
+      const intResp = obj.interactiveResponseMessage;
+      if (intResp) {
+        if (intResp.nativeFlowResponseMessage?.paramsJson) {
+          try {
+            const params = JSON.parse(intResp.nativeFlowResponseMessage.paramsJson);
+            const id = (
+              params?.id ||
+              params?.command ||
+              params?.rowId ||
+              params?.row_id ||
+              params?.selectedButtonId ||
+              params?.selectedRowId ||
+              ''
+            );
+            if (id && typeof id === 'string') return normalizeText(id);
+          } catch {}
+        }
+
+        if (intResp.listResponseMessage?.singleSelectReply) {
+          const rowId = intResp.listResponseMessage.singleSelectReply.selectedRowId;
+          if (rowId && typeof rowId === 'string') return normalizeText(rowId);
+        }
+
+        const body = intResp.body?.text || intResp.header?.title || '';
+        if (body) return normalizeText(body);
+      }
+
+      const intMsg = obj.interactiveMessage;
+      if (intMsg) {
+        const selectedRowId = (
+          intMsg.replyMessage?.selectedRowId ||
+          intMsg.selectedRowId ||
+          intMsg.nativeFlowResponseMessage?.selectedRowId ||
+          ''
+        );
+        if (selectedRowId && typeof selectedRowId === 'string') {
+          return normalizeText(selectedRowId);
+        }
+
+        const displayText = (
+          intMsg.replyMessage?.selectedDisplayText ||
+          intMsg.body?.selectedDisplayText ||
+          intMsg.body?.text ||
+          intMsg.header?.title ||
+          ''
+        );
+        if (displayText && typeof displayText === 'string') {
+          return normalizeText(displayText);
+        }
+
+        const nativeFlow = intMsg.nativeFlowMessage;
+        if (nativeFlow && Array.isArray(nativeFlow.buttons)) {
+          for (const btn of nativeFlow.buttons) {
+            if (btn.buttonParamsJson) {
+              try {
+                const params = JSON.parse(btn.buttonParamsJson);
+                const id = (
+                  params?.selectedButtonId ||
+                  params?.response?.selectedRowId ||
+                  params?.id ||
+                  params?.command ||
+                  ''
+                );
+                if (id) return normalizeText(id);
+              } catch {}
+            }
+          }
+        }
+
+        const paramsJson = intMsg.nativeFlowResponseMessage?.paramsJson;
+        if (paramsJson && typeof paramsJson === 'string') {
+          try {
+            const params = JSON.parse(paramsJson);
+            const id = (
+              params?.id ||
+              params?.command ||
+              params?.rowId ||
+              params?.row_id ||
+              ''
+            );
+            if (id) return normalizeText(id);
+          } catch {}
+        }
+      }
+
+      const poll = obj.pollUpdateMessage;
+      if (poll) {
+        const votes = poll.vote?.selectedOptions || [];
+        if (votes.length > 0) return normalizeText(votes[0] || '');
+      }
+
+      return '';
+    };
+
+    let text = extract(m);
+    if (text) return text;
+
+    const nested = (
+      m.viewOnceMessage?.message ||
+      m.viewOnceMessageV2?.message ||
+      m.viewOnceMessageV2Extension?.message ||
+      m.ephemeralMessage?.message ||
+      m.documentWithCaptionMessage?.message ||
+      null
+    );
+
+    if (nested) {
+      text = extract(nested);
+      if (text) return text;
+
+      const nested2 = (
+        nested.viewOnceMessage?.message ||
+        nested.viewOnceMessageV2?.message ||
+        nested.ephemeralMessage?.message ||
+        null
+      );
+
+      if (nested2) {
+        text = extract(nested2);
+        if (text) return text;
+      }
+    }
+
+    return '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function isCommand(text) {
+  return /^[\\/!.#?$~]/.test(String(text || '').trim());
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ===== ✅ FUNCIÓN PRINCIPAL =====
+// ===== FUNCIÓN PRINCIPAL =====
 async function start() {
   const authDir = path.join(DIR, 'auth');
   const usePairing = TYPE === 'code';
   const connectOptions = {
-    autoReconnect: false,
+    autoReconnect: true, // ✅ CRÍTICO: Habilitar auto-reconexión
     registerConnectionHandler: false,
     registerMessageHandler: false,
     printQRInTerminal: false,
@@ -92,7 +269,6 @@ async function start() {
   };
 
   try {
-    // Pre-cargar registry de comandos
     vlog('Pre-cargando registry de comandos...');
     try {
       const registryPath = path.resolve(path.dirname(__dirname), 'commands/registry/index.js');
@@ -210,7 +386,6 @@ async function start() {
     };
 
     const bindSocket = (s) => {
-      // ====== EVENTO: connection.update ======
       s.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
@@ -271,6 +446,7 @@ async function start() {
           if (isLoggedOut) {
             vlog(`❌ Subbot ${CODE} cerró sesión desde WhatsApp`);
             sendToParent('logged_out', { reason });
+            // ✅ CRÍTICO: NO borrar archivos aquí, solo notificar
             process.exit(0);
           } else {
             vlog(`⚠️ Subbot ${CODE} desconectado: ${reason}`);
@@ -281,12 +457,12 @@ async function start() {
             }
 
             lastQR = null;
+            // ✅ CRÍTICO: Reconectar automáticamente
             scheduleReconnect(reason);
           }
         }
       });
 
-      // ====== EVENTO: messages.upsert - CON EXTRACTOR UNIFICADO ======
       s.ev.on('messages.upsert', async ({ messages = [] }) => {
         for (const m of messages) {
           try {
@@ -301,19 +477,9 @@ async function start() {
             const fromMe = !!m.key?.fromMe;
             const isGroup = remoteJid.endsWith('@g.us');
 
-            // ✅ USAR EXTRACTOR UNIFICADO
             const text = extractText(m);
             const isCommandAttempt = isCommand(text);
             const senderJid = isGroup ? (m.key.participant || remoteJid) : remoteJid;
-
-            // ✅ LOG DE DEBUG (si está activado)
-            if (process.env.TRACE_TEXT_EXTRACTION === 'true') {
-              vlog('🔍 Texto extraído:', {
-                text: text.substring(0, 50),
-                isCommand: isCommandAttempt,
-                messageType: Object.keys(m?.message || {})[0]
-              });
-            }
 
             if (!fromMe) {
               const on = await isBotGloballyActive();
@@ -329,7 +495,7 @@ async function start() {
                 if (isCommandAttempt && canNotifyGate(`${remoteJid}|${senderJid}|group_off`)) {
                   try {
                     await s.sendMessage(remoteJid, {
-                      text: 'Subbot desactivado en este grupo (panel/config).'
+                      text: 'Subbot desactivado en este grupo.'
                     }, { quoted: m });
                   } catch {}
                 }
@@ -360,7 +526,7 @@ async function start() {
               sender: senderJid,
               participant: m.key.participant || null,
               pushName: m.pushName || null,
-              text, // ✅ Texto extraído correctamente
+              text,
               isGroup,
               fromMe,
               senderNumber,
@@ -433,7 +599,6 @@ async function start() {
   }
 }
 
-// ====== MANEJO DE SEÑALES ======
 process.on('SIGTERM', () => {
   vlog('📴 Recibida señal SIGTERM, cerrando subbot...');
   sendToParent('stopping', { code: CODE });
@@ -461,7 +626,6 @@ process.on('unhandledRejection', (reason) => {
   });
 });
 
-// ====== INICIAR SUBBOT ======
 start().catch(err => {
   vlog('❌ Error no capturado en start():', err?.message);
   sendToParent('error', {
