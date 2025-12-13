@@ -58,16 +58,16 @@ function isBotGroupAdmin(ctx) {
 
 export async function kick(ctx) {
   const { isGroup, remoteJid, args, sock, message, sender, fromMe } = ctx
-  if (!isGroup) return { success: false, message: '?? Este comando solo funciona en grupos.' }
+  if (!isGroup) return { success: false, message: 'Este comando solo funciona en grupos.' }
 
   try {
     // ?? Verificar permisos usando helpers
     if (!fromMe && !isUserAdmin(ctx)) {
-      return { success: false, message: '?? No tienes permisos de administrador para hacer esto.' }
+      return { success: false, message: ' No tienes permisos de administrador para hacer esto.' }
     }
 
     if (!isBotGroupAdmin(ctx)) {
-      return { success: false, message: '?? El bot necesita ser administrador para poder expulsar miembros.' }
+      return { success: false, message: ' El bot necesita ser administrador para poder expulsar miembros.' }
     }
 
     let targetJid =
@@ -80,7 +80,7 @@ export async function kick(ctx) {
     }
 
     if (!targetJid) {
-      return { success: false, message: '?? Uso: /kick @usuario o responde al mensaje de alguien con /kick.' }
+      return { success: false, message: ' Uso: /kick @usuario o responde al mensaje de alguien con /kick.' }
     }
 
     const meta = await getGroupMetadataCached(sock, remoteJid)
@@ -90,28 +90,28 @@ export async function kick(ctx) {
     await sock.groupParticipantsUpdate(remoteJid, [targetJid], 'remove')
     return {
       success: true,
-      message: `?? Usuario ${targetLabel} ha sido expulsado por ${actorLabel}.`,
+      message: ` Usuario ${targetLabel} ha sido expulsado por ${actorLabel}.`,
       mentions: [targetJid, sender],
     }
   } catch (error) {
     console.error('Error en /kick:', error)
-    return { success: false, message: '? Ocurri? un error al intentar expulsar al usuario.' }
+    return { success: false, message: ' Ocurrio un error al intentar expulsar al usuario.' }
   }
 }
 
 
 export async function promote(ctx) {
   const { isGroup, remoteJid, args, sock, message, sender } = ctx
-  if (!isGroup) return { success: false, message: '?? Comando solo para grupos.' }
+  if (!isGroup) return { success: false, message: ' Comando solo para grupos.' }
 
   try {
     // ?? Verificar permisos
     if (!isUserAdmin(ctx)) {
-      return { success: false, message: '?? No eres administrador.' }
+      return { success: false, message: ' No eres administrador.' }
     }
 
     if (!isBotGroupAdmin(ctx)) {
-      return { success: false, message: '?? El bot no es administrador.' }
+      return { success: false, message: ' El bot no es administrador.' }
     }
 
     const targetJid =
@@ -120,7 +120,7 @@ export async function promote(ctx) {
       (Array.isArray(args) && args.length > 0 ? `${onlyDigits(args[0])}@s.whatsapp.net` : null)
 
     if (!targetJid) {
-      return { success: false, message: '?? Menciona a un usuario o responde a su mensaje para promoverlo.' }
+      return { success: false, message: ' Menciona a un usuario o responde a su mensaje para promoverlo.' }
     }
 
     const meta = await getGroupMetadataCached(sock, remoteJid)
@@ -134,23 +134,23 @@ export async function promote(ctx) {
     }
   } catch (e) {
     console.error('Error en /promote:', e)
-    return { success: false, message: '? Error al promover al usuario.' }
+    return { success: false, message: ' Error al promover al usuario.' }
   }
 }
 
 
 export async function demote(ctx) {
   const { isGroup, remoteJid, args, sock, message, sender } = ctx
-  if (!isGroup) return { success: false, message: '?? Comando solo para grupos.' }
+  if (!isGroup) return { success: false, message: ' Comando solo para grupos.' }
 
   try {
     // ?? Verificar permisos
     if (!isUserAdmin(ctx)) {
-      return { success: false, message: '?? No eres administrador.' }
+      return { success: false, message: ' No eres administrador.' }
     }
 
     if (!isBotGroupAdmin(ctx)) {
-      return { success: false, message: '?? El bot no es administrador.' }
+      return { success: false, message: 'El bot no es administrador.' }
     }
 
     const targetJid =
@@ -159,7 +159,7 @@ export async function demote(ctx) {
       (Array.isArray(args) && args.length > 0 ? `${onlyDigits(args[0])}@s.whatsapp.net` : null)
 
     if (!targetJid) {
-      return { success: false, message: '?? Menciona a un usuario o responde a su mensaje para degradarlo.' }
+      return { success: false, message: ' Menciona a un usuario o responde a su mensaje para degradarlo.' }
     }
 
     const meta = await getGroupMetadataCached(sock, remoteJid)
@@ -173,7 +173,7 @@ export async function demote(ctx) {
     }
   } catch (e) {
     console.error('Error en /demote:', e)
-    return { success: false, message: '? Error al degradar al usuario.' }
+    return { success: false, message: ' Error al degradar al usuario.' }
   }
 }
 
@@ -262,7 +262,7 @@ export async function admins(ctx) {
 
     const list = admins.map((a, i) => `${i + 1}. ${formatMentionWithName(a.id, metadata)}`).join('\n')
     const mentions = admins.map((a) => a.id)
-    const text = `??? *Administradores del Grupo*\n\n${list}`
+    const text = `👑 *Administradores del Grupo*\n\n${list}`
 
     return { success: true, message: text, mentions }
   } catch (e) {
