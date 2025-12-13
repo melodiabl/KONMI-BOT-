@@ -1434,6 +1434,19 @@ async function tryImportModuleWithRetries(modulePath, opts = {}) {
    extractText y parseCommand
    ======================== */
 
+function normalizeIncomingText(text) {
+  try {
+    if (text == null) return ''
+    let s = String(text)
+    s = s.normalize('NFKC')
+    s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '')
+    s = s.replace(/\r\n/g, '\n')
+    return s.trim()
+  } catch {
+    return String(text || '').trim()
+  }
+}
+
 function extractText(message) {
   try {
     const pick = (obj) => {
@@ -1447,23 +1460,23 @@ function extractText(message) {
         obj.videoMessage?.caption ||
         ''
       )
-      if (base) return String(base).trim()
+      if (base) return normalizeIncomingText(base)
 
-      // 2. Botones clÃ¡sicos
+      // 2. Botones clasicos
       const btnId =
         obj.buttonsResponseMessage?.selectedButtonId ||
         obj.templateButtonReplyMessage?.selectedId ||
         obj.buttonReplyMessage?.selectedButtonId
-      if (btnId) return String(btnId).trim()
+      if (btnId) return normalizeIncomingText(btnId)
 
-      // 3. LISTA CLÃ?SICA - CRÃ?TICO PARA GRUPOS
+      // 3. LISTA CLASIICA - CRITICO PARA GRUPOS
       const listResp = obj.listResponseMessage
       if (listResp) {
         const rowId =
           listResp.singleSelectReply?.selectedRowId ||
           listResp.singleSelectReply?.selectedId ||
           listResp.title
-        if (rowId) return String(rowId).trim()
+        if (rowId) return normalizeIncomingText(rowId)
       }
 
       // 4. RESPUESTA INTERACTIVA (nuevo formato WhatsApp)
@@ -1474,23 +1487,23 @@ function extractText(message) {
           try {
             const params = JSON.parse(intResp.nativeFlowResponseMessage.paramsJson)
             const id = params?.id || params?.command || params?.rowId || params?.row_id
-            if (id && typeof id === 'string') return String(id).trim()
+            if (id && typeof id === 'string') return normalizeIncomingText(id)
           } catch { }
         }
 
         // 4b. List Response dentro de Interactive
         if (intResp.listResponseMessage?.singleSelectReply) {
           const rowId = intResp.listResponseMessage.singleSelectReply.selectedRowId
-          if (rowId && typeof rowId === 'string') return String(rowId).trim()
+          if (rowId && typeof rowId === 'string') return normalizeIncomingText(rowId)
         }
 
         // 4c. Body text (Ãºltimo recurso)
         if (intResp.body?.text) {
-          return String(intResp.body.text).trim()
+          return normalizeIncomingText(intResp.body.text)
         }
       }
 
-      // 5. MENSAJE INTERACTIVO (estructura de envÃ­o)
+      // 5. MENSAJE INTERACTIVO (estructura de envi­o)
       const intMsg = obj.interactiveMessage
       if (intMsg) {
         // 5a. Reply con selectedRowId
@@ -1500,7 +1513,7 @@ function extractText(message) {
           intMsg.nativeFlowResponseMessage?.selectedRowId
 
         if (selectedRowId && typeof selectedRowId === 'string') {
-          return String(selectedRowId).trim()
+          return normalizeIncomingText(selectedRowId)
         }
 
         // 5b. Display text
@@ -1509,7 +1522,7 @@ function extractText(message) {
           intMsg.body?.selectedDisplayText ||
           intMsg.body?.text
         if (displayText && typeof displayText === 'string') {
-          return String(displayText).trim()
+          return normalizeIncomingText(displayText)
         }
 
         // 5c. Native Flow Buttons
@@ -1524,7 +1537,7 @@ function extractText(message) {
                   params?.response?.selectedRowId ||
                   params?.id ||
                   params?.command
-                if (id) return String(id).trim()
+                if (id) return normalizeIncomingText(id)
               } catch { }
             }
           }
@@ -1536,7 +1549,7 @@ function extractText(message) {
           try {
             const params = JSON.parse(paramsJson)
             const id = params?.id || params?.command || params?.rowId || params?.row_id
-            if (id) return String(id).trim()
+            if (id) return normalizeIncomingText(id)
           } catch { }
         }
       }
@@ -1578,7 +1591,7 @@ function extractText(message) {
 }
 
 function parseCommand(text) {
-  const raw = String(text || '').trim()
+  const raw = normalizeIncomingText(text)
   if (!raw) return { command: '', args: [] }
 
   const prefixes = Array.from(
@@ -1896,13 +1909,40 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
   const effectiveCtx = { ...ctx, ...runtimeContext };
 
   try {
-    const textForGlobal = (ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || '';
+    const textForGlobal = normalizeIncomingText((ctx.text != null ? String(ctx.text) : extractText(ctx.message)) || '');
+    const isCommandAttempt = /^[\/!.#?$~]/.test(textForGlobal);
+    const gateKey = `${remoteJid}|${ctx?.sender || ctx?.participant || ''}`;
+    const canNotifyGate = () => {
+      try {
+        globalThis.__GATE_NOTICE = globalThis.__GATE_NOTICE || new Map();
+        const now = Date.now();
+        const last = globalThis.__GATE_NOTICE.get(gateKey) || 0;
+        if (now - last < 10000) return false;
+        globalThis.__GATE_NOTICE.set(gateKey, now);
+        if (globalThis.__GATE_NOTICE.size > 5000) globalThis.__GATE_NOTICE.clear();
+        return true;
+      } catch {
+        return true;
+      }
+    };
     const on = await isBotGloballyActive();
-    if (!on && !/^\/?bot\s+global\b/i.test(textForGlobal)) return false;
+    if (!on && !/^\/?bot\s+global\b/i.test(textForGlobal)) {
+      if (isCommandAttempt && canNotifyGate()) {
+        await safeSend(sock, remoteJid, { text: 'Bot desactivado globalmente. Usa `/bot global on` (owner).' }, {}, true);
+        return true;
+      }
+      return false;
+    }
 
     if (isGroup && !ctx.fromMe) {
       const botEnabled = await getGroupBool(remoteJid, 'bot_enabled', true);
-      if (!botEnabled && !/^\/?bot\b/i.test(textForGlobal)) return false;
+      if (!botEnabled && !/^\/?bot\b/i.test(textForGlobal)) {
+        if (isCommandAttempt && canNotifyGate()) {
+          await safeSend(sock, remoteJid, { text: 'Bot desactivado en este grupo. Usa `/bot on` (admin/owner).' }, {}, true);
+          return true;
+        }
+        return false;
+      }
     }
 
     const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message));

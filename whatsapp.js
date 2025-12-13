@@ -973,14 +973,7 @@ export async function connectToWhatsApp(
 
           const fromMe = !!m?.key?.fromMe
           if (fromMe) {
-            const msg = m?.message || {}
-            const raw = (
-              msg?.conversation ||
-              msg?.extendedTextMessage?.text ||
-              msg?.imageMessage?.caption ||
-              msg?.videoMessage?.caption ||
-              ''
-            ).trim()
+            const raw = extractTextFromMessage(m)
             const isCommand = /^[\/!.#?$~]/.test(raw)
             const mode = String(process.env.FROMME_MODE || 'commands').toLowerCase()
             const allow = (mode === 'all' || mode === 'true') || (mode === 'commands' && isCommand)
@@ -989,14 +982,7 @@ export async function connectToWhatsApp(
 
           const mm = await ensureMgr()
           const remoteJid = m?.key?.remoteJid || ''
-          const msg = m?.message || {}
-          const rawText = (
-            msg?.conversation ||
-            msg?.extendedTextMessage?.text ||
-            msg?.imageMessage?.caption ||
-            msg?.videoMessage?.caption ||
-            ''
-          ).trim()
+          const rawText = extractTextFromMessage(m)
           const firstToken = /^[\\/!.#?$~]/.test(rawText) ? rawText.split(/\s+/)[0].toLowerCase() : ''
           const bypassCmd = controlSet.has(firstToken)
 
@@ -1231,6 +1217,19 @@ export async function requestMainBotPairingCode() {
 // ==========================================================
 function extractTextFromMessage(message) {
   try {
+    const normalizeIncomingText = (text) => {
+      try {
+        if (text == null) return ''
+        let s = String(text)
+        s = s.normalize('NFKC')
+        s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '')
+        s = s.replace(/\r\n/g, '\n')
+        return s.trim()
+      } catch {
+        return String(text || '').trim()
+      }
+    }
+
     const pick = (obj) => {
       if (!obj || typeof obj !== 'object') return '';
 
@@ -1244,14 +1243,14 @@ function extractTextFromMessage(message) {
         obj.documentWithCaptionMessage?.message?.documentMessage?.caption ||
         ''
       );
-      if (base) return String(base).trim();
+      if (base) return normalizeIncomingText(base);
 
       // 2. Botones clásicos
       const btnId =
         obj.buttonsResponseMessage?.selectedButtonId ||
         obj.templateButtonReplyMessage?.selectedId ||
         obj.buttonReplyMessage?.selectedButtonId;
-      if (btnId) return String(btnId).trim();
+      if (btnId) return normalizeIncomingText(btnId);
 
       // 3. LISTA CLÁSICA - CRÍTICO PARA GRUPOS
       const listResp = obj.listResponseMessage;
@@ -1260,7 +1259,7 @@ function extractTextFromMessage(message) {
           listResp.singleSelectReply?.selectedRowId ||
           listResp.singleSelectReply?.selectedId ||
           listResp.title;
-        if (rowId) return String(rowId).trim();
+        if (rowId) return normalizeIncomingText(rowId);
       }
 
       // 4. RESPUESTA INTERACTIVA (nuevo formato WhatsApp)
@@ -1271,19 +1270,19 @@ function extractTextFromMessage(message) {
           try {
             const params = JSON.parse(intResp.nativeFlowResponseMessage.paramsJson);
             const id = params?.id || params?.command || params?.rowId || params?.row_id;
-            if (id && typeof id === 'string') return String(id).trim();
+            if (id && typeof id === 'string') return normalizeIncomingText(id);
           } catch { }
         }
 
         // 4b. List Response dentro de Interactive
         if (intResp.listResponseMessage?.singleSelectReply) {
           const rowId = intResp.listResponseMessage.singleSelectReply.selectedRowId;
-          if (rowId && typeof rowId === 'string') return String(rowId).trim();
+          if (rowId && typeof rowId === 'string') return normalizeIncomingText(rowId);
         }
 
         // 4c. Body text (último recurso)
         if (intResp.body?.text) {
-          return String(intResp.body.text).trim();
+          return normalizeIncomingText(intResp.body.text);
         }
       }
 
@@ -1297,7 +1296,7 @@ function extractTextFromMessage(message) {
           intMsg.nativeFlowResponseMessage?.selectedRowId;
 
         if (selectedRowId && typeof selectedRowId === 'string') {
-          return String(selectedRowId).trim();
+          return normalizeIncomingText(selectedRowId);
         }
 
         // 5b. Display text
@@ -1306,7 +1305,7 @@ function extractTextFromMessage(message) {
           intMsg.body?.selectedDisplayText ||
           intMsg.body?.text;
         if (displayText && typeof displayText === 'string') {
-          return String(displayText).trim();
+          return normalizeIncomingText(displayText);
         }
 
         // 5c. Native Flow Buttons
@@ -1321,7 +1320,7 @@ function extractTextFromMessage(message) {
                   params?.response?.selectedRowId ||
                   params?.id ||
                   params?.command;
-                if (id) return String(id).trim();
+                if (id) return normalizeIncomingText(id);
               } catch { }
             }
           }
@@ -1333,7 +1332,7 @@ function extractTextFromMessage(message) {
           try {
             const params = JSON.parse(paramsJson);
             const id = params?.id || params?.command || params?.rowId || params?.row_id;
-            if (id) return String(id).trim();
+            if (id) return normalizeIncomingText(id);
           } catch { }
         }
       }
@@ -1560,7 +1559,22 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 
   if (isGroup && isCommand) {
     try {
-      groupMetadata = await s.groupMetadata(remoteJid);
+      // Cache corto para evitar rate-limit/latencia al spamear comandos.
+      globalThis.__GROUP_META_CACHE = globalThis.__GROUP_META_CACHE || new Map()
+      const cacheKey = remoteJid
+      const cached = globalThis.__GROUP_META_CACHE.get(cacheKey)
+      const ttlMs = parseInt(process.env.GROUP_META_CACHE_TTL_MS || '30000', 10)
+      const useCache = cached && Number.isFinite(ttlMs) && ttlMs > 0 && (Date.now() - (cached.ts || 0) < ttlMs)
+
+      if (useCache) {
+        groupMetadata = cached.meta
+      } else {
+        groupMetadata = await s.groupMetadata(remoteJid)
+        try {
+          globalThis.__GROUP_META_CACHE.set(cacheKey, { ts: Date.now(), meta: groupMetadata })
+          if (globalThis.__GROUP_META_CACHE.size > 2000) globalThis.__GROUP_META_CACHE.clear()
+        } catch {}
+      }
       cacheChatName(remoteJid, groupMetadata?.subject);
 
       const participants = Array.isArray(groupMetadata?.participants) ? groupMetadata.participants : []
@@ -1572,6 +1586,11 @@ export async function handleMessage(message, customSock = null, prefix = '', run
       const botInfo = participants.find((p) => botIds.some((id) => participantMatches(p, id)))
       isBotAdmin = isAdminFlag(botInfo) || !!isOwner
     } catch (e) {
+      // Fallback a cache si existe
+      try {
+        const cached = globalThis.__GROUP_META_CACHE?.get(remoteJid)
+        if (cached?.meta) groupMetadata = cached.meta
+      } catch {}
       logMessage('WARN', 'METADATA', `Error obteniendo metadata: ${e.message}`);
     }
   }
