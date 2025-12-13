@@ -230,7 +230,7 @@ export async function code(ctx) {
                   const displayName = ctx?.usuarioName || ctx?.pushName || null
                   if (displayName) {
                     await sock.sendMessage(dmJid, {
-                      text: `ÐYZ% ${displayName}, ¶­ya eres un subbot mÇ­s de la comunidad!`,
+                      text: `🎉 ${displayName}, ya eres un subbot mas de la comunidad!`,
                     })
                   }
 
