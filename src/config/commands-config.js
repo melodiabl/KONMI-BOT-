@@ -278,7 +278,7 @@ export const COMMAND_DEFINITIONS = {
   qr: {
     category: 'Subbots',
     description: 'Crear subbot con código QR',
-    handler: 'subbots'
+    handler: 'subbot-management'
   },
 
   code: {
@@ -286,28 +286,29 @@ export const COMMAND_DEFINITIONS = {
     category: 'Subbots',
     description: 'Crear subbot con código de emparejamiento',
     usage: '/code [número]',
-    handler: 'subbots'
+    handler: 'subbot-management'
   },
 
   mybots: {
     aliases: ['mibots'],
     category: 'Subbots',
     description: 'Ver tus subbots',
-    handler: 'mybots'
+    handler: 'subbot-management'
   },
 
   bots: {
     category: 'Subbots',
     description: 'Ver todos los subbots (admin)',
     admin: true,
-    handler: 'bots'
+    handler: 'subbots'
   },
 
   stopbot: {
+    aliases: ['stop'],
     category: 'Subbots',
     description: 'Detener subbot',
     usage: '/stopbot [código]',
-    handler: 'subbots'
+    handler: 'subbot-management'
   },
 
   // ===== ADMINISTRACIÓN =====

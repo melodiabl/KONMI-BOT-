@@ -1569,32 +1569,7 @@ function registerAllCommands() {
     }
   });
 
-  // Registrar comandos locales del handler
-  const localCommands = {
-    'qr': { handler: handleStartSubbot, category: 'Subbots', description: 'Crear subbot con QR' },
-    'code': { handler: handleStartSubbot, category: 'Subbots', description: 'Crear subbot con código' },
-    'pair': { handler: handleStartSubbot, category: 'Subbots', description: 'Crear subbot con pairing' },
-    'stopbot': { handler: handleStopSubbot, category: 'Subbots', description: 'Detener subbot' },
-    'mybots': { handler: handleListSubbots, category: 'Subbots', description: 'Ver mis subbots' },
-    'mibots': { handler: handleListSubbots, category: 'Subbots', description: 'Ver mis subbots' },
-    'bots': { handler: handleListSubbots, category: 'Subbots', description: 'Ver todos los subbots', admin: true },
-    'subbotStatus': { handler: handleSubbotStatus, category: 'Subbots', description: 'Estado del subbot' },
-    'addaporte': { handler: handleAddAporte, category: 'Aportes', description: 'Agregar aporte' },
-    'aportes': { handler: handleAportes, category: 'Aportes', description: 'Ver aportes' },
-    'myaportes': { handler: handleMyAportes, category: 'Aportes', description: 'Mis aportes' },
-    'misaportes': { handler: handleMyAportes, category: 'Aportes', description: 'Mis aportes' },
-    'pedido': { handler: handlePedido, category: 'Pedidos', description: 'Crear pedido' },
-    'pedidos': { handler: handlePedidos, category: 'Pedidos', description: 'Ver pedidos' },
-    'aportar': { handler: handleAportar, category: 'Aportes', description: 'Aportar como proveedor' },
-    'provaportes': { handler: handleProveedorAportes, category: 'Aportes', description: 'Aportes de proveedor' },
-    'debugadmin': { handler: handleDebugAdmin, category: 'Admin', description: 'Debug del sistema', admin: true }
-  };
-
-  Object.entries(localCommands).forEach(([name, config]) => {
-    commandMap.set(name, { ...config, name, isLocal: true });
-  });
-
-  console.log(`✅ ${commandMap.size} comandos registrados (${Object.keys(COMMAND_DEFINITIONS).length} desde config + ${Object.keys(localCommands).length} locales)`);
+  console.log(`✅ ${commandMap.size} comandos registrados desde configuración centralizada`);
 }
 
 registerAllCommands();
@@ -1854,25 +1829,16 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       }
     }
 
-    let handler = null;
-
-    // Si es comando local, usar handler directo
-    if (commandConfig.isLocal && commandConfig.handler) {
-      handler = commandConfig.handler;
-    } else if (commandConfig.moduleName) {
-      // Cargar módulo dinámicamente
-      const module = await loadCommandModule(commandConfig.moduleName);
-      if (module && module.handler) {
-        handler = module.handler;
-      }
-    }
-
-    if (!handler) {
+    // Cargar módulo dinámicamente
+    const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler);
+    if (!module || !module.handler) {
       await sock.sendMessage(remoteJid, {
         text: `⚠️ Comando "${command}" no disponible temporalmente.`
       });
       return true;
     }
+
+    const handler = module.handler;
 
     // Ejecutar comando
     const params = {
