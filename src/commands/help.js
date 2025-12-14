@@ -1,5 +1,5 @@
 import { getTheme } from '../utils/utils/theme.js'
-import { promotionalLinks } from '../../config/config/links.js'
+import { promotionalLinks } from '../config/config/links.js'
 
 export async function help(ctx, commandMap) {
   const registry = commandMap
