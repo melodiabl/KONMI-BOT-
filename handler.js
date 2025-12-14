@@ -2956,9 +2956,63 @@ async function sendListFixedV2(sock, jid, result, ctx) {
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const opts = buildSendOptions(result, ctx);
 
-  console.log('[sendListV2] 📤 Enviando lista a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
+  console.log('[sendListV2] 📤 Enviando lista con native flow a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
 
-  // Preparar payload de lista con formato correcto
+  // Construir botones de native flow
+  const buttons = [];
+
+  for (const sec of result.sections || []) {
+    for (const r of sec.rows || []) {
+      buttons.push({
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+          display_text: r.title || 'Opción',
+          id: r.rowId || r.id || 'noop'
+        })
+      });
+    }
+  }
+
+  // Limitar a 10 botones (límite de WhatsApp)
+  const limitedButtons = buttons.slice(0, 10);
+
+  // Mensaje con native flow buttons
+  const nativeFlowMessage = {
+    text: result.text || 'Elige una opción',
+    footer: result.footer || 'KONMI BOT © 2025',
+    buttons: limitedButtons,
+    headerType: 1
+  };
+
+  // Intentar enviar con native flow
+  try {
+    await sock.sendMessage(jid, {
+      viewOnceMessage: {
+        message: {
+          interactiveMessage: {
+            body: { text: result.text || 'Elige una opción' },
+            footer: { text: result.footer || 'KONMI BOT © 2025' },
+            header: {
+              title: result.title || '📋 Menú de Comandos',
+              hasMediaAttachment: false
+            },
+            nativeFlowMessage: {
+              buttons: limitedButtons,
+              messageParamsJson: ''
+            }
+          }
+        }
+      }
+    }, opts);
+
+    console.log('[sendListV2] ✅ Native flow enviado exitosamente');
+    return true;
+  } catch (err1) {
+    console.log('[sendListV2] ⚠️ Native flow falló:', err1?.message);
+    console.log('[sendListV2] 🔄 Intentando list button clásico...');
+  }
+
+  // Fallback 1: List button clásico
   const listMessage = {
     text: result.text || 'Elige una opción',
     footer: result.footer || 'KONMI BOT',
@@ -2974,44 +3028,38 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }))
   };
 
-  // Intentar enviar lista
   try {
-    const sent = await sock.sendMessage(jid, listMessage, opts);
-    console.log('[sendListV2] ✅ Lista enviada:', sent ? 'con éxito' : 'sin confirmación');
-
-    // Verificar si realmente se envió como lista
-    if (sent && sent.message) {
-      const hasListButton = sent.message.listMessage || sent.message.buttonsMessage;
-      console.log('[sendListV2] 📊 Tipo de mensaje enviado:', hasListButton ? 'Lista/Botones' : 'Texto');
-    }
-
+    await sock.sendMessage(jid, listMessage, opts);
+    console.log('[sendListV2] ✅ List button clásico enviado');
     return true;
-  } catch (err1) {
-    console.log('[sendListV2] ⚠️ Error al enviar lista:', err1?.message);
-    console.log('[sendListV2] 📝 Intentando fallback a texto plano...');
+  } catch (err2) {
+    console.log('[sendListV2] ⚠️ List button falló:', err2?.message);
+    console.log('[sendListV2] 📝 Fallback final: texto plano...');
   }
 
-  // Fallback: Texto plano con todas las opciones
+  // Fallback 2: Texto plano con todas las opciones
   let txt = `${result.text || 'Menú'}\n\n`;
+  txt += `*📋 CATEGORÍAS DISPONIBLES*\n\n`;
 
   for (const sec of result.sections || []) {
-    if (sec.title) txt += `*${sec.title}*\n`;
     for (const r of sec.rows || []) {
-      txt += `• ${r.title}`;
-      if (r.description) txt += ` - ${r.description}`;
-      txt += `\n`;
+      txt += `${r.title}\n`;
+      if (r.description) txt += `   ${r.description}\n`;
+      txt += `   Comando: *${r.rowId || r.id}*\n\n`;
     }
-    txt += '\n';
   }
 
-  txt += `\n💡 *Tip:* Escribe el nombre de la categoría para ver sus comandos.`;
+  txt += `\n💡 *Cómo usar:*\n`;
+  txt += `Escribe el comando de la categoría que quieres ver.\n`;
+  txt += `Ejemplo: *cat_descargas*\n\n`;
+  txt += `${result.footer || 'KONMI BOT © 2025'}`;
 
   try {
     await sock.sendMessage(jid, { text: txt }, opts);
-    console.log('[sendListV2] ✅ Texto plano enviado como fallback');
+    console.log('[sendListV2] ✅ Texto plano enviado como fallback final');
     return true;
-  } catch (err2) {
-    console.error('[sendListV2] ❌ Todo falló:', err2);
+  } catch (err3) {
+    console.error('[sendListV2] ❌ Todo falló:', err3);
     return false;
   }
 }
