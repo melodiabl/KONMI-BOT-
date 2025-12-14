@@ -1971,6 +1971,36 @@ async function sendResult(sock, jid, result, ctx) {
       return;
     }
 
+    // Manejar tipos de media (audio, video, image)
+    if (result.type === 'audio' && result.audio) {
+      await sock.sendMessage(jid, {
+        audio: result.audio,
+        mimetype: result.mimetype || 'audio/mpeg',
+        caption: result.caption,
+        contextInfo: result.mentions ? { mentionedJid: result.mentions } : undefined
+      });
+      return;
+    }
+
+    if (result.type === 'video' && result.video) {
+      await sock.sendMessage(jid, {
+        video: result.video,
+        mimetype: result.mimetype || 'video/mp4',
+        caption: result.caption,
+        contextInfo: result.mentions ? { mentionedJid: result.mentions } : undefined
+      });
+      return;
+    }
+
+    if (result.type === 'image' && result.image) {
+      await sock.sendMessage(jid, {
+        image: result.image,
+        caption: result.caption,
+        contextInfo: result.mentions ? { mentionedJid: result.mentions } : undefined
+      });
+      return;
+    }
+
     if (result.type === 'buttons') {
       const payload = createButtonMenu(result);
       await sock.sendMessage(jid, payload);
