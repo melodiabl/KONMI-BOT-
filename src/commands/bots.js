@@ -1,11 +1,11 @@
+// src/commands/bots.js
 import { listAllSubbots } from '../services/subbot-manager.js'
 import { isOwner } from './utils/user.js'
 
-export async function bots({ usuario }) {
+async function bots({ usuario }) {
   if (!isOwner(usuario)) {
     return {
-      success: false,
-      message: '⛔ Solo el owner puede ver todos los subbots del sistema.',
+      text: '⛔ Solo el owner puede ver todos los subbots del sistema.',
     }
   }
 
@@ -13,7 +13,7 @@ export async function bots({ usuario }) {
     const rows = await listAllSubbots()
 
     if (!rows.length)
-      return { success: true, message: '📦 No hay subbots en el sistema.' }
+      return { text: '📦 No hay subbots en el sistema.' }
 
     let msg = `🤖 *Todos los Subbots del Sistema* (${rows.length})\n\n`
     rows.forEach((r, i) => {
@@ -41,9 +41,15 @@ export async function bots({ usuario }) {
       msg += '\n'
     })
 
-    return { success: true, message: msg.trim() }
+    return { text: msg.trim() }
   } catch (e) {
-    console.error('Error en bots:', e)
-    return { success: false, message: '⚠️ Error listando subbots del sistema.' }
+    return { text: '⚠️ Error listando subbots del sistema.' }
   }
 }
+
+export default {
+    name: 'bots',
+    description: 'Muestra todos los subbots del sistema (solo owner).',
+    category: 'admin',
+    handler: bots
+};

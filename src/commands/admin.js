@@ -1,246 +1,122 @@
-// commands/admin.js
-// Debug y utilidades de owner/admin usando ctx unificado y helper de metadata
+// src/commands/admin.js
 
 import { getTheme } from '../utils/utils/theme.js'
 import { setPrimaryOwner } from '../config/global-config.js'
 import { getGroupRoles, getGroupMetadataCached } from '../utils/utils/group-helper.js'
 
-// ✅ Helper mejorado para normalizar números
 function normalizePhoneNumber(jidOrNumber) {
-  if (!jidOrNumber) return null
-
-  let str = String(jidOrNumber)
-
-  // Remover @s.whatsapp.net
-  const atIndex = str.indexOf('@')
-  if (atIndex > 0) {
-    str = str.slice(0, atIndex)
-  }
-
-  // Remover :XX (como :45)
-  const colonIndex = str.indexOf(':')
-  if (colonIndex > 0) {
-    str = str.slice(0, colonIndex)
-  }
-
-  // Quedarse solo con dígitos
-  const digits = str.replace(/\D/g, '')
-
-  return digits || null
+  if (!jidOrNumber) return null;
+  let str = String(jidOrNumber);
+  const atIndex = str.indexOf('@');
+  if (atIndex > 0) str = str.slice(0, atIndex);
+  const colonIndex = str.indexOf(':');
+  if (colonIndex > 0) str = str.slice(0, colonIndex);
+  return str.replace(/\D/g, '') || null;
 }
 
-export async function ownerInfo(ctx) {
-  const th = getTheme()
-  const userNumber = normalizePhoneNumber(ctx.sender || ctx.usuario || ctx.senderNumber)
-  const roles = ctx.isOwner ? ['owner'] : []
-
+async function ownerInfo(ctx) {
+  const th = getTheme();
+  const userNumber = normalizePhoneNumber(ctx.sender || ctx.usuario || ctx.senderNumber);
+  const roles = ctx.isOwner ? ['owner'] : [];
   const msg = [
     th.header('TU PERFIL'),
     `📱 Número: +${userNumber || 'desconocido'}`,
     `👑 Roles: ${roles.join(', ') || 'ninguno'}`,
     th.footer()
-  ].join('\n')
-
-  return { success: true, message: msg }
+  ].join('\n');
+  return { text: msg };
 }
 
-export async function checkOwner(ctx) {
+async function setOwner(ctx) {
   if (!ctx.isOwner) {
-    return { success: false, message: '❌ No tienes el rol de owner.' }
+    return { text: 'Este comando solo puede ser usado por el owner del bot.' };
   }
-  return { success: true, message: '✅ Tienes el rol de owner.' }
-}
-
-export async function setOwner(ctx) {
-  if (!ctx.isOwner) {
-    return { success: false, message: 'Este comando solo puede ser usado por el owner del bot.' }
-  }
-
-  const numero = normalizePhoneNumber(ctx.args?.[0])
-  const nombre = ctx.args?.slice(1).join(' ') || 'Owner'
-
+  const numero = normalizePhoneNumber(ctx.args?.[0]);
+  const nombre = ctx.args?.slice(1).join(' ') || 'Owner';
   if (!numero) {
-    return { success: false, message: '❌ Uso: /setowner <número> <nombre>' }
+    return { text: '❌ Uso: /setowner <número> <nombre>' };
   }
-
-  setPrimaryOwner(numero, nombre)
-  return { success: true, message: `✅ Owner principal configurado: ${nombre} (+${numero})` }
+  setPrimaryOwner(numero, nombre);
+  return { text: `✅ Owner principal configurado: ${nombre} (+${numero})` };
 }
 
-export async function debugBot(ctx) {
-  try {
+async function debugBot(ctx) {
     const th = getTheme()
-
-    // ✅ Normalizar todos los números correctamente
     const botJidRaw = ctx.sock?.user?.id || ctx.botJid || 'N/A'
     const botNumber = normalizePhoneNumber(botJidRaw)
     const envOwner = normalizePhoneNumber(process.env.OWNER_WHATSAPP_NUMBER)
     const userNumber = normalizePhoneNumber(ctx.sender || ctx.usuario || ctx.senderNumber)
-
     const rolesOwner = ctx.isOwner ? ['owner'] : []
-
     let isAdmin = !!ctx.isAdmin
     let isBotAdmin = !!ctx.isBotAdmin
-    let hasGroupMetadata = !!ctx.groupMetadata
-
-    // ✅ Si es grupo, obtener metadata REAL
     if (ctx.isGroup && ctx.sock && ctx.remoteJid) {
       try {
         const roles = await getGroupRoles(ctx.sock, ctx.remoteJid, ctx.sender)
         isAdmin = roles.isAdmin
         isBotAdmin = roles.isBotAdmin
-        const meta = await getGroupMetadataCached(ctx.sock, ctx.remoteJid)
-        hasGroupMetadata = !!meta
-      } catch (e) {
-        console.error('Error obteniendo metadata:', e)
-      }
+      } catch (e) { console.error('Error obteniendo metadata:', e) }
     }
-
     const userAdmin = isAdmin ? 'admin del grupo' : 'miembro'
-
     const body = [
-      `🤖 Debug del Bot`,
-      ``,
       `*Bot:*`,
       `📱 JID completo: ${botJidRaw}`,
       `🔢 Número limpio: +${botNumber || 'N/A'}`,
-      ``,
       `*Owner configurado:*`,
       `👑 En .env: +${envOwner || 'no configurado'}`,
-      ``,
       `*Tu información:*`,
       `📱 Tu número: +${userNumber || 'desconocido'}`,
       `🎭 Roles: ${rolesOwner.length ? rolesOwner.join(', ') : 'usuario normal'}`,
       `${ctx.isGroup ? `🛡️ Estatus en grupo: ${userAdmin}` : ''}`,
-      ``,
       ctx.isGroup ? `*Bot en este grupo:*` : '',
       ctx.isGroup ? `🤖 Es admin: ${isBotAdmin ? 'Sí ✅' : 'No ❌'}` : '',
-      ctx.isGroup ? `📊 Metadata disponible: ${hasGroupMetadata ? 'Sí ✅' : 'No ❌'}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n')
-
-    const msg = `${th.header('KONMI BOT')}\n${body}\n${th.footer()}`
-    return { success: true, message: msg }
-  } catch (e) {
-    return { success: false, message: `⚠️ Error en /debugbot: ${e?.message || e}` }
-  }
+    ].filter(Boolean).join('\n')
+    const msg = `${th.header('KONMI BOT DEBUG')}\n${body}\n${th.footer()}`
+    return { text: msg }
 }
 
-// ✅ NUEVO: Debug completo de permisos en grupo
-export async function debugGroup(ctx) {
-  const { sock, remoteJid, sender, isOwner, isGroup } = ctx
-
+async function debugGroup(ctx) {
+  const { sock, remoteJid, sender, isOwner, isGroup } = ctx;
   if (!isGroup) {
-    return { success: false, message: 'ℹ️ Este comando solo funciona en grupos.' }
+    return { text: 'ℹ️ Este comando solo funciona en grupos.' };
   }
-
   try {
-    const th = getTheme()
-
-    // Obtener metadata del grupo
-    const metadata = await getGroupMetadataCached(sock, remoteJid)
-    const participants = metadata?.participants || []
-    const admins = participants.filter(p =>
-      p.admin === 'admin' || p.admin === 'superadmin' || p.admin === 'owner'
-    )
-
-    // Obtener roles del usuario y bot
-    const userRoles = await getGroupRoles(sock, remoteJid, sender)
-    const botJid = normalizePhoneNumber(sock?.user?.id) + '@s.whatsapp.net'
-    const botRoles = await getGroupRoles(sock, remoteJid, botJid)
-
-    // Información del usuario que ejecuta el comando
-    const userNumber = normalizePhoneNumber(sender)
-    const userParticipant = participants.find(p =>
-      normalizePhoneNumber(p.id) === userNumber
-    )
-
-    // Información del bot
-    const botNumber = normalizePhoneNumber(sock?.user?.id)
-    const botParticipant = participants.find(p =>
-      normalizePhoneNumber(p.id) === botNumber
-    )
-
+    const th = getTheme();
+    const metadata = await getGroupMetadataCached(sock, remoteJid);
+    const participants = metadata?.participants || [];
+    const admins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin');
+    const userRoles = await getGroupRoles(sock, remoteJid, sender);
+    const botJid = normalizePhoneNumber(sock?.user?.id) + '@s.whatsapp.net';
+    const botRoles = await getGroupRoles(sock, remoteJid, botJid);
     const body = [
-      `🔍 Debug Completo del Grupo`,
-      ``,
-      `*Grupo:*`,
-      `📛 Nombre: ${metadata?.subject || 'Sin nombre'}`,
-      `🆔 ID: ${remoteJid}`,
-      `👥 Miembros: ${participants.length}`,
-      `👑 Admins: ${admins.length}`,
-      ``,
-      `*Tu información:*`,
-      `📱 Número: +${userNumber}`,
-      `🎭 JID: ${sender}`,
-      `👑 Owner del bot: ${isOwner ? 'Sí ✅' : 'No ❌'}`,
-      `🛡️ Admin del grupo: ${userRoles.isAdmin ? 'Sí ✅' : 'No ❌'}`,
-      `📊 Admin role: ${userParticipant?.admin || 'member'}`,
-      ``,
-      `*Bot:*`,
-      `📱 Número: +${botNumber}`,
-      `🎭 JID: ${sock?.user?.id}`,
-      `🤖 Admin del grupo: ${botRoles.isBotAdmin ? 'Sí ✅' : 'No ❌'}`,
-      `📊 Admin role: ${botParticipant?.admin || 'member'}`,
-      ``,
-      `*Permisos verificados:*`,
-      `${userRoles.isAdmin ? '✅' : '❌'} Puedes usar comandos de admin`,
-      `${botRoles.isBotAdmin ? '✅' : '❌'} Bot puede ejecutar acciones de admin`,
-      `${isOwner ? '✅' : '❌'} Tienes privilegios de owner global`,
-    ].join('\n')
-
-    const msg = `${th.header('DEBUG DE GRUPO')}\n${body}\n${th.footer()}`
-    return { success: true, message: msg }
+        `*Grupo:* ${metadata?.subject || 'Sin nombre'}`,
+        `*ID:* ${remoteJid}`,
+        `*Miembros:* ${participants.length}`,
+        `*Admins:* ${admins.length}`,
+        `*Tu Rol:* ${userRoles.isAdmin ? 'Admin' : 'Miembro'}`,
+        `*Rol del Bot:* ${botRoles.isBotAdmin ? 'Admin' : 'Miembro'}`,
+    ].join('\n');
+    return { text: `${th.header('DEBUG DE GRUPO')}\n${body}\n${th.footer()}` };
   } catch (e) {
-    return {
-      success: false,
-      message: `⚠️ Error en /debuggroup: ${e?.message || e}`
-    }
+      console.error('Error en /debuggroup:', e);
+      return { text: `⚠️ Error en /debuggroup: ${e?.message || e}` };
   }
 }
 
-// ✅ NUEVO: Verificar conexión y permisos básicos
-export async function statusCheck(ctx) {
-  const th = getTheme()
-  const botNumber = normalizePhoneNumber(ctx.sock?.user?.id)
-  const userNumber = normalizePhoneNumber(ctx.sender || ctx.usuario)
-  const isConnected = !!ctx.sock && !!ctx.sock.user
-
-  const body = [
-    `📊 Estado del Bot`,
-    ``,
-    `*Conexión:*`,
-    `${isConnected ? '🟢' : '🔴'} Estado: ${isConnected ? 'Conectado' : 'Desconectado'}`,
-    `📱 Bot número: +${botNumber || 'N/A'}`,
-    ``,
-    `*Tu sesión:*`,
-    `📱 Tu número: +${userNumber || 'desconocido'}`,
-    `👑 Owner: ${ctx.isOwner ? 'Sí ✅' : 'No ❌'}`,
-    ctx.isGroup ? `🛡️ Admin: ${ctx.isAdmin ? 'Sí ✅' : 'No ❌'}` : '',
-    ``,
-    `*Comandos disponibles:*`,
-    `${ctx.isOwner || ctx.isAdmin ? '✅' : '❌'} Comandos de administración`,
-    `${ctx.isOwner ? '✅' : '❌'} Comandos de owner`,
-  ].filter(Boolean).join('\n')
-
-  const msg = `${th.header('STATUS')}\n${body}\n${th.footer()}`
-  return { success: true, message: msg }
+async function statusCheck(ctx) {
+    const th = getTheme();
+    const isConnected = !!ctx.sock && !!ctx.sock.user;
+    const botNumber = normalizePhoneNumber(ctx.sock?.user?.id);
+    const body = [
+        `*Conexión:* ${isConnected ? '🟢 Conectado' : '🔴 Desconectado'}`,
+        `*Número del Bot:* +${botNumber || 'N/A'}`
+    ].join('\n');
+    return { text: `${th.header('STATUS')}\n${body}\n${th.footer()}` };
 }
 
-// Alias y otros comandos de debug
-export const testAdmin = checkOwner
-export const debugMe = ownerInfo
-export const debugFull = debugGroup
-
-export default {
-  ownerInfo,
-  checkOwner,
-  setOwner,
-  debugBot,
-  debugGroup,
-  statusCheck,
-  testAdmin,
-  debugMe,
-  debugFull
-}
+export default [
+  { name: 'ownerinfo', description: 'Muestra información sobre el propietario.', category: 'admin', handler: ownerInfo },
+  { name: 'setowner', description: 'Establece el propietario principal del bot.', category: 'admin', handler: setOwner },
+  { name: 'debug', description: 'Muestra información de depuración del bot.', category: 'admin', handler: debugBot },
+  { name: 'debuggroup', description: 'Muestra información de depuración del grupo.', category: 'admin', handler: debugGroup },
+  { name: 'status', description: 'Verifica el estado del bot.', category: 'admin', handler: statusCheck }
+];

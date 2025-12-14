@@ -1109,83 +1109,6 @@ async function ensureProveedor(phone, name) {
   return prov;
 }
 
-export async function handleAportar(ctx) {
-  const { sock, remoteJid, sender, pushName, message } = ctx;
-  await ensureProveedoresBase();
-
-  const phone = sender || ctx.participant || remoteJid;
-  const prov = await ensureProveedor(phone, pushName);
-
-  const processed = await processWhatsAppMedia(sock, message, {
-    basePath: "./media/proveedores",
-  });
-
-  if (!processed || (!processed.text && !processed.filePath)) {
-    await sock.sendMessage(remoteJid, {
-      text: "⚠️ No encontré contenido válido en tu mensaje para registrar como aporte.",
-    });
-    return { success: false };
-  }
-
-  const metadata = {
-    mimetype: processed.mimetype || null,
-    size: processed.size || null,
-    originalName: processed.originalName || null,
-  };
-
-  const [id] = await db("proveedor_contenidos").insert(
-    {
-      proveedor_id: prov.id,
-      type: processed.filePath ? "media" : "text",
-      content: processed.text || null,
-      media_path: processed.filePath || null,
-      media_type: processed.mimetype || null,
-      metadata,
-    },
-    ["id"],
-  );
-
-  await sock.sendMessage(remoteJid, {
-    text:
-      "✅ ¡Gracias por tu contenido como proveedor!\n" +
-      `ID: ${id.id || id}\n` +
-      "Será revisado y utilizado por el equipo.",
-  });
-
-  return { success: true, contenidoId: id.id || id };
-}
-
-export async function handleProveedorAportes(ctx) {
-  const { sock, remoteJid, sender } = ctx;
-  await ensureProveedoresBase();
-
-  const phone = sender || ctx.participant || remoteJid;
-  const prov = await ensureProveedor(phone, ctx.pushName);
-
-  const rows = await db("proveedor_contenidos")
-    .select("*")
-    .where({ proveedor_id: prov.id })
-    .orderBy("created_at", "desc")
-    .limit(10);
-
-  if (!rows || rows.length === 0) {
-    await sock.sendMessage(remoteJid, {
-      text: "ℹ️ No tienes aportes registrados todavía como proveedor.",
-    });
-    return { success: true, contenidos: [] };
-  }
-
-  let text = "📦 *Tus Aportes como Proveedor*\n\n";
-  for (const r of rows) {
-    const createdAt = new Date(r.created_at).toLocaleString("es-ES");
-    const typeLabel = r.type === "media" ? "🖼 Media" : "💬 Texto";
-    text += `• [${r.id}] ${typeLabel}\n   ${createdAt}\n`;
-  }
-
-  await sock.sendMessage(remoteJid, { text });
-
-  return { success: true, contenidos: rows };
-}
 
 // =========================
 // Proveedores automÇ­ticos (API panel)
@@ -1526,122 +1449,24 @@ function registerCommand(command, module) {
   }
 }
 
-// Imports explícitos de comandos
-import * as adminMenuCmd from './src/commands/admin-menu.js';
-import * as adminCmd from './src/commands/admin.js';
-import * as advancedFeaturesCmd from './src/commands/advanced-features.js';
-import * as aiCmd from './src/commands/ai.js';
-import * as aportesCmd from './src/commands/aportes.js';
-import * as banCmd from './src/commands/ban.js';
-import * as botControlCmd from './src/commands/bot-control.js';
-import * as botsCmd from './src/commands/bots.js';
-import * as broadcastCmd from './src/commands/broadcast.js';
-import * as callsCmd from './src/commands/calls.js';
-import * as chatManagementCmd from './src/commands/chat-management.js';
-import * as communityFeaturesCmd from './src/commands/community-features.js';
-import * as contentCmd from './src/commands/content.js';
-import * as demoCmd from './src/commands/demo.js';
-import * as diagCmd from './src/commands/diag.js';
-import * as downloadCommandsCmd from './src/commands/download-commands.js';
-import * as filesCmd from './src/commands/files.js';
-import * as gamesCmd from './src/commands/games.js';
-import * as groupAdminExtraCmd from './src/commands/group-admin-extra.js';
-import * as groupAdvancedCmd from './src/commands/group-advanced.js';
-import * as groupExtraCmd from './src/commands/group-extra.js';
-import * as groupSettingsCmd from './src/commands/group-settings.js';
-import * as groupsCmd from './src/commands/groups.js';
-import * as helpCmd from './src/commands/help.js';
-import * as imagesCmd from './src/commands/images.js';
-import * as interactiveCmd from './src/commands/interactive.js';
-import * as logsCmd from './src/commands/logs.js';
-import * as maintenanceCmd from './src/commands/maintenance.js';
-import * as mediaCmd from './src/commands/media.js';
-import * as menuCmd from './src/commands/menu.js';
-import * as messageControlCmd from './src/commands/message-control.js';
-import * as moderationCmd from './src/commands/moderation.js';
-import * as mybotsCmd from './src/commands/mybots.js';
-import * as pairingCmd from './src/commands/pairing.js';
-import * as pedidosCmd from './src/commands/pedidos.js';
-import * as performanceFeaturesCmd from './src/commands/performance-features.js';
-import * as pingCmd from './src/commands/ping.js';
-import * as pollsCmd from './src/commands/polls.js';
-import * as presenceCmd from './src/commands/presence.js';
-import * as privacyFeaturesCmd from './src/commands/privacy-features.js';
-import * as privacyCmd from './src/commands/privacy.js';
-import * as profileCmd from './src/commands/profile.js';
-import * as promoCmd from './src/commands/promo.js';
-import * as statusCmd from './src/commands/status.js';
-import * as stickersCmd from './src/commands/stickers.js';
-import * as subbotsCmd from './src/commands/subbots.js';
-import * as systemInfoCmd from './src/commands/system-info.js';
-import * as systemCmd from './src/commands/system.js';
-import * as uiInteractiveCmd from './src/commands/ui-interactive.js';
-import * as utilMathCmd from './src/commands/util-math.js';
-import * as utilsCmd from './src/commands/utils.js';
-import * as votesCmd from './src/commands/votes.js';
+async function registerAllCommands() {
+  const commandFiles = fs.readdirSync('./src/commands').filter(file => file.endsWith('.js'));
 
-function registerAllCommands() {
-  const cmds = [
-    ['admin-menu', adminMenuCmd],
-    ['admin', adminCmd],
-    ['advanced-features', advancedFeaturesCmd],
-    ['ai', aiCmd],
-    ['aportes', aportesCmd],
-    ['ban', banCmd],
-    ['bot-control', botControlCmd],
-    ['bots', botsCmd],
-    ['broadcast', broadcastCmd],
-    ['calls', callsCmd],
-    ['chat-management', chatManagementCmd],
-    ['community-features', communityFeaturesCmd],
-    ['content', contentCmd],
-    ['demo', demoCmd],
-    ['diag', diagCmd],
-    ['download-commands', downloadCommandsCmd],
-    ['files', filesCmd],
-    ['games', gamesCmd],
-    ['group-admin-extra', groupAdminExtraCmd],
-    ['group-advanced', groupAdvancedCmd],
-    ['group-extra', groupExtraCmd],
-    ['group-settings', groupSettingsCmd],
-    ['groups', groupsCmd],
-    ['help', helpCmd],
-    ['images', imagesCmd],
-    ['interactive', interactiveCmd],
-    ['logs', logsCmd],
-    ['maintenance', maintenanceCmd],
-    ['media', mediaCmd],
-    ['menu', menuCmd],
-    ['message-control', messageControlCmd],
-    ['moderation', moderationCmd],
-    ['mybots', mybotsCmd],
-    ['pairing', pairingCmd],
-    ['pedidos', pedidosCmd],
-    ['performance-features', performanceFeaturesCmd],
-    ['ping', pingCmd],
-    ['polls', pollsCmd],
-    ['presence', presenceCmd],
-    ['privacy-features', privacyFeaturesCmd],
-    ['privacy', privacyCmd],
-    ['profile', profileCmd],
-    ['promo', promoCmd],
-    ['status', statusCmd],
-    ['stickers', stickersCmd],
-    ['subbots', subbotsCmd],
-    ['system-info', systemInfoCmd],
-    ['system', systemCmd],
-    ['ui-interactive', uiInteractiveCmd],
-    ['util-math', utilMathCmd],
-    ['utils', utilsCmd],
-    ['votes', votesCmd]
-  ];
+  for (const file of commandFiles) {
+    const filePath = `./src/commands/${file}`;
+    const module = await import(filePath);
+    const command = module.default;
 
-  for (const [name, mod] of cmds) {
-    const exportsObj = mod.default || mod;
-    const handler = exportsObj.handler || exportsObj.default || exportsObj[Object.keys(exportsObj).find(k => typeof exportsObj[k] === 'function')];
-
-    if (typeof handler === 'function') {
-      registerCommand(name, { ...exportsObj, handler, command: name });
+    if (Array.isArray(command)) {
+      for (const cmd of command) {
+        if (cmd.name && cmd.handler) {
+          registerCommand(cmd.name, cmd);
+          console.log(`Comando registrado: ${cmd.name}`);
+        }
+      }
+    } else if (command && command.name && command.handler) {
+      registerCommand(command.name, command);
+      console.log(`Comando registrado: ${command.name}`);
     }
   }
 
@@ -1661,10 +1486,7 @@ function registerAllCommands() {
   registerCommand('pedido', { handler: handlePedido });
   registerCommand('pedidos', { handler: handlePedidos });
 
-  registerCommand('aportar', { handler: handleAportar });
-  registerCommand('provaportes', { handler: handleProveedorAportes });
-
-  console.log('✅ Todos los comandos registrados explícitamente.');
+  console.log('✅ Todos los comandos registrados dinamicamente.');
 }
 
 registerAllCommands();
@@ -1805,57 +1627,42 @@ function parseCommand(text) {
 
 
 async function sendResult(sock, jid, result, ctx) {
-
   if (!sock || !jid) return;
 
-
-
   try {
-
     if (!result) {
-
       await sock.sendMessage(jid, { text: '✅ Listo.' });
-
       return;
-
     }
-
-
 
     if (typeof result === 'string') {
-
       await sock.sendMessage(jid, { text: result });
-
       return;
-
     }
 
+    // Handle new format { text: '...' } and potential mentions
+    if (result.text) {
+      await sock.sendMessage(jid, {
+        text: result.text,
+        mentions: result.mentions || []
+      });
+      return;
+    }
 
-
+    // Keep compatibility with older formats if needed, e.g., buttons
     if (result.type === 'buttons') {
-
         const payload = createButtonMenu(result);
-
         await sock.sendMessage(jid, payload);
-
         return;
-
     }
 
-
-
-    const message = result.message || result.text || '✅ Listo';
-
+    // Fallback for any other structure
+    const message = result.message || '✅ Operación completada.';
     await sock.sendMessage(jid, { text: message });
 
-
-
   } catch (error) {
-
     console.error("Error in sendResult:", error);
-
   }
-
 }
 
 
@@ -1889,7 +1696,13 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     if (commandModule && typeof commandModule.handler === 'function') {
       const params = { ...effectiveCtx, text, command, args }
 
-      const result = await commandModule.handler(params, commandMap)
+      let result;
+      if (command === 'help') {
+        result = await commandModule.handler(params, commandMap);
+      } else {
+        result = await commandModule.handler(params);
+      }
+
       await sendResult(sock, remoteJid, result, ctx)
 
 
