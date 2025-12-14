@@ -18,17 +18,16 @@ import { dispatch } from './handler.js'
 // ==============================================================================
 // Funciones locales de normalización y extracción de texto
 // Estas funciones reemplazan al módulo './src/utils/text-extractor.js'.
-function normalizeIncomingText(text) {
+function cleanText(text) {
   try {
     if (text == null) return '';
     let s = String(text);
-    s = s.normalize('NFKC');
     s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '');
     s = s.replace(/\r\n/g, '\n');
     s = s.replace(/ {2,}/g, ' ');
-    return s.trim().toUpperCase();
+    return s.trim(); // ✅ SIN .toUpperCase()
   } catch {
-    return String(text || '').trim().toUpperCase();
+    return String(text || '').trim();
   }
 }
 
