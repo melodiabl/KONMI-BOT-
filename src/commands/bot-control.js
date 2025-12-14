@@ -36,14 +36,26 @@ export async function bot(ctx) {
   }
 
   // Control por grupo
-  if (!['on', 'off'].includes(action)) {
-    const on = await getGroupBool(remoteJid, 'bot_enabled', true)
-    return { success: true, message: ` Bot: ${on ? 'ON' : 'OFF'}\n\nUso: /bot on|off`, quoted: true }
+  if (!['on', 'off', 'status'].includes(action)) {
+    const on = await getGroupBool(remoteJid, 'active', true)
+    return { success: true, message: `🤖 Bot: ${on ? '✅ ACTIVO' : '❌ INACTIVO'}\n\nUso:\n/bot on - Activar\n/bot off - Desactivar\n/bot status - Ver estado`, quoted: true }
+  }
+
+  if (action === 'status') {
+    const on = await getGroupBool(remoteJid, 'active', true)
+    return { success: true, message: `🤖 Estado del bot en este grupo: ${on ? '✅ ACTIVO' : '❌ INACTIVO'}`, quoted: true }
   }
 
   const val = action === 'on'
-  await setGroupConfig(remoteJid, 'bot_enabled', val)
-  return { success: true, message: `Bot ${val ? 'habilitado' : 'deshabilitado'} en este grupo.`, quoted: true }
+  await setGroupConfig(remoteJid, 'active', val)
+
+  const emoji = val ? '✅' : '❌'
+  const estado = val ? 'ACTIVADO' : 'DESACTIVADO'
+  return {
+    success: true,
+    message: `${emoji} Bot ${estado} en este grupo.\n\n${val ? 'Ahora responderé a todos los comandos.' : 'Solo responderé a /bot on para reactivarme.'}`,
+    quoted: true
+  }
 }
 
 export default { bot }

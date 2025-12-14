@@ -2030,6 +2030,26 @@ commandMap.set('comandos', {
   isLocal: true
 });
 
+// Registrar comandos que se cargan desde módulos externos
+commandMap.set('bot', {
+  moduleName: 'bot-control',
+  category: 'Admin',
+  description: 'Activar/desactivar bot en grupo',
+  admin: false // Cualquier admin del grupo puede usarlo
+});
+
+commandMap.set('ping', {
+  moduleName: 'ping',
+  category: 'Básicos',
+  description: 'Verificar latencia'
+});
+
+commandMap.set('status', {
+  moduleName: 'bot-control',
+  category: 'Admin',
+  description: 'Ver estado del bot'
+});
+
 async function sendResult(sock, jid, result, ctx) {
   if (!sock || !jid) return;
 
@@ -2116,17 +2136,25 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       // Si es grupo, verificar si el bot está activo en ese grupo específico
       if (isGroup) {
         const groupActive = await getGroupBool(remoteJid, 'active');
+        console.log('[DISPATCH] 🔍 Verificando estado del bot en grupo:', groupActive !== false ? '✅ ACTIVO' : '❌ INACTIVO');
+
         if (groupActive === false) {
           // Bot desactivado en este grupo
+          console.log('[DISPATCH] ⏭️ Bot desactivado en este grupo, ignorando comando:', command);
           return false;
         }
       } else {
         // Si es privado, verificar estado global
         const botActive = await isBotGloballyActive();
+        console.log('[DISPATCH] 🔍 Verificando estado global del bot:', botActive ? '✅ ACTIVO' : '❌ INACTIVO');
+
         if (!botActive) {
+          console.log('[DISPATCH] ⏭️ Bot desactivado globalmente, ignorando comando:', command);
           return false;
         }
       }
+    } else {
+      console.log('[DISPATCH] ✅ Comando permitido siempre:', command);
     }
 
     // Buscar comando en el mapa
