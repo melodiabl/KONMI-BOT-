@@ -2584,8 +2584,12 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       handler = commandConfig.handler;
     } else {
       // Cargar módulo dinámicamente, pasando el nombre del comando
+      console.log('[DISPATCH] 🔄 Cargando módulo:', commandConfig.moduleName || commandConfig.handler, 'para comando:', command);
       const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler, command);
+      console.log('[DISPATCH] 📦 Módulo cargado:', !!module, '| handler encontrado:', !!module?.handler);
+
       if (!module || !module.handler) {
+        console.log('[DISPATCH] ❌ Error: módulo o handler no encontrado');
         await sock.sendMessage(remoteJid, {
           text: `⚠️ Comando "${command}" no disponible temporalmente.`
         });
@@ -2827,19 +2831,21 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   };
 
-  // Intentar formato interactivo primero
-  try {
-    await sock.sendMessage(jid, {
-      viewOnceMessage: {
-        message: {
-          interactiveMessage
+  // Intentar formato interactivo primero (solo en privado por ahora)
+  if (!isGroup) {
+    try {
+      await sock.sendMessage(jid, {
+        viewOnceMessage: {
+          message: {
+            interactiveMessage
+          }
         }
-      }
-    }, opts);
-    console.log('[sendListV2] ✅ Formato interactivo enviado');
-    return true;
-  } catch (err1) {
-    console.log('[sendListV2] ⚠️ Formato interactivo falló:', err1?.message);
+      }, opts);
+      console.log('[sendListV2] ✅ Formato interactivo enviado');
+      return true;
+    } catch (err1) {
+      console.log('[sendListV2] ⚠️ Formato interactivo falló:', err1?.message);
+    }
   }
 
   // Formato 2: Lista clásica (privado)
@@ -2867,35 +2873,37 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // Formato 3: Botones simples (fallback para grupos)
-  try {
-    const buttons = [];
-    let counter = 1;
-    for (const sec of result.sections || []) {
-      for (const r of sec.rows || []) {
-        if (counter <= 3) { // WhatsApp limita a 3 botones
-          buttons.push({
-            buttonId: r.rowId || r.id || 'noop',
-            buttonText: { displayText: r.title || 'Opción' },
-            type: 1
-          });
-          counter++;
+  // Formato 3: Botones simples (preferido para grupos)
+  if (isGroup) {
+    try {
+      const buttons = [];
+      let counter = 1;
+      for (const sec of result.sections || []) {
+        for (const r of sec.rows || []) {
+          if (counter <= 3) { // WhatsApp limita a 3 botones
+            buttons.push({
+              buttonId: r.rowId || r.id || 'noop',
+              buttonText: { displayText: r.title || 'Opción' },
+              type: 1
+            });
+            counter++;
+          }
         }
       }
-    }
 
-    if (buttons.length > 0) {
-      await sock.sendMessage(jid, {
-        text: result.text || 'Elige una opción',
-        footer: result.footer,
-        buttons: buttons,
-        headerType: 1
-      }, opts);
-      console.log('[sendListV2] ✅ Botones simples enviados');
-      return true;
+      if (buttons.length > 0) {
+        await sock.sendMessage(jid, {
+          text: result.text || 'Elige una opción',
+          footer: result.footer,
+          buttons: buttons,
+          headerType: 1
+        }, opts);
+        console.log('[sendListV2] ✅ Botones simples enviados');
+        return true;
+      }
+    } catch (err3) {
+      console.log('[sendListV2] ⚠️ Botones simples fallaron:', err3?.message);
     }
-  } catch (err3) {
-    console.log('[sendListV2] ⚠️ Botones simples fallaron:', err3?.message);
   }
 
   // Formato 4: Texto plano (último recurso)
