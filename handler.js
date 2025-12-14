@@ -1829,16 +1829,29 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       }
     }
 
-    // Cargar módulo dinámicamente
-    const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler);
-    if (!module || !module.handler) {
+    let handler = null;
+
+    // Si es comando local, usar handler directo
+    if (commandConfig.isLocal && typeof commandConfig.handler === 'function') {
+      handler = commandConfig.handler;
+    } else {
+      // Cargar módulo dinámicamente
+      const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler);
+      if (!module || !module.handler) {
+        await sock.sendMessage(remoteJid, {
+          text: `⚠️ Comando "${command}" no disponible temporalmente.`
+        });
+        return true;
+      }
+      handler = module.handler;
+    }
+
+    if (!handler) {
       await sock.sendMessage(remoteJid, {
-        text: `⚠️ Comando "${command}" no disponible temporalmente.`
+        text: `⚠️ Comando "${command}" no disponible.`
       });
       return true;
     }
-
-    const handler = module.handler;
 
     // Ejecutar comando
     const params = {
