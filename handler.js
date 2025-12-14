@@ -1819,14 +1819,31 @@ registerCommand('/ping', () => ({ success: true, message: '🏓 Pong' }));
 
 registerCommand('/mybots', mybots, ['/mibots']);
 
-registerCommand('/bots', bots);
-
-async function handleNuevo(ctx) {
-  // Simple handler for /nuevo
-  return { success: true, message: 'Nuevo comando ejecutado' };
+async function loadCommandModules() {
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    const thisDir = path.dirname(thisFile);
+    const commandsDir = path.join(thisDir, 'src', 'commands');
+    const files = fs.readdirSync(commandsDir);
+    for (const file of files) {
+      if (!file.endsWith('.js')) continue;
+      const modPath = pathToFileURL(path.join(commandsDir, file)).href;
+      const mod = await import(modPath);
+      const exportsObj = mod.default || mod;
+      for (const [name, handler] of Object.entries(exportsObj)) {
+        if (typeof handler === 'function') {
+          const cmd = '/' + name.toLowerCase();
+          if (!commandMap.has(cmd)) {
+            registerCommand(cmd, handler);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load command modules', err);
+  }
 }
-
-registerCommand('/nuevo', handleNuevo);
+loadCommandModules().catch((err) => console.error('Failed to load command modules', err));
 
 
 
