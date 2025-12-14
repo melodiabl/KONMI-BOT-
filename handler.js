@@ -1855,6 +1855,7 @@ function parseCommand(text) {
   const s = raw.trim()
   let prefixUsed = null
 
+  // Verificar si tiene prefijo
   for (const p of prefixes) {
     if (s.startsWith(p)) {
       prefixUsed = p
@@ -1862,14 +1863,27 @@ function parseCommand(text) {
     }
   }
 
-  if (prefixUsed === null) {
-    return { command: '', args: [] }
+  // Si tiene prefijo, procesarlo normalmente
+  if (prefixUsed !== null) {
+    const parts = s.slice(prefixUsed.length).trim().split(/\s+/)
+    const command = parts.shift() || ''
+    return { command: command, args: parts }
   }
 
-  const parts = s.slice(prefixUsed.length).trim().split(/\s+/)
-  const command = parts.shift() || ''
+  // Si no tiene prefijo, verificar si es un comando especial (botones del menú help)
+  const specialCommands = [
+    'help_play', 'help_video', 'help_tiktok', 'help_instagram', 'help_spotify',
+    'help_ia', 'help_image', 'help_clasificar', 'help_sticker', 'help_meme',
+    'help_quote', 'help_translate', 'help_weather', 'help_ping', 'help_bot',
+    'help_groupinfo', 'help_qr', 'help_code', 'help_mybots'
+  ];
 
-  return { command: command, args: parts }
+  if (specialCommands.includes(s)) {
+    return { command: s, args: [] }
+  }
+
+  // No es comando válido
+  return { command: '', args: [] }
 }
 
 
@@ -2130,7 +2144,14 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     if (!command) return false;
 
     // Comandos que siempre funcionan aunque el bot esté off
-    const alwaysAllowedCommands = ['bot', 'status', 'ping', 'help', 'ayuda', 'menu', 'comandos'];
+    const alwaysAllowedCommands = [
+      'bot', 'status', 'ping', 'help', 'ayuda', 'menu', 'comandos',
+      // Respuestas del menú help
+      'help_play', 'help_video', 'help_tiktok', 'help_instagram', 'help_spotify',
+      'help_ia', 'help_image', 'help_clasificar', 'help_sticker', 'help_meme',
+      'help_quote', 'help_translate', 'help_weather', 'help_ping', 'help_bot',
+      'help_groupinfo', 'help_qr', 'help_code', 'help_mybots'
+    ];
 
     if (!alwaysAllowedCommands.includes(command.toLowerCase())) {
       // Si es grupo, verificar si el bot está activo en ese grupo específico
