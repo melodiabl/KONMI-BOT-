@@ -1,303 +1,101 @@
-import logger from '../config/logger.js'
+// src/commands/presence.js
+// Sistema de estados de presencia
 
-export async function setStatusOnline(ctx) {
-  const { remoteJid, sock } = ctx
+export async function typing(ctx) {
+  const { sock, remoteJid, args } = ctx;
 
-  try {
-    await sock.sendPresenceUpdate('available', remoteJid)
-    return { success: true, message: '🟢 Estado: En línea' }
-  } catch (error) {
-    logger.error('Error estableciendo estado en línea:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
+  const duration = parseInt(args[0]) || 5; // Duración en segundos (default: 5)
 
-export async function setStatusOffline(ctx) {
-  const { remoteJid, sock } = ctx
-
-  try {
-    await sock.sendPresenceUpdate('unavailable', remoteJid)
-    return { success: true, message: '⚫ Estado: Desconectado' }
-  } catch (error) {
-    logger.error('Error estableciendo estado desconectado:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
-
-export async function setStatusTyping(ctx) {
-  const { remoteJid, sock } = ctx
-
-  try {
-    await sock.sendPresenceUpdate('composing', remoteJid)
-    return { success: true, message: '✏️ Estado: Escribiendo' }
-  } catch (error) {
-    logger.error('Error estableciendo estado escribiendo:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
-
-export async function setStatusRecording(ctx) {
-  const { remoteJid, sock } = ctx
-
-  try {
-    await sock.sendPresenceUpdate('recording', remoteJid)
-    return { success: true, message: '🎥 Estado: Grabando' }
-  } catch (error) {
-    logger.error('Error estableciendo estado grabando:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
-
-export async function setStatusPaused(ctx) {
-  const { remoteJid, sock } = ctx
-
-  try {
-    await sock.sendPresenceUpdate('paused', remoteJid)
-    return { success: true, message: '⏸️ Estado: Pausado' }
-  } catch (error) {
-    logger.error('Error estableciendo estado pausado:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
-
-export async function getStatus(ctx) {
-  const { args, sock } = ctx
-  const jid = args[0]
-
-  if (!jid) {
-    return { success: false, message: '❌ Proporciona un JID' }
+  if (duration > 30) {
+    return { text: '❌ Duración máxima: 30 segundos' };
   }
 
   try {
-    const presence = await sock.getPresence(jid)
-    const statusMap = {
-      'available': '🟢 En línea',
-      'unavailable': '⚫ Desconectado',
-      'composing': '✏️ Escribiendo',
-      'recording': '🎥 Grabando',
-      'paused': '⏸️ Pausado'
-    }
-    
-    const status = statusMap[presence] || presence
-    return { success: true, message: `📊 Estado: ${status}` }
-  } catch (error) {
-    logger.error('Error obteniendo estado:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
+    // Mostrar "escribiendo..."
+    await sock.sendPresenceUpdate('composing', remoteJid);
 
-export async function subscribePresence(ctx) {
-  const { args, sock, remoteJid } = ctx
-  const jid = args[0] || remoteJid
-
-  try {
-    await sock.subscribePresence(jid)
-    return { success: true, message: '✅ Suscrito a presencia' }
-  } catch (error) {
-    logger.error('Error suscribiéndose a presencia:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
-
-export async function unsubscribePresence(ctx) {
-  const { args, sock, remoteJid } = ctx
-  const jid = args[0] || remoteJid
-
-  try {
-    await sock.unsubscribePresence(jid)
-    return { success: true, message: '✅ Desuscrito de presencia' }
-  } catch (error) {
-    logger.error('Error desuscribiéndose de presencia:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
-
-export async function getStatusText(ctx) {
-  const { args, sock } = ctx
-  const jid = args[0]
-
-  if (!jid) {
-    return { success: false, message: '❌ Proporciona un JID' }
-  }
-
-  try {
-    const status = await sock.fetchStatus(jid)
-    if (!status) {
-      return { success: false, message: '❌ Usuario sin estado' }
-    }
-
-    let message = `📝 *Estado del Usuario:*\n`
-    message += `Texto: ${status.status || 'N/D'}\n`
-    message += `Actualizado: ${new Date(status.setAt * 1000).toLocaleString()}`
-
-    return { success: true, message }
-  } catch (error) {
-    logger.error('Error obteniendo texto de estado:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
-  }
-}
-
-export async function simulateTyping(ctx) {
-  const { remoteJid, sock } = ctx
-
-  try {
-    await sock.sendPresenceUpdate('composing', remoteJid)
-    
+    // Después del tiempo, volver a disponible
     setTimeout(async () => {
-      try {
-        await sock.sendPresenceUpdate('paused', remoteJid)
-      } catch (error) {
-        logger.error('Error pausando escritura:', error)
-      }
-    }, 3000)
+      await sock.sendPresenceUpdate('paused', remoteJid);
+    }, duration * 1000);
 
-    return { success: true, message: '✏️ Simulando escritura...' }
+    return { text: `✅ Mostrando "escribiendo..." por ${duration} segundos` };
   } catch (error) {
-    logger.error('Error simulando escritura:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    console.error('[TYPING] Error:', error);
+    return { text: '❌ Error al actualizar presencia' };
   }
 }
 
-export async function simulateRecording(ctx) {
-  const { remoteJid, sock } = ctx
+export async function recording(ctx) {
+  const { sock, remoteJid, args } = ctx;
+
+  const duration = parseInt(args[0]) || 5; // Duración en segundos (default: 5)
+
+  if (duration > 30) {
+    return { text: '❌ Duración máxima: 30 segundos' };
+  }
 
   try {
-    await sock.sendPresenceUpdate('recording', remoteJid)
+    // Mostrar "grabando audio..."
+    await sock.sendPresenceUpdate('recording', remoteJid);
 
+    // Después del tiempo, volver a disponible
     setTimeout(async () => {
-      try {
-        await sock.sendPresenceUpdate('paused', remoteJid)
-      } catch (error) {
-        logger.error('Error pausando grabación:', error)
-      }
-    }, 5000)
+      await sock.sendPresenceUpdate('paused', remoteJid);
+    }, duration * 1000);
 
-    return { success: true, message: '🎥 Simulando grabación...' }
+    return { text: `✅ Mostrando "grabando audio..." por ${duration} segundos` };
   } catch (error) {
-    logger.error('Error simulando grabación:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    console.error('[RECORDING] Error:', error);
+    return { text: '❌ Error al actualizar presencia' };
   }
 }
 
-// Funcionalidades avanzadas de presencia
-export async function setCustomPresence(ctx) {
-  const { args, remoteJid, sock } = ctx
-
-  const presenceType = args[0] || 'available'
-  const validTypes = ['available', 'unavailable', 'composing', 'recording', 'paused']
-
-  if (!validTypes.includes(presenceType)) {
-    return {
-      success: false,
-      message: `❌ Tipo de presencia inválido. Opciones: ${validTypes.join(', ')}`
-    }
-  }
+export async function online(ctx) {
+  const { sock, remoteJid } = ctx;
 
   try {
-    await sock.sendPresenceUpdate(presenceType, remoteJid)
-    return { success: true, message: `✅ Presencia cambiada a: ${presenceType}` }
+    await sock.sendPresenceUpdate('available', remoteJid);
+    return { text: '✅ Estado: Disponible' };
   } catch (error) {
-    logger.error('Error setting custom presence:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    console.error('[ONLINE] Error:', error);
+    return { text: '❌ Error al actualizar presencia' };
   }
 }
 
-export async function broadcastPresence(ctx) {
-  const { args, remoteJid, sock, isOwner } = ctx
-
-  if (!isOwner) {
-    return { success: false, message: '❌ Solo el owner puede hacer broadcast de presencia' }
-  }
-
-  const presenceType = args[0] || 'available'
-  const validTypes = ['available', 'unavailable']
-
-  if (!validTypes.includes(presenceType)) {
-    return {
-      success: false,
-      message: `❌ Tipo de presencia inválido para broadcast. Opciones: ${validTypes.join(', ')}`
-    }
-  }
+export async function offline(ctx) {
+  const { sock, remoteJid } = ctx;
 
   try {
-    // Obtener todos los chats
-    const chats = await sock.store?.chats?.keys() || []
-    let successCount = 0
-
-    for (const chatId of chats) {
-      try {
-        await sock.sendPresenceUpdate(presenceType, chatId)
-        successCount++
-      } catch (error) {
-        // Ignorar errores individuales
-      }
-    }
-
-    return { success: true, message: `✅ Presencia ${presenceType} enviada a ${successCount} chats` }
+    await sock.sendPresenceUpdate('unavailable', remoteJid);
+    return { text: '✅ Estado: No disponible' };
   } catch (error) {
-    logger.error('Error broadcasting presence:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    console.error('[OFFLINE] Error:', error);
+    return { text: '❌ Error al actualizar presencia' };
   }
 }
 
-export async function monitorPresence(ctx) {
-  const { args, remoteJid, sock } = ctx
-
-  const jid = args[0]
-  const duration = parseInt(args[1]) || 30000 // 30 segundos por defecto
-
-  if (!jid) {
-    return { success: false, message: '❌ Uso: /monitorpresence [número/JID] [duración_ms]' }
-  }
-
+// Función helper para usar en otros comandos
+export async function showTyping(sock, jid, duration = 3000) {
   try {
-    // Suscribirse a presencia
-    await sock.subscribePresence(jid)
-
-    // Monitorear por el tiempo especificado
+    await sock.sendPresenceUpdate('composing', jid);
     setTimeout(async () => {
-      try {
-        const presence = await sock.getPresence(jid)
-        const statusMessage = presence ?
-          `📊 Estado actual: ${presence.lastKnownPresence || 'Desconocido'}` :
-          '❌ No se pudo obtener presencia'
-
-        await sock.sendMessage(remoteJid, {
-          text: `⏰ *Monitoreo de presencia finalizado*\n\n👤 Usuario: ${jid.split('@')[0]}\n${statusMessage}`
-        })
-      } catch (error) {
-        logger.error('Error finalizando monitoreo de presencia:', error)
-      }
-    }, duration)
-
-    return {
-      success: true,
-      message: `✅ Monitoreando presencia de ${jid.split('@')[0]} por ${duration}ms`
-    }
+      await sock.sendPresenceUpdate('paused', jid);
+    }, duration);
   } catch (error) {
-    logger.error('Error monitoring presence:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    console.error('[SHOW_TYPING] Error:', error);
   }
 }
 
-export async function getPresence(ctx) {
-  const { args, remoteJid, sock } = ctx
-
-  const jid = args[0] || remoteJid.replace('@g.us', '@s.whatsapp.net')
-
+export async function showRecording(sock, jid, duration = 3000) {
   try {
-    const presence = await sock.getPresence(jid)
-    if (!presence) {
-      return { success: false, message: '❌ No se pudo obtener la presencia' }
-    }
-
-    let message = `👀 *Presencia de ${jid.split('@')[0]}*\n\n`
-    message += `📊 *Estado:* ${presence.lastKnownPresence || 'Desconocido'}\n`
-    message += `🕒 *Última vez:* ${presence.lastSeen ? new Date(presence.lastSeen * 1000).toLocaleString() : 'Nunca'}\n`
-
-    return { success: true, message }
+    await sock.sendPresenceUpdate('recording', jid);
+    setTimeout(async () => {
+      await sock.sendPresenceUpdate('paused', jid);
+    }, duration);
   } catch (error) {
-    logger.error('Error getting presence:', error)
-    return { success: false, message: `❌ Error: ${error.message}` }
+    console.error('[SHOW_RECORDING] Error:', error);
   }
 }
+
+export default { typing, recording, online, offline, showTyping, showRecording };

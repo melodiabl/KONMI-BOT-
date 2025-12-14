@@ -1647,6 +1647,16 @@ const COMMAND_FUNCTION_MAP = {
   // profile.js
   'whoami': 'whoami',
   'profile': 'profile',
+
+  // poll.js (Wileys)
+  'poll': 'poll',
+  'pollmultiple': 'pollMultiple',
+
+  // presence.js (Wileys)
+  'typing': 'typing',
+  'recording': 'recording',
+  'online': 'online',
+  'offline': 'offline',
 };
 
 // Función para cargar módulo de comando dinámicamente
@@ -1873,7 +1883,7 @@ function parseCommand(text) {
   // Si no tiene prefijo, verificar si es un comando especial (botones del menú help)
   const specialCommands = [
     // Categorías
-    'cat_descargas', 'cat_ia', 'cat_media', 'cat_utilidades', 'cat_grupo', 'cat_admin',
+    'cat_descargas', 'cat_ia', 'cat_interactivo', 'cat_media', 'cat_utilidades', 'cat_grupo', 'cat_admin',
     'cat_entretenimiento', 'cat_archivos', 'cat_aportes',
     // Comandos individuales
     'help_play', 'help_video', 'help_tiktok', 'help_instagram', 'help_spotify',
@@ -1908,9 +1918,10 @@ async function handleHelpCommand(ctx) {
       rows: [
         { title: '📥 Descargas', description: 'YouTube, TikTok, Instagram, Facebook, Twitter', rowId: 'cat_descargas', id: 'cat_descargas' },
         { title: '🤖 Inteligencia Artificial', description: 'IA, Generar imágenes, Clasificar', rowId: 'cat_ia', id: 'cat_ia' },
+        { title: '✨ Interactivo', description: 'Reacciones, Encuestas, Estados', rowId: 'cat_interactivo', id: 'cat_interactivo' },
         { title: '🎨 Media & Stickers', description: 'Stickers, Memes, TTS, Wallpapers', rowId: 'cat_media', id: 'cat_media' },
         { title: '🧰 Utilidades', description: 'Traducir, Clima, Ping, Horóscopo', rowId: 'cat_utilidades', id: 'cat_utilidades' },
-        { title: '🎮 Entretenimiento', description: 'Juegos, Trivia, Chistes, Encuestas', rowId: 'cat_entretenimiento', id: 'cat_entretenimiento' },
+        { title: '🎮 Entretenimiento', description: 'Juegos, Trivia, Chistes', rowId: 'cat_entretenimiento', id: 'cat_entretenimiento' },
         { title: '📁 Archivos', description: 'Guardar, Descargar, Mis archivos', rowId: 'cat_archivos', id: 'cat_archivos' },
         { title: '👥 Grupo', description: 'Administración de grupos, Configuración', rowId: 'cat_grupo', id: 'cat_grupo' },
         { title: '📊 Aportes & Pedidos', description: 'Sistema de aportes y pedidos', rowId: 'cat_aportes', id: 'cat_aportes' }
@@ -2155,13 +2166,58 @@ async function handleHelpResponse(ctx) {
    Horóscopo del día
    Ejemplo: /horoscope aries
 
-📊 */poll* <pregunta> (también */encuesta*)
-   Crear encuesta
-   Ejemplo: /poll ¿Cuál prefieres?
+📊 */poll* <pregunta> | op1 | op2
+   Crear encuesta (una opción)
+   Ejemplo: /poll ¿Te gusta? | Sí | No
+
+📊 */pollmultiple* <pregunta> | op1 | op2
+   Crear encuesta (múltiples opciones)
+   Ejemplo: /pollmultiple ¿Qué te gusta? | Pizza | Tacos
 
 📰 */fact*
    Dato curioso aleatorio
    Ejemplo: /fact
+
+💡 *Tip:* Usa /help para volver al menú principal`
+    };
+  }
+
+  if (category === 'cat_interactivo') {
+    return {
+      text: `✨ *COMANDOS INTERACTIVOS*
+
+❤️ *REACCIONES AUTOMÁTICAS*
+   El bot reacciona automáticamente a tus comandos:
+   📥 Descargas → Reacciona mientras procesa
+   ✅ Completado → Reacciona cuando termina
+   🤖 IA → Reacciona mientras piensa
+   ✨ Media → Reacciona mientras crea
+
+   ¡No necesitas hacer nada, es automático!
+
+📊 */poll* <pregunta> | opción1 | opción2
+   Crear encuesta de una sola opción
+   Ejemplo: /poll ¿Te gusta? | Sí | No
+
+📊 */pollmultiple* <pregunta> | opción1 | opción2
+   Crear encuesta de múltiples opciones
+   Ejemplo: /pollmultiple ¿Qué te gusta? | Pizza | Tacos | Sushi
+
+⌨️ */typing* [segundos]
+   Simular que estás escribiendo
+   Ejemplo: /typing 5
+
+🎤 */recording* [segundos]
+   Simular que estás grabando audio
+   Ejemplo: /recording 3
+
+🟢 */online*
+   Cambiar estado a disponible
+   Ejemplo: /online
+
+⚫ */offline*
+   Cambiar estado a no disponible
+   Ejemplo: /offline
 
 💡 *Tip:* Usa /help para volver al menú principal`
     };
@@ -2282,7 +2338,7 @@ commandMap.set('menu', {
 // Registrar manejadores para respuestas del menú
 for (const key of Object.keys({
   // Categorías
-  cat_descargas: 1, cat_ia: 1, cat_media: 1, cat_utilidades: 1, cat_grupo: 1, cat_admin: 1,
+  cat_descargas: 1, cat_ia: 1, cat_interactivo: 1, cat_media: 1, cat_utilidades: 1, cat_grupo: 1, cat_admin: 1,
   cat_entretenimiento: 1, cat_archivos: 1, cat_aportes: 1,
   // Comandos individuales
   help_play: 1, help_video: 1, help_tiktok: 1, help_instagram: 1, help_spotify: 1,
@@ -2406,17 +2462,43 @@ commandMap.set('bc', { moduleName: 'broadcast', category: 'Admin', description: 
 commandMap.set('whoami', { moduleName: 'profile', category: 'Utilidades', description: 'Mi perfil' });
 commandMap.set('profile', { moduleName: 'profile', category: 'Utilidades', description: 'Ver perfil' });
 
+// ===== COMANDOS DE WILEYS =====
+
+// Encuestas mejoradas (ya existía poll, ahora agregamos pollmultiple)
+commandMap.set('pollmultiple', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta múltiple' });
+
+// Estados de presencia
+commandMap.set('typing', { moduleName: 'presence', category: 'Utilidades', description: 'Simular escribiendo' });
+commandMap.set('recording', { moduleName: 'presence', category: 'Utilidades', description: 'Simular grabando' });
+commandMap.set('online', { moduleName: 'presence', category: 'Utilidades', description: 'Estado disponible' });
+commandMap.set('offline', { moduleName: 'presence', category: 'Utilidades', description: 'Estado no disponible' });
+
 async function sendResult(sock, jid, result, ctx) {
   if (!sock || !jid) return;
 
   try {
+    // Mostrar "escribiendo..." antes de enviar (más natural)
+    const showPresence = process.env.SHOW_TYPING === 'true';
+    if (showPresence) {
+      await sock.sendPresenceUpdate('composing', jid).catch(() => {});
+      await new Promise(resolve => setTimeout(resolve, 500)); // Pequeño delay
+    }
+
     if (!result) {
-      await sock.sendMessage(jid, { text: '✅ Listo.' });
+      // No enviar mensaje "Listo", solo reaccionar (ya se hace en dispatch)
+      if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
+      return;
+    }
+
+    // Si result.success === true sin mensaje, no enviar nada (solo reacción)
+    if (result.success === true && !result.text && !result.message) {
+      if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
       return;
     }
 
     if (typeof result === 'string') {
       await sock.sendMessage(jid, { text: result });
+      if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
       return;
     }
 
@@ -2489,7 +2571,7 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     const alwaysAllowedCommands = [
       'bot', 'status', 'ping', 'help', 'ayuda', 'menu', 'comandos',
       // Categorías del menú help
-      'cat_descargas', 'cat_ia', 'cat_media', 'cat_utilidades', 'cat_grupo', 'cat_admin',
+      'cat_descargas', 'cat_ia', 'cat_interactivo', 'cat_media', 'cat_utilidades', 'cat_grupo', 'cat_admin',
       'cat_entretenimiento', 'cat_archivos', 'cat_aportes',
       // Respuestas del menú help
       'help_play', 'help_video', 'help_tiktok', 'help_instagram', 'help_spotify',
@@ -2584,10 +2666,110 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     };
 
     console.log('[DISPATCH] 🚀 Ejecutando handler para:', command);
+
+    // ===== SISTEMA DE REACCIONES AUTOMÁTICAS =====
+    // Reaccionar al mensaje del usuario según el tipo de comando
+    const reactionEmojis = {
+      // Descargas
+      'play': '📥',
+      'music': '📥',
+      'video': '📥',
+      'youtube': '📥',
+      'tiktok': '📥',
+      'instagram': '📥',
+      'ig': '📥',
+      'facebook': '📥',
+      'fb': '📥',
+      'twitter': '📥',
+      'x': '📥',
+      'pinterest': '📥',
+      'spotify': '🎵',
+
+      // IA
+      'ia': '🤖',
+      'ai': '🤖',
+      'image': '🎨',
+      'clasificar': '📊',
+
+      // Media
+      'sticker': '✨',
+      's': '✨',
+      'meme': '😂',
+      'quote': '💭',
+      'tts': '🔊',
+      'wallpaper': '🖼️',
+
+      // Utilidades
+      'translate': '🌐',
+      'tr': '🌐',
+      'weather': '🌤️',
+      'clima': '🌤️',
+      'ping': '🏓',
+
+      // Grupo
+      'kick': '👢',
+      'promote': '⬆️',
+      'demote': '⬇️',
+      'lock': '🔒',
+      'unlock': '🔓',
+
+      // Aportes
+      'addaporte': '📝',
+      'pedido': '📋',
+
+      // Encuestas
+      'poll': '📊',
+      'pollmultiple': '📊',
+      'encuesta': '📊',
+
+      // Admin
+      'qr': '📱',
+      'code': '🔑',
+      'broadcast': '📢',
+      'bc': '📢',
+
+      // Sistema
+      'stats': '📊',
+      'logs': '📋',
+      'bot': '🤖'
+    };
+
+    // Reaccionar al mensaje del usuario si hay emoji definido
+    const reactionEmoji = reactionEmojis[command.toLowerCase()];
+    if (reactionEmoji && ctx.message?.key) {
+      try {
+        await sock.sendMessage(remoteJid, {
+          react: {
+            text: reactionEmoji,
+            key: ctx.message.key
+          }
+        });
+        console.log('[DISPATCH] ✅ Reacción enviada:', reactionEmoji);
+      } catch (err) {
+        console.log('[DISPATCH] ⚠️ Error enviando reacción:', err.message);
+      }
+    }
+
     const result = await handler(params, commandMap);
     console.log('[DISPATCH] 📤 Resultado tipo:', result?.type || 'text', '| hasText:', !!result?.text);
 
     await sendResult(sock, remoteJid, result, ctx);
+
+    // Reaccionar con ✅ cuando el comando se completó exitosamente
+    if (reactionEmoji && ctx.message?.key) {
+      try {
+        await sock.sendMessage(remoteJid, {
+          react: {
+            text: '✅',
+            key: ctx.message.key
+          }
+        });
+        console.log('[DISPATCH] ✅ Reacción de completado enviada');
+      } catch (err) {
+        console.log('[DISPATCH] ⚠️ Error enviando reacción de completado:', err.message);
+      }
+    }
+
     console.log('[DISPATCH] ✅ Comando ejecutado exitosamente:', command);
 
     return true;
