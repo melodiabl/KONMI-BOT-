@@ -1,10 +1,9 @@
-// commands/menu.js
-// Menú con botones interactivos (centralizados en router)
-import { sendInteractiveButtons, sendCategorizedList } from './ui-interactive.js'
+import { sendInteractiveButtons } from './utils/interactive.js'
 
 export async function menu(ctx) {
   const who = (ctx && (ctx.sender || ctx.usuario || ctx.remoteJid)) || ''
-  const whoTag = typeof who === 'string' && who.includes('@') ? who.split('@')[0] : String(who)
+  const whoTag =
+    typeof who === 'string' && who.includes('@') ? who.split('@')[0] : String(who)
 
   const buttons = [
     { text: '📋 Todos los Comandos', command: '/help' },
@@ -19,7 +18,8 @@ export async function menu(ctx) {
     buttons.push({ text: '👑 Panel Admin', command: '/admin' })
   }
 
-  return sendInteractiveButtons(`🤖 *KONMI BOT v2.0*\n\n¡Hola, @${whoTag}! 👋\n\nSelecciona una opción para empezar:`, buttons)
+  return sendInteractiveButtons(
+    `🤖 *KONMI BOT v2.0*\n\n¡Hola, @${whoTag}! 👋\n\nSelecciona una opción para empezar:`,
+    buttons,
+  )
 }
-
-export default { menu }
