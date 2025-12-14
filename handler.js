@@ -1518,153 +1518,83 @@ function normalizeDigits(userOrJid){
 
 
 
-const commandMap = new Map()
+// ===== SISTEMA DE COMANDOS CENTRALIZADO =====
+// Importar configuración centralizada de comandos
+import { COMMAND_DEFINITIONS, generateHelpText, getCommandHelp } from './src/config/commands-config.js';
 
-function registerCommand(command, module) {
-  if (!commandMap.has(command)) {
-    commandMap.set(command, module)
+// Maps para gestión de comandos
+const commandModules = new Map();
+const commandMap = new Map();
+
+// Función para cargar módulo de comando dinámicamente
+async function loadCommandModule(moduleName) {
+  if (commandModules.has(moduleName)) {
+    return commandModules.get(moduleName);
   }
-}
 
-// Imports explícitos de comandos
-import * as adminMenuCmd from './src/commands/admin-menu.js';
-import * as adminCmd from './src/commands/admin.js';
-import * as advancedFeaturesCmd from './src/commands/advanced-features.js';
-import * as aiCmd from './src/commands/ai.js';
-import * as aportesCmd from './src/commands/aportes.js';
-import * as banCmd from './src/commands/ban.js';
-import * as botControlCmd from './src/commands/bot-control.js';
-import * as botsCmd from './src/commands/bots.js';
-import * as broadcastCmd from './src/commands/broadcast.js';
-import * as callsCmd from './src/commands/calls.js';
-import * as chatManagementCmd from './src/commands/chat-management.js';
-import * as communityFeaturesCmd from './src/commands/community-features.js';
-import * as contentCmd from './src/commands/content.js';
-import * as demoCmd from './src/commands/demo.js';
-import * as diagCmd from './src/commands/diag.js';
-import * as downloadCommandsCmd from './src/commands/download-commands.js';
-import * as filesCmd from './src/commands/files.js';
-import * as gamesCmd from './src/commands/games.js';
-import * as groupAdminExtraCmd from './src/commands/group-admin-extra.js';
-import * as groupAdvancedCmd from './src/commands/group-advanced.js';
-import * as groupExtraCmd from './src/commands/group-extra.js';
-import * as groupSettingsCmd from './src/commands/group-settings.js';
-import * as groupsCmd from './src/commands/groups.js';
-import * as helpCmd from './src/commands/help.js';
-import * as imagesCmd from './src/commands/images.js';
-import * as interactiveCmd from './src/commands/interactive.js';
-import * as logsCmd from './src/commands/logs.js';
-import * as maintenanceCmd from './src/commands/maintenance.js';
-import * as mediaCmd from './src/commands/media.js';
-import * as menuCmd from './src/commands/menu.js';
-import * as messageControlCmd from './src/commands/message-control.js';
-import * as moderationCmd from './src/commands/moderation.js';
-import * as mybotsCmd from './src/commands/mybots.js';
-import * as pairingCmd from './src/commands/pairing.js';
-import * as pedidosCmd from './src/commands/pedidos.js';
-import * as performanceFeaturesCmd from './src/commands/performance-features.js';
-import * as pingCmd from './src/commands/ping.js';
-import * as pollsCmd from './src/commands/polls.js';
-import * as presenceCmd from './src/commands/presence.js';
-import * as privacyFeaturesCmd from './src/commands/privacy-features.js';
-import * as privacyCmd from './src/commands/privacy.js';
-import * as profileCmd from './src/commands/profile.js';
-import * as promoCmd from './src/commands/promo.js';
-import * as statusCmd from './src/commands/status.js';
-import * as stickersCmd from './src/commands/stickers.js';
-import * as subbotsCmd from './src/commands/subbots.js';
-import * as systemInfoCmd from './src/commands/system-info.js';
-import * as systemCmd from './src/commands/system.js';
-import * as uiInteractiveCmd from './src/commands/ui-interactive.js';
-import * as utilMathCmd from './src/commands/util-math.js';
-import * as utilsCmd from './src/commands/utils.js';
-import * as votesCmd from './src/commands/votes.js';
-
-function registerAllCommands() {
-  const cmds = [
-    ['admin-menu', adminMenuCmd],
-    ['admin', adminCmd],
-    ['advanced-features', advancedFeaturesCmd],
-    ['ai', aiCmd],
-    ['aportes', aportesCmd],
-    ['ban', banCmd],
-    ['bot-control', botControlCmd],
-    ['bots', botsCmd],
-    ['broadcast', broadcastCmd],
-    ['calls', callsCmd],
-    ['chat-management', chatManagementCmd],
-    ['community-features', communityFeaturesCmd],
-    ['content', contentCmd],
-    ['demo', demoCmd],
-    ['diag', diagCmd],
-    ['download-commands', downloadCommandsCmd],
-    ['files', filesCmd],
-    ['games', gamesCmd],
-    ['group-admin-extra', groupAdminExtraCmd],
-    ['group-advanced', groupAdvancedCmd],
-    ['group-extra', groupExtraCmd],
-    ['group-settings', groupSettingsCmd],
-    ['groups', groupsCmd],
-    ['help', helpCmd],
-    ['images', imagesCmd],
-    ['interactive', interactiveCmd],
-    ['logs', logsCmd],
-    ['maintenance', maintenanceCmd],
-    ['media', mediaCmd],
-    ['menu', menuCmd],
-    ['message-control', messageControlCmd],
-    ['moderation', moderationCmd],
-    ['mybots', mybotsCmd],
-    ['pairing', pairingCmd],
-    ['pedidos', pedidosCmd],
-    ['performance-features', performanceFeaturesCmd],
-    ['ping', pingCmd],
-    ['polls', pollsCmd],
-    ['presence', presenceCmd],
-    ['privacy-features', privacyFeaturesCmd],
-    ['privacy', privacyCmd],
-    ['profile', profileCmd],
-    ['promo', promoCmd],
-    ['status', statusCmd],
-    ['stickers', stickersCmd],
-    ['subbots', subbotsCmd],
-    ['system-info', systemInfoCmd],
-    ['system', systemCmd],
-    ['ui-interactive', uiInteractiveCmd],
-    ['util-math', utilMathCmd],
-    ['utils', utilsCmd],
-    ['votes', votesCmd]
-  ];
-
-  for (const [name, mod] of cmds) {
-    const exportsObj = mod.default || mod;
-    const handler = exportsObj.handler || exportsObj.default || exportsObj[Object.keys(exportsObj).find(k => typeof exportsObj[k] === 'function')];
+  try {
+    const module = await import(`./src/commands/${moduleName}.js`);
+    const handler = module.default?.handler || module.handler || module.default || module[Object.keys(module).find(k => typeof module[k] === 'function')];
 
     if (typeof handler === 'function') {
-      registerCommand(name, { ...exportsObj, handler, command: name });
+      commandModules.set(moduleName, { ...module, handler });
+      return commandModules.get(moduleName);
     }
+  } catch (error) {
+    console.warn(`⚠️ No se pudo cargar el módulo: ${moduleName}`, error.message);
   }
 
-  // Registrar comandos locales
-  registerCommand('qr', { handler: handleStartSubbot });
-  registerCommand('code', { handler: handleStartSubbot });
-  registerCommand('pair', { handler: handleStartSubbot });
-  registerCommand('stop', { handler: handleStopSubbot });
-  registerCommand('bots', { handler: handleListSubbots });
-  registerCommand('mybots', { handler: handleListSubbots });
-  registerCommand('status', { handler: handleSubbotStatus });
+  return null;
+}
 
-  registerCommand('aporte', { handler: handleAddAporte });
-  registerCommand('aportes', { handler: handleAportes });
-  registerCommand('misaportes', { handler: handleMyAportes });
+// Registrar comandos desde la configuración
+function registerAllCommands() {
+  // Registrar comandos desde la configuración
+  Object.entries(COMMAND_DEFINITIONS).forEach(([commandName, config]) => {
+    commandMap.set(commandName, {
+      ...config,
+      name: commandName,
+      moduleName: config.handler
+    });
 
-  registerCommand('pedido', { handler: handlePedido });
-  registerCommand('pedidos', { handler: handlePedidos });
+    // Registrar aliases
+    if (config.aliases) {
+      config.aliases.forEach(alias => {
+        commandMap.set(alias, {
+          ...config,
+          name: commandName,
+          moduleName: config.handler
+        });
+      });
+    }
+  });
 
-  registerCommand('aportar', { handler: handleAportar });
-  registerCommand('provaportes', { handler: handleProveedorAportes });
+  // Registrar comandos locales del handler
+  const localCommands = {
+    'qr': { handler: handleStartSubbot, category: 'Subbots', description: 'Crear subbot con QR' },
+    'code': { handler: handleStartSubbot, category: 'Subbots', description: 'Crear subbot con código' },
+    'pair': { handler: handleStartSubbot, category: 'Subbots', description: 'Crear subbot con pairing' },
+    'stopbot': { handler: handleStopSubbot, category: 'Subbots', description: 'Detener subbot' },
+    'mybots': { handler: handleListSubbots, category: 'Subbots', description: 'Ver mis subbots' },
+    'mibots': { handler: handleListSubbots, category: 'Subbots', description: 'Ver mis subbots' },
+    'bots': { handler: handleListSubbots, category: 'Subbots', description: 'Ver todos los subbots', admin: true },
+    'subbotStatus': { handler: handleSubbotStatus, category: 'Subbots', description: 'Estado del subbot' },
+    'addaporte': { handler: handleAddAporte, category: 'Aportes', description: 'Agregar aporte' },
+    'aportes': { handler: handleAportes, category: 'Aportes', description: 'Ver aportes' },
+    'myaportes': { handler: handleMyAportes, category: 'Aportes', description: 'Mis aportes' },
+    'misaportes': { handler: handleMyAportes, category: 'Aportes', description: 'Mis aportes' },
+    'pedido': { handler: handlePedido, category: 'Pedidos', description: 'Crear pedido' },
+    'pedidos': { handler: handlePedidos, category: 'Pedidos', description: 'Ver pedidos' },
+    'aportar': { handler: handleAportar, category: 'Aportes', description: 'Aportar como proveedor' },
+    'provaportes': { handler: handleProveedorAportes, category: 'Aportes', description: 'Aportes de proveedor' },
+    'debugadmin': { handler: handleDebugAdmin, category: 'Admin', description: 'Debug del sistema', admin: true }
+  };
 
-  console.log('✅ Todos los comandos registrados explícitamente.');
+  Object.entries(localCommands).forEach(([name, config]) => {
+    commandMap.set(name, { ...config, name, isLocal: true });
+  });
+
+  console.log(`✅ ${commandMap.size} comandos registrados (${Object.keys(COMMAND_DEFINITIONS).length} desde config + ${Object.keys(localCommands).length} locales)`);
 }
 
 registerAllCommands();
@@ -1804,121 +1734,171 @@ function parseCommand(text) {
 
 
 
-async function sendResult(sock, jid, result, ctx) {
+// Comando de ayuda integrado
+async function handleHelpCommand(ctx) {
+  const { sock, remoteJid, sender, args } = ctx;
 
-  if (!sock || !jid) return;
+  // Si se especifica un comando, mostrar ayuda específica
+  if (args.length > 0) {
+    const commandName = args[0].toLowerCase();
+    const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
+    const isAdmin = await isSuperAdmin(userPhone);
 
-
-
-  try {
-
-    if (!result) {
-
-      await sock.sendMessage(jid, { text: '✅ Listo.' });
-
-      return;
-
+    const helpText = getCommandHelp(commandName, isAdmin);
+    if (helpText) {
+      await sock.sendMessage(remoteJid, { text: helpText });
+      return { success: true };
+    } else {
+      await sock.sendMessage(remoteJid, {
+        text: `❌ No se encontró ayuda para el comando "${commandName}"`
+      });
+      return { success: false };
     }
-
-
-
-    if (typeof result === 'string') {
-
-      await sock.sendMessage(jid, { text: result });
-
-      return;
-
-    }
-
-
-
-    if (result.type === 'buttons') {
-
-        const payload = createButtonMenu(result);
-
-        await sock.sendMessage(jid, payload);
-
-        return;
-
-    }
-
-
-
-    const message = result.message || result.text || '✅ Listo';
-
-    await sock.sendMessage(jid, { text: message });
-
-
-
-  } catch (error) {
-
-    console.error("Error in sendResult:", error);
-
   }
 
+  // Mostrar ayuda general
+  const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
+  const isAdmin = await isSuperAdmin(userPhone);
+  const helpText = generateHelpText(isAdmin);
+
+  await sock.sendMessage(remoteJid, { text: helpText });
+  return { success: true };
+}
+
+// Registrar comando de ayuda
+commandMap.set('help', {
+  handler: handleHelpCommand,
+  category: 'Básicos',
+  description: 'Mostrar ayuda',
+  isLocal: true
+});
+commandMap.set('ayuda', {
+  handler: handleHelpCommand,
+  category: 'Básicos',
+  description: 'Mostrar ayuda',
+  isLocal: true
+});
+commandMap.set('menu', {
+  handler: handleHelpCommand,
+  category: 'Básicos',
+  description: 'Mostrar menú',
+  isLocal: true
+});
+commandMap.set('comandos', {
+  handler: handleHelpCommand,
+  category: 'Básicos',
+  description: 'Mostrar comandos',
+  isLocal: true
+});
+
+async function sendResult(sock, jid, result, ctx) {
+  if (!sock || !jid) return;
+
+  try {
+    if (!result) {
+      await sock.sendMessage(jid, { text: '✅ Listo.' });
+      return;
+    }
+
+    if (typeof result === 'string') {
+      await sock.sendMessage(jid, { text: result });
+      return;
+    }
+
+    if (result.type === 'buttons') {
+      const payload = createButtonMenu(result);
+      await sock.sendMessage(jid, payload);
+      return;
+    }
+
+    if (result.type === 'list') {
+      await sendListFixedV2(sock, jid, result, ctx);
+      return;
+    }
+
+    const message = result.message || result.text || '✅ Listo';
+    await sock.sendMessage(jid, { text: message });
+
+  } catch (error) {
+    console.error("Error in sendResult:", error);
+  }
 }
 
 
 
 export async function dispatch(ctx = {}, runtimeContext = {}) {
-
-  const { sock, remoteJid, isGroup } = ctx;
-
+  const { sock, remoteJid, isGroup, sender } = ctx;
   if (!sock || !remoteJid) return false;
-
-
 
   const effectiveCtx = { ...ctx, ...runtimeContext };
 
-
-
   try {
-
     const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message));
-
     const { command, args } = parseCommand(text);
-
-
 
     if (!command) return false;
 
+    // Buscar comando en el mapa
+    const commandConfig = commandMap.get(command.toLowerCase());
+    if (!commandConfig) return false;
 
-
-    const commandModule = commandMap.get(command)
-
-    if (commandModule && typeof commandModule.handler === 'function') {
-      const params = { ...effectiveCtx, text, command, args }
-
-      const result = await commandModule.handler(params, commandMap)
-      await sendResult(sock, remoteJid, result, ctx)
-
-
+    // Verificar permisos de admin si es necesario
+    if (commandConfig.admin) {
+      const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
+      const isAdmin = await isSuperAdmin(userPhone);
+      if (!isAdmin) {
+        await sock.sendMessage(remoteJid, {
+          text: '❌ No tienes permisos para usar este comando.'
+        });
         return true;
-
+      }
     }
 
+    let handler = null;
 
+    // Si es comando local, usar handler directo
+    if (commandConfig.isLocal && commandConfig.handler) {
+      handler = commandConfig.handler;
+    } else if (commandConfig.moduleName) {
+      // Cargar módulo dinámicamente
+      const module = await loadCommandModule(commandConfig.moduleName);
+      if (module && module.handler) {
+        handler = module.handler;
+      }
+    }
 
-    return false; // Command not found
+    if (!handler) {
+      await sock.sendMessage(remoteJid, {
+        text: `⚠️ Comando "${command}" no disponible temporalmente.`
+      });
+      return true;
+    }
+
+    // Ejecutar comando
+    const params = {
+      ...effectiveCtx,
+      text,
+      command: commandConfig.name || command,
+      args,
+      commandConfig
+    };
+
+    const result = await handler(params, commandMap);
+    await sendResult(sock, remoteJid, result, ctx);
+
+    return true;
 
   } catch (error) {
-
     console.error("Error in dispatch:", error);
-
     try {
-
-        await sock.sendMessage(remoteJid, { text: `⚠️ Error ejecutando el comando: ${error?.message || error}` });
-
+      await sock.sendMessage(remoteJid, {
+        text: `⚠️ Error ejecutando el comando: ${error?.message || error}`
+      });
     } catch (e) {
-
-        // ignore
-
+      // ignore
     }
-
     return true; // Error was handled
-
   }
-
 }
 
 
@@ -1943,7 +1923,7 @@ export async function chatWithAI(message, context = "panel") {
     const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash"
     const model = getGeminiModel(modelName)
     const systemPrefix =
-      "Eres el asistente del panel de administraciÇün de KONMI BOT. Responde en espaÇñol, claro y directo.\n\n"
+      "Eres el asistente del panel de administracion de KONMI BOT. Responde en español, claro y directo.\n\n"
     const fullPrompt = `${systemPrefix}Contexto: ${context}\n\nUsuario: ${prompt}`
 
     const result = await model.generateContent(fullPrompt)

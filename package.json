@@ -24,11 +24,11 @@
         "pterodactyl:init": "npm run pterodactyl:setup && npm install && npm run migrate",
         "verify:system": "node tools/verify-system.js",
         "db:backup": "node tools/backup-db.js",
-        "postinstall": "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true"
+        "postinstall": "echo Skipping Chromium download"
     },
     "dependencies": {
         "@distube/ytdl-core": "^4.16.12",
-        "@google/generative-ai": "^0.21.0",
+        "@google/generative-ai": "^0.24.1",
         "axios": "^1.11.0",
         "bcryptjs": "^2.4.3",
         "better-sqlite3": "^12.4.1",
@@ -62,8 +62,8 @@
         "ytdl-core": "^4.11.5"
     },
     "devDependencies": {
-        "jest": "^29.7.0",
-        "supertest": "^6.3.3"
+        "jest": "^30.2.0",
+        "supertest": "^7.1.4"
     },
     "engines": {
         "node": ">=16.0.0"
