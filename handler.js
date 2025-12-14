@@ -1943,119 +1943,136 @@ async function handleHelpResponse(ctx) {
 
   console.log('[HELP_RESPONSE] Procesando:', category);
 
-  // Manejadores de categorías
+  // Manejadores de categorías - TEXTO PLANO
   if (category === 'cat_descargas') {
     return {
-      type: 'list',
-      text: '📥 *COMANDOS DE DESCARGAS*\n\nSelecciona un comando para ver su información detallada:',
-      title: '📥 Descargas',
-      buttonText: 'Ver Comandos',
-      footer: 'KONMI BOT © 2025',
-      sections: [{
-        title: '📥 Comandos Disponibles',
-        rows: [
-          { title: '/play', description: 'Descargar audio de YouTube', rowId: 'help_play', id: 'help_play' },
-          { title: '/video', description: 'Descargar video de YouTube', rowId: 'help_video', id: 'help_video' },
-          { title: '/tiktok', description: 'Descargar videos de TikTok', rowId: 'help_tiktok', id: 'help_tiktok' },
-          { title: '/instagram', description: 'Descargar de Instagram', rowId: 'help_instagram', id: 'help_instagram' },
-          { title: '/spotify', description: 'Buscar música en Spotify', rowId: 'help_spotify', id: 'help_spotify' },
-          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
-        ]
-      }]
+      text: `📥 *COMANDOS DE DESCARGAS*
+
+🎵 */play* <nombre o URL>
+   Descarga audio de YouTube
+   Ejemplo: /play despacito
+
+🎬 */video* <nombre o URL>
+   Descarga video de YouTube
+   Ejemplo: /video tutorial javascript
+
+📱 */tiktok* <URL>
+   Descarga videos de TikTok
+   Ejemplo: /tiktok https://vm.tiktok.com/...
+
+� */instagram* <URL>
+   Descarga contenido de Instagram
+   Ejemplo: /instagram https://instagram.com/p/...
+
+🎧 */spotify* <búsqueda>
+   Busca música en Spotify
+   Ejemplo: /spotify bad bunny
+
+💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
 
   if (category === 'cat_ia') {
     return {
-      type: 'list',
-      text: '🤖 *COMANDOS DE INTELIGENCIA ARTIFICIAL*\n\nSelecciona un comando para ver su información detallada:',
-      title: '🤖 Inteligencia Artificial',
-      buttonText: 'Ver Comandos',
-      footer: 'KONMI BOT © 2025',
-      sections: [{
-        title: '🤖 Comandos Disponibles',
-        rows: [
-          { title: '/ia', description: 'Pregunta a Gemini AI', rowId: 'help_ia', id: 'help_ia' },
-          { title: '/image', description: 'Generar imagen con IA', rowId: 'help_image', id: 'help_image' },
-          { title: '/clasificar', description: 'Clasificar texto', rowId: 'help_clasificar', id: 'help_clasificar' },
-          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
-        ]
-      }]
+      text: `🤖 *COMANDOS DE INTELIGENCIA ARTIFICIAL*
+
+🧠 */ia* <pregunta>
+   Pregunta a Gemini AI
+   Ejemplo: /ia explícame qué es javascript
+
+🎨 */image* <descripción>
+   Generar imagen con IA
+   Ejemplo: /image un gato astronauta
+
+📊 */clasificar* <texto>
+   Clasificar texto (positivo/negativo)
+   Ejemplo: /clasificar este producto es excelente
+
+💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
 
   if (category === 'cat_media') {
     return {
-      type: 'list',
-      text: '🎨 *COMANDOS DE MEDIA & STICKERS*\n\nSelecciona un comando para ver su información detallada:',
-      title: '🎨 Media & Stickers',
-      buttonText: 'Ver Comandos',
-      footer: 'KONMI BOT © 2025',
-      sections: [{
-        title: '🎨 Comandos Disponibles',
-        rows: [
-          { title: '/sticker', description: 'Crear sticker de imagen/video', rowId: 'help_sticker', id: 'help_sticker' },
-          { title: '/meme', description: 'Meme aleatorio', rowId: 'help_meme', id: 'help_meme' },
-          { title: '/quote', description: 'Frase motivacional', rowId: 'help_quote', id: 'help_quote' },
-          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
-        ]
-      }]
+      text: `🎨 *COMANDOS DE MEDIA & STICKERS*
+
+✨ */sticker*
+   Crear sticker de imagen o video
+   Uso: Envía imagen/video con /sticker
+   O responde a una imagen con /sticker
+
+😂 */meme*
+   Meme aleatorio
+   Ejemplo: /meme
+
+💭 */quote*
+   Frase motivacional aleatoria
+   Ejemplo: /quote
+
+💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
 
   if (category === 'cat_utilidades') {
     return {
-      type: 'list',
-      text: '🧰 *COMANDOS DE UTILIDADES*\n\nSelecciona un comando para ver su información detallada:',
-      title: '🧰 Utilidades',
-      buttonText: 'Ver Comandos',
-      footer: 'KONMI BOT © 2025',
-      sections: [{
-        title: '🧰 Comandos Disponibles',
-        rows: [
-          { title: '/translate', description: 'Traducir texto', rowId: 'help_translate', id: 'help_translate' },
-          { title: '/weather', description: 'Consultar clima', rowId: 'help_weather', id: 'help_weather' },
-          { title: '/ping', description: 'Verificar latencia', rowId: 'help_ping', id: 'help_ping' },
-          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
-        ]
-      }]
+      text: `🧰 *COMANDOS DE UTILIDADES*
+
+🌐 */translate* <idioma> <texto>
+   Traducir texto a cualquier idioma
+   Ejemplo: /translate en hola mundo
+
+🌤️ */weather* <ciudad>
+   Consultar el clima actual
+   Ejemplo: /weather Madrid
+
+🏓 */ping*
+   Verificar latencia del bot
+   Ejemplo: /ping
+
+💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
 
   if (category === 'cat_grupo') {
     return {
-      type: 'list',
-      text: '👥 *COMANDOS DE GRUPO*\n\nSelecciona un comando para ver su información detallada:',
-      title: '👥 Grupo',
-      buttonText: 'Ver Comandos',
-      footer: 'KONMI BOT © 2025',
-      sections: [{
-        title: '👥 Comandos Disponibles',
-        rows: [
-          { title: '/bot', description: 'Activar/desactivar bot', rowId: 'help_bot', id: 'help_bot' },
-          { title: '/groupinfo', description: 'Info del grupo', rowId: 'help_groupinfo', id: 'help_groupinfo' },
-          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
-        ]
-      }]
+      text: `👥 *COMANDOS DE GRUPO*
+
+🤖 */bot* <on/off/status>
+   Controlar el bot en este grupo
+   /bot on - Activar bot
+   /bot off - Desactivar bot
+   /bot status - Ver estado
+   ⚠️ Solo admins pueden usarlo
+
+ℹ️ */groupinfo*
+   Mostrar información del grupo
+   Ejemplo: /groupinfo
+
+💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
 
   if (category === 'cat_admin') {
     return {
-      type: 'list',
-      text: '⚙️ *COMANDOS DE ADMINISTRACIÓN*\n\nSelecciona un comando para ver su información detallada:',
-      title: '⚙️ Administración',
-      buttonText: 'Ver Comandos',
-      footer: 'KONMI BOT © 2025',
-      sections: [{
-        title: '⚙️ Comandos Disponibles',
-        rows: [
-          { title: '/qr', description: 'Crear subbot con QR', rowId: 'help_qr', id: 'help_qr' },
-          { title: '/code', description: 'Crear con código', rowId: 'help_code', id: 'help_code' },
-          { title: '/mybots', description: 'Ver mis subbots', rowId: 'help_mybots', id: 'help_mybots' },
-          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
-        ]
-      }]
+      text: `⚙️ *COMANDOS DE ADMINISTRACIÓN*
+
+📱 */qr*
+   Crear un subbot con código QR
+   Proceso: Bot genera QR → Escaneas → Subbot creado
+   ⚠️ Solo para administradores
+
+🔑 */code* <número>
+   Crear subbot con código de emparejamiento
+   Ejemplo: /code 34612345678
+   Proceso: Envías número → Recibes código → Introduces código
+   ⚠️ Solo para administradores
+
+🤖 */mybots*
+   Ver tus subbots activos
+   Muestra: Lista, estado, tiempo de actividad
+   ⚠️ Solo para administradores
+
+💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
 
