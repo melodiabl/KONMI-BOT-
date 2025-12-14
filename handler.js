@@ -1639,7 +1639,7 @@ function registerAllCommands() {
   for (const [name, mod] of cmds) {
     const exportsObj = mod.default || mod;
     const handler = exportsObj.handler || exportsObj.default || exportsObj[Object.keys(exportsObj).find(k => typeof exportsObj[k] === 'function')];
-    
+
     if (typeof handler === 'function') {
       registerCommand(name, { ...exportsObj, handler, command: name });
     }
@@ -1653,17 +1653,17 @@ function registerAllCommands() {
   registerCommand('bots', { handler: handleListSubbots });
   registerCommand('mybots', { handler: handleListSubbots });
   registerCommand('status', { handler: handleSubbotStatus });
-  
+
   registerCommand('aporte', { handler: handleAddAporte });
   registerCommand('aportes', { handler: handleAportes });
   registerCommand('misaportes', { handler: handleMyAportes });
-  
+
   registerCommand('pedido', { handler: handlePedido });
   registerCommand('pedidos', { handler: handlePedidos });
-  
+
   registerCommand('aportar', { handler: handleAportar });
   registerCommand('provaportes', { handler: handleProveedorAportes });
-  
+
   console.log('✅ Todos los comandos registrados explícitamente.');
 }
 
@@ -1673,16 +1673,16 @@ registerAllCommands();
 
 
 
-function normalizeIncomingText(text) {
+function cleanText(text) {
   try {
-    if (text == null) return ''
-    let s = String(text)
-    s = s.normalize('NFKC')
-    s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '')
-    s = s.replace(/\r\n/g, '\n')
-    return s.trim()
+    if (text == null) return '';
+    let s = String(text);
+    s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '');
+    s = s.replace(/\r\n/g, '\n');
+    s = s.replace(/ {2,}/g, ' ');
+    return s.trim();
   } catch {
-    return String(text || '').trim()
+    return String(text || '').trim();
   }
 }
 
