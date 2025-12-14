@@ -533,7 +533,7 @@ async function handleStartSubbot(ctx) {
   const name = pushName || "Usuario";
 
   await initDatabase();
-  await cleanupInactiveSubbots();
+  // await cleanupInactiveSubbots();
 
   const row = await ensureSubbotForUser(cleanPhone, name);
   if (!row) {
