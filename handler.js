@@ -1519,8 +1519,6 @@ function normalizeDigits(userOrJid){
 
 
 // ===== SISTEMA DE COMANDOS CENTRALIZADO =====
-// Importar configuración centralizada de comandos
-import { COMMAND_DEFINITIONS, generateHelpText, getCommandHelp } from './src/config/commands-config.js';
 
 // Maps para gestión de comandos
 const commandModules = new Map();
@@ -1671,7 +1669,7 @@ async function loadCommandModule(moduleName, commandName = null) {
       if (typeof module[functionName] === 'function') {
         handler = module[functionName];
       } else if (typeof module.default?.[functionName] === 'function') {
-        handler = module.default[functionName];
+        handler = module.iationName];
       }
     }
 
@@ -1738,32 +1736,8 @@ async function loadCommandModule(moduleName, commandName = null) {
   return null;
 }
 
-// Registrar comandos desde la configuración
-function registerAllCommands() {
-  // Registrar comandos desde la configuración
-  Object.entries(COMMAND_DEFINITIONS).forEach(([commandName, config]) => {
-    commandMap.set(commandName, {
-      ...config,
-      name: commandName,
-      moduleName: config.handler
-    });
-
-    // Registrar aliases
-    if (config.aliases) {
-      config.aliases.forEach(alias => {
-        commandMap.set(alias, {
-          ...config,
-          name: commandName,
-          moduleName: config.handler
-        });
-      });
-    }
-  });
-
-  console.log(`✅ ${commandMap.size} comandos registrados desde configuración centralizada`);
-}
-
-registerAllCommands();
+// Sistema simplificado: los comandos se mapean directamente en COMMAND_FUNCTION_MAP
+console.log(`✅ Sistema de comandos inicializado con ${Object.keys(COMMAND_FUNCTION_MAP).length} comandos mapeados`);
 
 
 
@@ -1900,35 +1874,65 @@ function parseCommand(text) {
 
 
 
-// Comando de ayuda integrado
+// Comando de ayuda integrado con listas interactivas (funciona en grupos y privado)
 async function handleHelpCommand(ctx) {
-  const { sock, remoteJid, sender, args } = ctx;
+  const { sock, remoteJid, sender, isGroup } = ctx;
 
-  // Si se especifica un comando, mostrar ayuda específica
-  if (args.length > 0) {
-    const commandName = args[0].toLowerCase();
-    const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
-    const isAdmin = await isSuperAdmin(userPhone);
-
-    const helpText = getCommandHelp(commandName, isAdmin);
-    if (helpText) {
-      await sock.sendMessage(remoteJid, { text: helpText });
-      return { success: true };
-    } else {
-      await sock.sendMessage(remoteJid, {
-        text: `❌ No se encontró ayuda para el comando "${commandName}"`
-      });
-      return { success: false };
-    }
-  }
-
-  // Mostrar ayuda general
   const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
   const isAdmin = await isSuperAdmin(userPhone);
-  const helpText = generateHelpText(isAdmin);
 
-  await sock.sendMessage(remoteJid, { text: helpText });
-  return { success: true };
+  // Usar lista interactiva para todos (grupos y privado)
+  return {
+    type: 'list',
+    text: '🤖 *KONMI BOT*\n\nSelecciona una categoría para ver los comandos disponibles:',
+    title: 'Menú de Comandos',
+    buttonText: 'Ver Categorías 📋',
+    footer: 'KONMI BOT © 2025',
+    sections: [
+      {
+        title: '📥 Descargas',
+        rows: [
+          { title: '/play', description: 'Audio de YouTube', rowId: '/play', id: '/play' },
+          { title: '/video', description: 'Video de YouTube', rowId: '/video', id: '/video' },
+          { title: '/tiktok', description: 'Descargar TikTok', rowId: '/tiktok', id: '/tiktok' },
+          { title: '/instagram', description: 'Descargar Instagram', rowId: '/instagram', id: '/instagram' },
+          { title: '/spotify', description: 'Buscar en Spotify', rowId: '/spotify', id: '/spotify' }
+        ]
+      },
+      {
+        title: '🤖 Inteligencia Artificial',
+        rows: [
+          { title: '/ia', description: 'Pregunta a Gemini AI', rowId: '/ia', id: '/ia' },
+          { title: '/image', description: 'Generar imagen con IA', rowId: '/image', id: '/image' },
+          { title: '/clasificar', description: 'Clasificar texto', rowId: '/clasificar', id: '/clasificar' }
+        ]
+      },
+      {
+        title: '🎵 Media',
+        rows: [
+          { title: '/sticker', description: 'Crear sticker', rowId: '/sticker', id: '/sticker' },
+          { title: '/meme', description: 'Meme aleatorio', rowId: '/meme', id: '/meme' },
+          { title: '/quote', description: 'Frase célebre', rowId: '/quote', id: '/quote' }
+        ]
+      },
+      {
+        title: '🧰 Utilidades',
+        rows: [
+          { title: '/translate', description: 'Traducir texto', rowId: '/translate', id: '/translate' },
+          { title: '/weather', description: 'Consultar clima', rowId: '/weather', id: '/weather' },
+          { title: '/ping', description: 'Verificar latencia', rowId: '/ping', id: '/ping' }
+        ]
+      },
+      {
+        title: '🤝 Subbots',
+        rows: [
+          { title: '/qr', description: 'Crear subbot con QR', rowId: '/qr', id: '/qr' },
+          { title: '/code', description: 'Crear con código', rowId: '/code', id: '/code' },
+          { title: '/mybots', description: 'Ver mis subbots', rowId: '/mybots', id: '/mybots' }
+        ]
+      }
+    ]
+  };
 }
 
 // Registrar comando de ayuda
@@ -2033,6 +2037,26 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     const { command, args } = parseCommand(text);
 
     if (!command) return false;
+
+    // Comandos que siempre funcionan aunque el bot esté off
+    const alwaysAllowedCommands = ['bot', 'status', 'ping'];
+
+    if (!alwaysAllowedCommands.includes(command.toLowerCase())) {
+      // Si es grupo, verificar si el bot está activo en ese grupo específico
+      if (isGroup) {
+        const groupActive = await getGroupBool(remoteJid, 'active');
+        if (groupActive === false) {
+          // Bot desactivado en este grupo
+          return false;
+        }
+      } else {
+        // Si es privado, verificar estado global
+        const botActive = await isBotGloballyActive();
+        if (!botActive) {
+          return false;
+        }
+      }
+    }
 
     // Buscar comando en el mapa
     const commandConfig = commandMap.get(command.toLowerCase());
