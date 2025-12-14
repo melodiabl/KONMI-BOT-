@@ -1560,10 +1560,10 @@ const COMMAND_FUNCTION_MAP = {
   // status.js
   'status': 'status',
 
-  // help.js (si existe)
-  'help': 'help',
-  'ayuda': 'help',
-  'menu': 'help',
+  // help es local, no necesita mapeo
+  // 'help': 'help',
+  // 'ayuda': 'help',
+  // 'menu': 'help',
   'comandos': 'help',
 
   // subbots.js
@@ -1878,61 +1878,114 @@ function parseCommand(text) {
 async function handleHelpCommand(ctx) {
   const { sock, remoteJid, sender, isGroup } = ctx;
 
+  console.log('[HELP] Comando help ejecutado en:', remoteJid, 'isGroup:', isGroup);
+
   const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
   const isAdmin = await isSuperAdmin(userPhone);
 
-  // Usar lista interactiva para todos (grupos y privado)
+  // Construir secciones dinámicamente
+  const sections = [
+    {
+      title: '📥 Descargas',
+      rows: [
+        { title: 'Play Audio', description: 'Descargar audio de YouTube', rowId: 'help_play', id: 'help_play' },
+        { title: 'Video', description: 'Descargar video de YouTube', rowId: 'help_video', id: 'help_video' },
+        { title: 'TikTok', description: 'Descargar videos de TikTok', rowId: 'help_tiktok', id: 'help_tiktok' },
+        { title: 'Instagram', description: 'Descargar de Instagram', rowId: 'help_instagram', id: 'help_instagram' },
+        { title: 'Spotify', description: 'Buscar música en Spotify', rowId: 'help_spotify', id: 'help_spotify' }
+      ]
+    },
+    {
+      title: '🤖 Inteligencia Artificial',
+      rows: [
+        { title: 'IA Gemini', description: 'Pregunta a la IA', rowId: 'help_ia', id: 'help_ia' },
+        { title: 'Generar Imagen', description: 'Crear imagen con IA', rowId: 'help_image', id: 'help_image' },
+        { title: 'Clasificar', description: 'Clasificar texto', rowId: 'help_clasificar', id: 'help_clasificar' }
+      ]
+    },
+    {
+      title: '🎨 Media & Stickers',
+      rows: [
+        { title: 'Sticker', description: 'Crear sticker de imagen/video', rowId: 'help_sticker', id: 'help_sticker' },
+        { title: 'Meme', description: 'Meme aleatorio', rowId: 'help_meme', id: 'help_meme' },
+        { title: 'Quote', description: 'Frase motivacional', rowId: 'help_quote', id: 'help_quote' }
+      ]
+    },
+    {
+      title: '🧰 Utilidades',
+      rows: [
+        { title: 'Traducir', description: 'Traducir texto', rowId: 'help_translate', id: 'help_translate' },
+        { title: 'Clima', description: 'Consultar el clima', rowId: 'help_weather', id: 'help_weather' },
+        { title: 'Ping', description: 'Verificar latencia del bot', rowId: 'help_ping', id: 'help_ping' }
+      ]
+    },
+    {
+      title: '👥 Grupo',
+      rows: [
+        { title: 'Bot On/Off', description: 'Activar/desactivar bot', rowId: 'help_bot', id: 'help_bot' },
+        { title: 'Info Grupo', description: 'Info del grupo', rowId: 'help_groupinfo', id: 'help_groupinfo' }
+      ]
+    }
+  ];
+
+  // Agregar sección de admin si es admin
+  if (isAdmin) {
+    sections.push({
+      title: '⚙️ Admin',
+      rows: [
+        { title: 'Subbots QR', description: 'Crear subbot con QR', rowId: 'help_qr', id: 'help_qr' },
+        { title: 'Subbots Code', description: 'Crear con código', rowId: 'help_code', id: 'help_code' },
+        { title: 'Mis Bots', description: 'Ver mis subbots', rowId: 'help_mybots', id: 'help_mybots' }
+      ]
+    });
+  }
+
+  console.log('[HELP] Retornando lista con', sections.length, 'secciones');
+
   return {
     type: 'list',
-    text: '🤖 *KONMI BOT*\n\nSelecciona una categoría para ver los comandos disponibles:',
-    title: 'Menú de Comandos',
-    buttonText: 'Ver Categorías 📋',
-    footer: 'KONMI BOT © 2025',
-    sections: [
-      {
-        title: '📥 Descargas',
-        rows: [
-          { title: '/play', description: 'Audio de YouTube', rowId: '/play', id: '/play' },
-          { title: '/video', description: 'Video de YouTube', rowId: '/video', id: '/video' },
-          { title: '/tiktok', description: 'Descargar TikTok', rowId: '/tiktok', id: '/tiktok' },
-          { title: '/instagram', description: 'Descargar Instagram', rowId: '/instagram', id: '/instagram' },
-          { title: '/spotify', description: 'Buscar en Spotify', rowId: '/spotify', id: '/spotify' }
-        ]
-      },
-      {
-        title: '🤖 Inteligencia Artificial',
-        rows: [
-          { title: '/ia', description: 'Pregunta a Gemini AI', rowId: '/ia', id: '/ia' },
-          { title: '/image', description: 'Generar imagen con IA', rowId: '/image', id: '/image' },
-          { title: '/clasificar', description: 'Clasificar texto', rowId: '/clasificar', id: '/clasificar' }
-        ]
-      },
-      {
-        title: '🎵 Media',
-        rows: [
-          { title: '/sticker', description: 'Crear sticker', rowId: '/sticker', id: '/sticker' },
-          { title: '/meme', description: 'Meme aleatorio', rowId: '/meme', id: '/meme' },
-          { title: '/quote', description: 'Frase célebre', rowId: '/quote', id: '/quote' }
-        ]
-      },
-      {
-        title: '🧰 Utilidades',
-        rows: [
-          { title: '/translate', description: 'Traducir texto', rowId: '/translate', id: '/translate' },
-          { title: '/weather', description: 'Consultar clima', rowId: '/weather', id: '/weather' },
-          { title: '/ping', description: 'Verificar latencia', rowId: '/ping', id: '/ping' }
-        ]
-      },
-      {
-        title: '🤝 Subbots',
-        rows: [
-          { title: '/qr', description: 'Crear subbot con QR', rowId: '/qr', id: '/qr' },
-          { title: '/code', description: 'Crear con código', rowId: '/code', id: '/code' },
-          { title: '/mybots', description: 'Ver mis subbots', rowId: '/mybots', id: '/mybots' }
-        ]
-      }
-    ]
+    text: '🤖 *KONMI BOT - MENÚ PRINCIPAL*\n\n¡Hola! Soy tu asistente de WhatsApp.\n\nSelecciona una categoría para ver los comandos disponibles:',
+    title: '📋 Menú de Comandos',
+    buttonText: 'Ver Categorías',
+    footer: `KONMI BOT © 2025 | ${isAdmin ? '👑 Admin' : '👤 Usuario'}`,
+    sections: sections
   };
+}
+
+// Manejador para respuestas del menú help
+async function handleHelpResponse(ctx) {
+  const { sock, remoteJid, args } = ctx;
+
+  const helpTexts = {
+    help_play: '🎵 *Comando: /play*\n\nDescarga audio de YouTube.\n\n*Uso:*\n/play <nombre o URL>\n\n*Ejemplo:*\n/play despacito\n/play https://youtube.com/watch?v=...',
+    help_video: '🎬 *Comando: /video*\n\nDescarga video de YouTube.\n\n*Uso:*\n/video <nombre o URL>\n\n*Ejemplo:*\n/video tutorial javascript',
+    help_tiktok: '📱 *Comando: /tiktok*\n\nDescarga videos de TikTok.\n\n*Uso:*\n/tiktok <URL>\n\n*Ejemplo:*\n/tiktok https://vm.tiktok.com/...',
+    help_instagram: '📷 *Comando: /instagram*\n\nDescarga contenido de Instagram.\n\n*Uso:*\n/instagram <URL>\n\n*Ejemplo:*\n/instagram https://instagram.com/p/...',
+    help_spotify: '🎧 *Comando: /spotify*\n\nBusca música en Spotify.\n\n*Uso:*\n/spotify <búsqueda>\n\n*Ejemplo:*\n/spotify bad bunny',
+    help_ia: '🤖 *Comando: /ia*\n\nPregunta a Gemini AI.\n\n*Uso:*\n/ia <pregunta>\n\n*Ejemplo:*\n/ia explícame qué es javascript',
+    help_image: '🎨 *Comando: /image*\n\nGenera imagen con IA.\n\n*Uso:*\n/image <descripción>\n\n*Ejemplo:*\n/image un gato astronauta',
+    help_clasificar: '📊 *Comando: /clasificar*\n\nClasifica texto.\n\n*Uso:*\n/clasificar <texto>\n\n*Ejemplo:*\n/clasificar este producto es excelente',
+    help_sticker: '✨ *Comando: /sticker*\n\nCrea sticker de imagen o video.\n\n*Uso:*\nEnvía una imagen o video con el caption /sticker\n\nO responde a una imagen/video con /sticker',
+    help_meme: '😂 *Comando: /meme*\n\nMeme aleatorio.\n\n*Uso:*\n/meme',
+    help_quote: '💭 *Comando: /quote*\n\nFrase motivacional.\n\n*Uso:*\n/quote',
+    help_translate: '🌐 *Comando: /translate*\n\nTraduce texto.\n\n*Uso:*\n/translate <idioma> <texto>\n\n*Ejemplo:*\n/translate en hola mundo',
+    help_weather: '🌤️ *Comando: /weather*\n\nConsulta el clima.\n\n*Uso:*\n/weather <ciudad>\n\n*Ejemplo:*\n/weather Madrid',
+    help_ping: '🏓 *Comando: /ping*\n\nVerifica latencia del bot.\n\n*Uso:*\n/ping',
+    help_bot: '🤖 *Comando: /bot*\n\nActiva o desactiva el bot en este grupo.\n\n*Uso:*\n/bot on - Activar\n/bot off - Desactivar\n/bot status - Ver estado',
+    help_groupinfo: 'ℹ️ *Comando: /groupinfo*\n\nMuestra información del grupo.\n\n*Uso:*\n/groupinfo',
+    help_qr: '📱 *Comando: /qr*\n\nCrea un subbot con código QR.\n\n*Uso:*\n/qr\n\n*Nota:* Solo para administradores',
+    help_code: '🔑 *Comando: /code*\n\nCrea subbot con código de emparejamiento.\n\n*Uso:*\n/code <número>\n\n*Ejemplo:*\n/code 34612345678',
+    help_mybots: '🤖 *Comando: /mybots*\n\nVer tus subbots activos.\n\n*Uso:*\n/mybots'
+  };
+
+  const helpKey = args[0] || '';
+  const helpText = helpTexts[helpKey];
+
+  if (helpText) {
+    return { text: helpText };
+  }
+
+  return { text: '❌ No se encontró información para esa opción. Usa /help para ver el menú.' };
 }
 
 // Registrar comando de ayuda
@@ -1954,6 +2007,22 @@ commandMap.set('menu', {
   description: 'Mostrar menú',
   isLocal: true
 });
+
+// Registrar manejadores para respuestas del menú
+for (const key of Object.keys({
+  help_play: 1, help_video: 1, help_tiktok: 1, help_instagram: 1, help_spotify: 1,
+  help_ia: 1, help_image: 1, help_clasificar: 1, help_sticker: 1, help_meme: 1,
+  help_quote: 1, help_translate: 1, help_weather: 1, help_ping: 1, help_bot: 1,
+  help_groupinfo: 1, help_qr: 1, help_code: 1, help_mybots: 1
+})) {
+  commandMap.set(key, {
+    handler: handleHelpResponse,
+    category: 'Sistema',
+    description: 'Respuesta de menú',
+    isLocal: true
+  });
+}
+
 commandMap.set('comandos', {
   handler: handleHelpCommand,
   category: 'Básicos',
@@ -2275,97 +2344,126 @@ export async function analyzeContentWithAI(text, context = "") {
 
 // Helpers avanzados para listas/botones en grupos (nativeFlow)
 async function sendListFixedV2(sock, jid, result, ctx) {
-  const isGroup = typeof jid === 'string' && jid.endsWith('@g.us')
-  const opts = buildSendOptions(result, ctx)
+  const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
+  const opts = buildSendOptions(result, ctx);
 
-  const classicPayload = {
-    text: result.text || 'Elige una opción de la lista',
-    title: result.title || undefined,
-    footer: result.footer || undefined,
-    buttonText: result.buttonText || 'Ver opciones',
-    sections: (result.sections || []).map(sec => ({
-      title: sec.title || '',
-      rows: (sec.rows || []).map(r => ({
-        title: r.title || 'Opción',
-        description: r.description || '',
-        rowId: r.rowId || r.id || r.command || r.text || 'noop'
-      }))
-    }))
+  console.log('[sendListV2] Enviando lista a:', jid, 'isGroup:', isGroup);
+
+  // Formato 1: Lista interactiva nativa (funciona en grupos y privado con baileys reciente)
+  const interactiveMessage = {
+    body: { text: result.text || 'Elige una opción' },
+    footer: result.footer ? { text: result.footer } : undefined,
+    header: result.title ? { title: result.title, hasMediaAttachment: false } : undefined,
+    nativeFlowMessage: {
+      buttons: [{
+        name: 'single_select',
+        buttonParamsJson: JSON.stringify({
+          title: result.buttonText || 'Ver opciones',
+          sections: (result.sections || []).map(sec => ({
+            title: sec.title || '',
+            rows: (sec.rows || []).map(r => ({
+              header: r.title || 'Opción',
+              title: r.title || 'Opción',
+              description: r.description || '',
+              id: r.rowId || r.id || 'noop'
+            }))
+          }))
+        })
+      }]
+    }
+  };
+
+  // Intentar formato interactivo primero
+  try {
+    await sock.sendMessage(jid, {
+      viewOnceMessage: {
+        message: {
+          interactiveMessage
+        }
+      }
+    }, opts);
+    console.log('[sendListV2] ✅ Formato interactivo enviado');
+    return true;
+  } catch (err1) {
+    console.log('[sendListV2] ⚠️ Formato interactivo falló:', err1?.message);
   }
 
-  const interactivePayload = {
-    viewOnceMessage: {
-      message: {
-        interactiveMessage: {
-          header: result.title ? {
-            title: result.title,
-            hasMediaAttachment: false
-          } : undefined,
-          body: {
-            text: result.text || 'Elige una opción'
-          },
-          footer: result.footer ? {
-            text: result.footer
-          } : undefined,
-          nativeFlowMessage: {
-            buttons: [{
-              name: "single_select",
-              buttonParamsJson: JSON.stringify({
-                title: result.buttonText || "Ver opciones",
-                sections: (result.sections || []).map(sec => ({
-                  title: sec.title || '',
-                  rows: (sec.rows || []).map(r => ({
-                    header: r.title || 'Opción',
-                    title: r.title || 'Opción',
-                    description: r.description || '',
-                    id: r.rowId || r.id || r.command || 'noop'
-                  }))
-                }))
-              })
-            }]
-          },
-          contextInfo: {
-            mentionedJid: result.mentions || []
-          }
+  // Formato 2: Lista clásica (privado)
+  if (!isGroup) {
+    try {
+      const classicPayload = {
+        text: result.text || 'Elige una opción',
+        title: result.title,
+        footer: result.footer,
+        buttonText: result.buttonText || 'Ver opciones',
+        sections: (result.sections || []).map(sec => ({
+          title: sec.title || '',
+          rows: (sec.rows || []).map(r => ({
+            title: r.title || 'Opción',
+            description: r.description || '',
+            rowId: r.rowId || r.id || 'noop'
+          }))
+        }))
+      };
+      await sock.sendMessage(jid, classicPayload, opts);
+      console.log('[sendListV2] ✅ Formato clásico enviado');
+      return true;
+    } catch (err2) {
+      console.log('[sendListV2] ⚠️ Formato clásico falló:', err2?.message);
+    }
+  }
+
+  // Formato 3: Botones simples (fallback para grupos)
+  try {
+    const buttons = [];
+    let counter = 1;
+    for (const sec of result.sections || []) {
+      for (const r of sec.rows || []) {
+        if (counter <= 3) { // WhatsApp limita a 3 botones
+          buttons.push({
+            buttonId: r.rowId || r.id || 'noop',
+            buttonText: { displayText: r.title || 'Opción' },
+            type: 1
+          });
+          counter++;
         }
       }
     }
-  }
 
-  try {
-    await sock.sendMessage(jid, classicPayload, opts)
-    console.log('[sendListV2] formato clásico enviado')
-    return true
-  } catch (err1) {
-    console.log('[sendListV2] formato clásico falló:', err1?.message || err1)
-
-    if (isGroup) {
-      try {
-        await sock.sendMessage(jid, interactivePayload, opts)
-        console.log('[sendListV2] formato interactivo enviado (grupo)')
-        return true
-      } catch (err2) {
-        console.log('[sendListV2] formato interactivo falló:', err2?.message || err2)
-      }
+    if (buttons.length > 0) {
+      await sock.sendMessage(jid, {
+        text: result.text || 'Elige una opción',
+        footer: result.footer,
+        buttons: buttons,
+        headerType: 1
+      }, opts);
+      console.log('[sendListV2] ✅ Botones simples enviados');
+      return true;
     }
+  } catch (err3) {
+    console.log('[sendListV2] ⚠️ Botones simples fallaron:', err3?.message);
   }
 
-  console.log('[sendListV2] usando fallback texto plano')
-  let txt = (result.text || result.title || 'Menú') + '\n\n'
+  // Formato 4: Texto plano (último recurso)
+  console.log('[sendListV2] 📝 Usando fallback texto plano');
+  let txt = (result.text || result.title || 'Menú') + '\n\n';
   for (const sec of result.sections || []) {
-    if (sec.title) txt += `*${sec.title}*\n`
+    if (sec.title) txt += `*${sec.title}*\n`;
     for (const r of sec.rows || []) {
-      txt += `- ${r.title}${r.description ? ` (${r.description})` : ''}\n`
-      txt += `  Usa: ${r.rowId}\n`
+      txt += `• ${r.title}`;
+      if (r.description) txt += ` - ${r.description}`;
+      txt += `\n  Comando: ${r.rowId || r.id}\n`;
     }
-    txt += '\n'
+    txt += '\n';
   }
 
   try {
-    await sock.sendMessage(jid, { text: txt }, opts)
-    return true
-  } catch {
-    return false
+    await sock.sendMessage(jid, { text: txt }, opts);
+    console.log('[sendListV2] ✅ Texto plano enviado');
+    return true;
+  } catch (err4) {
+    console.error('[sendListV2] ❌ Todo falló:', err4);
+    return false;
   }
 }
 
