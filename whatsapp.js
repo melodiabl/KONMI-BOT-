@@ -13,7 +13,81 @@ import { fileURLToPath, pathToFileURL } from 'url'
 import logger from './src/config/logger.js'
 import { isSuperAdmin, setPrimaryOwner } from './src/config/global-config.js'
 import { initStore } from './src/utils/utils/store.js'
-import { extractText } from './src/utils/text-extractor.js'
+m// port { extractText } from './src/utils/textextractor.js'
+// ==============================================================================
+// Funciones locales de normalización y extracción de texto
+// Estas funciones reemplazan al módulo './src/utils/text-extractor.js'.
+function normalizeIncomingText(text) {
+  try {
+    if (text == null) return '';
+    let s = String(text);
+    s = s.normalize('NFKC');
+    s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '');
+    s = s.replace(/\r\n/g, '\n');
+    s = s.replace(/ {2,}/g, ' ');
+    return s.trim().toUpperCase();
+  } catch {
+    return String(text || '').trim().toUpperCase();
+  }
+}
+
+function extractText(msg) {
+  try {
+    if (!msg || typeof msg !== 'object') return '';
+    const m = msg.message || msg;
+    // Captura de texto básico y captions
+    const basic = (
+      m.conversation ||
+      m.extendedTextMessage?.text ||
+      m.imageMessage?.caption ||
+      m.videoMessage?.caption ||
+      m.documentMessage?.caption ||
+      m.documentWithCaptionMessage?.message?.documentMessage?.caption ||
+      m.audioMessage?.caption ||
+      ''
+    );
+    if (basic) return normalizeIncomingText(basic);
+    // Botones
+    const btn =
+      m.buttonsResponseMessage?.selectedButtonId ||
+      m.templateButtonReplyMessage?.selectedId ||
+      m.buttonReplyMessage?.selectedButtonId ||
+      '';
+    if (btn) return normalizeIncomingText(btn);
+    // Listas (fila seleccionada)
+    const list = m.listResponseMessage;
+    if (list) {
+      const rowId =
+        list.singleSelectReply?.selectedRowId ||
+        list.singleSelectReply?.selectedId ||
+        list.title ||
+        '';
+      if (rowId) return normalizeIncomingText(rowId);
+    }
+    // Mensajes anidados (view once, ephermal, etc.)
+    const nested =
+      m.viewOnceMessage?.message ||
+      m.viewOnceMessageV2?.message ||
+      m.viewOnceMessageV2Extension?.message ||
+      m.ephemeralMessage?.message ||
+      m.documentWithCaptionMessage?.message ||
+      null;
+    if (nested) {
+      const out = extractText(nested);
+      if (out) return out;
+    }
+    return '';
+  } catch (error) {
+    console.error('[extractText]', error?.message);
+    return '';
+  }
+}
+
+// Compatibilidad: alias que reenvía a extractText
+function extractTextFromMessage(msg) {
+  return extractText(msg);
+}
+
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
