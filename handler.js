@@ -1669,7 +1669,7 @@ async function loadCommandModule(moduleName, commandName = null) {
       if (typeof module[functionName] === 'function') {
         handler = module[functionName];
       } else if (typeof module.default?.[functionName] === 'function') {
-        handler = module.iationName];
+        handler = module.default[functionName];
       }
     }
 
