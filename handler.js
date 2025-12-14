@@ -1874,6 +1874,7 @@ function parseCommand(text) {
   const specialCommands = [
     // Categorías
     'cat_descargas', 'cat_ia', 'cat_media', 'cat_utilidades', 'cat_grupo', 'cat_admin',
+    'cat_entretenimiento', 'cat_archivos', 'cat_aportes',
     // Comandos individuales
     'help_play', 'help_video', 'help_tiktok', 'help_instagram', 'help_spotify',
     'help_ia', 'help_image', 'help_clasificar', 'help_sticker', 'help_meme',
@@ -1905,11 +1906,14 @@ async function handleHelpCommand(ctx) {
     {
       title: '📋 Categorías Disponibles',
       rows: [
-        { title: '📥 Descargas', description: 'YouTube, TikTok, Instagram, Spotify', rowId: 'cat_descargas', id: 'cat_descargas' },
+        { title: '📥 Descargas', description: 'YouTube, TikTok, Instagram, Facebook, Twitter', rowId: 'cat_descargas', id: 'cat_descargas' },
         { title: '🤖 Inteligencia Artificial', description: 'IA, Generar imágenes, Clasificar', rowId: 'cat_ia', id: 'cat_ia' },
-        { title: '🎨 Media & Stickers', description: 'Stickers, Memes, Quotes', rowId: 'cat_media', id: 'cat_media' },
-        { title: '🧰 Utilidades', description: 'Traducir, Clima, Ping', rowId: 'cat_utilidades', id: 'cat_utilidades' },
-        { title: '👥 Grupo', description: 'Bot on/off, Info del grupo', rowId: 'cat_grupo', id: 'cat_grupo' }
+        { title: '🎨 Media & Stickers', description: 'Stickers, Memes, TTS, Wallpapers', rowId: 'cat_media', id: 'cat_media' },
+        { title: '🧰 Utilidades', description: 'Traducir, Clima, Ping, Horóscopo', rowId: 'cat_utilidades', id: 'cat_utilidades' },
+        { title: '🎮 Entretenimiento', description: 'Juegos, Trivia, Chistes, Encuestas', rowId: 'cat_entretenimiento', id: 'cat_entretenimiento' },
+        { title: '📁 Archivos', description: 'Guardar, Descargar, Mis archivos', rowId: 'cat_archivos', id: 'cat_archivos' },
+        { title: '👥 Grupo', description: 'Administración de grupos, Configuración', rowId: 'cat_grupo', id: 'cat_grupo' },
+        { title: '📊 Aportes & Pedidos', description: 'Sistema de aportes y pedidos', rowId: 'cat_aportes', id: 'cat_aportes' }
       ]
     }
   ];
@@ -1918,7 +1922,7 @@ async function handleHelpCommand(ctx) {
   if (isAdmin) {
     sections[0].rows.push({
       title: '⚙️ Administración',
-      description: 'Subbots, Gestión avanzada',
+      description: 'Subbots, Sistema, Logs, Broadcast',
       rowId: 'cat_admin',
       id: 'cat_admin'
     });
@@ -1996,12 +2000,20 @@ async function handleHelpResponse(ctx) {
     return {
       text: `🎨 *COMANDOS DE MEDIA & STICKERS*
 
-✨ */sticker*
+✨ */sticker* (también */s*)
    Crear sticker de imagen o video
    Uso: Envía imagen/video con /sticker
    O responde a una imagen con /sticker
 
-😂 */meme*
+�️* */wallpaper* <búsqueda>
+   Buscar wallpapers
+   Ejemplo: /wallpaper naturaleza
+
+�️ */tots* <texto>
+   Convertir texto a voz
+   Ejemplo: /tts Hola mundo
+
+� */meme*U
    Meme aleatorio
    Ejemplo: /meme
 
@@ -2048,6 +2060,34 @@ async function handleHelpResponse(ctx) {
    Mostrar información del grupo
    Ejemplo: /groupinfo
 
+⚙️ */settings* (también */config*)
+   Configuración del grupo
+   Ejemplo: /settings
+   ⚠️ Solo admins pueden usarlo
+
+👢 */kick* @usuario
+   Expulsar usuario del grupo
+   Ejemplo: /kick @usuario
+   ⚠️ Solo admins pueden usarlo
+
+⬆️ */promote* @usuario
+   Promover usuario a admin
+   Ejemplo: /promote @usuario
+   ⚠️ Solo admins pueden usarlo
+
+⬇️ */demote* @usuario
+   Quitar admin a usuario
+   Ejemplo: /demote @usuario
+   ⚠️ Solo admins pueden usarlo
+
+🔒 */lock*
+   Cerrar grupo (solo admins pueden escribir)
+   ⚠️ Solo admins pueden usarlo
+
+🔓 */unlock*
+   Abrir grupo (todos pueden escribir)
+   ⚠️ Solo admins pueden usarlo
+
 💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
@@ -2064,13 +2104,120 @@ async function handleHelpResponse(ctx) {
 🔑 */code* <número>
    Crear subbot con código de emparejamiento
    Ejemplo: /code 34612345678
-   Proceso: Envías número → Recibes código → Introduces código
    ⚠️ Solo para administradores
 
-🤖 */mybots*
+🤖 */mybots* (también */bots*)
    Ver tus subbots activos
-   Muestra: Lista, estado, tiempo de actividad
+   Ejemplo: /mybots
+
+📊 */stats* (también */estadisticas*)
+   Estadísticas del sistema
+   Ejemplo: /stats
+
+📋 */logs*
+   Ver logs del sistema
+   Ejemplo: /logs
+
+📢 */broadcast* <mensaje> (también */bc*)
+   Enviar mensaje a todos los grupos
+   Ejemplo: /broadcast Hola a todos
    ⚠️ Solo para administradores
+
+🔄 */update*
+   Actualizar el sistema
+   ⚠️ Solo para administradores
+
+📤 */export*
+   Exportar datos del sistema
+   ⚠️ Solo para administradores
+
+💡 *Tip:* Usa /help para volver al menú principal`
+    };
+  }
+
+  if (category === 'cat_entretenimiento') {
+    return {
+      text: `🎮 *COMANDOS DE ENTRETENIMIENTO*
+
+🎲 */game* (también */juego*)
+   Juegos interactivos
+   Ejemplo: /game
+
+🧠 */trivia*
+   Preguntas de trivia
+   Ejemplo: /trivia
+
+😂 */joke*
+   Chiste aleatorio
+   Ejemplo: /joke
+
+🔮 */horoscope* <signo> (también */horoscopo*)
+   Horóscopo del día
+   Ejemplo: /horoscope aries
+
+📊 */poll* <pregunta> (también */encuesta*)
+   Crear encuesta
+   Ejemplo: /poll ¿Cuál prefieres?
+
+📰 */fact*
+   Dato curioso aleatorio
+   Ejemplo: /fact
+
+💡 *Tip:* Usa /help para volver al menú principal`
+    };
+  }
+
+  if (category === 'cat_archivos') {
+    return {
+      text: `📁 *COMANDOS DE ARCHIVOS*
+
+💾 */guardar* <nombre>
+   Guardar archivo (responde a un archivo)
+   Ejemplo: /guardar mi_documento
+
+📥 */descargar* <nombre>
+   Descargar archivo guardado
+   Ejemplo: /descargar mi_documento
+
+📋 */archivos*
+   Ver todos los archivos disponibles
+   Ejemplo: /archivos
+
+📂 */misarchivos*
+   Ver mis archivos guardados
+   Ejemplo: /misarchivos
+
+💡 *Tip:* Usa /help para volver al menú principal`
+    };
+  }
+
+  if (category === 'cat_aportes') {
+    return {
+      text: `📊 *COMANDOS DE APORTES & PEDIDOS*
+
+➕ */addaporte* <descripción>
+   Agregar un nuevo aporte
+   Ejemplo: /addaporte Nueva función de descarga
+
+📋 */aportes*
+   Ver todos los aportes
+   Ejemplo: /aportes
+
+📝 */myaportes* (también */misaportes*)
+   Ver mis aportes
+   Ejemplo: /myaportes
+
+🔍 */aporteestado* <ID>
+   Ver estado de un aporte
+   Ejemplo: /aporteestado 123
+
+🙏 */pedido* <descripción>
+   Hacer un pedido o solicitud
+   Ejemplo: /pedido Necesito ayuda con...
+
+📜 */pedidos* (también */mispedidos*)
+   Ver pedidos
+   Ejemplo: /pedidos
 
 💡 *Tip:* Usa /help para volver al menú principal`
     };
@@ -2136,6 +2283,7 @@ commandMap.set('menu', {
 for (const key of Object.keys({
   // Categorías
   cat_descargas: 1, cat_ia: 1, cat_media: 1, cat_utilidades: 1, cat_grupo: 1, cat_admin: 1,
+  cat_entretenimiento: 1, cat_archivos: 1, cat_aportes: 1,
   // Comandos individuales
   help_play: 1, help_video: 1, help_tiktok: 1, help_instagram: 1, help_spotify: 1,
   help_ia: 1, help_image: 1, help_clasificar: 1, help_sticker: 1, help_meme: 1,
@@ -2374,6 +2522,7 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       'bot', 'status', 'ping', 'help', 'ayuda', 'menu', 'comandos',
       // Categorías del menú help
       'cat_descargas', 'cat_ia', 'cat_media', 'cat_utilidades', 'cat_grupo', 'cat_admin',
+      'cat_entretenimiento', 'cat_archivos', 'cat_aportes',
       // Respuestas del menú help
       'help_play', 'help_video', 'help_tiktok', 'help_instagram', 'help_spotify',
       'help_ia', 'help_image', 'help_clasificar', 'help_sticker', 'help_meme',
