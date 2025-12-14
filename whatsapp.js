@@ -1327,6 +1327,15 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const rawText = extractText(message);
   const pushName = message?.pushName || null;
 
+  // ✅ LOG SIEMPRE VISIBLE
+  console.log('[WHATSAPP] 📨 Mensaje recibido:', {
+    texto: rawText.substring(0, 50),
+    esComando: /^[\\/!.#?$~]/.test(rawText),
+    chat: remoteJid.substring(0, 20) + '...',
+    esGrupo: isGroup,
+    deMi: fromMe
+  });
+
   // ✅ LOG DE DEBUG CRÍTICO
   if (process.env.TRACE_ROUTER === 'true') {
     logMessage('DEBUG', 'MESSAGE', 'Texto extraído del mensaje', {
@@ -1578,9 +1587,12 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 
   // ✅ DISPATCH MEJORADO
   try {
+    console.log('[WHATSAPP] 🚀 Llamando a dispatch con texto:', rawText);
+
     // Usamos el dispatch importado directamente de handler.js
     if (typeof dispatch === 'function') {
       const handled = await dispatch(ctx, runtimeContext);
+      console.log('[WHATSAPP] ✅ Dispatch retornó:', handled);
 
       if (process.env.TRACE_ROUTER === 'true') {
         logMessage('INFO', 'DISPATCH', `Resultado: ${handled === true ? '✅ MANEJADO' : '⏭️ NO MANEJADO'}`, {

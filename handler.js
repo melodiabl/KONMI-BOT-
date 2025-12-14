@@ -2105,10 +2105,12 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message));
     const { command, args } = parseCommand(text);
 
+    console.log('[DISPATCH] Texto:', text, '| Comando:', command, '| Args:', args);
+
     if (!command) return false;
 
     // Comandos que siempre funcionan aunque el bot esté off
-    const alwaysAllowedCommands = ['bot', 'status', 'ping'];
+    const alwaysAllowedCommands = ['bot', 'status', 'ping', 'help', 'ayuda', 'menu', 'comandos'];
 
     if (!alwaysAllowedCommands.includes(command.toLowerCase())) {
       // Si es grupo, verificar si el bot está activo en ese grupo específico
@@ -2129,7 +2131,12 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
 
     // Buscar comando en el mapa
     const commandConfig = commandMap.get(command.toLowerCase());
-    if (!commandConfig) return false;
+    console.log('[DISPATCH] CommandConfig encontrado:', !!commandConfig, '| isLocal:', commandConfig?.isLocal);
+
+    if (!commandConfig) {
+      console.log('[DISPATCH] ❌ Comando no encontrado en commandMap:', command);
+      return false;
+    }
 
     // Verificar permisos de admin si es necesario
     if (commandConfig.admin) {
@@ -2147,6 +2154,7 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
 
     // Si es comando local, usar handler directo
     if (commandConfig.isLocal && typeof commandConfig.handler === 'function') {
+      console.log('[DISPATCH] ✅ Usando handler local para:', command);
       handler = commandConfig.handler;
     } else {
       // Cargar módulo dinámicamente, pasando el nombre del comando
@@ -2176,8 +2184,12 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       commandConfig
     };
 
+    console.log('[DISPATCH] 🚀 Ejecutando handler para:', command);
     const result = await handler(params, commandMap);
+    console.log('[DISPATCH] 📤 Resultado tipo:', result?.type || 'text', '| hasText:', !!result?.text);
+
     await sendResult(sock, remoteJid, result, ctx);
+    console.log('[DISPATCH] ✅ Comando ejecutado exitosamente:', command);
 
     return true;
 
