@@ -2533,8 +2533,9 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     if (!alwaysAllowedCommands.includes(command.toLowerCase())) {
       // Si es grupo, verificar si el bot está activo en ese grupo específico
       if (isGroup) {
-        const groupActive = await getGroupBool(remoteJid, 'active');
-        console.log('[DISPATCH] 🔍 Verificando estado del bot en grupo:', groupActive !== false ? '✅ ACTIVO' : '❌ INACTIVO');
+        // Por defecto el bot está ACTIVO (true), solo se desactiva si explícitamente está en false
+        const groupActive = await getGroupBool(remoteJid, 'active', true); // DEFAULT: true (activo)
+        console.log('[DISPATCH] 🔍 Estado del bot en grupo:', groupActive ? '✅ ACTIVO' : '❌ INACTIVO');
 
         if (groupActive === false) {
           // Bot desactivado en este grupo
