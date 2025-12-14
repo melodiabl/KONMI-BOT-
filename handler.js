@@ -2800,131 +2800,60 @@ function buildSendOptions(result, ctx) {
   return opts;
 }
 
-// Helpers avanzados para listas/botones en grupos (nativeFlow)
+// Función simplificada para enviar listas que funciona en grupos y privado
 async function sendListFixedV2(sock, jid, result, ctx) {
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const opts = buildSendOptions(result, ctx);
 
-  console.log('[sendListV2] Enviando lista a:', jid, 'isGroup:', isGroup);
+  console.log('[sendListV2] 📤 Enviando lista a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
 
-  // Formato 1: Lista interactiva nativa (funciona en grupos y privado con baileys reciente)
-  const interactiveMessage = {
-    body: { text: result.text || 'Elige una opción' },
-    footer: result.footer ? { text: result.footer } : undefined,
-    header: result.title ? { title: result.title, hasMediaAttachment: false } : undefined,
-    nativeFlowMessage: {
-      buttons: [{
-        name: 'single_select',
-        buttonParamsJson: JSON.stringify({
-          title: result.buttonText || 'Ver opciones',
-          sections: (result.sections || []).map(sec => ({
-            title: sec.title || '',
-            rows: (sec.rows || []).map(r => ({
-              header: r.title || 'Opción',
-              title: r.title || 'Opción',
-              description: r.description || '',
-              id: r.rowId || r.id || 'noop'
-            }))
-          }))
-        })
-      }]
-    }
+  // Preparar payload de lista clásica (funciona en privado y algunos grupos)
+  const listPayload = {
+    text: result.text || 'Elige una opción',
+    footer: result.footer || 'KONMI BOT',
+    title: result.title,
+    buttonText: result.buttonText || 'Ver opciones',
+    sections: (result.sections || []).map(sec => ({
+      title: sec.title || '',
+      rows: (sec.rows || []).map(r => ({
+        title: r.title || 'Opción',
+        description: r.description || '',
+        rowId: r.rowId || r.id || 'noop'
+      }))
+    }))
   };
 
-  // Intentar formato interactivo primero (solo en privado por ahora)
-  if (!isGroup) {
-    try {
-      await sock.sendMessage(jid, {
-        viewOnceMessage: {
-          message: {
-            interactiveMessage
-          }
-        }
-      }, opts);
-      console.log('[sendListV2] ✅ Formato interactivo enviado');
-      return true;
-    } catch (err1) {
-      console.log('[sendListV2] ⚠️ Formato interactivo falló:', err1?.message);
-    }
+  // Intentar enviar lista clásica primero
+  try {
+    await sock.sendMessage(jid, listPayload, opts);
+    console.log('[sendListV2] ✅ Lista clásica enviada exitosamente');
+    return true;
+  } catch (err1) {
+    console.log('[sendListV2] ⚠️ Lista clásica falló:', err1?.message);
   }
 
-  // Formato 2: Lista clásica (privado)
-  if (!isGroup) {
-    try {
-      const classicPayload = {
-        text: result.text || 'Elige una opción',
-        title: result.title,
-        footer: result.footer,
-        buttonText: result.buttonText || 'Ver opciones',
-        sections: (result.sections || []).map(sec => ({
-          title: sec.title || '',
-          rows: (sec.rows || []).map(r => ({
-            title: r.title || 'Opción',
-            description: r.description || '',
-            rowId: r.rowId || r.id || 'noop'
-          }))
-        }))
-      };
-      await sock.sendMessage(jid, classicPayload, opts);
-      console.log('[sendListV2] ✅ Formato clásico enviado');
-      return true;
-    } catch (err2) {
-      console.log('[sendListV2] ⚠️ Formato clásico falló:', err2?.message);
-    }
-  }
-
-  // Formato 3: Botones simples (preferido para grupos)
-  if (isGroup) {
-    try {
-      const buttons = [];
-      let counter = 1;
-      for (const sec of result.sections || []) {
-        for (const r of sec.rows || []) {
-          if (counter <= 3) { // WhatsApp limita a 3 botones
-            buttons.push({
-              buttonId: r.rowId || r.id || 'noop',
-              buttonText: { displayText: r.title || 'Opción' },
-              type: 1
-            });
-            counter++;
-          }
-        }
-      }
-
-      if (buttons.length > 0) {
-        await sock.sendMessage(jid, {
-          text: result.text || 'Elige una opción',
-          footer: result.footer,
-          buttons: buttons,
-          headerType: 1
-        }, opts);
-        console.log('[sendListV2] ✅ Botones simples enviados');
-        return true;
-      }
-    } catch (err3) {
-      console.log('[sendListV2] ⚠️ Botones simples fallaron:', err3?.message);
-    }
-  }
-
-  // Formato 4: Texto plano (último recurso)
+  // Fallback: Texto plano con todas las opciones
   console.log('[sendListV2] 📝 Usando fallback texto plano');
-  let txt = (result.text || result.title || 'Menú') + '\n\n';
+  let txt = `${result.text || 'Menú'}\n\n`;
+
   for (const sec of result.sections || []) {
     if (sec.title) txt += `*${sec.title}*\n`;
     for (const r of sec.rows || []) {
       txt += `• ${r.title}`;
       if (r.description) txt += ` - ${r.description}`;
-      txt += `\n  Comando: ${r.rowId || r.id}\n`;
+      txt += `\n`;
     }
     txt += '\n';
   }
+
+  txt += `\n💡 *Tip:* Escribe el nombre de la categoría para ver sus comandos.`;
 
   try {
     await sock.sendMessage(jid, { text: txt }, opts);
     console.log('[sendListV2] ✅ Texto plano enviado');
     return true;
-  } catch (err4) {
-    console.error('[sendListV2] ❌ Todo falló:', err4);
+  } catch (err2) {
+    console.error('[sendListV2] ❌ Todo falló:', err2);
     return false;
   }
 }
