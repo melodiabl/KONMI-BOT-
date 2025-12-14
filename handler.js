@@ -1839,12 +1839,10 @@ function normalizeIncomingText(text) {
 
     s = s.replace(/\r\n/g, '\n')
 
-    return s.trim()
-
+return s.trim().toUpperCase()
   } catch {
 
-    return String(text || '').trim()
-
+return String(text || '').trim().toUpperCase()
   }
 
 }
