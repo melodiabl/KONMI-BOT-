@@ -1872,10 +1872,13 @@ function parseCommand(text) {
 
   // Si no tiene prefijo, verificar si es un comando especial (botones del menú help)
   const specialCommands = [
+    // Categorías
+    'cat_descargas', 'cat_ia', 'cat_media', 'cat_utilidades', 'cat_grupo', 'cat_admin',
+    // Comandos individuales
     'help_play', 'help_video', 'help_tiktok', 'help_instagram', 'help_spotify',
     'help_ia', 'help_image', 'help_clasificar', 'help_sticker', 'help_meme',
     'help_quote', 'help_translate', 'help_weather', 'help_ping', 'help_bot',
-    'help_groupinfo', 'help_qr', 'help_code', 'help_mybots'
+    'help_groupinfo', 'help_qr', 'help_code', 'help_mybots', 'help_menu'
   ];
 
   if (specialCommands.includes(s)) {
@@ -1897,104 +1900,194 @@ async function handleHelpCommand(ctx) {
   const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
   const isAdmin = await isSuperAdmin(userPhone);
 
-  // Construir secciones dinámicamente
+  // Menú principal con categorías
   const sections = [
     {
-      title: '📥 Descargas',
+      title: '📋 Categorías Disponibles',
       rows: [
-        { title: 'Play Audio', description: 'Descargar audio de YouTube', rowId: 'help_play', id: 'help_play' },
-        { title: 'Video', description: 'Descargar video de YouTube', rowId: 'help_video', id: 'help_video' },
-        { title: 'TikTok', description: 'Descargar videos de TikTok', rowId: 'help_tiktok', id: 'help_tiktok' },
-        { title: 'Instagram', description: 'Descargar de Instagram', rowId: 'help_instagram', id: 'help_instagram' },
-        { title: 'Spotify', description: 'Buscar música en Spotify', rowId: 'help_spotify', id: 'help_spotify' }
-      ]
-    },
-    {
-      title: '🤖 Inteligencia Artificial',
-      rows: [
-        { title: 'IA Gemini', description: 'Pregunta a la IA', rowId: 'help_ia', id: 'help_ia' },
-        { title: 'Generar Imagen', description: 'Crear imagen con IA', rowId: 'help_image', id: 'help_image' },
-        { title: 'Clasificar', description: 'Clasificar texto', rowId: 'help_clasificar', id: 'help_clasificar' }
-      ]
-    },
-    {
-      title: '🎨 Media & Stickers',
-      rows: [
-        { title: 'Sticker', description: 'Crear sticker de imagen/video', rowId: 'help_sticker', id: 'help_sticker' },
-        { title: 'Meme', description: 'Meme aleatorio', rowId: 'help_meme', id: 'help_meme' },
-        { title: 'Quote', description: 'Frase motivacional', rowId: 'help_quote', id: 'help_quote' }
-      ]
-    },
-    {
-      title: '🧰 Utilidades',
-      rows: [
-        { title: 'Traducir', description: 'Traducir texto', rowId: 'help_translate', id: 'help_translate' },
-        { title: 'Clima', description: 'Consultar el clima', rowId: 'help_weather', id: 'help_weather' },
-        { title: 'Ping', description: 'Verificar latencia del bot', rowId: 'help_ping', id: 'help_ping' }
-      ]
-    },
-    {
-      title: '👥 Grupo',
-      rows: [
-        { title: 'Bot On/Off', description: 'Activar/desactivar bot', rowId: 'help_bot', id: 'help_bot' },
-        { title: 'Info Grupo', description: 'Info del grupo', rowId: 'help_groupinfo', id: 'help_groupinfo' }
+        { title: '📥 Descargas', description: 'YouTube, TikTok, Instagram, Spotify', rowId: 'cat_descargas', id: 'cat_descargas' },
+        { title: '🤖 Inteligencia Artificial', description: 'IA, Generar imágenes, Clasificar', rowId: 'cat_ia', id: 'cat_ia' },
+        { title: '🎨 Media & Stickers', description: 'Stickers, Memes, Quotes', rowId: 'cat_media', id: 'cat_media' },
+        { title: '🧰 Utilidades', description: 'Traducir, Clima, Ping', rowId: 'cat_utilidades', id: 'cat_utilidades' },
+        { title: '👥 Grupo', description: 'Bot on/off, Info del grupo', rowId: 'cat_grupo', id: 'cat_grupo' }
       ]
     }
   ];
 
-  // Agregar sección de admin si es admin
+  // Agregar categoría de admin si es admin
   if (isAdmin) {
-    sections.push({
-      title: '⚙️ Admin',
-      rows: [
-        { title: 'Subbots QR', description: 'Crear subbot con QR', rowId: 'help_qr', id: 'help_qr' },
-        { title: 'Subbots Code', description: 'Crear con código', rowId: 'help_code', id: 'help_code' },
-        { title: 'Mis Bots', description: 'Ver mis subbots', rowId: 'help_mybots', id: 'help_mybots' }
-      ]
+    sections[0].rows.push({
+      title: '⚙️ Administración',
+      description: 'Subbots, Gestión avanzada',
+      rowId: 'cat_admin',
+      id: 'cat_admin'
     });
   }
 
-  console.log('[HELP] Retornando lista con', sections.length, 'secciones');
+  console.log('[HELP] Retornando menú principal con', sections[0].rows.length, 'categorías');
 
   return {
     type: 'list',
-    text: '🤖 *KONMI BOT - MENÚ PRINCIPAL*\n\n¡Hola! Soy tu asistente de WhatsApp.\n\nSelecciona una categoría para ver los comandos disponibles:',
+    text: '🤖 *KONMI BOT - MENÚ PRINCIPAL*\n\n¡Hola! Soy tu asistente de WhatsApp.\n\nSelecciona una categoría para ver todos los comandos disponibles:',
     title: '📋 Menú de Comandos',
-    buttonText: 'Ver Categorías',
+    buttonText: 'Seleccionar Categoría',
     footer: `KONMI BOT © 2025 | ${isAdmin ? '👑 Admin' : '👤 Usuario'}`,
     sections: sections
   };
 }
 
-// Manejador para respuestas del menú help
+// Manejador para respuestas del menú help (categorías y comandos individuales)
 async function handleHelpResponse(ctx) {
-  const { sock, remoteJid, args } = ctx;
+  const { sock, remoteJid, args, text } = ctx;
+  const category = args[0] || text || '';
 
+  console.log('[HELP_RESPONSE] Procesando:', category);
+
+  // Manejadores de categorías
+  if (category === 'cat_descargas') {
+    return {
+      type: 'list',
+      text: '📥 *COMANDOS DE DESCARGAS*\n\nSelecciona un comando para ver su información detallada:',
+      title: '📥 Descargas',
+      buttonText: 'Ver Comandos',
+      footer: 'KONMI BOT © 2025',
+      sections: [{
+        title: '📥 Comandos Disponibles',
+        rows: [
+          { title: '/play', description: 'Descargar audio de YouTube', rowId: 'help_play', id: 'help_play' },
+          { title: '/video', description: 'Descargar video de YouTube', rowId: 'help_video', id: 'help_video' },
+          { title: '/tiktok', description: 'Descargar videos de TikTok', rowId: 'help_tiktok', id: 'help_tiktok' },
+          { title: '/instagram', description: 'Descargar de Instagram', rowId: 'help_instagram', id: 'help_instagram' },
+          { title: '/spotify', description: 'Buscar música en Spotify', rowId: 'help_spotify', id: 'help_spotify' },
+          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
+        ]
+      }]
+    };
+  }
+
+  if (category === 'cat_ia') {
+    return {
+      type: 'list',
+      text: '🤖 *COMANDOS DE INTELIGENCIA ARTIFICIAL*\n\nSelecciona un comando para ver su información detallada:',
+      title: '🤖 Inteligencia Artificial',
+      buttonText: 'Ver Comandos',
+      footer: 'KONMI BOT © 2025',
+      sections: [{
+        title: '🤖 Comandos Disponibles',
+        rows: [
+          { title: '/ia', description: 'Pregunta a Gemini AI', rowId: 'help_ia', id: 'help_ia' },
+          { title: '/image', description: 'Generar imagen con IA', rowId: 'help_image', id: 'help_image' },
+          { title: '/clasificar', description: 'Clasificar texto', rowId: 'help_clasificar', id: 'help_clasificar' },
+          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
+        ]
+      }]
+    };
+  }
+
+  if (category === 'cat_media') {
+    return {
+      type: 'list',
+      text: '🎨 *COMANDOS DE MEDIA & STICKERS*\n\nSelecciona un comando para ver su información detallada:',
+      title: '🎨 Media & Stickers',
+      buttonText: 'Ver Comandos',
+      footer: 'KONMI BOT © 2025',
+      sections: [{
+        title: '🎨 Comandos Disponibles',
+        rows: [
+          { title: '/sticker', description: 'Crear sticker de imagen/video', rowId: 'help_sticker', id: 'help_sticker' },
+          { title: '/meme', description: 'Meme aleatorio', rowId: 'help_meme', id: 'help_meme' },
+          { title: '/quote', description: 'Frase motivacional', rowId: 'help_quote', id: 'help_quote' },
+          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
+        ]
+      }]
+    };
+  }
+
+  if (category === 'cat_utilidades') {
+    return {
+      type: 'list',
+      text: '🧰 *COMANDOS DE UTILIDADES*\n\nSelecciona un comando para ver su información detallada:',
+      title: '🧰 Utilidades',
+      buttonText: 'Ver Comandos',
+      footer: 'KONMI BOT © 2025',
+      sections: [{
+        title: '🧰 Comandos Disponibles',
+        rows: [
+          { title: '/translate', description: 'Traducir texto', rowId: 'help_translate', id: 'help_translate' },
+          { title: '/weather', description: 'Consultar clima', rowId: 'help_weather', id: 'help_weather' },
+          { title: '/ping', description: 'Verificar latencia', rowId: 'help_ping', id: 'help_ping' },
+          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
+        ]
+      }]
+    };
+  }
+
+  if (category === 'cat_grupo') {
+    return {
+      type: 'list',
+      text: '👥 *COMANDOS DE GRUPO*\n\nSelecciona un comando para ver su información detallada:',
+      title: '👥 Grupo',
+      buttonText: 'Ver Comandos',
+      footer: 'KONMI BOT © 2025',
+      sections: [{
+        title: '👥 Comandos Disponibles',
+        rows: [
+          { title: '/bot', description: 'Activar/desactivar bot', rowId: 'help_bot', id: 'help_bot' },
+          { title: '/groupinfo', description: 'Info del grupo', rowId: 'help_groupinfo', id: 'help_groupinfo' },
+          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
+        ]
+      }]
+    };
+  }
+
+  if (category === 'cat_admin') {
+    return {
+      type: 'list',
+      text: '⚙️ *COMANDOS DE ADMINISTRACIÓN*\n\nSelecciona un comando para ver su información detallada:',
+      title: '⚙️ Administración',
+      buttonText: 'Ver Comandos',
+      footer: 'KONMI BOT © 2025',
+      sections: [{
+        title: '⚙️ Comandos Disponibles',
+        rows: [
+          { title: '/qr', description: 'Crear subbot con QR', rowId: 'help_qr', id: 'help_qr' },
+          { title: '/code', description: 'Crear con código', rowId: 'help_code', id: 'help_code' },
+          { title: '/mybots', description: 'Ver mis subbots', rowId: 'help_mybots', id: 'help_mybots' },
+          { title: '🔙 Volver al menú', description: 'Regresar al menú principal', rowId: 'help_menu', id: 'help_menu' }
+        ]
+      }]
+    };
+  }
+
+  // Volver al menú principal
+  if (category === 'help_menu') {
+    return await handleHelpCommand(ctx);
+  }
+
+  // Ayuda individual de comandos
   const helpTexts = {
-    help_play: '🎵 *Comando: /play*\n\nDescarga audio de YouTube.\n\n*Uso:*\n/play <nombre o URL>\n\n*Ejemplo:*\n/play despacito\n/play https://youtube.com/watch?v=...',
-    help_video: '🎬 *Comando: /video*\n\nDescarga video de YouTube.\n\n*Uso:*\n/video <nombre o URL>\n\n*Ejemplo:*\n/video tutorial javascript',
-    help_tiktok: '📱 *Comando: /tiktok*\n\nDescarga videos de TikTok.\n\n*Uso:*\n/tiktok <URL>\n\n*Ejemplo:*\n/tiktok https://vm.tiktok.com/...',
-    help_instagram: '📷 *Comando: /instagram*\n\nDescarga contenido de Instagram.\n\n*Uso:*\n/instagram <URL>\n\n*Ejemplo:*\n/instagram https://instagram.com/p/...',
-    help_spotify: '🎧 *Comando: /spotify*\n\nBusca música en Spotify.\n\n*Uso:*\n/spotify <búsqueda>\n\n*Ejemplo:*\n/spotify bad bunny',
-    help_ia: '🤖 *Comando: /ia*\n\nPregunta a Gemini AI.\n\n*Uso:*\n/ia <pregunta>\n\n*Ejemplo:*\n/ia explícame qué es javascript',
-    help_image: '🎨 *Comando: /image*\n\nGenera imagen con IA.\n\n*Uso:*\n/image <descripción>\n\n*Ejemplo:*\n/image un gato astronauta',
-    help_clasificar: '📊 *Comando: /clasificar*\n\nClasifica texto.\n\n*Uso:*\n/clasificar <texto>\n\n*Ejemplo:*\n/clasificar este producto es excelente',
-    help_sticker: '✨ *Comando: /sticker*\n\nCrea sticker de imagen o video.\n\n*Uso:*\nEnvía una imagen o video con el caption /sticker\n\nO responde a una imagen/video con /sticker',
-    help_meme: '😂 *Comando: /meme*\n\nMeme aleatorio.\n\n*Uso:*\n/meme',
-    help_quote: '💭 *Comando: /quote*\n\nFrase motivacional.\n\n*Uso:*\n/quote',
-    help_translate: '🌐 *Comando: /translate*\n\nTraduce texto.\n\n*Uso:*\n/translate <idioma> <texto>\n\n*Ejemplo:*\n/translate en hola mundo',
-    help_weather: '🌤️ *Comando: /weather*\n\nConsulta el clima.\n\n*Uso:*\n/weather <ciudad>\n\n*Ejemplo:*\n/weather Madrid',
-    help_ping: '🏓 *Comando: /ping*\n\nVerifica latencia del bot.\n\n*Uso:*\n/ping',
-    help_bot: '🤖 *Comando: /bot*\n\nActiva o desactiva el bot en este grupo.\n\n*Uso:*\n/bot on - Activar\n/bot off - Desactivar\n/bot status - Ver estado',
-    help_groupinfo: 'ℹ️ *Comando: /groupinfo*\n\nMuestra información del grupo.\n\n*Uso:*\n/groupinfo',
-    help_qr: '📱 *Comando: /qr*\n\nCrea un subbot con código QR.\n\n*Uso:*\n/qr\n\n*Nota:* Solo para administradores',
-    help_code: '🔑 *Comando: /code*\n\nCrea subbot con código de emparejamiento.\n\n*Uso:*\n/code <número>\n\n*Ejemplo:*\n/code 34612345678',
-    help_mybots: '🤖 *Comando: /mybots*\n\nVer tus subbots activos.\n\n*Uso:*\n/mybots'
+    help_play: '🎵 *Comando: /play*\n\nDescarga audio de YouTube.\n\n*Uso:*\n/play <nombre o URL>\n\n*Ejemplo:*\n/play despacito\n/play https://youtube.com/watch?v=...\n\n💡 *Tip:* También puedes usar solo el nombre de la canción.',
+    help_video: '🎬 *Comando: /video*\n\nDescarga video de YouTube.\n\n*Uso:*\n/video <nombre o URL>\n\n*Ejemplo:*\n/video tutorial javascript\n/video https://youtube.com/watch?v=...',
+    help_tiktok: '📱 *Comando: /tiktok*\n\nDescarga videos de TikTok.\n\n*Uso:*\n/tiktok <URL>\n\n*Ejemplo:*\n/tiktok https://vm.tiktok.com/...\n/tiktok https://tiktok.com/@user/video/...',
+    help_instagram: '📷 *Comando: /instagram*\n\nDescarga contenido de Instagram.\n\n*Uso:*\n/instagram <URL>\n\n*Ejemplo:*\n/instagram https://instagram.com/p/...\n/instagram https://instagram.com/reel/...',
+    help_spotify: '🎧 *Comando: /spotify*\n\nBusca música en Spotify.\n\n*Uso:*\n/spotify <búsqueda>\n\n*Ejemplo:*\n/spotify bad bunny\n/spotify reggaeton 2024',
+    help_ia: '🤖 *Comando: /ia*\n\nPregunta a Gemini AI.\n\n*Uso:*\n/ia <pregunta>\n\n*Ejemplo:*\n/ia explícame qué es javascript\n/ia cómo hacer una pizza\n/ia traduce esto al inglés',
+    help_image: '🎨 *Comando: /image*\n\nGenera imagen con IA.\n\n*Uso:*\n/image <descripción>\n\n*Ejemplo:*\n/image un gato astronauta\n/image paisaje de montañas al atardecer',
+    help_clasificar: '📊 *Comando: /clasificar*\n\nClasifica texto (positivo/negativo).\n\n*Uso:*\n/clasificar <texto>\n\n*Ejemplo:*\n/clasificar este producto es excelente\n/clasificar no me gustó nada',
+    help_sticker: '✨ *Comando: /sticker*\n\nCrea sticker de imagen o video.\n\n*Uso:*\n• Envía una imagen/video con caption /sticker\n• O responde a una imagen/video con /sticker\n\n*Ejemplo:*\n[Imagen] /sticker',
+    help_meme: '😂 *Comando: /meme*\n\nMeme aleatorio.\n\n*Uso:*\n/meme\n\n💡 *Tip:* Cada vez que uses el comando obtendrás un meme diferente.',
+    help_quote: '💭 *Comando: /quote*\n\nFrase motivacional aleatoria.\n\n*Uso:*\n/quote\n\n💡 *Tip:* Perfecto para inspirarte cada día.',
+    help_translate: '🌐 *Comando: /translate*\n\nTraduce texto a cualquier idioma.\n\n*Uso:*\n/translate <idioma> <texto>\n\n*Ejemplo:*\n/translate en hola mundo\n/translate fr buenos días\n/translate es hello world',
+    help_weather: '🌤️ *Comando: /weather*\n\nConsulta el clima actual.\n\n*Uso:*\n/weather <ciudad>\n\n*Ejemplo:*\n/weather Madrid\n/weather Buenos Aires\n/weather New York',
+    help_ping: '🏓 *Comando: /ping*\n\nVerifica la latencia del bot.\n\n*Uso:*\n/ping\n\n💡 *Tip:* Útil para verificar si el bot está funcionando correctamente.',
+    help_bot: '🤖 *Comando: /bot*\n\nControla el bot en este grupo.\n\n*Uso:*\n/bot on - Activar bot\n/bot off - Desactivar bot\n/bot status - Ver estado\n\n💡 *Tip:* Solo admins pueden usar este comando.',
+    help_groupinfo: 'ℹ️ *Comando: /groupinfo*\n\nMuestra información del grupo.\n\n*Uso:*\n/groupinfo\n\n*Información mostrada:*\n• Nombre del grupo\n• Descripción\n• Cantidad de miembros\n• Admins',
+    help_qr: '📱 *Comando: /qr*\n\nCrea un subbot con código QR.\n\n*Uso:*\n/qr\n\n*Proceso:*\n1. El bot genera un QR\n2. Escaneas con WhatsApp\n3. Se crea tu subbot personal\n\n⚠️ *Solo para administradores*',
+    help_code: '🔑 *Comando: /code*\n\nCrea subbot con código de emparejamiento.\n\n*Uso:*\n/code <número>\n\n*Ejemplo:*\n/code 34612345678\n\n*Proceso:*\n1. Envías tu número\n2. Recibes código en WhatsApp\n3. Introduces el código\n\n⚠️ *Solo para administradores*',
+    help_mybots: '🤖 *Comando: /mybots*\n\nVer tus subbots activos.\n\n*Uso:*\n/mybots\n\n*Información mostrada:*\n• Lista de tus subbots\n• Estado (activo/inactivo)\n• Tiempo de actividad'
   };
 
-  const helpKey = args[0] || '';
-  const helpText = helpTexts[helpKey];
-
+  const helpText = helpTexts[category];
   if (helpText) {
     return { text: helpText };
   }
@@ -2024,10 +2117,13 @@ commandMap.set('menu', {
 
 // Registrar manejadores para respuestas del menú
 for (const key of Object.keys({
+  // Categorías
+  cat_descargas: 1, cat_ia: 1, cat_media: 1, cat_utilidades: 1, cat_grupo: 1, cat_admin: 1,
+  // Comandos individuales
   help_play: 1, help_video: 1, help_tiktok: 1, help_instagram: 1, help_spotify: 1,
   help_ia: 1, help_image: 1, help_clasificar: 1, help_sticker: 1, help_meme: 1,
   help_quote: 1, help_translate: 1, help_weather: 1, help_ping: 1, help_bot: 1,
-  help_groupinfo: 1, help_qr: 1, help_code: 1, help_mybots: 1
+  help_groupinfo: 1, help_qr: 1, help_code: 1, help_mybots: 1, help_menu: 1
 })) {
   commandMap.set(key, {
     handler: handleHelpResponse,
@@ -2146,11 +2242,13 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     // Comandos que siempre funcionan aunque el bot esté off
     const alwaysAllowedCommands = [
       'bot', 'status', 'ping', 'help', 'ayuda', 'menu', 'comandos',
+      // Categorías del menú help
+      'cat_descargas', 'cat_ia', 'cat_media', 'cat_utilidades', 'cat_grupo', 'cat_admin',
       // Respuestas del menú help
       'help_play', 'help_video', 'help_tiktok', 'help_instagram', 'help_spotify',
       'help_ia', 'help_image', 'help_clasificar', 'help_sticker', 'help_meme',
       'help_quote', 'help_translate', 'help_weather', 'help_ping', 'help_bot',
-      'help_groupinfo', 'help_qr', 'help_code', 'help_mybots'
+      'help_groupinfo', 'help_qr', 'help_code', 'help_mybots', 'help_menu'
     ];
 
     if (!alwaysAllowedCommands.includes(command.toLowerCase())) {
