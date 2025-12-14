@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'url'
 import logger from './src/config/logger.js'
 import { isSuperAdmin, setPrimaryOwner } from './src/config/global-config.js'
 import { initStore } from './src/utils/utils/store.js'
+import { dispatch } from './handler.js'
 // port { extractText } from './src/utils/textextractor.js'
 // ==============================================================================
 // Funciones locales de normalización y extracción de texto
@@ -1578,25 +1579,7 @@ export async function handleMessage(message, customSock = null, prefix = '', run
 
   // ✅ DISPATCH MEJORADO
   try {
-    let dispatch = null;
-
-    if (global.__APP_DISPATCH && typeof global.__APP_DISPATCH === 'function') {
-      dispatch = global.__APP_DISPATCH;
-    } else {
-      try {
-        const routerResolved = path.isAbsolute(routerPath) ? routerPath : path.resolve(__dirname, routerPath);
-        const mod = await tryImportModuleWithRetries(routerResolved, { retries: 3, timeoutMs: 20000, backoffMs: 1000 });
-        dispatch = mod?.dispatch || mod?.default?.dispatch || mod?.default;
-        if (dispatch) {
-          global.__APP_ROUTER_MODULE = mod;
-          global.__APP_DISPATCH = dispatch;
-          logMessage('SUCCESS', 'ROUTER', 'dispatch cargado correctamente y cacheado');
-        }
-      } catch (e) {
-        logMessage('ERROR', 'ROUTER', 'Error importando router dinámico', { error: e?.message });
-      }
-    }
-
+    // Usamos el dispatch importado directamente de handler.js
     if (typeof dispatch === 'function') {
       const handled = await dispatch(ctx, runtimeContext);
 
@@ -1618,6 +1601,8 @@ export async function handleMessage(message, customSock = null, prefix = '', run
           }
         }
       }
+    } else {
+      logMessage('ERROR', 'HANDLER', 'dispatch no es una función');
     }
   } catch (e) {
     logMessage('ERROR', 'HANDLER', 'Error en dispatch', { error: e?.message, stack: e?.stack });

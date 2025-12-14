@@ -1526,43 +1526,148 @@ function registerCommand(command, module) {
   }
 }
 
-async function loadCommandModules() {
-  try {
-    const thisFile = fileURLToPath(import.meta.url)
-    const thisDir = path.dirname(thisFile)
-    const commandsDir = path.join(thisDir, 'src', 'commands')
-    const files = fs.readdirSync(commandsDir)
+// Imports explícitos de comandos
+import * as adminMenuCmd from './src/commands/admin-menu.js';
+import * as adminCmd from './src/commands/admin.js';
+import * as advancedFeaturesCmd from './src/commands/advanced-features.js';
+import * as aiCmd from './src/commands/ai.js';
+import * as aportesCmd from './src/commands/aportes.js';
+import * as banCmd from './src/commands/ban.js';
+import * as botControlCmd from './src/commands/bot-control.js';
+import * as botsCmd from './src/commands/bots.js';
+import * as broadcastCmd from './src/commands/broadcast.js';
+import * as callsCmd from './src/commands/calls.js';
+import * as chatManagementCmd from './src/commands/chat-management.js';
+import * as communityFeaturesCmd from './src/commands/community-features.js';
+import * as contentCmd from './src/commands/content.js';
+import * as demoCmd from './src/commands/demo.js';
+import * as diagCmd from './src/commands/diag.js';
+import * as downloadCommandsCmd from './src/commands/download-commands.js';
+import * as filesCmd from './src/commands/files.js';
+import * as gamesCmd from './src/commands/games.js';
+import * as groupAdminExtraCmd from './src/commands/group-admin-extra.js';
+import * as groupAdvancedCmd from './src/commands/group-advanced.js';
+import * as groupExtraCmd from './src/commands/group-extra.js';
+import * as groupSettingsCmd from './src/commands/group-settings.js';
+import * as groupsCmd from './src/commands/groups.js';
+import * as helpCmd from './src/commands/help.js';
+import * as imagesCmd from './src/commands/images.js';
+import * as interactiveCmd from './src/commands/interactive.js';
+import * as logsCmd from './src/commands/logs.js';
+import * as maintenanceCmd from './src/commands/maintenance.js';
+import * as mediaCmd from './src/commands/media.js';
+import * as menuCmd from './src/commands/menu.js';
+import * as messageControlCmd from './src/commands/message-control.js';
+import * as moderationCmd from './src/commands/moderation.js';
+import * as mybotsCmd from './src/commands/mybots.js';
+import * as pairingCmd from './src/commands/pairing.js';
+import * as pedidosCmd from './src/commands/pedidos.js';
+import * as performanceFeaturesCmd from './src/commands/performance-features.js';
+import * as pingCmd from './src/commands/ping.js';
+import * as pollsCmd from './src/commands/polls.js';
+import * as presenceCmd from './src/commands/presence.js';
+import * as privacyFeaturesCmd from './src/commands/privacy-features.js';
+import * as privacyCmd from './src/commands/privacy.js';
+import * as profileCmd from './src/commands/profile.js';
+import * as promoCmd from './src/commands/promo.js';
+import * as statusCmd from './src/commands/status.js';
+import * as stickersCmd from './src/commands/stickers.js';
+import * as subbotsCmd from './src/commands/subbots.js';
+import * as systemInfoCmd from './src/commands/system-info.js';
+import * as systemCmd from './src/commands/system.js';
+import * as uiInteractiveCmd from './src/commands/ui-interactive.js';
+import * as utilMathCmd from './src/commands/util-math.js';
+import * as utilsCmd from './src/commands/utils.js';
+import * as votesCmd from './src/commands/votes.js';
 
-    for (const file of files) {
-      if (!file.endsWith('.js')) continue
-      const modPath = pathToFileURL(path.join(commandsDir, file)).href
-      const mod = await import(modPath)
-      const exportsObj = mod.default || mod
+function registerAllCommands() {
+  const cmds = [
+    ['admin-menu', adminMenuCmd],
+    ['admin', adminCmd],
+    ['advanced-features', advancedFeaturesCmd],
+    ['ai', aiCmd],
+    ['aportes', aportesCmd],
+    ['ban', banCmd],
+    ['bot-control', botControlCmd],
+    ['bots', botsCmd],
+    ['broadcast', broadcastCmd],
+    ['calls', callsCmd],
+    ['chat-management', chatManagementCmd],
+    ['community-features', communityFeaturesCmd],
+    ['content', contentCmd],
+    ['demo', demoCmd],
+    ['diag', diagCmd],
+    ['download-commands', downloadCommandsCmd],
+    ['files', filesCmd],
+    ['games', gamesCmd],
+    ['group-admin-extra', groupAdminExtraCmd],
+    ['group-advanced', groupAdvancedCmd],
+    ['group-extra', groupExtraCmd],
+    ['group-settings', groupSettingsCmd],
+    ['groups', groupsCmd],
+    ['help', helpCmd],
+    ['images', imagesCmd],
+    ['interactive', interactiveCmd],
+    ['logs', logsCmd],
+    ['maintenance', maintenanceCmd],
+    ['media', mediaCmd],
+    ['menu', menuCmd],
+    ['message-control', messageControlCmd],
+    ['moderation', moderationCmd],
+    ['mybots', mybotsCmd],
+    ['pairing', pairingCmd],
+    ['pedidos', pedidosCmd],
+    ['performance-features', performanceFeaturesCmd],
+    ['ping', pingCmd],
+    ['polls', pollsCmd],
+    ['presence', presenceCmd],
+    ['privacy-features', privacyFeaturesCmd],
+    ['privacy', privacyCmd],
+    ['profile', profileCmd],
+    ['promo', promoCmd],
+    ['status', statusCmd],
+    ['stickers', stickersCmd],
+    ['subbots', subbotsCmd],
+    ['system-info', systemInfoCmd],
+    ['system', systemCmd],
+    ['ui-interactive', uiInteractiveCmd],
+    ['util-math', utilMathCmd],
+    ['utils', utilsCmd],
+    ['votes', votesCmd]
+  ];
 
-      let commandName = path.basename(file, '.js')
-      if (commandName === 'music') {
-        commandName = 'play'
-      }
-      const handler =
-        exportsObj.handler ||
-        exportsObj.default ||
-        exportsObj[Object.keys(exportsObj).find(k => typeof exportsObj[k] === 'function')]
-
-      if (typeof handler === 'function') {
-        registerCommand(commandName, {
-          ...exportsObj,
-          handler,
-          command: commandName,
-        })
-      }
+  for (const [name, mod] of cmds) {
+    const exportsObj = mod.default || mod;
+    const handler = exportsObj.handler || exportsObj.default || exportsObj[Object.keys(exportsObj).find(k => typeof exportsObj[k] === 'function')];
+    
+    if (typeof handler === 'function') {
+      registerCommand(name, { ...exportsObj, handler, command: name });
     }
-  } catch (err) {
-    console.error('Failed to load command modules', err)
   }
+
+  // Registrar comandos locales
+  registerCommand('qr', { handler: handleStartSubbot });
+  registerCommand('code', { handler: handleStartSubbot });
+  registerCommand('pair', { handler: handleStartSubbot });
+  registerCommand('stop', { handler: handleStopSubbot });
+  registerCommand('bots', { handler: handleListSubbots });
+  registerCommand('mybots', { handler: handleListSubbots });
+  registerCommand('status', { handler: handleSubbotStatus });
+  
+  registerCommand('aporte', { handler: handleAddAporte });
+  registerCommand('aportes', { handler: handleAportes });
+  registerCommand('misaportes', { handler: handleMyAportes });
+  
+  registerCommand('pedido', { handler: handlePedido });
+  registerCommand('pedidos', { handler: handlePedidos });
+  
+  registerCommand('aportar', { handler: handleAportar });
+  registerCommand('provaportes', { handler: handleProveedorAportes });
+  
+  console.log('✅ Todos los comandos registrados explícitamente.');
 }
-loadCommandModules().catch((err) =>
-  console.error('Failed to load command modules', err),
-)
+
+registerAllCommands();
 
 
 
@@ -1725,7 +1830,7 @@ async function sendResult(sock, jid, result, ctx) {
 
     }
 
-    
+
 
     if (result.type === 'buttons') {
 
@@ -1792,7 +1897,7 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
 
     }
 
-    
+
 
     return false; // Command not found
 
