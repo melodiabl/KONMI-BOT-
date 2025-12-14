@@ -2382,6 +2382,22 @@ export async function analyzeContentWithAI(text, context = "") {
   }
 }
 
+// Helper para construir opciones de envío
+function buildSendOptions(result, ctx) {
+  const opts = {};
+
+  if (result.quoted && ctx?.message) {
+    opts.quoted = ctx.message;
+  }
+
+  if (result.mentions && Array.isArray(result.mentions)) {
+    opts.contextInfo = opts.contextInfo || {};
+    opts.contextInfo.mentionedJid = result.mentions;
+  }
+
+  return opts;
+}
+
 // Helpers avanzados para listas/botones en grupos (nativeFlow)
 async function sendListFixedV2(sock, jid, result, ctx) {
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
