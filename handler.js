@@ -2305,138 +2305,106 @@ commandMap.set('comandos', {
   isLocal: true
 });
 
-// Registrar comandos que se cargan desde módulos externos
+// ===== REGISTRO COMPLETO DE COMANDOS =====
 
 // Comandos básicos
-commandMap.set('bot', {
-  moduleName: 'bot-control',
-  category: 'Admin',
-  description: 'Activar/desactivar bot en grupo',
-  admin: false // Cualquier admin del grupo puede usarlo
-});
-
-commandMap.set('ping', {
-  moduleName: 'ping',
-  category: 'Básicos',
-  description: 'Verificar latencia'
-});
-
-commandMap.set('status', {
-  moduleName: 'bot-control',
-  category: 'Admin',
-  description: 'Ver estado del bot'
-});
+commandMap.set('bot', { moduleName: 'bot-control', category: 'Admin', description: 'Activar/desactivar bot', admin: false });
+commandMap.set('ping', { moduleName: 'ping', category: 'Básicos', description: 'Verificar latencia' });
+commandMap.set('status', { moduleName: 'status', category: 'Básicos', description: 'Ver estado del bot' });
 
 // Comandos de descargas
-commandMap.set('play', {
-  moduleName: 'download-commands',
-  category: 'Descargas',
-  description: 'Descargar audio de YouTube'
-});
-
-commandMap.set('video', {
-  moduleName: 'download-commands',
-  category: 'Descargas',
-  description: 'Descargar video de YouTube'
-});
-
-commandMap.set('tiktok', {
-  moduleName: 'download-commands',
-  category: 'Descargas',
-  description: 'Descargar videos de TikTok'
-});
-
-commandMap.set('instagram', {
-  moduleName: 'download-commands',
-  category: 'Descargas',
-  description: 'Descargar de Instagram'
-});
-
-commandMap.set('spotify', {
-  moduleName: 'download-commands',
-  category: 'Descargas',
-  description: 'Buscar en Spotify'
-});
+commandMap.set('play', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
+commandMap.set('music', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
+commandMap.set('video', { moduleName: 'download-commands', category: 'Descargas', description: 'Video de YouTube' });
+commandMap.set('youtube', { moduleName: 'download-commands', category: 'Descargas', description: 'Video de YouTube' });
+commandMap.set('tiktok', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de TikTok' });
+commandMap.set('instagram', { moduleName: 'download-commands', category: 'Descargas', description: 'Contenido de Instagram' });
+commandMap.set('ig', { moduleName: 'download-commands', category: 'Descargas', description: 'Contenido de Instagram' });
+commandMap.set('facebook', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Facebook' });
+commandMap.set('fb', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Facebook' });
+commandMap.set('twitter', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Twitter' });
+commandMap.set('x', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Twitter/X' });
+commandMap.set('pinterest', { moduleName: 'download-commands', category: 'Descargas', description: 'Imágenes de Pinterest' });
+commandMap.set('spotify', { moduleName: 'download-commands', category: 'Descargas', description: 'Buscar en Spotify' });
 
 // Comandos de IA
-commandMap.set('ia', {
-  moduleName: 'ai-commands',
-  category: 'IA',
-  description: 'Pregunta a Gemini AI'
-});
-
-commandMap.set('image', {
-  moduleName: 'ai-commands',
-  category: 'IA',
-  description: 'Generar imagen con IA'
-});
-
-commandMap.set('clasificar', {
-  moduleName: 'ai-commands',
-  category: 'IA',
-  description: 'Clasificar texto'
-});
+commandMap.set('ia', { moduleName: 'ai', category: 'IA', description: 'Pregunta a Gemini AI' });
+commandMap.set('ai', { moduleName: 'ai', category: 'IA', description: 'Pregunta a Gemini AI' });
+commandMap.set('image', { moduleName: 'images', category: 'IA', description: 'Generar imagen con IA' });
+commandMap.set('clasificar', { moduleName: 'ai', category: 'IA', description: 'Clasificar texto' });
+commandMap.set('wallpaper', { moduleName: 'images', category: 'Media', description: 'Buscar wallpapers' });
 
 // Comandos de media
-commandMap.set('sticker', {
-  moduleName: 'media-commands',
-  category: 'Media',
-  description: 'Crear sticker'
-});
-
-commandMap.set('meme', {
-  moduleName: 'media-commands',
-  category: 'Media',
-  description: 'Meme aleatorio'
-});
-
-commandMap.set('quote', {
-  moduleName: 'media-commands',
-  category: 'Media',
-  description: 'Frase motivacional'
-});
+commandMap.set('sticker', { moduleName: 'stickers', category: 'Media', description: 'Crear sticker' });
+commandMap.set('s', { moduleName: 'stickers', category: 'Media', description: 'Crear sticker' });
+commandMap.set('meme', { moduleName: 'download-commands', category: 'Media', description: 'Meme aleatorio' });
+commandMap.set('quote', { moduleName: 'download-commands', category: 'Media', description: 'Frase motivacional' });
+commandMap.set('tts', { moduleName: 'media', category: 'Media', description: 'Texto a voz' });
 
 // Comandos de utilidades
-commandMap.set('translate', {
-  moduleName: 'utility-commands',
-  category: 'Utilidades',
-  description: 'Traducir texto'
-});
+commandMap.set('translate', { moduleName: 'download-commands', category: 'Utilidades', description: 'Traducir texto' });
+commandMap.set('tr', { moduleName: 'download-commands', category: 'Utilidades', description: 'Traducir texto' });
+commandMap.set('weather', { moduleName: 'download-commands', category: 'Utilidades', description: 'Consultar clima' });
+commandMap.set('clima', { moduleName: 'download-commands', category: 'Utilidades', description: 'Consultar clima' });
+commandMap.set('joke', { moduleName: 'utils', category: 'Entretenimiento', description: 'Chiste aleatorio' });
+commandMap.set('horoscope', { moduleName: 'utils', category: 'Entretenimiento', description: 'Horóscopo' });
+commandMap.set('horoscopo', { moduleName: 'utils', category: 'Entretenimiento', description: 'Horóscopo' });
+commandMap.set('fact', { moduleName: 'download-commands', category: 'Entretenimiento', description: 'Dato curioso' });
+commandMap.set('trivia', { moduleName: 'download-commands', category: 'Entretenimiento', description: 'Preguntas de trivia' });
 
-commandMap.set('weather', {
-  moduleName: 'utility-commands',
-  category: 'Utilidades',
-  description: 'Consultar clima'
-});
+// Comandos de archivos
+commandMap.set('descargar', { moduleName: 'files', category: 'Archivos', description: 'Descargar archivo' });
+commandMap.set('guardar', { moduleName: 'files', category: 'Archivos', description: 'Guardar archivo' });
+commandMap.set('archivos', { moduleName: 'files', category: 'Archivos', description: 'Ver archivos' });
+commandMap.set('misarchivos', { moduleName: 'files', category: 'Archivos', description: 'Mis archivos' });
+
+// Comandos de juegos
+commandMap.set('game', { moduleName: 'games', category: 'Entretenimiento', description: 'Juegos' });
+commandMap.set('juego', { moduleName: 'games', category: 'Entretenimiento', description: 'Juegos' });
+
+// Comandos de encuestas
+commandMap.set('poll', { moduleName: 'polls', category: 'Entretenimiento', description: 'Crear encuesta' });
+commandMap.set('encuesta', { moduleName: 'polls', category: 'Entretenimiento', description: 'Crear encuesta' });
 
 // Comandos de grupo
-commandMap.set('groupinfo', {
-  moduleName: 'group-commands',
-  category: 'Grupo',
-  description: 'Información del grupo'
-});
+commandMap.set('groupinfo', { moduleName: 'groups', category: 'Grupo', description: 'Info del grupo' });
+commandMap.set('kick', { moduleName: 'groups', category: 'Grupo', description: 'Expulsar usuario', admin: true });
+commandMap.set('promote', { moduleName: 'groups', category: 'Grupo', description: 'Promover a admin', admin: true });
+commandMap.set('demote', { moduleName: 'groups', category: 'Grupo', description: 'Quitar admin', admin: true });
+commandMap.set('lock', { moduleName: 'groups', category: 'Grupo', description: 'Cerrar grupo', admin: true });
+commandMap.set('unlock', { moduleName: 'groups', category: 'Grupo', description: 'Abrir grupo', admin: true });
+commandMap.set('settings', { moduleName: 'group-settings', category: 'Grupo', description: 'Configuración', admin: true });
+commandMap.set('config', { moduleName: 'group-settings', category: 'Grupo', description: 'Configuración', admin: true });
 
-// Comandos de admin
-commandMap.set('qr', {
-  moduleName: 'subbot-management',
-  category: 'Admin',
-  description: 'Crear subbot con QR',
-  admin: true
-});
+// Comandos de aportes y pedidos
+commandMap.set('addaporte', { moduleName: 'aportes', category: 'Aportes', description: 'Agregar aporte' });
+commandMap.set('aportes', { moduleName: 'aportes', category: 'Aportes', description: 'Ver aportes' });
+commandMap.set('myaportes', { moduleName: 'aportes', category: 'Aportes', description: 'Mis aportes' });
+commandMap.set('misaportes', { moduleName: 'aportes', category: 'Aportes', description: 'Mis aportes' });
+commandMap.set('aporteestado', { moduleName: 'aportes', category: 'Aportes', description: 'Estado de aporte' });
+commandMap.set('pedido', { moduleName: 'pedidos', category: 'Aportes', description: 'Hacer pedido' });
+commandMap.set('pedidos', { moduleName: 'pedidos', category: 'Aportes', description: 'Ver pedidos' });
+commandMap.set('mispedidos', { moduleName: 'pedidos', category: 'Aportes', description: 'Mis pedidos' });
 
-commandMap.set('code', {
-  moduleName: 'subbot-management',
-  category: 'Admin',
-  description: 'Crear subbot con código',
-  admin: true
-});
+// Comandos de admin - Subbots
+commandMap.set('qr', { moduleName: 'subbots', category: 'Admin', description: 'Crear subbot con QR', admin: true });
+commandMap.set('code', { moduleName: 'pairing', category: 'Admin', description: 'Crear subbot con código', admin: true });
+commandMap.set('mybots', { moduleName: 'mybots', category: 'Admin', description: 'Ver mis subbots', admin: true });
+commandMap.set('mibots', { moduleName: 'mybots', category: 'Admin', description: 'Ver mis subbots', admin: true });
+commandMap.set('bots', { moduleName: 'bots', category: 'Admin', description: 'Ver todos los bots', admin: true });
 
-commandMap.set('mybots', {
-  moduleName: 'subbot-management',
-  category: 'Admin',
-  description: 'Ver mis subbots',
-  admin: true
-});
+// Comandos de admin - Sistema
+commandMap.set('logs', { moduleName: 'logs', category: 'Admin', description: 'Ver logs', admin: true });
+commandMap.set('stats', { moduleName: 'system-info', category: 'Admin', description: 'Estadísticas', admin: true });
+commandMap.set('estadisticas', { moduleName: 'system-info', category: 'Admin', description: 'Estadísticas', admin: true });
+commandMap.set('export', { moduleName: 'system', category: 'Admin', description: 'Exportar datos', admin: true });
+commandMap.set('update', { moduleName: 'maintenance', category: 'Admin', description: 'Actualizar sistema', admin: true });
+commandMap.set('broadcast', { moduleName: 'broadcast', category: 'Admin', description: 'Enviar a todos', admin: true });
+commandMap.set('bc', { moduleName: 'broadcast', category: 'Admin', description: 'Enviar a todos', admin: true });
+
+// Comandos de perfil
+commandMap.set('whoami', { moduleName: 'profile', category: 'Utilidades', description: 'Mi perfil' });
+commandMap.set('profile', { moduleName: 'profile', category: 'Utilidades', description: 'Ver perfil' });
 
 async function sendResult(sock, jid, result, ctx) {
   if (!sock || !jid) return;
@@ -2801,19 +2769,19 @@ function buildSendOptions(result, ctx) {
   return opts;
 }
 
-// Función simplificada para enviar listas que funciona en grupos y privado
+// Función para enviar listas con botón visible
 async function sendListFixedV2(sock, jid, result, ctx) {
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const opts = buildSendOptions(result, ctx);
 
   console.log('[sendListV2] 📤 Enviando lista a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
 
-  // Preparar payload de lista clásica (funciona en privado y algunos grupos)
-  const listPayload = {
+  // Preparar payload de lista con formato correcto
+  const listMessage = {
     text: result.text || 'Elige una opción',
     footer: result.footer || 'KONMI BOT',
-    title: result.title,
-    buttonText: result.buttonText || 'Ver opciones',
+    title: result.title || 'Menú',
+    buttonText: result.buttonText || '📋 Ver Opciones',
     sections: (result.sections || []).map(sec => ({
       title: sec.title || '',
       rows: (sec.rows || []).map(r => ({
@@ -2824,17 +2792,24 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }))
   };
 
-  // Intentar enviar lista clásica primero
+  // Intentar enviar lista
   try {
-    await sock.sendMessage(jid, listPayload, opts);
-    console.log('[sendListV2] ✅ Lista clásica enviada exitosamente');
+    const sent = await sock.sendMessage(jid, listMessage, opts);
+    console.log('[sendListV2] ✅ Lista enviada:', sent ? 'con éxito' : 'sin confirmación');
+
+    // Verificar si realmente se envió como lista
+    if (sent && sent.message) {
+      const hasListButton = sent.message.listMessage || sent.message.buttonsMessage;
+      console.log('[sendListV2] 📊 Tipo de mensaje enviado:', hasListButton ? 'Lista/Botones' : 'Texto');
+    }
+
     return true;
   } catch (err1) {
-    console.log('[sendListV2] ⚠️ Lista clásica falló:', err1?.message);
+    console.log('[sendListV2] ⚠️ Error al enviar lista:', err1?.message);
+    console.log('[sendListV2] 📝 Intentando fallback a texto plano...');
   }
 
   // Fallback: Texto plano con todas las opciones
-  console.log('[sendListV2] 📝 Usando fallback texto plano');
   let txt = `${result.text || 'Menú'}\n\n`;
 
   for (const sec of result.sections || []) {
@@ -2851,7 +2826,7 @@ async function sendListFixedV2(sock, jid, result, ctx) {
 
   try {
     await sock.sendMessage(jid, { text: txt }, opts);
-    console.log('[sendListV2] ✅ Texto plano enviado');
+    console.log('[sendListV2] ✅ Texto plano enviado como fallback');
     return true;
   } catch (err2) {
     console.error('[sendListV2] ❌ Todo falló:', err2);
