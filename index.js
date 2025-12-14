@@ -74,7 +74,7 @@ import {
 async function restoreSubbotsOnBoot() {
     try {
         const mod = await import("./src/services/subbot-manager.js");
-        const clean = await mod.cleanOrphanSubbots?.().catch(() => 0);
+        const clean = 0;
         const restored = await mod.restoreActiveSubbots?.().catch(() => 0);
         console.log(`♻️ Subbots autostart (boot): restaurados=${restored || 0}, limpieza=${clean || 0}`);
     } catch (e) {
