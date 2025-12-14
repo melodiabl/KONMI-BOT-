@@ -1821,6 +1821,13 @@ registerCommand('/mybots', mybots, ['/mibots']);
 
 registerCommand('/bots', bots);
 
+async function handleNuevo(ctx) {
+  // Simple handler for /nuevo
+  return { success: true, message: 'Nuevo comando ejecutado' };
+}
+
+registerCommand('/nuevo', handleNuevo);
+
 
 
 
