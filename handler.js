@@ -1513,362 +1513,72 @@ function normalizeDigits(userOrJid){
 
 }
 
-function isOwner(usuario){
-
-  try { const env = onlyDigits(process.env.OWNER_WHATSAPP_NUMBER||''); if (env && normalizeDigits(usuario)===env) return true } catch {}
-
-  try { const base = onlyDigits(global.BOT_BASE_NUMBER||''); if (base && normalizeDigits(usuario)===base) return true } catch {}
-
-  try { const first = Array.isArray(global.owner)&&global.owner[0]?.[0]; if (first && normalizeDigits(usuario)===onlyDigits(first)) return true } catch {}
-
-  return false
-
-}
 
 
 
 
 
-// =========================
+const commandMap = new Map()
 
-// Command Handlers
-
-// =========================
-
-
-
-async function menu(ctx) {
-
-  const who = (ctx && (ctx.sender || ctx.usuario || ctx.remoteJid)) || ''
-
-  const whoTag = typeof who === 'string' && who.includes('@') ? who.split('@')[0] : String(who)
-
-
-
-  const buttons = [
-
-    { text: '📋 Todos los Comandos', command: '/help' },
-
-    { text: '🤖 Mis Sub-bots', command: '/mybots' },
-
-    { text: '📥 Descargar Media', command: '/video' },
-
-    { text: '🎯 Interactivos', command: '/poll' },
-
-    { text: '🛠️ Utilidades', command: '/status' },
-
-    { text: '📱 Copiar Código', command: '/copy' },
-
-  ]
-
-
-
-  if (ctx.isOwner) {
-
-    buttons.push({ text: '👑 Panel Admin', command: '/admin' })
-
+function registerCommand(command, module) {
+  if (!commandMap.has(command)) {
+    commandMap.set(command, module)
   }
-
-
-
-  return sendInteractiveButtons(`🤖 *KONMI BOT v2.0*\n\n¡Hola, @${whoTag}! 👋\n\nSelecciona una opción para empezar:`, buttons)
-
 }
-
-
-
-async function status(ctx) {
-
-    const { getConnectionStatus, getBotStatus } = await import('./whatsapp.js');
-
-    const st = getConnectionStatus();
-
-    const bot = getBotStatus();
-
-    const mem = process.memoryUsage();
-
-    const os = await import('os');
-
-    const load = os.loadavg?.() || [];
-
-
-
-    const buttons = [
-
-        { text: '📊 Estado Completo', command: '/status-full' },
-
-        { text: '🖥️ Info del Servidor', command: '/serverinfo' },
-
-        { text: '🔧 Hardware', command: '/hardware' },
-
-        { text: '⏱️ Runtime', command: '/runtime' },
-
-        { text: '⚡ Ping', command: '/ping' },
-
-    ];
-
-
-
-    let msg = '📊 *ESTADO DEL BOT*\n\n';
-
-    msg += `🤖 Conexión: ${bot.connected ? '✅ Conectado' : '❌ ' + bot.connectionStatus}\n`;
-
-    if (bot.pairingNumber) msg += `🔢 Pairing: ${bot.pairingNumber}\n`;
-
-    if (bot.qrCode) msg += `📱 QR: ✅ Disponible\n`;
-
-    msg += `⏰ Uptime: ${st.status === 'connected' ? Math.round(process.uptime()) + 's' : '0s'}\n`;
-
-    msg += `💾 Memoria: RSS ${humanBytes(mem.rss)}, Heap ${humanBytes(mem.heapUsed)}\n`;
-
-    if (load.length) msg += `⚡ Carga CPU: ${load.map(n=>n.toFixed(2)).join(' | ')}\n\n`;
-
-    msg += 'Selecciona una opción para más detalles:';
-
-
-
-    return sendInteractiveButtons(msg, buttons);
-
-}
-
-
-
-
-
-// Placeholder for buildHelp until I can get all dependencies.
-
-async function buildHelp(ctx) {
-
-    return { success: true, message: 'Help command is under construction.' };
-
-}
-
-
-
-async function mybots({ usuario }){
-
-  try{
-
-    const phone = normalizeDigits(usuario)
-
-    const rows = await listUserSubbots(phone)
-
-
-
-    if(!rows.length) return { success:true, message:'📦 No tienes subbots creados.' }
-
-
-
-    let msg = `🤖 *Mis Subbots* (${rows.length})\n\n`
-
-    rows.forEach((r,i)=>{
-
-      const online = (r.status||'').toLowerCase()==='connected' || r.is_active===1 || r.is_active===true || r.is_online===true
-
-      const type = r.type || r.method || r.connection_type || 'qr'
-
-      const metadata = typeof r.metadata === 'string' ? JSON.parse(r.metadata || '{}') : r.metadata || {}
-
-
-
-      // CORRECCIÓN: Para tipo 'code', mostrar el código de pairing como principal
-
-      const pairingCode = metadata.pairingCode || '-'
-
-      const pushName = metadata.creatorPushName || 'Sin nombre'
-
-      const displayName = `KONMISUB(${pushName})`
-
-
-
-      msg += `${i+1}. *Código:* ${pairingCode}\n`
-
-      msg += `   *Identificación:* ${displayName}\n`
-
-      msg += `   *Tipo:* ${type}\n`
-
-      msg += `   *Estado:* ${online?'🟢 Online':'⚪ Offline'}\n`
-
-      msg += '\n'
-
-    })
-
-
-
-    return { success:true, message: msg.trim() }
-
-  }catch(e){
-
-    console.error('Error en mybots:', e)
-
-    return { success:false, message:'⚠️ Error listando tus subbots.' }
-
-  }
-
-}
-
-
-
-async function bots({ usuario }){
-
-  if (!isOwner(usuario)) {
-
-    return { success:false, message:'⛔ Solo el owner puede ver todos los subbots del sistema.' }
-
-  }
-
-
-
-  try{
-
-    const rows = await listAllSubbots()
-
-
-
-    if(!rows.length) return { success:true, message:'📦 No hay subbots en el sistema.' }
-
-
-
-    let msg = `🤖 *Todos los Subbots del Sistema* (${rows.length})\n\n`
-
-    rows.forEach((r,i)=>{
-
-      const online = (r.status||'').toLowerCase()==='connected' || r.is_active===1 || r.is_active===true || r.is_online===true
-
-      const type = r.type || r.method || r.connection_type || 'qr'
-
-      const metadata = typeof r.metadata === 'string' ? JSON.parse(r.metadata || '{}') : r.metadata || {}
-
-
-
-      const pairingCode = metadata.pairingCode || '-'
-
-      const pushName = metadata.creatorPushName || 'Sin nombre'
-
-      const displayName = `KONMISUB(${pushName})`
-
-      const ownerNumber = r.owner_number || 'Desconocido'
-
-
-
-      msg += `${i+1}. *Código:* ${pairingCode}\n`
-
-      msg += `   *Identificación:* ${displayName}\n`
-
-      msg += `   *Owner:* ${ownerNumber}\n`
-
-      msg += `   *Tipo:* ${type}\n`
-
-      msg += `   *Estado:* ${online?'🟢 Online':'⚪ Offline'}\n`
-
-      msg += '\n'
-
-    })
-
-
-
-    return { success:true, message: msg.trim() }
-
-  }catch(e){
-
-    console.error('Error en bots:', e)
-
-    return { success:false, message:'⚠️ Error listando subbots del sistema.' }
-
-  }
-
-}
-
-
-
-
-
-// =========================
-
-// New Dispatcher
-
-// =========================
-
-
-
-const commandMap = new Map();
-
-
-
-function registerCommand(command, handler, aliases = []) {
-
-    commandMap.set(command, handler);
-
-    for (const alias of aliases) {
-
-        commandMap.set(alias, handler);
-
-    }
-
-}
-
-
-
-registerCommand('/menu', menu);
-
-registerCommand('/help', buildHelp, ['/ayuda', '/comandos']);
-
-registerCommand('/status', status);
-
-registerCommand('/ping', () => ({ success: true, message: '🏓 Pong' }));
-
-registerCommand('/mybots', mybots, ['/mibots']);
 
 async function loadCommandModules() {
   try {
-    const thisFile = fileURLToPath(import.meta.url);
-    const thisDir = path.dirname(thisFile);
-    const commandsDir = path.join(thisDir, 'src', 'commands');
-    const files = fs.readdirSync(commandsDir);
+    const thisFile = fileURLToPath(import.meta.url)
+    const thisDir = path.dirname(thisFile)
+    const commandsDir = path.join(thisDir, 'src', 'commands')
+    const files = fs.readdirSync(commandsDir)
+
     for (const file of files) {
-      if (!file.endsWith('.js')) continue;
-      const modPath = pathToFileURL(path.join(commandsDir, file)).href;
-      const mod = await import(modPath);
-      const exportsObj = mod.default || mod;
-      for (const [name, handler] of Object.entries(exportsObj)) {
-        if (typeof handler === 'function') {
-          const cmd = '/' + name.toLowerCase();
-          if (!commandMap.has(cmd)) {
-            registerCommand(cmd, handler);
-          }
-        }
+      if (!file.endsWith('.js')) continue
+      const modPath = pathToFileURL(path.join(commandsDir, file)).href
+      const mod = await import(modPath)
+      const exportsObj = mod.default || mod
+
+      let commandName = path.basename(file, '.js')
+      if (commandName === 'music') {
+        commandName = 'play'
+      }
+      const handler =
+        exportsObj.handler ||
+        exportsObj.default ||
+        exportsObj[Object.keys(exportsObj).find(k => typeof exportsObj[k] === 'function')]
+
+      if (typeof handler === 'function') {
+        registerCommand(commandName, {
+          ...exportsObj,
+          handler,
+          command: commandName,
+        })
       }
     }
   } catch (err) {
-    console.error('Failed to load command modules', err);
+    console.error('Failed to load command modules', err)
   }
 }
-loadCommandModules().catch((err) => console.error('Failed to load command modules', err));
+loadCommandModules().catch((err) =>
+  console.error('Failed to load command modules', err),
+)
 
 
 
 
 
 function normalizeIncomingText(text) {
-
   try {
-
     if (text == null) return ''
-
     let s = String(text)
-
     s = s.normalize('NFKC')
-
     s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '')
-
     s = s.replace(/\r\n/g, '\n')
-
-return s.trim().toUpperCase()
+    return s.trim()
   } catch {
-
-return String(text || '').trim().toUpperCase()
+    return String(text || '').trim()
   }
-
 }
 
 
@@ -1956,35 +1666,35 @@ function extractText(message) {
 
 
 function parseCommand(text) {
-
   const raw = normalizeIncomingText(text)
-
   if (!raw) return { command: '', args: [] }
 
-  const prefixes = Array.from(new Set(((process.env.CMD_PREFIXES || '/!.#?$~').split('')).concat(['/', '!', '.'])))
+  const prefixes = Array.from(
+    new Set(
+      (process.env.CMD_PREFIXES || '/!.#?$~')
+        .split('')
+        .concat(['/', '!', '.']),
+    ),
+  )
 
-  const s = raw.replace(/^\s+/, '')
+  const s = raw.trim()
+  let prefixUsed = null
 
-  if (s.startsWith('/')) {
-
-    const parts = s.slice(1).trim().split(/\s+/)
-
-    return { command: `/${(parts.shift() || '').toLowerCase()}`, args: parts }
-
+  for (const p of prefixes) {
+    if (s.startsWith(p)) {
+      prefixUsed = p
+      break
+    }
   }
 
-  if (prefixes.includes(s[0])) {
-
-    const parts = s.slice(1).trim().split(/\s+/)
-
-    const token = (parts.shift() || '').toLowerCase().replace(/^[\/.!#?$~]+/, '')
-
-    return { command: `/${token}`, args: parts }
-
+  if (prefixUsed === null) {
+    return { command: '', args: [] }
   }
 
-  return { command: '', args: [] }
+  const parts = s.slice(prefixUsed.length).trim().split(/\s+/)
+  const command = parts.shift() || ''
 
+  return { command: command, args: parts }
 }
 
 
@@ -2069,17 +1779,14 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
 
 
 
-    const handler = commandMap.get(command);
+    const commandModule = commandMap.get(command)
 
+    if (commandModule && typeof commandModule.handler === 'function') {
+      const params = { ...effectiveCtx, text, command, args }
 
+      const result = await commandModule.handler(params, commandMap)
+      await sendResult(sock, remoteJid, result, ctx)
 
-    if (handler && typeof handler === 'function') {
-
-        const params = { ...effectiveCtx, text, command, args };
-
-        const result = await handler(params);
-
-        await sendResult(sock, remoteJid, result, ctx);
 
         return true;
 
