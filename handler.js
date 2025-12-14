@@ -1710,7 +1710,7 @@ function extractText(message) {
 
       )
 
-      if (base) return normalizeIncomingText(base)
+      if (base) return cleanText(base)
 
       const btnId =
 
@@ -1720,7 +1720,7 @@ function extractText(message) {
 
         obj.buttonReplyMessage?.selectedButtonId
 
-      if (btnId) return normalizeIncomingText(btnId)
+      if (btnId) return cleanText(btnId)
 
       const listResp = obj.listResponseMessage
 
@@ -1734,7 +1734,7 @@ function extractText(message) {
 
           listResp.title
 
-        if (rowId) return normalizeIncomingText(rowId)
+        if (rowId) return cleanText(rowId)
 
       }
 
@@ -1771,7 +1771,7 @@ function extractText(message) {
 
 
 function parseCommand(text) {
-  const raw = normalizeIncomingText(text)
+  const raw = cleanText(text)
   if (!raw) return { command: '', args: [] }
 
   const prefixes = Array.from(
