@@ -2141,6 +2141,8 @@ commandMap.set('comandos', {
 });
 
 // Registrar comandos que se cargan desde módulos externos
+
+// Comandos básicos
 commandMap.set('bot', {
   moduleName: 'bot-control',
   category: 'Admin',
@@ -2158,6 +2160,117 @@ commandMap.set('status', {
   moduleName: 'bot-control',
   category: 'Admin',
   description: 'Ver estado del bot'
+});
+
+// Comandos de descargas
+commandMap.set('play', {
+  moduleName: 'download-commands',
+  category: 'Descargas',
+  description: 'Descargar audio de YouTube'
+});
+
+commandMap.set('video', {
+  moduleName: 'download-commands',
+  category: 'Descargas',
+  description: 'Descargar video de YouTube'
+});
+
+commandMap.set('tiktok', {
+  moduleName: 'download-commands',
+  category: 'Descargas',
+  description: 'Descargar videos de TikTok'
+});
+
+commandMap.set('instagram', {
+  moduleName: 'download-commands',
+  category: 'Descargas',
+  description: 'Descargar de Instagram'
+});
+
+commandMap.set('spotify', {
+  moduleName: 'download-commands',
+  category: 'Descargas',
+  description: 'Buscar en Spotify'
+});
+
+// Comandos de IA
+commandMap.set('ia', {
+  moduleName: 'ai-commands',
+  category: 'IA',
+  description: 'Pregunta a Gemini AI'
+});
+
+commandMap.set('image', {
+  moduleName: 'ai-commands',
+  category: 'IA',
+  description: 'Generar imagen con IA'
+});
+
+commandMap.set('clasificar', {
+  moduleName: 'ai-commands',
+  category: 'IA',
+  description: 'Clasificar texto'
+});
+
+// Comandos de media
+commandMap.set('sticker', {
+  moduleName: 'media-commands',
+  category: 'Media',
+  description: 'Crear sticker'
+});
+
+commandMap.set('meme', {
+  moduleName: 'media-commands',
+  category: 'Media',
+  description: 'Meme aleatorio'
+});
+
+commandMap.set('quote', {
+  moduleName: 'media-commands',
+  category: 'Media',
+  description: 'Frase motivacional'
+});
+
+// Comandos de utilidades
+commandMap.set('translate', {
+  moduleName: 'utility-commands',
+  category: 'Utilidades',
+  description: 'Traducir texto'
+});
+
+commandMap.set('weather', {
+  moduleName: 'utility-commands',
+  category: 'Utilidades',
+  description: 'Consultar clima'
+});
+
+// Comandos de grupo
+commandMap.set('groupinfo', {
+  moduleName: 'group-commands',
+  category: 'Grupo',
+  description: 'Información del grupo'
+});
+
+// Comandos de admin
+commandMap.set('qr', {
+  moduleName: 'subbot-management',
+  category: 'Admin',
+  description: 'Crear subbot con QR',
+  admin: true
+});
+
+commandMap.set('code', {
+  moduleName: 'subbot-management',
+  category: 'Admin',
+  description: 'Crear subbot con código',
+  admin: true
+});
+
+commandMap.set('mybots', {
+  moduleName: 'subbot-management',
+  category: 'Admin',
+  description: 'Ver mis subbots',
+  admin: true
 });
 
 async function sendResult(sock, jid, result, ctx) {
