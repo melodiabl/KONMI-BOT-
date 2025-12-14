@@ -1526,10 +1526,137 @@ import { COMMAND_DEFINITIONS, generateHelpText, getCommandHelp } from './src/con
 const commandModules = new Map();
 const commandMap = new Map();
 
+// Mapeo completo de comandos a funciones específicas en los módulos
+const COMMAND_FUNCTION_MAP = {
+  // download-commands.js
+  'play': 'handleMusicDownload',
+  'music': 'handleMusicDownload',
+  'video': 'handleVideoDownload',
+  'youtube': 'handleVideoDownload',
+  'tiktok': 'handleTikTokDownload',
+  'instagram': 'handleInstagramDownload',
+  'ig': 'handleInstagramDownload',
+  'facebook': 'handleFacebookDownload',
+  'fb': 'handleFacebookDownload',
+  'twitter': 'handleTwitterDownload',
+  'x': 'handleTwitterDownload',
+  'pinterest': 'handlePinterestDownload',
+  'spotify': 'handleSpotifySearch',
+  'translate': 'handleTranslate',
+  'tr': 'handleTranslate',
+  'weather': 'handleWeather',
+  'clima': 'handleWeather',
+  'quote': 'handleQuote',
+  'fact': 'handleFact',
+  'trivia': 'handleTriviaCommand',
+  'meme': 'handleMemeCommand',
+
+  // ai.js
+  'ia': 'ai',
+  'ai': 'ai',
+  'clasificar': 'clasificar',
+
+  // ping.js
+  'ping': 'ping',
+
+  // status.js
+  'status': 'status',
+
+  // help.js (si existe)
+  'help': 'help',
+  'ayuda': 'help',
+  'menu': 'help',
+  'comandos': 'help',
+
+  // subbots.js
+  'mybots': 'mybots',
+  'mibots': 'mybots',
+  'bots': 'bots',
+
+  // aportes.js
+  'addaporte': 'addaporte',
+  'aportes': 'aportes',
+  'myaportes': 'myaportes',
+  'misaportes': 'myaportes',
+  'aporteestado': 'aporteestado',
+
+  // pedidos.js
+  'pedido': 'pedido',
+  'pedidos': 'pedidos',
+  'mispedidos': 'pedidos',
+
+  // stickers.js
+  'sticker': 'sticker',
+  's': 'sticker',
+
+  // images.js
+  'image': 'image',
+  'wallpaper': 'wallpaper',
+
+  // media.js
+  'tts': 'tts',
+
+  // utils.js
+  'joke': 'joke',
+  'horoscope': 'horoscope',
+  'horoscopo': 'horoscope',
+
+  // files.js
+  'descargar': 'descargar',
+  'guardar': 'guardar',
+  'archivos': 'archivos',
+  'misarchivos': 'misarchivos',
+
+  // games.js
+  'game': 'game',
+  'juego': 'game',
+
+  // polls.js
+  'poll': 'poll',
+  'encuesta': 'poll',
+
+  // groups.js
+  'kick': 'kick',
+  'promote': 'promote',
+  'demote': 'demote',
+  'lock': 'lock',
+  'unlock': 'unlock',
+
+  // group-settings.js
+  'settings': 'settings',
+  'config': 'settings',
+
+  // bot-control.js
+  'bot': 'bot',
+
+  // logs.js
+  'logs': 'logs',
+
+  // system-info.js
+  'stats': 'stats',
+  'estadisticas': 'stats',
+
+  // system.js
+  'export': 'export',
+
+  // maintenance.js
+  'update': 'update',
+
+  // broadcast.js
+  'broadcast': 'broadcast',
+  'bc': 'broadcast',
+
+  // profile.js
+  'whoami': 'whoami',
+  'profile': 'profile',
+};
+
 // Función para cargar módulo de comando dinámicamente
-async function loadCommandModule(moduleName) {
-  if (commandModules.has(moduleName)) {
-    return commandModules.get(moduleName);
+async function loadCommandModule(moduleName, commandName = null) {
+  const cacheKey = commandName ? `${moduleName}:${commandName}` : moduleName;
+
+  if (commandModules.has(cacheKey)) {
+    return commandModules.get(cacheKey);
   }
 
   try {
@@ -1538,8 +1665,18 @@ async function loadCommandModule(moduleName) {
     // Buscar el handler en diferentes formas
     let handler = null;
 
+    // 0. Si hay un mapeo específico para este comando, usarlo PRIMERO
+    if (commandName && COMMAND_FUNCTION_MAP[commandName]) {
+      const functionName = COMMAND_FUNCTION_MAP[commandName];
+      if (typeof module[functionName] === 'function') {
+        handler = module[functionName];
+      } else if (typeof module.default?.[functionName] === 'function') {
+        handler = module.default[functionName];
+      }
+    }
+
     // 1. Buscar module.handler o module.default.handler
-    if (typeof module.handler === 'function') {
+    if (!handler && typeof module.handler === 'function') {
       handler = module.handler;
     } else if (typeof module.default?.handler === 'function') {
       handler = module.default.handler;
@@ -1588,7 +1725,7 @@ async function loadCommandModule(moduleName) {
           return await handler(ctx);
         }
       };
-      commandModules.set(moduleName, wrappedModule);
+      commandModules.set(cacheKey, wrappedModule);
       return wrappedModule;
     } else {
       console.warn(`⚠️ No se encontró handler en el módulo: ${moduleName}`);
@@ -1889,8 +2026,8 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     if (commandConfig.isLocal && typeof commandConfig.handler === 'function') {
       handler = commandConfig.handler;
     } else {
-      // Cargar módulo dinámicamente
-      const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler);
+      // Cargar módulo dinámicamente, pasando el nombre del comando
+      const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler, command);
       if (!module || !module.handler) {
         await sock.sendMessage(remoteJid, {
           text: `⚠️ Comando "${command}" no disponible temporalmente.`
