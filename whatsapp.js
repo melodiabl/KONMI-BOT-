@@ -46,14 +46,14 @@ function extractText(msg) {
       m.audioMessage?.caption ||
       ''
     );
-    if (basic) return normalizeIncomingText(basic);
+    if (basic) return cleanText(basic);
     // Botones
     const btn =
       m.buttonsResponseMessage?.selectedButtonId ||
       m.templateButtonReplyMessage?.selectedId ||
       m.buttonReplyMessage?.selectedButtonId ||
       '';
-    if (btn) return normalizeIncomingText(btn);
+    if (btn) return cleanText(btn);
     // Listas (fila seleccionada)
     const list = m.listResponseMessage;
     if (list) {
@@ -62,7 +62,7 @@ function extractText(msg) {
         list.singleSelectReply?.selectedId ||
         list.title ||
         '';
-      if (rowId) return normalizeIncomingText(rowId);
+      if (rowId) return cleanText(rowId);
     }
     // Mensajes anidados (view once, ephermal, etc.)
     const nested =
