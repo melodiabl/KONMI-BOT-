@@ -1534,11 +1534,65 @@ async function loadCommandModule(moduleName) {
 
   try {
     const module = await import(`./src/commands/${moduleName}.js`);
-    const handler = module.default?.handler || module.handler || module.default || module[Object.keys(module).find(k => typeof module[k] === 'function')];
+
+    // Buscar el handler en diferentes formas
+    let handler = null;
+
+    // 1. Buscar module.handler o module.default.handler
+    if (typeof module.handler === 'function') {
+      handler = module.handler;
+    } else if (typeof module.default?.handler === 'function') {
+      handler = module.default.handler;
+    }
+    // 2. Buscar module.default si es función
+    else if (typeof module.default === 'function') {
+      handler = module.default;
+    }
+    // 3. Buscar función con el nombre del módulo exacto
+    else if (typeof module[moduleName] === 'function') {
+      handler = module[moduleName];
+    }
+    // 4. Buscar función con nombre similar al módulo
+    else {
+      // Intentar variaciones del nombre
+      const variations = [
+        moduleName.replace(/-/g, ''),           // 'download-commands' -> 'downloadcommands'
+        moduleName.split('-').pop(),            // 'download-commands' -> 'commands'
+        moduleName.split('-')[0],               // 'download-commands' -> 'download'
+        moduleName.replace(/-/g, '_'),          // 'download-commands' -> 'download_commands'
+      ];
+
+      for (const variant of variations) {
+        if (typeof module[variant] === 'function') {
+          handler = module[variant];
+          console.log(`✅ Encontrado handler: ${variant} para módulo ${moduleName}`);
+          break;
+        }
+      }
+
+      // 5. Si aún no encontramos, buscar la primera función exportada
+      if (!handler) {
+        const functions = Object.keys(module).filter(k => typeof module[k] === 'function');
+        if (functions.length > 0) {
+          handler = module[functions[0]];
+          console.log(`✅ Usando primera función: ${functions[0]} para módulo ${moduleName}`);
+        }
+      }
+    }
 
     if (typeof handler === 'function') {
-      commandModules.set(moduleName, { ...module, handler });
-      return commandModules.get(moduleName);
+      const wrappedModule = {
+        ...module,
+        handler: async (ctx) => {
+          // Llamar al handler con el contexto
+          return await handler(ctx);
+        }
+      };
+      commandModules.set(moduleName, wrappedModule);
+      return wrappedModule;
+    } else {
+      console.warn(`⚠️ No se encontró handler en el módulo: ${moduleName}`);
+      console.warn(`   Exports disponibles:`, Object.keys(module));
     }
   } catch (error) {
     console.warn(`⚠️ No se pudo cargar el módulo: ${moduleName}`, error.message);
