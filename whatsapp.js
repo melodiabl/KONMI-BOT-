@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'url'
 import logger from './src/config/logger.js'
 import { isSuperAdmin, setPrimaryOwner } from './src/config/global-config.js'
 import { initStore } from './src/utils/utils/store.js'
-m// port { extractText } from './src/utils/textextractor.js'
+// port { extractText } from './src/utils/textextractor.js'
 // ==============================================================================
 // Funciones locales de normalización y extracción de texto
 // Estas funciones reemplazan al módulo './src/utils/text-extractor.js'.
