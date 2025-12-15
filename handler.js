@@ -2956,109 +2956,64 @@ async function sendListFixedV2(sock, jid, result, ctx) {
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const opts = buildSendOptions(result, ctx);
 
-  console.log('[sendListV2] 📤 Enviando lista con native flow a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
+  console.log('[sendListV2] 📤 Enviando native flow list a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
 
-  // Construir botones de native flow
-  const buttons = [];
-
-  for (const sec of result.sections || []) {
-    for (const r of sec.rows || []) {
-      buttons.push({
-        name: 'quick_reply',
-        buttonParamsJson: JSON.stringify({
-          display_text: r.title || 'Opción',
-          id: r.rowId || r.id || 'noop'
-        })
-      });
-    }
-  }
-
-  // Limitar a 10 botones (límite de WhatsApp)
-  const limitedButtons = buttons.slice(0, 10);
-
-  // Mensaje con native flow buttons
-  const nativeFlowMessage = {
-    text: result.text || 'Elige una opción',
-    footer: result.footer || 'KONMI BOT © 2025',
-    buttons: limitedButtons,
-    headerType: 1
-  };
-
-  // Intentar enviar con native flow (formato correcto de Wileys)
-  try {
-    const interactiveMessage = {
-      body: {
-        text: result.text || 'Elige una opción'
-      },
-      footer: {
-        text: result.footer || 'KONMI BOT © 2025'
-      },
-      header: {
-        title: result.title || '📋 Menú de Comandos',
-        hasMediaAttachment: false
-      },
-      nativeFlowMessage: {
-        buttons: limitedButtons
-      }
-    };
-
-    await sock.sendMessage(jid, {
-      interactiveMessage: interactiveMessage
-    }, opts);
-
-    console.log('[sendListV2] ✅ Native flow enviado exitosamente');
-    return true;
-  } catch (err1) {
-    console.log('[sendListV2] ⚠️ Native flow falló:', err1?.message);
-    console.log('[sendListV2] 🔄 Intentando botones simples...');
-  }
-
-  // Intentar con botones simples (formato alternativo)
-  try {
-    await sock.sendMessage(jid, {
-      text: result.text || 'Elige una opción',
-      footer: result.footer || 'KONMI BOT © 2025',
-      buttons: limitedButtons.map((btn, i) => ({
-        buttonId: JSON.parse(btn.buttonParamsJson).id,
-        buttonText: { displayText: JSON.parse(btn.buttonParamsJson).display_text },
-        type: 1
-      })),
-      headerType: 1
-    }, opts);
-
-    console.log('[sendListV2] ✅ Botones simples enviados');
-    return true;
-  } catch (err2) {
-    console.log('[sendListV2] ⚠️ Botones simples fallaron:', err2?.message);
-    console.log('[sendListV2] 🔄 Intentando list button clásico...');
-  }
-
-  // Fallback 1: List button clásico
-  const listMessage = {
-    text: result.text || 'Elige una opción',
-    footer: result.footer || 'KONMI BOT',
-    title: result.title || 'Menú',
-    buttonText: result.buttonText || '📋 Ver Opciones',
-    sections: (result.sections || []).map(sec => ({
-      title: sec.title || '',
-      rows: (sec.rows || []).map(r => ({
-        title: r.title || 'Opción',
-        description: r.description || '',
-        rowId: r.rowId || r.id || 'noop'
-      }))
+  // Preparar secciones para native flow
+  const sections = (result.sections || []).map(sec => ({
+    title: sec.title || '',
+    rows: (sec.rows || []).map(r => ({
+      header: r.title || 'Opción',
+      title: r.title || 'Opción',
+      description: r.description || '',
+      id: r.rowId || r.id || 'noop'
     }))
-  };
+  }));
 
+  // Native Flow List Button (formato Wileys)
   try {
-    await sock.sendMessage(jid, listMessage, opts);
-    console.log('[sendListV2] ✅ List button clásico enviado');
+    await sock.sendMessage(jid, {
+      viewOnceMessage: {
+        message: {
+          messageContextInfo: {
+            deviceListMetadata: {},
+            deviceListMetadataVersion: 2
+          },
+          interactiveMessage: {
+            body: {
+              text: result.text || 'Elige una opción'
+            },
+            footer: {
+              text: result.footer || 'KONMI BOT © 2025'
+            },
+            header: {
+              title: result.title || '📋 Menú de Comandos',
+              subtitle: '',
+              hasMediaAttachment: false
+            },
+            nativeFlowMessage: {
+              buttons: [
+                {
+                  name: 'single_select',
+                  buttonParamsJson: JSON.stringify({
+                    title: result.buttonText || '📋 Ver Opciones',
+                    sections: sections
+                  })
+                }
+              ]
+            }
+          }
+        }
+      }
+    }, opts);
+
+    console.log('[sendListV2] ✅ Native flow list enviado');
     return true;
-  } catch (err2) {
-    console.log('[sendListV2] ⚠️ List button falló:', err2?.message);
-    console.log('[sendListV2] 📝 Fallback final: texto plano...');
+  } catch (err) {
+    console.log('[sendListV2] ⚠️ Native flow falló:', err?.message);
+    console.log('[sendListV2] 📝 Fallback: texto plano...');
   }
 
-  // Fallback 2: Texto plano con todas las opciones
+  // Fallback: Texto plano
   let txt = `${result.text || 'Menú'}\n\n`;
   txt += `*📋 CATEGORÍAS DISPONIBLES*\n\n`;
 
@@ -3077,10 +3032,10 @@ async function sendListFixedV2(sock, jid, result, ctx) {
 
   try {
     await sock.sendMessage(jid, { text: txt }, opts);
-    console.log('[sendListV2] ✅ Texto plano enviado como fallback final');
+    console.log('[sendListV2] ✅ Texto plano enviado');
     return true;
-  } catch (err3) {
-    console.error('[sendListV2] ❌ Todo falló:', err3);
+  } catch (err2) {
+    console.error('[sendListV2] ❌ Todo falló:', err2);
     return false;
   }
 }
