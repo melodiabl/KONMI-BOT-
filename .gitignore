@@ -42,3 +42,4 @@ storage/baileys_full
 package-lock.json
 .env
 session_data/
+src/commands/pairing.js.backup

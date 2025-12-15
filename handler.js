@@ -1924,6 +1924,7 @@ async function handleHelpCommand(ctx) {
         { title: '🎮 Entretenimiento', description: 'Juegos, Trivia, Chistes', rowId: 'cat_entretenimiento', id: 'cat_entretenimiento' },
         { title: '📁 Archivos', description: 'Guardar, Descargar, Mis archivos', rowId: 'cat_archivos', id: 'cat_archivos' },
         { title: '👥 Grupo', description: 'Administración de grupos, Configuración', rowId: 'cat_grupo', id: 'cat_grupo' },
+        { title: '🤖 Subbots', description: 'Crear y gestionar tus subbots', rowId: 'cat_subbots', id: 'cat_subbots' },
         { title: '📊 Aportes & Pedidos', description: 'Sistema de aportes y pedidos', rowId: 'cat_aportes', id: 'cat_aportes' }
       ]
     }
@@ -2279,10 +2280,17 @@ async function handleHelpResponse(ctx) {
     };
   }
 
-  // Volver al menú principal
-  if (category === 'help_menu') {
-    return await handleHelpCommand(ctx);
-  }
+  if (category === 'cat_subbots') {
+    return {
+      text: `🤖 *COMANDOS DE SUBBOTS*
+
+📱 */qr*
+   Crear subbot con código QR
+   El bot te enviará un QR para escanear
+   Ejemplo: /qr
+
+🔑 */code* <número>
+   Crear su
 
   // Ayuda individual de comandos
   const helpTexts = {
@@ -2442,11 +2450,11 @@ commandMap.set('pedido', { moduleName: 'pedidos', category: 'Aportes', descripti
 commandMap.set('pedidos', { moduleName: 'pedidos', category: 'Aportes', description: 'Ver pedidos' });
 commandMap.set('mispedidos', { moduleName: 'pedidos', category: 'Aportes', description: 'Mis pedidos' });
 
-// Comandos de admin - Subbots
-commandMap.set('qr', { moduleName: 'subbots', category: 'Admin', description: 'Crear subbot con QR', admin: true });
-commandMap.set('code', { moduleName: 'pairing', category: 'Admin', description: 'Crear subbot con código', admin: true });
-commandMap.set('mybots', { moduleName: 'mybots', category: 'Admin', description: 'Ver mis subbots', admin: true });
-commandMap.set('mibots', { moduleName: 'mybots', category: 'Admin', description: 'Ver mis subbots', admin: true });
+// Comandos de Subbots (disponibles para todos)
+commandMap.set('qr', { moduleName: 'subbots', category: 'Subbots', description: 'Crear subbot con QR', admin: false });
+commandMap.set('code', { moduleName: 'pairing', category: 'Subbots', description: 'Crear subbot con código', admin: false });
+commandMap.set('mybots', { moduleName: 'mybots', category: 'Subbots', description: 'Ver mis subbots', admin: false });
+commandMap.set('mibots', { moduleName: 'mybots', category: 'Subbots', description: 'Ver mis subbots', admin: false });
 commandMap.set('bots', { moduleName: 'bots', category: 'Admin', description: 'Ver todos los bots', admin: true });
 
 // Comandos de admin - Sistema
@@ -2956,20 +2964,21 @@ async function sendListFixedV2(sock, jid, result, ctx) {
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const opts = buildSendOptions(result, ctx);
 
-  console.log('[sendListV2] 📤 Enviando native flow list a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
+  console.log('[sendListV2] 📤 Enviando lista a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
 
-  // Preparar secciones para native flow
-  const sections = (result.sections || []).map(sec => ({
-    title: sec.title || '',
-    rows: (sec.rows || []).map(r => ({
-      header: r.title || 'Opción',
-      title: r.title || 'Opción',
-      description: r.description || '',
-      id: r.rowId || r.id || 'noop'
-    }))
-  }));
+  // Preparar todas las opciones
+  const allRows = [];
+  for (const sec of result.sections || []) {
+    for (const r of sec.rows || []) {
+      allRows.push({
+        title: r.title || 'Opción',
+        description: r.description || '',
+        rowId: r.rowId || r.id || 'noop'
+      });
+    }
+  }
 
-  // Formato simple de list message (compatible con Wileys 0.4.2)
+  // MÉTODO 1: List Button (funciona mejor en privado)
   const listMessage = {
     text: result.text || 'Elige una opción',
     footer: result.footer || 'KONMI BOT © 2025',
@@ -2987,27 +2996,112 @@ async function sendListFixedV2(sock, jid, result, ctx) {
 
   try {
     await sock.sendMessage(jid, listMessage, opts);
-    console.log('[sendListV2] ✅ List message enviado');
+    console.log('[sendListV2] ✅ List button enviado');
     return true;
   } catch (err) {
-    console.log('[sendListV2] ⚠️ List message falló:', err?.message);
-    console.log('[sendListV2] 📝 Fallback: texto plano...');
+    console.log('[sendListV2] ⚠️ List button falló:', err?.message);
+    console.log('[sendListV2] 🔄 Intentando botones simples...');
   }
 
-  // Fallback: Texto plano
+  // MÉTODO 2: Botones simples (máximo 3, funciona en grupos)
+  if (allRows.length <= 3) {
+    try {
+      await sock.sendMessage(jid, {
+        text: result.text || 'Elige una opción',
+        footer: result.footer || 'KONMI BOT © 2025',
+        buttons: allRows.map((r, i) => ({
+          buttonId: r.rowId,
+          buttonText: { displayText: r.title },
+          type: 1
+        })),
+        headerType: 1
+      }, opts);
+
+      console.log('[sendListV2] ✅ Botones simples enviados');
+      return true;
+    } catch (err2) {
+      console.log('[sendListV2] ⚠️ Botones simples fallaron:', err2?.message);
+    }
+  }
+
+  // MÉTODO 3: Template buttons (alternativa para grupos)
+  if (allRows.length <= 3) {
+    try {
+      await sock.sendMessage(jid, {
+        text: result.text || 'Elige una opción',
+        footer: result.footer || 'KONMI BOT © 2025',
+        templateButtons: allRows.map((r, i) => ({
+          index: i + 1,
+          quickReplyButton: {
+            displayText: r.title,
+            id: r.rowId
+          }
+        }))
+      }, opts);
+
+      console.log('[sendListV2] ✅ Template buttons enviados');
+      return true;
+    } catch (err3) {
+      console.log('[sendListV2] ⚠️ Template buttons fallaron:', err3?.message);
+    }
+  }
+
+  // MÉTODO 4: Botones en páginas (para más de 3 opciones)
+  if (allRows.length > 3) {
+    const pages = [];
+    for (let i = 0; i < allRows.length; i += 3) {
+      pages.push(allRows.slice(i, i + 3));
+    }
+
+    // Enviar primera página
+    const page1 = pages[0];
+    const hasMorePages = pages.length > 1;
+
+    try {
+      const buttons = page1.map((r, i) => ({
+        buttonId: r.rowId,
+        buttonText: { displayText: r.title },
+        type: 1
+      }));
+
+      if (hasMorePages) {
+        buttons.push({
+          buttonId: 'help_page2',
+          buttonText: { displayText: '➡️ Más opciones' },
+          type: 1
+        });
+      }
+
+      await sock.sendMessage(jid, {
+        text: `${result.text || 'Elige una opción'}\n\n📄 Página 1 de ${pages.length}`,
+        footer: result.footer || 'KONMI BOT © 2025',
+        buttons: buttons,
+        headerType: 1
+      }, opts);
+
+      console.log('[sendListV2] ✅ Botones paginados enviados (página 1)');
+      return true;
+    } catch (err4) {
+      console.log('[sendListV2] ⚠️ Botones paginados fallaron:', err4?.message);
+    }
+  }
+
+  // FALLBACK FINAL: Texto plano con números
   let txt = `${result.text || 'Menú'}\n\n`;
   txt += `*📋 CATEGORÍAS DISPONIBLES*\n\n`;
 
+  let num = 1;
   for (const sec of result.sections || []) {
     for (const r of sec.rows || []) {
-      txt += `${r.title}\n`;
+      txt += `${num}️⃣ ${r.title}\n`;
       if (r.description) txt += `   ${r.description}\n`;
       txt += `   Comando: *${r.rowId || r.id}*\n\n`;
+      num++;
     }
   }
 
   txt += `\n💡 *Cómo usar:*\n`;
-  txt += `Escribe el comando de la categoría que quieres ver.\n`;
+  txt += `Escribe el comando de la categoría.\n`;
   txt += `Ejemplo: *cat_descargas*\n\n`;
   txt += `${result.footer || 'KONMI BOT © 2025'}`;
 
@@ -3015,8 +3109,8 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     await sock.sendMessage(jid, { text: txt }, opts);
     console.log('[sendListV2] ✅ Texto plano enviado');
     return true;
-  } catch (err2) {
-    console.error('[sendListV2] ❌ Todo falló:', err2);
+  } catch (err5) {
+    console.error('[sendListV2] ❌ Todo falló:', err5);
     return false;
   }
 }

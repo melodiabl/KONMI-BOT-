@@ -74,10 +74,11 @@ export async function qr(ctx) {
   try {
     const { isOwner, sock, remoteJid } = ctx || {};
 
-    const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
-    if (access === 'owner' && !isOwner) {
-      return { success:false, message:'⛔ Solo el owner puede usar /qr (subbots).', quoted: true }
-    }
+    // Los subbots están disponibles para todos
+    // const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
+    // if (access === 'owner' && !isOwner) {
+    //   return { success:false, message:'⛔ Solo el owner puede usar /qr (subbots).', quoted: true }
+    // }
 
     const owner = await extractPhoneNumber(ctx);
     if (!owner) {
@@ -164,10 +165,11 @@ export async function code(ctx) {
   try {
     const { isOwner, sock, remoteJid, pushName, usuarioName } = ctx || {};
 
-    const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
-    if (access === 'owner' && !isOwner) {
-      return { success:false, message:'⛔ Solo el owner puede usar /code (subbots).', quoted: true }
-    }
+    // Los subbots están disponibles para todos
+    // const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
+    // if (access === 'owner' && !isOwner) {
+    //   return { success:false, message:'⛔ Solo el owner puede usar /code (subbots).', quoted: true }
+    // }
 
     const phone = await extractPhoneNumber(ctx);
     if (!phone) {
@@ -177,37 +179,55 @@ export async function code(ctx) {
       return { success:false, message:hint }
     }
 
-    // 🔧 CORRECCIÓN: Registrar listener GLOBAL antes de crear el subbot
+    // Generar el subbot y obtener el código directamente
+    const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT' });
+    const codeValue = res?.code;
+    const pairingCode = res?.pairingCode;
+
+    console.log(`[pairing.js] 🚀 Subbot creado:`, { code: codeValue, pairingCode });
+
+    if (!codeValue) {
+      return { success: false, message: '❌ Error al crear el subbot' };
+    }
+
+    if (!pairingCode) {
+      return {
+        success: false,
+        message: `⚠️ Subbot creado (${codeValue}) pero no se generó código de vinculación. Intenta de nuevo.`
+      };
+    }
+
+    // Registrar listener para cuando se conecte (notificación post-vinculación)
     return await new Promise(async (resolve) => {
-      let globalHandler = null;
-      let codeValue = null;
+      // Primero devolver el código al usuario
+      const messageText = `✅ *Código de Vinculación Generado*\n\n` +
+        `🔢 *Código:* \`${pairingCode}\`\n` +
+        `📱 *Número:* +${phone}\n` +
+        `🆔 *SubBot ID:* ${codeValue}\n\n` +
+        `📋 *INSTRUCCIONES:*\n` +
+        `1️⃣ Abre WhatsApp en tu teléfono\n` +
+        `2️⃣ Ve a *Dispositivos vinculados*\n` +
+        `3️⃣ Toca *"Vincular con número de teléfono"*\n` +
+        `4️⃣ Ingresa este código: *${pairingCode}*\n\n` +
+        `⏱️ El código expira en 5 minutos\n` +
+        `💡 Recibirás una confirmación cuando se vincule`;
 
-      const timeout = setTimeout(() => {
-        if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
-        resolve({ success:false, message:'⏱️ Timeout esperando código de vinculación (60s). Intenta de nuevo.' })
-      }, 60000);
+      // Enviar el código inmediatamente
+      resolve({
+        success: true,
+        message: messageText,
+        mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined,
+        quoted: true
+      });
 
-      // Registrar listener GLOBAL que captura todos los eventos pairing_code
-      globalHandler = async (payload) => {
-        try {
-          const subbotCode = payload?.subbot?.code;
+      // Después registrar listener para notificación de conexión (en segundo plano)
+      try {
+        const globalHandler = async (payload) => {
+          try {
+            const subbotCode = payload?.subbot?.code;
+            if (subbotCode !== codeValue) return;
 
-          // Solo procesar si es NUESTRO subbot
-          if (!codeValue || subbotCode !== codeValue) return;
-
-          // Limpiar timeout y listener
-          clearTimeout(timeout);
-          if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
-
-          const data = payload?.data || {};
-          const pairingCode = data.pairingCode || data.code;
-
-          console.log(`[pairing.js] 🎯 Código recibido para ${codeValue}: ${pairingCode}`);
-
-          if (!pairingCode) {
-            resolve({ success:false, message:'⚠️ No se recibió código de vinculación' });
-            return;
-          }
+            offSubbotEvent('pairing_code', globalHandler);
 
           // Registrar listener para cuando se conecte (notificación post-vinculación)
           try {
