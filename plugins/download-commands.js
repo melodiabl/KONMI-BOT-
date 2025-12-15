@@ -22,6 +22,34 @@ import { createProgressNotifier } from '../utils/utils/progress-notifier.js'
 
 /* ===== Utilidades ===== */
 
+// Funcionalidad Wileys: Reacciones automáticas para descargas
+const addDownloadReaction = async (sock, message, emoji = '📥') => {
+  try {
+    if (sock && message?.key) {
+      await sock.sendMessage(message.key.remoteJid, {
+        react: { text: emoji, key: message.key }
+      });
+    }
+  } catch (error) {
+    console.error('[DOWNLOAD_REACTION] Error:', error);
+  }
+};
+
+const addCompletionReaction = async (sock, message, success = true) => {
+  try {
+    if (sock && message?.key) {
+      const emoji = success ? '✅' : '❌';
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: emoji, key: message.key }
+        });
+      }, 1000);
+    }
+  } catch (error) {
+    console.error('[COMPLETION_REACTION] Error:', error);
+  }
+};
+
 const toMediaInput = (val) => {
   if (!val) return null
   if (Buffer.isBuffer(val)) return val
@@ -334,6 +362,9 @@ async function handleMusicDownload(ctx) {
     return { success: false, message: '❌ Uso: /music <nombre o url>' }
   }
 
+  // Funcionalidad Wileys: Reacción automática al iniciar
+  await addDownloadReaction(sock, message, '🎵');
+
   const progress = createProgressNotifier({
     resolveSocket: () => Promise.resolve(sock),
     chatId: remoteJid,
@@ -362,11 +393,11 @@ async function handleMusicDownload(ctx) {
     const dl = await downloadYouTube(video.url, 'audio', (p) => {
       if (p?.percent) {
         const percent = Math.min(95, 20 + Math.floor(p.percent * 0.75))
-        
+
         // Solo actualizar si cambió significativamente
         if (Math.abs(percent - lastPercent) >= 1) {
-          const status = percent < 50 ? 'Conectando con servidor...' : 
-                        percent < 80 ? 'Descargando audio...' : 
+          const status = percent < 50 ? 'Conectando con servidor...' :
+                        percent < 80 ? 'Descargando audio...' :
                         'Procesando con FFmpeg...'
           progress.update(percent, status).catch(() => {})
           lastPercent = percent
@@ -385,6 +416,9 @@ async function handleMusicDownload(ctx) {
 
     await progress.complete('✅ Música lista')
 
+    // Funcionalidad Wileys: Reacción de completado exitoso
+    await addCompletionReaction(sock, message, true);
+
     return {
       type: 'audio',
       audio: audioInput,
@@ -395,6 +429,10 @@ async function handleMusicDownload(ctx) {
   } catch (e) {
     logger.error('Music error:', e)
     await progress.fail(e.message)
+
+    // Funcionalidad Wileys: Reacción de error
+    await addCompletionReaction(sock, message, false);
+
     return { success: false, message: `❌ Error /music: ${e.message}` }
   } finally {
     progress.cleanup?.()
@@ -437,9 +475,9 @@ async function handleVideoDownload(ctx) {
     const dl = await downloadYouTube(video.url, 'video', (p) => {
       if (p?.percent) {
         const percent = Math.min(95, 20 + Math.floor(p.percent * 0.75))
-        
+
         if (Math.abs(percent - lastPercent) >= 1) {
-          const status = percent < 40 ? 'Descargando video...' : 
+          const status = percent < 40 ? 'Descargando video...' :
                         percent < 70 ? 'Descargando audio...' :
                         percent < 90 ? 'Mezclando video y audio...' :
                         'Finalizando...'
@@ -524,7 +562,7 @@ async function handleSpotifySearch(ctx) {
     const dl = await downloadYouTube(best.url, 'audio', (p) => {
       if (p?.percent) {
         const percent = Math.min(95, 30 + Math.floor(p.percent * 0.65))
-        
+
         if (Math.abs(percent - lastPercent) >= 1) {
           const status = percent < 60 ? 'Descargando...' :
                         percent < 85 ? 'Procesando audio...' :

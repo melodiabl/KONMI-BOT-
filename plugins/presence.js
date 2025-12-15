@@ -1,14 +1,30 @@
 // src/commands/presence.js
-// Sistema de estados de presencia
+// Sistema de estados de presencia + Funcionalidades Wileys
+
+// Funcionalidad Wileys: Reacciones automáticas para presencia
+const addPresenceReaction = async (sock, message, emoji) => {
+  try {
+    if (sock && message?.key) {
+      await sock.sendMessage(message.key.remoteJid, {
+        react: { text: emoji, key: message.key }
+      });
+    }
+  } catch (error) {
+    console.error('[PRESENCE_REACTION] Error:', error);
+  }
+};
 
 export async function typing(ctx) {
-  const { sock, remoteJid, args } = ctx;
+  const { sock, remoteJid, args, message } = ctx;
 
   const duration = parseInt(args[0]) || 5; // Duración en segundos (default: 5)
 
   if (duration > 30) {
     return { text: '❌ Duración máxima: 30 segundos' };
   }
+
+  // Funcionalidad Wileys: Reacción automática
+  await addPresenceReaction(sock, message, '⌨️');
 
   try {
     // Mostrar "escribiendo..."

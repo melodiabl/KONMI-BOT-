@@ -1256,6 +1256,15 @@ const COMMAND_FUNCTION_MAP = {
   'x': 'handleTwitterDownload',
   'pinterest': 'handlePinterestDownload',
   'spotify': 'handleSpotifySearch',
+  // Descargas avanzadas (Wileys)
+  'soundcloud': 'soundcloud',
+  'reddit': 'reddit',
+  'twitch': 'twitch',
+  'dailymotion': 'dailymotion',
+  'vimeo': 'vimeo',
+  'kwai': 'kwai',
+  'bilibili': 'bilibili',
+  'downloads': 'downloads',
   'translate': 'handleTranslate',
   'tr': 'handleTranslate',
   'weather': 'handleWeather',
@@ -1308,6 +1317,11 @@ const COMMAND_FUNCTION_MAP = {
   // Juegos
   'game': 'game',
   'juego': 'game',
+  'rps': 'rps',
+  'guess': 'guess',
+  'dice': 'dice',
+  'sorteo': 'sorteo',
+  'coin': 'coin',
   // Encuestas
   'poll': 'poll',
   'encuesta': 'poll',
@@ -1356,6 +1370,62 @@ const COMMAND_FUNCTION_MAP = {
   'qrcode': 'qrcode',
   'calc': 'calc',
   'short': 'short',
+  // Nuevos comandos de utilidades (Wileys)
+  'password': 'password',
+  'convert': 'convert',
+  'email': 'email',
+  'color': 'color',
+  'timezone': 'timezone',
+  // Nuevos comandos de IA (Wileys)
+  'resume': 'resume',
+  'translate': 'translate',
+  'explain': 'explain',
+  'sentiment': 'sentiment',
+  'grammar': 'grammar',
+  'code': 'code',
+  'analyze': 'analyze',
+  'brainstorm': 'brainstorm',
+  // Nuevos comandos de juegos (Wileys)
+  'hangman': 'hangman',
+  'memory': 'memory',
+  'blackjack': 'blackjack',
+  'lottery': 'lottery',
+  // Nuevos comandos de grupos (Wileys)
+  'welcome': 'welcome',
+  'automod': 'automod',
+  'rules': 'rules',
+  'groupstats': 'groupstats',
+  'clean': 'clean',
+  // Nuevos comandos de subbots (Wileys)
+  'subbotstats': 'subbotstats',
+  'subbotmanage': 'subbotmanage',
+  'subbotmonitor': 'subbotmonitor',
+  // Nuevos comandos de música (Wileys)
+  'identify': 'identify',
+  'lyrics': 'lyrics',
+  'playlist': 'playlist',
+  'radio': 'radio',
+  'nowplaying': 'nowplaying',
+  'musichelp': 'musichelp',
+  // Nuevos comandos de media avanzado (Wileys)
+  'compress': 'compress',
+  'convert': 'convert',
+  'removebg': 'removeBackground',
+  'addtext': 'addText',
+  'gif': 'createGif',
+  'collage': 'collage',
+  'filter': 'filter',
+  'resize': 'resize',
+  'mediahelp': 'mediahelp',
+  // Nuevos comandos de seguridad (Wileys)
+  'whitelist': 'whitelist',
+  'blacklist': 'blacklist',
+  'enable2fa': 'enable2fa',
+  'verify2fa': 'verify2fa',
+  'disable2fa': 'disable2fa',
+  'spamcheck': 'spamcheck',
+  'securitylogs': 'securitylogs',
+  'securitystatus': 'securitystatus',
 };
 
 async function loadCommandModule(moduleName, commandName = null) {
@@ -1524,13 +1594,13 @@ async function handleHelpCommand(ctx) {
     title: '📋 Categorías Disponibles',
     rows: [
       { title: '📥 Descargas', description: 'YouTube, TikTok, Instagram, Facebook, Twitter', rowId: 'cat_descargas', id: 'cat_descargas' },
-      { title: '🤖 Inteligencia Artificial', description: 'IA, Generar imágenes, Clasificar', rowId: 'cat_ia', id: 'cat_ia' },
+      { title: '🤖 Inteligencia Artificial', description: 'IA, Resumir, Traducir, Explicar, Clasificar', rowId: 'cat_ia', id: 'cat_ia' },
       { title: '✨ Interactivo', description: 'Reacciones, Encuestas, Estados', rowId: 'cat_interactivo', id: 'cat_interactivo' },
       { title: '🎨 Media & Stickers', description: 'Stickers, Memes, TTS, Wallpapers', rowId: 'cat_media', id: 'cat_media' },
       { title: '🧰 Utilidades', description: 'Traducir, Clima, Ping, Horóscopo', rowId: 'cat_utilidades', id: 'cat_utilidades' },
       { title: '🎮 Entretenimiento', description: 'Juegos, Trivia, Chistes', rowId: 'cat_entretenimiento', id: 'cat_entretenimiento' },
       { title: '📁 Archivos', description: 'Guardar, Descargar, Mis archivos', rowId: 'cat_archivos', id: 'cat_archivos' },
-      { title: '👥 Grupo', description: 'Administración de grupos, Configuración', rowId: 'cat_grupo', id: 'cat_grupo' },
+      { title: '👥 Grupo', description: 'Administración, Bienvenida, Auto-moderación, Reglas', rowId: 'cat_grupo', id: 'cat_grupo' },
       { title: '🤖 Subbots', description: 'Crear y gestionar tus subbots', rowId: 'cat_subbots', id: 'cat_subbots' },
       { title: '📊 Aportes & Pedidos', description: 'Sistema de aportes y pedidos', rowId: 'cat_aportes', id: 'cat_aportes' }
     ]
@@ -1586,6 +1656,30 @@ Ejemplo: /instagram https://instagram.com/p/...
 Busca música en Spotify
 Ejemplo: /spotify bad bunny
 
+� */downloaads*
+Ver todas las plataformas de descarga
+Ejemplo: /downloads
+
+🎵 */soundcloud* <URL>
+Música de SoundCloud
+Ejemplo: /soundcloud https://soundcloud.com/...
+
+🔴 */reddit* <URL>
+Videos/imágenes de Reddit
+Ejemplo: /reddit https://reddit.com/r/...
+
+🟣 */twitch* <URL>
+Clips y videos de Twitch
+Ejemplo: /twitch https://clips.twitch.tv/...
+
+🔵 */dailymotion* <URL>
+Videos de Dailymotion
+Ejemplo: /dailymotion https://dailymotion.com/...
+
+🎥 */vimeo* <URL>
+Videos de Vimeo
+Ejemplo: /vimeo https://vimeo.com/...
+
 💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
@@ -1605,6 +1699,18 @@ Ejemplo: /image un gato astronauta
 📊 */clasificar* <texto>
 Clasificar texto (positivo/negativo)
 Ejemplo: /clasificar este producto es excelente
+
+� */iresume* <texto largo>
+Resumir texto en puntos principales
+Ejemplo: /resume Este es un texto muy largo...
+
+🌐 */translate* <idioma> <texto>
+Traducir texto a cualquier idioma
+Ejemplo: /translate english Hola mundo
+
+🧠 */explain* <concepto>
+Explicar conceptos de forma simple
+Ejemplo: /explain inteligencia artificial
 
 💡 *Tip:* Usa /help para volver al menú principal`
     };
@@ -1655,6 +1761,38 @@ Ejemplo: /weather Madrid
 Verificar latencia del bot
 Ejemplo: /ping
 
+� */iqrcode* <texto>
+Generar código QR
+Ejemplo: /qrcode https://google.com
+
+🧮 */calc* <expresión>
+Calculadora matemática
+Ejemplo: /calc 2 + 2 * 3
+
+🔐 */password* [longitud]
+Generar contraseña segura
+Ejemplo: /password 16
+
+🔄 */convert* <cantidad> <de> <a>
+Convertir unidades
+Ejemplo: /convert 100 cm m
+
+📧 */email* <dirección>
+Validar email
+Ejemplo: /email test@ejemplo.com
+
+🎨 */color* <código>
+Información de colores
+Ejemplo: /color #FF0000
+
+🌍 */timezone* <zona>
+Conversor de zonas horarias
+Ejemplo: /timezone UTC
+
+🔗 */short* <URL>
+Acortar URLs
+Ejemplo: /short https://google.com
+
 💡 *Tip:* Usa /help para volver al menú principal`
     };
   }
@@ -1665,41 +1803,43 @@ Ejemplo: /ping
 
 🤖 */bot* <on/off/status>
 Controlar el bot en este grupo
-/bot on - Activar bot
-/bot off - Desactivar bot
-/bot status - Ver estado
 ⚠️ Solo admins pueden usarlo
 
 ℹ️ */groupinfo*
 Mostrar información del grupo
-Ejemplo: /groupinfo
 
-⚙️ */settings* (también */config*)
-Configuración del grupo
-Ejemplo: /settings
-⚠️ Solo admins pueden usarlo
+📊 */groupstats*
+Estadísticas detalladas del grupo
 
 👢 */kick* @usuario
 Expulsar usuario del grupo
-Ejemplo: /kick @usuario
 ⚠️ Solo admins pueden usarlo
 
 ⬆️ */promote* @usuario
 Promover usuario a admin
-Ejemplo: /promote @usuario
 ⚠️ Solo admins pueden usarlo
 
 ⬇️ */demote* @usuario
 Quitar admin a usuario
-Ejemplo: /demote @usuario
 ⚠️ Solo admins pueden usarlo
 
-🔒 */lock*
-Cerrar grupo (solo admins pueden escribir)
+🔒 */lock* / 🔓 */unlock*
+Cerrar/abrir grupo
 ⚠️ Solo admins pueden usarlo
 
-🔓 */unlock*
-Abrir grupo (todos pueden escribir)
+👋 */welcome* <mensaje>
+Configurar mensaje de bienvenida
+⚠️ Solo admins pueden usarlo
+
+🛡️ */automod* <on/off/status>
+Auto-moderación del grupo
+⚠️ Solo admins pueden usarlo
+
+📋 */rules* [texto]
+Ver o configurar reglas del grupo
+
+🧹 */clean* [cantidad]
+Limpiar mensajes del grupo
 ⚠️ Solo admins pueden usarlo
 
 💡 *Tip:* Usa /help para volver al menú principal`
@@ -1710,42 +1850,26 @@ Abrir grupo (todos pueden escribir)
     return {
       text: `⚙️ *COMANDOS DE ADMINISTRACIÓN*
 
-📱 */qr*
-Crear un subbot con código QR
-Proceso: Bot genera QR → Escaneas → Subbot creado
-⚠️ Solo para administradores
+🤖 *SUBBOTS:*
+📱 */qr* - Crear subbot con QR
+🔑 */code* <número> - Crear con código
+📋 */bots* - Ver todos los subbots del sistema
+📊 */subbotstats* - Estadísticas de subbots
+⚙️ */subbotmanage* - Gestión avanzada
+📈 */subbotmonitor* - Monitor de actividad
 
-🔑 */code* <número>
-Crear subbot con código de emparejamiento
-Ejemplo: /code 34612345678
-⚠️ Solo para administradores
+📊 *SISTEMA:*
+📊 */stats* - Estadísticas del sistema
+📋 */logs* - Ver logs del sistema
+📤 */export* - Exportar datos
+🔄 */update* - Actualizar sistema
 
-🤖 */mybots* (también */bots*)
-Ver tus subbots activos
-Ejemplo: /mybots
+ **COMUNICACIÓN:*
+📢 */broadcast* <mensaje> - Mensaje a todos los grupos
 
-📊 */stats* (también */estadisticas*)
-Estadísticas del sistema
-Ejemplo: /stats
+⚠️ *Nota:* Comandos marcados solo para administradores
 
-📋 */logs*
-Ver logs del sistema
-Ejemplo: /logs
-
-📢 */broadcast* <mensaje> (también */bc*)
-Enviar mensaje a todos los grupos
-Ejemplo: /broadcast Hola a todos
-⚠️ Solo para administradores
-
-🔄 */update*
-Actualizar el sistema
-⚠️ Solo para administradores
-
-📤 */export*
-Exportar datos del sistema
-⚠️ Solo para administradores
-
-💡 *Tip:* Usa /help para volver al menú principal`
+ *Tip:* Usa /help para volver al menú principal`
     };
   }
 
@@ -1813,7 +1937,7 @@ No necesitas hacer nada, es automático!
 */busy* - Estado ocupado
 */readall* - Marcar todo como leído (grupos)
 
-�  *Tip:* Usa /help para volver al menú principal`
+  *Tip:* Usa /help para volver al menú principal`
     };
   }
 
@@ -1879,7 +2003,6 @@ Ejemplo: /pedidos
 
 📱 */qr*
 Crear subbot con código QR
-El bot te enviará un QR para escanear
 Ejemplo: /qr
 
 🔑 */code* <número>
@@ -1893,6 +2016,19 @@ Ejemplo: /mybots
 🛑 */stopbot* <código>
 Detener un subbot
 Ejemplo: /stopbot SUB-123456
+
+📊 */subbotstats*
+Estadísticas de tus subbots
+Ejemplo: /subbotstats
+
+⚙️ */subbotmanage* <acción> <código>
+Gestionar subbots avanzado
+Acciones: start, stop, restart, delete, info
+Ejemplo: /subbotmanage info SUB-123
+
+📈 */subbotmonitor*
+Monitor de actividad de subbots
+Ejemplo: /subbotmonitor
 
 💡 *Tip:* Usa /help para volver al menú principal`
     };
@@ -1999,8 +2135,13 @@ commandMap.set('archivos', { moduleName: 'files', category: 'Archivos', descript
 commandMap.set('misarchivos', { moduleName: 'files', category: 'Archivos', description: 'Mis archivos' });
 
 // Comandos de juegos
-commandMap.set('game', { moduleName: 'games', category: 'Entretenimiento', description: 'Juegos' });
-commandMap.set('juego', { moduleName: 'games', category: 'Entretenimiento', description: 'Juegos' });
+commandMap.set('game', { moduleName: 'games', category: 'Entretenimiento', description: 'Menú de juegos' });
+commandMap.set('juego', { moduleName: 'games', category: 'Entretenimiento', description: 'Menú de juegos' });
+commandMap.set('rps', { moduleName: 'games', category: 'Entretenimiento', description: 'Piedra, papel o tijera' });
+commandMap.set('guess', { moduleName: 'games', category: 'Entretenimiento', description: 'Adivinar número' });
+commandMap.set('dice', { moduleName: 'games', category: 'Entretenimiento', description: 'Lanzar dados' });
+commandMap.set('sorteo', { moduleName: 'games', category: 'Entretenimiento', description: 'Sorteo/ruleta' });
+commandMap.set('coin', { moduleName: 'games', category: 'Entretenimiento', description: 'Lanzar moneda' });
 
 // Comandos de encuestas
 commandMap.set('poll', { moduleName: 'polls', category: 'Entretenimiento', description: 'Crear encuesta' });
@@ -2460,26 +2601,10 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
 
     console.log('[DISPATCH] 🚀 Ejecutando handler para:', command);
 
-    // 🎯 REACCIONES AUTOMÁTICAS (Wileys feature)
-    try {
-      const utilsModule = await loadCommandModule('utils');
-      if (utilsModule?.addAutoReaction) {
-        await utilsModule.addAutoReaction(sock, ctx.message, command);
-      }
-    } catch {}
-
     const result = await handler(params, commandMap);
     console.log('[DISPATCH] 📤 Resultado tipo:', result?.type || 'text', '| hasText:', !!result?.text);
 
     await sendResult(sock, remoteJid, result, ctx);
-
-    // ✅ Reacción de completado
-    try {
-      const utilsModule = await loadCommandModule('utils');
-      if (utilsModule?.addCompletionReaction) {
-        await utilsModule.addCompletionReaction(sock, ctx.message, result);
-      }
-    } catch {}
 
     console.log('[DISPATCH] ✅ Comando ejecutado exitosamente:', command);
     return true;

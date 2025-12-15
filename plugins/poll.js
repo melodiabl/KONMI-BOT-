@@ -1,8 +1,24 @@
 // src/commands/poll.js
-// Sistema de encuestas/polls
+// Sistema de encuestas/polls + Funcionalidades Wileys
+
+// Funcionalidad Wileys: Reacciones automáticas para encuestas
+const addPollReaction = async (sock, message, emoji = '📊') => {
+  try {
+    if (sock && message?.key) {
+      await sock.sendMessage(message.key.remoteJid, {
+        react: { text: emoji, key: message.key }
+      });
+    }
+  } catch (error) {
+    console.error('[POLL_REACTION] Error:', error);
+  }
+};
 
 export async function poll(ctx) {
-  const { sock, remoteJid, args, text } = ctx;
+  const { sock, remoteJid, args, text, message } = ctx;
+
+  // Funcionalidad Wileys: Reacción automática
+  await addPollReaction(sock, message, '📊');
 
   if (args.length === 0) {
     return {

@@ -459,6 +459,215 @@ function normalizePhoneNumber(jidOrNumber) {
   return str.replace(/\D/g, '') || null
 }
 
+// =========================
+// FUNCIONALIDADES WILEYS PARA GRUPOS
+// =========================
+
+// Funcionalidad Wileys: Reacciones automáticas para comandos de grupo
+const addGroupReaction = async (sock, message, emoji = '👥') => {
+  try {
+    if (sock && message?.key) {
+      await sock.sendMessage(message.key.remoteJid, {
+        react: { text: emoji, key: message.key }
+      });
+    }
+  } catch (error) {
+    console.error('[GROUP_REACTION] Error:', error);
+  }
+};
+
+// Funcionalidad Wileys: Mensaje de bienvenida automático
+export async function welcome(ctx) {
+  const { isGroup, remoteJid, sock, message, args } = ctx;
+  if (!isGroup) return { success: false, message: 'Este comando solo funciona en grupos.' };
+
+  if (!isUserAdmin(ctx)) {
+    return { success: false, message: '⛔ Solo los administradores pueden configurar mensajes de bienvenida.' };
+  }
+
+  await addGroupReaction(sock, message, '👋');
+
+  const welcomeText = args.join(' ').trim();
+  if (!welcomeText) {
+    return {
+      success: true,
+      message: '👋 *Configurar Mensaje de Bienvenida*\n\nUso: /welcome <mensaje>\nEjemplo: /welcome ¡Bienvenido al grupo! Lee las reglas.'
+    };
+  }
+
+  // Aquí se guardaría en la base de datos la configuración del grupo
+  try {
+    await ensureGroupsTable();
+    await db('grupos_autorizados')
+      .where({ jid: remoteJid })
+      .update({
+        welcome_message: welcomeText,
+        welcome_enabled: true
+      });
+
+    return {
+      success: true,
+      message: `✅ Mensaje de bienvenida configurado:\n\n"${welcomeText}"`
+    };
+  } catch (error) {
+    return { success: false, message: '⚠️ Error al guardar la configuración.' };
+  }
+}
+
+// Funcionalidad Wileys: Auto-moderación básica
+export async function automod(ctx) {
+  const { isGroup, remoteJid, sock, message, args } = ctx;
+  if (!isGroup) return { success: false, message: 'Este comando solo funciona en grupos.' };
+
+  if (!isUserAdmin(ctx)) {
+    return { success: false, message: '⛔ Solo los administradores pueden configurar la auto-moderación.' };
+  }
+
+  await addGroupReaction(sock, message, '🛡️');
+
+  const action = args[0]?.toLowerCase();
+
+  if (!action || !['on', 'off', 'status'].includes(action)) {
+    return {
+      success: true,
+      message: '🛡️ *Auto-Moderación*\n\n/automod on - Activar\n/automod off - Desactivar\n/automod status - Ver estado'
+    };
+  }
+
+  try {
+    await ensureGroupsTable();
+
+    if (action === 'status') {
+      const group = await db('grupos_autorizados').where({ jid: remoteJid }).first();
+      const enabled = group?.automod_enabled || false;
+      return {
+        success: true,
+        message: `🛡️ Auto-moderación: ${enabled ? '🟢 Activada' : '⚪ Desactivada'}`
+      };
+    }
+
+    const enabled = action === 'on';
+    await db('grupos_autorizados')
+      .where({ jid: remoteJid })
+      .update({ automod_enabled: enabled });
+
+    return {
+      success: true,
+      message: `🛡️ Auto-moderación ${enabled ? '🟢 activada' : '⚪ desactivada'}`
+    };
+  } catch (error) {
+    return { success: false, message: '⚠️ Error al configurar la auto-moderación.' };
+  }
+}
+
+// Funcionalidad Wileys: Reglas del grupo
+export async function rules(ctx) {
+  const { isGroup, remoteJid, sock, message, args } = ctx;
+  if (!isGroup) return { success: false, message: 'Este comando solo funciona en grupos.' };
+
+  await addGroupReaction(sock, message, '📋');
+
+  if (args.length === 0) {
+    // Mostrar reglas existentes
+    try {
+      const group = await db('grupos_autorizados').where({ jid: remoteJid }).first();
+      const rules = group?.rules || 'No hay reglas configuradas para este grupo.';
+
+      return {
+        success: true,
+        message: `📋 *Reglas del Grupo*\n\n${rules}`
+      };
+    } catch (error) {
+      return { success: false, message: '⚠️ Error al obtener las reglas.' };
+    }
+  }
+
+  // Configurar reglas (solo admins)
+  if (!isUserAdmin(ctx)) {
+    return { success: false, message: '⛔ Solo los administradores pueden configurar las reglas.' };
+  }
+
+  const rulesText = args.join(' ').trim();
+
+  try {
+    await ensureGroupsTable();
+    await db('grupos_autorizados')
+      .where({ jid: remoteJid })
+      .update({ rules: rulesText });
+
+    return {
+      success: true,
+      message: `✅ Reglas del grupo actualizadas:\n\n${rulesText}`
+    };
+  } catch (error) {
+    return { success: false, message: '⚠️ Error al guardar las reglas.' };
+  }
+}
+
+// Funcionalidad Wileys: Información extendida del grupo
+export async function groupstats(ctx) {
+  const { isGroup, remoteJid, sock, message } = ctx;
+  if (!isGroup) return { success: false, message: 'Este comando solo funciona en grupos.' };
+
+  await addGroupReaction(sock, message, '📊');
+
+  try {
+    const metadata = await getGroupMetadataCached(sock, remoteJid);
+    const participants = metadata?.participants || [];
+
+    const admins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin');
+    const members = participants.filter(p => !p.admin || p.admin === 'member');
+
+    // Estadísticas adicionales
+    const creationDate = metadata?.creation ? new Date(metadata.creation * 1000).toLocaleDateString('es-ES') : 'Desconocida';
+    const description = metadata?.desc || 'Sin descripción';
+
+    const stats = [
+      '📊 *Estadísticas del Grupo*',
+      '',
+      `📛 *Nombre:* ${metadata?.subject || 'Sin nombre'}`,
+      `👥 *Total miembros:* ${participants.length}`,
+      `👑 *Administradores:* ${admins.length}`,
+      `👤 *Miembros regulares:* ${members.length}`,
+      `📅 *Creado:* ${creationDate}`,
+      '',
+      `📝 *Descripción:*`,
+      description.length > 100 ? description.substring(0, 100) + '...' : description
+    ];
+
+    return {
+      success: true,
+      message: stats.join('\n')
+    };
+  } catch (error) {
+    return { success: false, message: '⚠️ Error al obtener estadísticas del grupo.' };
+  }
+}
+
+// Funcionalidad Wileys: Limpiar mensajes (simulado)
+export async function clean(ctx) {
+  const { isGroup, remoteJid, sock, message, args } = ctx;
+  if (!isGroup) return { success: false, message: 'Este comando solo funciona en grupos.' };
+
+  if (!isUserAdmin(ctx)) {
+    return { success: false, message: '⛔ Solo los administradores pueden usar este comando.' };
+  }
+
+  if (!isBotGroupAdmin(ctx)) {
+    return { success: false, message: '⛔ El bot necesita ser administrador para limpiar mensajes.' };
+  }
+
+  await addGroupReaction(sock, message, '🧹');
+
+  const count = parseInt(args[0]) || 5;
+  const maxCount = Math.min(count, 20); // Máximo 20 mensajes
+
+  return {
+    success: true,
+    message: `🧹 *Limpieza de Mensajes*\n\n⚠️ Esta función está en desarrollo.\nSe limpiarían ${maxCount} mensajes del grupo.\n\n💡 Por ahora, los admins pueden eliminar mensajes manualmente.`
+  };
+}
+
 export default {
   addGroup,
   delGroup,
@@ -472,5 +681,10 @@ export default {
   whoami,
   debuggroup,
   debugadmin,
-  testBotAdmin
+  testBotAdmin,
+  welcome,
+  automod,
+  rules,
+  groupstats,
+  clean
 }

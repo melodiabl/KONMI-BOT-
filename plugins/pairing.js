@@ -12,6 +12,19 @@ import { getBotStatus } from '../../whatsapp.js';
 // 🔧 NUEVO: Importar directamente desde inproc-subbots para registrar listener global
 import { onSubbotEvent, offSubbotEvent } from '../services/inproc-subbots.js';
 
+// Funcionalidad Wileys: Reacciones automáticas para subbots
+const addSubbotReaction = async (sock, message, emoji = '🤖') => {
+  try {
+    if (sock && message?.key) {
+      await sock.sendMessage(message.key.remoteJid, {
+        react: { text: emoji, key: message.key }
+      });
+    }
+  } catch (error) {
+    console.error('[SUBBOT_PAIRING_REACTION] Error:', error);
+  }
+};
+
 function normalizeDigits(v) { return String(v || '').replace(/[^0-9]/g, '') }
 
 async function extractPhoneNumber(ctx) {
@@ -72,7 +85,10 @@ async function extractPhoneNumber(ctx) {
 
 export async function qr(ctx) {
   try {
-    const { isOwner, sock, remoteJid } = ctx || {};
+    const { isOwner, sock, remoteJid, message } = ctx || {};
+
+    // Funcionalidad Wileys: Reacción automática
+    await addSubbotReaction(sock, message, '📱');
 
     // Los subbots están disponibles para todos
     // const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
@@ -163,7 +179,10 @@ export async function qr(ctx) {
 
 export async function code(ctx) {
   try {
-    const { isOwner, sock, remoteJid, pushName, usuarioName } = ctx || {};
+    const { isOwner, sock, remoteJid, pushName, usuarioName, message } = ctx || {};
+
+    // Funcionalidad Wileys: Reacción automática
+    await addSubbotReaction(sock, message, '🔑');
 
     // Los subbots están disponibles para todos
     // const access = String(process.env.SUBBOTS_ACCESS || 'all').toLowerCase()
@@ -197,157 +216,25 @@ export async function code(ctx) {
       };
     }
 
-    // Registrar listener para cuando se conecte (notificación post-vinculación)
-    return await new Promise(async (resolve) => {
-      // Primero devolver el código al usuario
-      const messageText = `✅ *Código de Vinculación Generado*\n\n` +
-        `🔢 *Código:* \`${pairingCode}\`\n` +
-        `📱 *Número:* +${phone}\n` +
-        `🆔 *SubBot ID:* ${codeValue}\n\n` +
-        `📋 *INSTRUCCIONES:*\n` +
-        `1️⃣ Abre WhatsApp en tu teléfono\n` +
-        `2️⃣ Ve a *Dispositivos vinculados*\n` +
-        `3️⃣ Toca *"Vincular con número de teléfono"*\n` +
-        `4️⃣ Ingresa este código: *${pairingCode}*\n\n` +
-        `⏱️ El código expira en 5 minutos\n` +
-        `💡 Recibirás una confirmación cuando se vincule`;
+    // Devolver el código inmediatamente
+    const messageText = `✅ *Código de Vinculación Generado*\n\n` +
+      `🔢 *Código:* \`${pairingCode}\`\n` +
+      `📱 *Número:* +${phone}\n` +
+      `🆔 *SubBot ID:* ${codeValue}\n\n` +
+      `📋 *INSTRUCCIONES:*\n` +
+      `1️⃣ Abre WhatsApp en tu teléfono\n` +
+      `2️⃣ Ve a *Dispositivos vinculados*\n` +
+      `3️⃣ Toca *"Vincular con número de teléfono"*\n` +
+      `4️⃣ Ingresa este código: *${pairingCode}*\n\n` +
+      `⏱️ El código expira en 5 minutos\n` +
+      `💡 Recibirás una confirmación cuando se vincule`;
 
-      // Enviar el código inmediatamente
-      resolve({
-        success: true,
-        message: messageText,
-        mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined,
-        quoted: true
-      });
-
-      // Después registrar listener para notificación de conexión (en segundo plano)
-      try {
-        const globalHandler = async (payload) => {
-          try {
-            const subbotCode = payload?.subbot?.code;
-            if (subbotCode !== codeValue) return;
-
-            offSubbotEvent('pairing_code', globalHandler);
-
-          // Registrar listener para cuando se conecte (notificación post-vinculación)
-          try {
-            const dmJid = phone ? `${phone}@s.whatsapp.net` : (remoteJid || null)
-            if (sock && dmJid) {
-              let detachConnected = null
-              const onConnected = async (connPayload) => {
-                try {
-                  if (connPayload?.subbot?.code !== codeValue) return;
-
-                  const connData = connPayload?.data || {}
-                  const linked = String(connData?.digits || connData?.number || connData?.jid || '').replace(/\D/g,'')
-                  const parts = [
-                    '🎉 Listo, ¡ya eres un subbot más de la comunidad!\n',
-                    `🆔 SubBot: ${codeValue}`,
-                    linked ? `🤝 Vinculado: +${linked}` : null,
-                  ].filter(Boolean)
-                  await sock.sendMessage(dmJid, { text: parts.join('\n') })
-
-                  const displayName = ctx?.usuarioName || ctx?.pushName || null
-                  if (displayName) {
-                    await sock.sendMessage(dmJid, {
-                      text: `🎉 ${displayName}, ya eres un subbot mas de la comunidad!`,
-                    })
-                  }
-
-                  const isGroup = typeof remoteJid === 'string' && remoteJid.endsWith('@g.us')
-                  if (isGroup) {
-                    const mention = phone ? `${phone}@s.whatsapp.net` : undefined
-                    const gLines = [
-                      `🎉 ${mention ? '@'+phone : 'Listo'}, ¡ya eres un subbot más de la comunidad!`,
-                      `🆔 SubBot: ${codeValue}`,
-                      linked ? `🤝 Vinculado: +${linked}` : null,
-                    ].filter(Boolean)
-                    const payloadMsg = mention ? { text: gLines.join('\n'), mentions: [mention] } : { text: gLines.join('\n') }
-                    await sock.sendMessage(remoteJid, payloadMsg)
-
-                    if (displayName && mention) {
-                      await sock.sendMessage(remoteJid, {
-                        text: ` @${phone} (${displayName}), ya eres un subbot mas de la comunidad!`,
-                        mentions: [mention],
-                      })
-                    }
-                  }
-                } finally {
-                  try { detachConnected?.() } catch {}
-                }
-              }
-              try {
-                detachConnected = attachSubbotListeners(codeValue, [{ event: 'connected', handler: onConnected }])
-              } catch {}
-            }
-          } catch (e) {
-            console.error('[pairing.js] Error registrando onConnected:', e);
-          }
-
-          // 🎯 RESPUESTA SIMPLIFICADA: Un solo mensaje con botón de copiar
-          const messageText = `✅ *Código de Vinculación Generado*\n\n` +
-            `🔢 Código: \`${pairingCode}\`\n` +
-            `📱 Número: +${phone}\n\n` +
-            `📋 *Instrucciones:*\n` +
-            `1. Abre WhatsApp > Dispositivos vinculados\n` +
-            `2. Toca "Vincular con número de teléfono"\n` +
-            `3. Ingresa el código de arriba\n\n` +
-            `⏱️ El código expira en 5 minutos`;
-
-          // Usar el flow interactivo con botón de copiar automático
-          const interactiveFlow = buildQuickReplyFlow({
-            header: '🔐 Código de Vinculación',
-            body: `Código: *${pairingCode}*\nNúmero: +${phone}`,
-            footer: 'Toca el botón para copiar',
-            buttons: [
-              { text: '📋 Copiar Código', copy: pairingCode },
-              { text: '🤖 Mis Subbots', command: '/mybots' },
-            ],
-          });
-
-          resolve([
-            {
-              success: true,
-              message: messageText,
-              mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined,
-              quoted: true,
-              ephemeralDuration: 600,
-            },
-            {
-              type: 'content',
-              content: interactiveFlow,
-              quoted: true,
-              ephemeralDuration: 600,
-            }
-          ]);
-        } catch (e) {
-          console.error('[pairing.js] Error en globalHandler:', e);
-          resolve({ success:false, message:`⚠️ Error procesando código: ${e?.message||e}` });
-        }
-      };
-
-      try {
-        // 1. Registrar listener PRIMERO
-        onSubbotEvent('pairing_code', globalHandler);
-        console.log('[pairing.js] 📡 Listener global registrado para pairing_code');
-
-        // 2. DESPUÉS crear el subbot
-        const res = await generateSubbotPairingCode(phone, phone, { displayName: 'KONMI-BOT' });
-        codeValue = res?.code;
-
-        console.log(`[pairing.js] 🚀 Subbot creado con código: ${codeValue}`);
-
-        if (!codeValue) {
-          clearTimeout(timeout);
-          if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
-          resolve({ success:false, message:'❌ Error al crear el subbot' });
-        }
-      } catch (e) {
-        clearTimeout(timeout);
-        if (globalHandler) offSubbotEvent('pairing_code', globalHandler);
-        resolve({ success:false, message:`⚠️ Error generando code: ${e?.message||e}` });
-      }
-    });
+    return {
+      success: true,
+      message: messageText,
+      mentions: phone ? [`${phone}@s.whatsapp.net`] : undefined,
+      quoted: true
+    };
 
   } catch (e) {
     return { success:false, message:`⚠️ Error generando code: ${e?.message||e}` };
