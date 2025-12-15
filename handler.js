@@ -2969,47 +2969,28 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }))
   }));
 
-  // Native Flow List Button (formato Wileys)
-  try {
-    await sock.sendMessage(jid, {
-      viewOnceMessage: {
-        message: {
-          messageContextInfo: {
-            deviceListMetadata: {},
-            deviceListMetadataVersion: 2
-          },
-          interactiveMessage: {
-            body: {
-              text: result.text || 'Elige una opción'
-            },
-            footer: {
-              text: result.footer || 'KONMI BOT © 2025'
-            },
-            header: {
-              title: result.title || '📋 Menú de Comandos',
-              subtitle: '',
-              hasMediaAttachment: false
-            },
-            nativeFlowMessage: {
-              buttons: [
-                {
-                  name: 'single_select',
-                  buttonParamsJson: JSON.stringify({
-                    title: result.buttonText || '📋 Ver Opciones',
-                    sections: sections
-                  })
-                }
-              ]
-            }
-          }
-        }
-      }
-    }, opts);
+  // Formato simple de list message (compatible con Wileys 0.4.2)
+  const listMessage = {
+    text: result.text || 'Elige una opción',
+    footer: result.footer || 'KONMI BOT © 2025',
+    title: result.title || '📋 Menú de Comandos',
+    buttonText: result.buttonText || '📋 Ver Opciones',
+    sections: (result.sections || []).map(sec => ({
+      title: sec.title || '',
+      rows: (sec.rows || []).map(r => ({
+        title: r.title || 'Opción',
+        description: r.description || '',
+        rowId: r.rowId || r.id || 'noop'
+      }))
+    }))
+  };
 
-    console.log('[sendListV2] ✅ Native flow list enviado');
+  try {
+    await sock.sendMessage(jid, listMessage, opts);
+    console.log('[sendListV2] ✅ List message enviado');
     return true;
   } catch (err) {
-    console.log('[sendListV2] ⚠️ Native flow falló:', err?.message);
+    console.log('[sendListV2] ⚠️ List message falló:', err?.message);
     console.log('[sendListV2] 📝 Fallback: texto plano...');
   }
 
