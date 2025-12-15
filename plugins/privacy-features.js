@@ -1,7 +1,7 @@
 // commands/privacy-features.js
 // Funcionalidades avanzadas de privacidad de WhatsApp
 
-import logger from '../config/logger.js'
+import logger from './config/logger.js'
 
 // Obtener configuración de privacidad
 export async function getPrivacySettings(ctx) {

@@ -1,5 +1,5 @@
 // commands/diag.js — Autodiagnóstico simple de formatos de mensaje
-import { buildQuickReplyFlow } from '../utils/utils/flows.js'
+import { buildQuickReplyFlow } from './utils/flows.js'
 
 export async function selftest({ remoteJid, usuario, args }) {
   const results = []

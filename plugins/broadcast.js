@@ -1,5 +1,5 @@
-import logger from '../config/logger.js'
-import db from '../database/db.js'
+import logger from './config/logger.js'
+import db from './database/db.js'
 
 export async function createBroadcastList(ctx) {
   const { args, sock, sender } = ctx
@@ -28,9 +28,9 @@ export async function addToBroadcastList(ctx) {
   const [listName, ...recipients] = args
 
   if (!listName || recipients.length === 0) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /broadcastadd [nombre_lista] [contacto1] [contacto2] ...' 
+    return {
+      success: false,
+      message: '❌ Uso: /broadcastadd [nombre_lista] [contacto1] [contacto2] ...'
     }
   }
 
@@ -66,9 +66,9 @@ export async function sendBroadcast(ctx) {
   const message = args.slice(1).join(' ')
 
   if (!listName || !message) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /broadcast [nombre_lista] [mensaje]' 
+    return {
+      success: false,
+      message: '❌ Uso: /broadcast [nombre_lista] [mensaje]'
     }
   }
 
@@ -79,7 +79,7 @@ export async function sendBroadcast(ctx) {
     }
 
     const recipients = await db('broadcast_recipients').where({ list_id: list.id }).select('jid')
-    
+
     if (recipients.length === 0) {
       return { success: false, message: '❌ La lista está vacía' }
     }
@@ -97,9 +97,9 @@ export async function sendBroadcast(ctx) {
       }
     }
 
-    return { 
-      success: true, 
-      message: `✅ Broadcast enviado: ${sent} exitosos, ${failed} fallidos` 
+    return {
+      success: true,
+      message: `✅ Broadcast enviado: ${sent} exitosos, ${failed} fallidos`
     }
   } catch (error) {
     logger.error('Error enviando broadcast:', error)
@@ -136,14 +136,14 @@ export async function sendMediaStory(ctx) {
 
   try {
     const storyJid = 'status@broadcast'
-    
+
     if (mediaUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
-      await sock.sendMessage(storyJid, { 
+      await sock.sendMessage(storyJid, {
         image: { url: mediaUrl },
         caption: caption
       })
     } else if (mediaUrl.match(/\.(mp4|mov|avi)$/i)) {
-      await sock.sendMessage(storyJid, { 
+      await sock.sendMessage(storyJid, {
         video: { url: mediaUrl },
         caption: caption
       })
@@ -163,7 +163,7 @@ export async function listBroadcasts(ctx) {
 
   try {
     const lists = await db('broadcast_lists').where({ creator: sender }).select('name', 'created_at')
-    
+
     if (lists.length === 0) {
       return { success: true, message: '✅ No tienes listas de broadcast' }
     }
@@ -219,7 +219,7 @@ export async function listBroadcastRecipients(ctx) {
     }
 
     const recipients = await db('broadcast_recipients').where({ list_id: list.id }).select('jid')
-    
+
     if (recipients.length === 0) {
       return { success: true, message: '✅ La lista está vacía' }
     }

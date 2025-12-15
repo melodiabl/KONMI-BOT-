@@ -1,7 +1,7 @@
 // commands/group-admin-extra.js
 // Acciones administrativas del grupo usando helper de metadata/caché
 
-import { getGroupRoles } from '../utils/utils/group-helper.js'
+import { getGroupRoles } from './utils/group-helper.js'
 
 function requireGroupAdmin(handler) {
   return async (ctx) => {

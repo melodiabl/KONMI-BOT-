@@ -1,4 +1,4 @@
-import logger from '../config/logger.js'
+import logger from './config/logger.js'
 
 export async function blockUser(ctx) {
   const { args, sock } = ctx

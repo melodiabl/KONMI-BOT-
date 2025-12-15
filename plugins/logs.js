@@ -1,5 +1,5 @@
 // commands/logs.js — utilidades de consulta de logs desde WhatsApp
-import db from '../database/db.js'
+import db from './database/db.js'
 
 export async function find({ args }) {
   const q = (args||[]).join(' ').trim()

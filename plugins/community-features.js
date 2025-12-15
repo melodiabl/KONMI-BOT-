@@ -1,7 +1,7 @@
 // commands/community-features.js
 // Funcionalidades avanzadas de comunidades de WhatsApp
 
-import logger from '../config/logger.js'
+import logger from './config/logger.js'
 
 // Crear comunidad
 export async function createCommunity(ctx) {

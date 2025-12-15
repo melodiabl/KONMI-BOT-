@@ -1,4 +1,4 @@
-import { listAllSubbots } from '../services/subbot-manager.js'
+import { listAllSubbots } from './services/subbot-manager.js'
 import { isOwner } from './utils/user.js'
 
 export async function bots({ usuario }) {

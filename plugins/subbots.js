@@ -1,5 +1,5 @@
 // commands/subbots.js – Comandos para gestionar subbots
-import { listUserSubbots, listAllSubbots } from '../services/subbot-manager.js'
+import { listUserSubbots, listAllSubbots } from './services/subbot-manager.js'
 
 function onlyDigits(v){ return String(v||'').replace(/\D/g,'') }
 function normalizeDigits(userOrJid){

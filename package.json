@@ -26,6 +26,9 @@
         "db:backup": "node tools/backup-db.js",
         "install:wileys": "node install-essential.js",
         "install:wileys-win": "install-wileys-windows.bat",
+        "verify:paths": "node verify-paths.js",
+        "fix:paths": "node fix-all-paths.js",
+        "test:start": "node start-test.js",
         "postinstall": "echo Skipping Chromium download"
     },
     "dependencies": {

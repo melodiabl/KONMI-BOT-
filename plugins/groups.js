@@ -1,8 +1,8 @@
 // commands/groups.js
 // Administración de grupos - VERSIÓN CORREGIDA
 
-import db from '../database/db.js'
-import { getGroupRoles, getGroupMetadataCached } from '../utils/utils/group-helper.js'
+import db from './database/db.js'
+import { getGroupRoles, getGroupMetadataCached } from './utils/group-helper.js'
 
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
 const first = (v) => (Array.isArray(v) && v.length ? v[0] : null)

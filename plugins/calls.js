@@ -1,14 +1,14 @@
-import logger from '../config/logger.js'
-import db from '../database/db.js'
+import logger from './config/logger.js'
+import db from './database/db.js'
 
 export async function rejectCall(ctx) {
   const { args, sock } = ctx
   const [callId, callFrom] = [args[0], args[1]]
 
   if (!callId || !callFrom) {
-    return { 
-      success: false, 
-      message: '❌ Uso: /rejectcall [callId] [caller_jid]' 
+    return {
+      success: false,
+      message: '❌ Uso: /rejectcall [callId] [caller_jid]'
     }
   }
 
@@ -105,7 +105,7 @@ export async function listCallBlacklist(ctx) {
 
   try {
     const list = await db('call_blocklist').where({ blocked_by: sender }).select('jid')
-    
+
     if (list.length === 0) {
       return { success: true, message: '✅ No tienes números bloqueados' }
     }

@@ -1,7 +1,7 @@
 // commands/performance-features.js
 // Funcionalidades de optimización y rendimiento usando Baileys
 
-import logger from '../config/logger.js'
+import logger from './config/logger.js'
 
 // Limpiar datos sucios (dirty bits) para mejorar rendimiento
 export async function cleanDirtyBits(ctx) {

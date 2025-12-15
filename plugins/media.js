@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import axios from 'axios'
-import logger from '../config/logger.js'
+import logger from './config/logger.js'
 
 const MEDIA_DIR = './storage/media'
 

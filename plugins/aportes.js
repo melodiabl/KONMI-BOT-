@@ -1,8 +1,8 @@
 // commands/aportes.js
 // Implementación directa para aportes
 
-import db from '../database/db.js'
-import { processWhatsAppMedia } from '../services/file-manager.js'
+import db from './database/db.js'
+import { processWhatsAppMedia } from './services/file-manager.js'
 
 export async function myAportes({ usuario, remoteJid }) {
   try {

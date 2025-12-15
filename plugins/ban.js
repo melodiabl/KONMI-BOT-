@@ -1,8 +1,8 @@
 // commands/ban.js
 // Sistema sencillo de ban por grupo
 
-import db from '../database/db.js'
-import { getGroupRoles } from '../utils/utils/group-helper.js'
+import db from './database/db.js'
+import { getGroupRoles } from './utils/group-helper.js'
 
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
 

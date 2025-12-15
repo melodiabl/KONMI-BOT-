@@ -1,7 +1,7 @@
 // commands/files.js
 // Gestión de archivos / descargas
 
-import { processWhatsAppMedia, listDownloads, getDownloadStats } from '../services/file-manager.js'
+import { processWhatsAppMedia, listDownloads, getDownloadStats } from './services/file-manager.js'
 
 export async function guardar({ message, usuario }) {
   try {

@@ -2,8 +2,22 @@
 // Descargas avanzadas - SoundCloud, Reddit, Twitch, etc.
 
 import axios from 'axios'
-import * as cheerio from 'cheerio'
-import { JSDOM } from 'jsdom'
+
+// Importaciones opcionales para scraping avanzado
+let cheerio, JSDOM;
+
+try {
+  cheerio = await import('cheerio');
+} catch (e) {
+  console.log('⚠️ cheerio no disponible, usando extracción básica');
+}
+
+try {
+  const jsdomModule = await import('jsdom');
+  JSDOM = jsdomModule.JSDOM;
+} catch (e) {
+  console.log('⚠️ jsdom no disponible, usando análisis básico');
+}
 
 // Funcionalidad Wileys: Reacciones automáticas para descargas avanzadas
 const addAdvancedDownloadReaction = async (sock, message, emoji = '⬇️') => {
@@ -42,6 +56,16 @@ const extractMediaInfo = async (platform, url) => {
       },
       timeout: 10000
     });
+
+    if (!cheerio) {
+      return {
+        success: false,
+        error: 'cheerio no disponible',
+        title: `Contenido de ${platform}`,
+        author: 'Información no disponible',
+        platform
+      };
+    }
 
     const $ = cheerio.load(response.data);
     let title = 'Contenido sin título';

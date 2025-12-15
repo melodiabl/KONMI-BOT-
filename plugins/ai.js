@@ -1,12 +1,36 @@
 // commands/ai.js
 // IA: chat y clasificación + Funcionalidades Wileys
 
-import db from '../database/db.js'
-import { chatWithAI, analyzeManhwaContent, analyzeContentWithAI } from '../../handler.js'
-import Sentiment from 'sentiment'
-import natural from 'natural'
-import compromise from 'compromise'
-import { franc } from 'franc'
+import db from './database/db.js'
+import { chatWithAI, analyzeManhwaContent, analyzeContentWithAI } from '../handler.js'
+
+// Importaciones opcionales para IA avanzada
+let Sentiment, natural, compromise, franc;
+
+try {
+  Sentiment = (await import('sentiment')).default;
+} catch (e) {
+  console.log('⚠️ sentiment no disponible, usando análisis básico');
+}
+
+try {
+  natural = await import('natural');
+} catch (e) {
+  console.log('⚠️ natural no disponible, usando procesamiento básico');
+}
+
+try {
+  compromise = (await import('compromise')).default;
+} catch (e) {
+  console.log('⚠️ compromise no disponible, usando análisis básico');
+}
+
+try {
+  const francModule = await import('franc');
+  franc = francModule.franc;
+} catch (e) {
+  console.log('⚠️ franc no disponible, usando detección básica de idioma');
+}
 
 // Funcionalidad Wileys: Reacciones automáticas para IA
 const addAIReaction = async (sock, message, emoji = '🤖') => {
@@ -197,13 +221,25 @@ export async function sentiment(ctx) {
   await showThinking(sock, remoteJid, 1500);
 
   try {
+    if (!Sentiment) {
+      return {
+        success: false,
+        message: '❌ Análisis de sentimientos no disponible. Instala: npm install sentiment'
+      };
+    }
+
     // Usar librería Sentiment real para análisis
     const sentiment = new Sentiment();
     const result = sentiment.analyze(texto);
 
     // Detectar idioma
-    const detectedLang = franc(texto);
-    const langName = detectedLang === 'spa' ? 'Español' : detectedLang === 'eng' ? 'Inglés' : 'Desconocido';
+    let detectedLang = 'unknown';
+    let langName = 'Desconocido';
+
+    if (franc) {
+      detectedLang = franc(texto);
+      langName = detectedLang === 'spa' ? 'Español' : detectedLang === 'eng' ? 'Inglés' : 'Desconocido';
+    }
 
     // Clasificar sentimiento
     let classification = 'NEUTRO';
@@ -299,6 +335,13 @@ export async function analyze(ctx) {
   await showThinking(sock, remoteJid, 2500);
 
   try {
+    if (!compromise) {
+      return {
+        success: false,
+        message: '❌ Análisis de texto avanzado no disponible. Instala: npm install compromise natural'
+      };
+    }
+
     // Análisis con Natural.js y Compromise
     const doc = compromise(texto);
 
@@ -308,8 +351,13 @@ export async function analyze(ctx) {
     const avgWordsPerSentence = (wordCount / sentenceCount).toFixed(1);
 
     // Detectar idioma
-    const detectedLang = franc(texto);
-    const langName = detectedLang === 'spa' ? 'Español' : detectedLang === 'eng' ? 'Inglés' : 'Desconocido';
+    let detectedLang = 'unknown';
+    let langName = 'Desconocido';
+
+    if (franc) {
+      detectedLang = franc(texto);
+      langName = detectedLang === 'spa' ? 'Español' : detectedLang === 'eng' ? 'Inglés' : 'Desconocido';
+    }
 
     // Extraer entidades
     const people = doc.people().out('array');
@@ -318,8 +366,11 @@ export async function analyze(ctx) {
     const topics = doc.topics().out('array');
 
     // Análisis de sentimientos
-    const sentiment = new Sentiment();
-    const sentimentResult = sentiment.analyze(texto);
+    let sentimentResult = { score: 0 };
+    if (Sentiment) {
+      const sentiment = new Sentiment();
+      sentimentResult = sentiment.analyze(texto);
+    }
     let sentimentLabel = 'Neutro';
     if (sentimentResult.score > 1) sentimentLabel = 'Positivo';
     else if (sentimentResult.score < -1) sentimentLabel = 'Negativo';

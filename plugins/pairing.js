@@ -1,4 +1,4 @@
-import { buildQuickReplyFlow } from './utils/utils/flows.js'
+import { buildQuickReplyFlow } from './utils/flows.js'
 import { sendCopyableCode, sendInteractiveButtons } from './ui-interactive.js'
 
 import {
@@ -10,7 +10,7 @@ import {
 import { getBotStatus } from '../../whatsapp.js';
 
 // 🔧 NUEVO: Importar directamente desde inproc-subbots para registrar listener global
-import { onSubbotEvent, offSubbotEvent } from '../services/inproc-subbots.js';
+import { onSubbotEvent, offSubbotEvent } from './services/inproc-subbots.js';
 
 // Funcionalidad Wileys: Reacciones automáticas para subbots
 const addSubbotReaction = async (sock, message, emoji = '🤖') => {

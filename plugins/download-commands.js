@@ -17,8 +17,8 @@ import {
   getTrivia,
   getRandomMeme,
 } from '../utils/utils/api-providers.js'
-import logger from '../config/logger.js'
-import { createProgressNotifier } from '../utils/utils/progress-notifier.js'
+import logger from './config/logger.js'
+import { createProgressNotifier } from './utils/progress-notifier.js'
 
 /* ===== Utilidades ===== */
 

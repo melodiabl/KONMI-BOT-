@@ -57,8 +57,8 @@ if (arch === "arm64") {
 // 3. CARGAR EL BOT NORMALMENTE
 // ======================================
 
-// ❌ CORRECCIÓN 1: Se corrigió la ruta del archivo de configuración
-import config from "./src/config/config.js";
+// ✅ CORRECCIÓN 1: Ruta corregida para la nueva estructura
+import config from "./plugins/config/config.js";
 import app from "./server.js";
 
 // ✅ CORRECCIÓN 2: Se añaden checkSessionState y sanitizePhoneNumberInput para reconexión automática
@@ -73,7 +73,7 @@ import {
 
 async function restoreSubbotsOnBoot() {
     try {
-        const mod = await import("./src/services/subbot-manager.js");
+        const mod = await import("./plugins/services/subbot-manager.js");
         const clean = 0;
         const restored = await mod.restoreActiveSubbots?.().catch(() => 0);
         console.log(`♻️ Subbots autostart (boot): restaurados=${restored || 0}, limpieza=${clean || 0}`);

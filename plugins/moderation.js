@@ -1,8 +1,8 @@
 // commands/moderation.js
 // Sistema de advertencias por grupo, refactorizado para ctx unificado
 
-import db from '../database/db.js'
-import { getGroupRoles } from '../utils/utils/group-helper.js'
+import db from './database/db.js'
+import { getGroupRoles } from './utils/group-helper.js'
 
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
 

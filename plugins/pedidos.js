@@ -1,7 +1,7 @@
 // commands/pedidos.js
 // Implementación directa para pedidos
 
-import db from '../database/db.js'
+import db from './database/db.js'
 
 export async function pedido({ args, usuario, remoteJid, fecha }) {
   try {

@@ -1,8 +1,8 @@
 // commands/chat-management.js
 // Gestión de chats
 
-import logger from '../config/logger.js'
-import { getGroupRoles } from '../utils/utils/group-helper.js'
+import logger from './config/logger.js'
+import { getGroupRoles } from './utils/group-helper.js'
 
 const MUTE_TIMES = {
   '8h': 8 * 60 * 60 * 1000,

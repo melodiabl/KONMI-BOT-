@@ -10,14 +10,14 @@ import pino from 'pino'
 import QRCode from 'qrcode'
 import qrTerminal from 'qrcode-terminal'
 import { fileURLToPath, pathToFileURL } from 'url'
-import logger from './src/config/logger.js'
-import { isSuperAdmin, setPrimaryOwner } from './src/config/global-config.js'
-import { initStore } from './src/utils/utils/store.js'
+import logger from './plugins/config/logger.js'
+import { isSuperAdmin, setPrimaryOwner } from './plugins/config/global-config.js'
+import { initStore } from './plugins/utils/utils/store.js'
 import { dispatch } from './handler.js'
-// port { extractText } from './src/utils/textextractor.js'
+// port { extractText } from './plugins/utils/text-extractor.js'
 // ==============================================================================
 // Funciones locales de normalización y extracción de texto
-// Estas funciones reemplazan al módulo './src/utils/text-extractor.js'.
+// Estas funciones reemplazan al módulo './plugins/utils/text-extractor.js'.
 function cleanText(text) {
   try {
     if (text == null) return '';
@@ -962,7 +962,7 @@ export async function connectToWhatsApp(
         }
 
         try {
-          const mod = await import('./src/services/subbot-manager.js')
+          const mod = await import('./plugins/services/subbot-manager.js')
           const clean = await mod.cleanOrphanSubbots?.().catch(() => 0)
           const restored = await mod.restoreActiveSubbots?.().catch(() => 0)
           logMessage('INFO', 'SUBBOTS', `Auto-start: restaurados=${restored||0}, limpieza=${clean||0}`)
@@ -972,7 +972,7 @@ export async function connectToWhatsApp(
           if (!globalThis.__SUBBOT_CLEAN_TIMER && Number.isFinite(intervalMs) && intervalMs > 0) {
             globalThis.__SUBBOT_CLEAN_TIMER = setInterval(async () => {
               try {
-                const mod2 = await import('./src/services/subbot-manager.js')
+                const mod2 = await import('./plugins/services/subbot-manager.js')
                 const removed = await mod2.cleanOrphanSubbots?.().catch(() => 0)
                 if (removed) {
                   logMessage('INFO', 'SUBBOTS', `Cleanup periodicamente: ${removed} subbots eliminados`)
@@ -1048,7 +1048,7 @@ export async function connectToWhatsApp(
       let mgr = null
       const ensureMgr = async () => {
         if (mgr) return mgr
-        try { mgr = await import('./src/services/subbot-manager.js') } catch (e) {
+        try { mgr = await import('./plugins/services/subbot-manager.js') } catch (e) {
           logMessage('ERROR', 'MANAGER', 'import failed', { error: e?.message })
           mgr = null
         }
@@ -1078,7 +1078,7 @@ export async function connectToWhatsApp(
           const bypassCmd = controlSet.has(firstToken)
 
           try {
-            const { logIncomingMessage } = await import('./src/utils/utils/wa-logging.js')
+            const { logIncomingMessage } = await import('./plugins/utils/utils/wa-logging.js')
             await logIncomingMessage(m)
           } catch (e) {
             logMessage('WARN', 'LOGGING', 'logIncomingMessage failed', { error: e?.message })
@@ -1087,7 +1087,7 @@ export async function connectToWhatsApp(
           const isGroup = remoteJid.endsWith('@g.us')
           if (isGroup && !fromMe) {
             try {
-              const { getGroupBool, getGroupNumber, getGroupConfig } = await import('./src/utils/utils/group-config.js')
+              const { getGroupBool, getGroupNumber, getGroupConfig } = await import('./plugins/utils/utils/group-config.js')
               const body = rawText
 
               const slow = await getGroupNumber(remoteJid, 'slowmode_s', 0)
@@ -1166,7 +1166,7 @@ export async function connectToWhatsApp(
         const { id: jid, action, participants } = ev
         if (!jid || !Array.isArray(participants) || participants.length === 0) return
 
-        const { getGroupBool, getGroupConfig } = await import('./src/utils/utils/group-config.js')
+        const { getGroupBool, getGroupConfig } = await import('./plugins/utils/utils/group-config.js')
         const welcomeOn = await getGroupBool(jid, 'welcome_on', false)
         if (!welcomeOn) return
 

@@ -1,6 +1,6 @@
 // commands/utils.js
 // Utilidades varias + Funcionalidades Wileys
-import fetch from './utils/utils/fetch.js'
+import fetch from './utils/fetch.js'
 import QRCode from 'qrcode'
 // Importaciones opcionales - fallarán graciosamente si no están instaladas
 let validator, moment, generatePassword, color;

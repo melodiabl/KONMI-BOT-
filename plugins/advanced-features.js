@@ -1,7 +1,7 @@
 // commands/advanced-features.js
 // Funcionalidades avanzadas de Baileys: encuestas, mensajes efímeros, etiquetas, etc.
 
-import logger from '../config/logger.js'
+import logger from './config/logger.js'
 
 // Crear encuesta
 export async function createPoll(ctx) {

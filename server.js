@@ -4,10 +4,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import config from './src/config/config.js';
-import apiRouter from './src/api/api.js';
-import { router as authRouter } from './src/auth/auth.js';
-import subbotApiRouter from './src/api/subbot-api.js';
+import config from './plugins/config/config.js';
+import apiRouter from './plugins/api/api.js';
+import { router as authRouter } from './plugins/auth/auth.js';
+import subbotApiRouter from './plugins/api/subbot-api.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

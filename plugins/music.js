@@ -1,11 +1,29 @@
 // plugins/music.js
 // Sistema de música avanzado - Reproductor, playlists, identificación, etc.
 
-import * as mm from 'music-metadata'
-import NodeID3 from 'node-id3'
-import ytsr from 'ytsr'
 import fs from 'fs'
 import path from 'path'
+
+// Importaciones opcionales para música avanzada
+let mm, NodeID3, ytsr;
+
+try {
+  mm = await import('music-metadata');
+} catch (e) {
+  console.log('⚠️ music-metadata no disponible, usando análisis básico');
+}
+
+try {
+  NodeID3 = (await import('node-id3')).default;
+} catch (e) {
+  console.log('⚠️ node-id3 no disponible, sin manipulación de tags');
+}
+
+try {
+  ytsr = (await import('ytsr')).default;
+} catch (e) {
+  console.log('⚠️ ytsr no disponible, búsquedas limitadas');
+}
 
 // Funcionalidad Wileys: Reacciones automáticas para música
 const addMusicReaction = async (sock, message, emoji = '🎵') => {
@@ -27,6 +45,17 @@ const userPlaylists = new Map();
 // Identificación real de música usando metadatos
 const identifySong = async (audioBuffer) => {
   try {
+    if (!mm) {
+      return {
+        title: 'Audio sin identificar',
+        artist: 'Desconocido',
+        album: 'Desconocido',
+        year: 'Desconocido',
+        identified: false,
+        error: 'music-metadata no disponible'
+      };
+    }
+
     // Analizar metadatos del archivo de audio
     const metadata = await mm.parseBuffer(audioBuffer);
 
@@ -67,6 +96,10 @@ const identifySong = async (audioBuffer) => {
 // Búsqueda real de letras usando APIs públicas
 const getLyrics = async (title, artist) => {
   try {
+    if (!ytsr) {
+      return `🎵 *${title}* - ${artist}\n\n⚠️ Búsqueda de letras no disponible.\n\n💡 Instala ytsr para habilitar búsquedas: npm install ytsr`;
+    }
+
     // Buscar en YouTube para obtener información adicional
     const searchQuery = `${title} ${artist} lyrics`;
     const searchResults = await ytsr(searchQuery, { limit: 1 });

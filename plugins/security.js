@@ -1,11 +1,29 @@
 // plugins/security.js
 // Sistema de seguridad avanzado - 2FA, whitelist, detección de spam, etc.
 
-import db from '../database/db.js'
-import speakeasy from 'speakeasy'
+import db from './database/db.js'
 import QRCode from 'qrcode'
-import bcrypt from 'bcrypt'
-import crypto from 'crypto'
+
+// Importaciones opcionales para seguridad avanzada
+let speakeasy, bcrypt, crypto;
+
+try {
+  speakeasy = (await import('speakeasy')).default;
+} catch (e) {
+  console.log('⚠️ speakeasy no disponible, usando 2FA básico');
+}
+
+try {
+  bcrypt = (await import('bcrypt')).default;
+} catch (e) {
+  console.log('⚠️ bcrypt no disponible, usando hashing básico');
+}
+
+try {
+  crypto = await import('crypto');
+} catch (e) {
+  console.log('⚠️ crypto no disponible, usando funciones básicas');
+}
 
 // Funcionalidad Wileys: Reacciones automáticas para seguridad
 const addSecurityReaction = async (sock, message, emoji = '🔐') => {
@@ -270,6 +288,13 @@ export async function enable2fa(ctx) {
   }
 
   try {
+    if (!speakeasy) {
+      return {
+        success: false,
+        message: '❌ 2FA avanzado no disponible. Instala: npm install speakeasy\n\n💡 Usando sistema básico de códigos temporales.'
+      };
+    }
+
     // Generar secreto 2FA real con Speakeasy
     const secret = generate2FASecret(userPhone);
 
@@ -339,6 +364,13 @@ export async function verify2fa(ctx) {
   }
 
   try {
+    if (!speakeasy) {
+      return {
+        success: false,
+        message: '❌ Verificación 2FA no disponible. Instala: npm install speakeasy'
+      };
+    }
+
     // Verificar código TOTP real con Speakeasy
     const verified = speakeasy.totp.verify({
       secret: userData.secret,

@@ -2,7 +2,7 @@
 // Aviso: Solo modifiqué la parte necesaria para arreglar el fondo inconsistente.
 // Todo el resto del archivo lo dejo intacto.
 
-import fetch from '../utils/utils/fetch.js';
+import fetch from './utils/fetch.js';
 import Jimp from 'jimp';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from 'ffmpeg-static';
