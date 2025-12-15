@@ -1352,6 +1352,10 @@ const COMMAND_FUNCTION_MAP = {
   // Votos
   'vote': 'vote',
   'votes': 'votes',
+  // Utils adicionales
+  'qrcode': 'qrcode',
+  'calc': 'calc',
+  'short': 'short',
 };
 
 async function loadCommandModule(moduleName, commandName = null) {
@@ -2088,6 +2092,11 @@ commandMap.set('diag', { moduleName: 'diag', category: 'Admin', description: 'Di
 // Comandos de promo
 commandMap.set('promo', { moduleName: 'promo', category: 'Utilidades', description: 'Promociones' });
 
+// Comandos adicionales de utils (Wileys)
+commandMap.set('qrcode', { moduleName: 'utils', category: 'Utilidades', description: 'Generar código QR' });
+commandMap.set('calc', { moduleName: 'utils', category: 'Utilidades', description: 'Calculadora' });
+commandMap.set('short', { moduleName: 'utils', category: 'Utilidades', description: 'Acortar URL' });
+
 
 // =========================
 // Funciones de envío de resultados
@@ -2347,81 +2356,7 @@ async function sendListFixedV2(sock, jid, result, ctx) {
 // Sistema de Reacciones Automáticas (Wileys)
 // =========================
 
-async function addAutoReaction(sock, message, command) {
-  if (!sock || !message?.key) return;
 
-  try {
-    const reactionMap = {
-      // Descargas
-      'play': '🎵', 'music': '🎵', 'video': '🎬', 'youtube': '🎬',
-      'tiktok': '📱', 'instagram': '📷', 'ig': '📷',
-      'facebook': '📘', 'fb': '📘', 'twitter': '🐦', 'x': '🐦',
-      'spotify': '🎧', 'pinterest': '📌',
-
-      // IA
-      'ia': '🤖', 'ai': '🤖', 'image': '🎨', 'clasificar': '📊',
-
-      // Media
-      'sticker': '✨', 's': '✨', 'meme': '😂', 'quote': '💭',
-      'tts': '🗣️', 'wallpaper': '🖼️',
-
-      // Utilidades
-      'translate': '🌐', 'tr': '🌐', 'weather': '🌤️', 'clima': '🌤️',
-      'ping': '🏓', 'joke': '😄', 'fact': '📰',
-
-      // Subbots
-      'qr': '📱', 'code': '🔑', 'mybots': '🤖', 'bots': '🤖',
-
-      // Grupo
-      'kick': '👢', 'promote': '⬆️', 'demote': '⬇️',
-      'lock': '🔒', 'unlock': '🔓',
-
-      // Encuestas
-      'poll': '📊', 'pollmultiple': '📊',
-
-      // Estados
-      'typing': '⌨️', 'recording': '🎤', 'online': '🟢', 'offline': '⚫'
-    };
-
-    const emoji = reactionMap[command.toLowerCase()];
-    if (emoji) {
-      await sock.sendMessage(message.key.remoteJid, {
-        react: { text: emoji, key: message.key }
-      });
-    }
-  } catch (error) {
-    console.error('[AUTO_REACTION] Error:', error);
-  }
-}
-
-async function addCompletionReaction(sock, message, result) {
-  if (!sock || !message?.key) return;
-
-  try {
-    let emoji = '✅'; // Default success
-
-    if (result?.success === false) {
-      emoji = '❌'; // Error
-    } else if (result?.type === 'audio') {
-      emoji = '🎵'; // Audio completado
-    } else if (result?.type === 'video') {
-      emoji = '🎬'; // Video completado
-    } else if (result?.type === 'image') {
-      emoji = '🖼️'; // Imagen completada
-    }
-
-    // Esperar un poco antes de la reacción final
-    setTimeout(async () => {
-      try {
-        await sock.sendMessage(message.key.remoteJid, {
-          react: { text: emoji, key: message.key }
-        });
-      } catch {}
-    }, 1000);
-  } catch (error) {
-    console.error('[COMPLETION_REACTION] Error:', error);
-  }
-}
 
 // =========================
 // Dispatch principal
@@ -2526,7 +2461,12 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     console.log('[DISPATCH] 🚀 Ejecutando handler para:', command);
 
     // 🎯 REACCIONES AUTOMÁTICAS (Wileys feature)
-    await addAutoReaction(sock, ctx.message, command);
+    try {
+      const utilsModule = await loadCommandModule('utils');
+      if (utilsModule?.addAutoReaction) {
+        await utilsModule.addAutoReaction(sock, ctx.message, command);
+      }
+    } catch {}
 
     const result = await handler(params, commandMap);
     console.log('[DISPATCH] 📤 Resultado tipo:', result?.type || 'text', '| hasText:', !!result?.text);
@@ -2534,7 +2474,12 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     await sendResult(sock, remoteJid, result, ctx);
 
     // ✅ Reacción de completado
-    await addCompletionReaction(sock, ctx.message, result);
+    try {
+      const utilsModule = await loadCommandModule('utils');
+      if (utilsModule?.addCompletionReaction) {
+        await utilsModule.addCompletionReaction(sock, ctx.message, result);
+      }
+    } catch {}
 
     console.log('[DISPATCH] ✅ Comando ejecutado exitosamente:', command);
     return true;
