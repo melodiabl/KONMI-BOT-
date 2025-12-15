@@ -1,7 +1,7 @@
 // handler.js
-import './src/config/config.js';
+import './plugins/config/config.js';
 // Handler principal para logica de aportes, media, pedidos y proveedores
-import db from "./src/database/db.js";
+import db from "./plugins/database/db.js";
 import path from "path";
 import fs from "fs";
 import axios from "axios";
@@ -9,10 +9,10 @@ import { fileURLToPath, pathToFileURL } from "url";
 import QRCode from "qrcode";
 import pino from "pino";
 import { EventEmitter } from "events";
-import appLogger from "./src/config/logger.js";
-import antibanMiddleware from "./src/utils/utils/anti-ban-middleware.js";
-import antibanSystem from "./src/utils/utils/anti-ban.js";
-import { getGroupBool } from "./src/utils/utils/group-config.js";
+import appLogger from "./plugins/config/logger.js";
+import antibanMiddleware from "./plugins/utils/utils/anti-ban-middleware.js";
+import antibanSystem from "./plugins/utils/utils/anti-ban.js";
+import { getGroupBool } from "./plugins/utils/utils/group-config.js";
 import {
   isBotGloballyActive,
   createSubbotWithPairing,
@@ -22,15 +22,15 @@ import {
   deleteUserSubbot,
   getSubbotByCode as getSubbotByCodeCore,
   cleanOrphanSubbots,
-} from "./src/services/subbot-manager.js";
+} from "./plugins/services/subbot-manager.js";
 import {
   startSubbot,
   stopSubbotRuntime as stopSubbot,
   getSubbotStatus as getRuntimeStatus,
-} from "./src/lib/subbots.js";
-import { processWhatsAppMedia } from "./src/services/file-manager.js";
-import { isSuperAdmin } from "./src/config/global-config.js";
-import { getGeminiModel, hasGeminiApiKey } from "./src/services/gemini-client.js";
+} from "./plugins/lib/subbots.js";
+import { processWhatsAppMedia } from "./plugins/services/file-manager.js";
+import { isSuperAdmin } from "./plugins/config/global-config.js";
+import { getGeminiModel, hasGeminiApiKey } from "./plugins/services/gemini-client.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1242,6 +1242,7 @@ const commandModules = new Map();
 const commandMap = new Map();
 
 const COMMAND_FUNCTION_MAP = {
+  // Descargas
   'play': 'handleMusicDownload',
   'music': 'handleMusicDownload',
   'video': 'handleVideoDownload',
@@ -1263,15 +1264,24 @@ const COMMAND_FUNCTION_MAP = {
   'fact': 'handleFact',
   'trivia': 'handleTriviaCommand',
   'meme': 'handleMemeCommand',
+  // IA
   'ia': 'ai',
   'ai': 'ai',
   'clasificar': 'clasificar',
+  // Básicos
   'ping': 'ping',
   'status': 'status',
   'comandos': 'help',
+  // Subbots - IMPORTANTE: qr y code están en pairing.js
+  'qr': 'qr',
+  'code': 'code',
   'mybots': 'mybots',
   'mibots': 'mybots',
   'bots': 'bots',
+  'stopbot': 'stopbot',
+  'requestcode': 'requestMainBotPairingCode',
+  'maincode': 'mainCode',
+  // Aportes
   'addaporte': 'addaporte',
   'aportes': 'aportes',
   'myaportes': 'myaportes',
@@ -1280,22 +1290,32 @@ const COMMAND_FUNCTION_MAP = {
   'pedido': 'pedido',
   'pedidos': 'pedidos',
   'mispedidos': 'pedidos',
+  // Media
   'sticker': 'sticker',
   's': 'sticker',
   'image': 'image',
   'wallpaper': 'wallpaper',
   'tts': 'tts',
+  // Entretenimiento
   'joke': 'joke',
   'horoscope': 'horoscope',
   'horoscopo': 'horoscope',
+  // Archivos
   'descargar': 'descargar',
   'guardar': 'guardar',
   'archivos': 'archivos',
   'misarchivos': 'misarchivos',
+  // Juegos
   'game': 'game',
   'juego': 'game',
+  // Encuestas
   'poll': 'poll',
   'encuesta': 'poll',
+  'pollmultiple': 'pollMultiple',
+  'quickpoll': 'quickpoll',
+  'rating': 'rating',
+  'yesno': 'yesno',
+  // Grupo
   'kick': 'kick',
   'promote': 'promote',
   'demote': 'demote',
@@ -1303,6 +1323,8 @@ const COMMAND_FUNCTION_MAP = {
   'unlock': 'unlock',
   'settings': 'settings',
   'config': 'settings',
+  'groupinfo': 'groupinfo',
+  // Admin
   'bot': 'bot',
   'logs': 'logs',
   'stats': 'stats',
@@ -1311,13 +1333,25 @@ const COMMAND_FUNCTION_MAP = {
   'update': 'update',
   'broadcast': 'broadcast',
   'bc': 'broadcast',
+  // Perfil
   'whoami': 'whoami',
   'profile': 'profile',
-  'pollmultiple': 'pollMultiple',
+  // Presencia
   'typing': 'typing',
   'recording': 'recording',
   'online': 'online',
   'offline': 'offline',
+  'away': 'away',
+  'busy': 'busy',
+  'readall': 'readall',
+  // Ban
+  'ban': 'ban',
+  'unban': 'unban',
+  // Privacidad
+  'privacy': 'privacy',
+  // Votos
+  'vote': 'vote',
+  'votes': 'votes',
 };
 
 async function loadCommandModule(moduleName, commandName = null) {
@@ -1326,7 +1360,7 @@ async function loadCommandModule(moduleName, commandName = null) {
     return commandModules.get(cacheKey);
   }
   try {
-    const module = await import(`./src/commands/${moduleName}.js`);
+    const module = await import(`./plugins/${moduleName}.js`);
     let handler = null;
     if (commandName && COMMAND_FUNCTION_MAP[commandName]) {
       const functionName = COMMAND_FUNCTION_MAP[commandName];
@@ -1759,31 +1793,23 @@ El bot reacciona automáticamente a tus comandos:
 ✨ Media → Reacciona mientras crea
 No necesitas hacer nada, es automático!
 
-📊 */poll* <pregunta> | opción1 | opción2
-Crear encuesta de una sola opción
-Ejemplo: /poll ¿Te gusta? | Sí | No
+📊 *ENCUESTAS*
+*/poll* <pregunta> | op1 | op2 - Encuesta normal
+*/pollmultiple* <pregunta> | op1 | op2 - Múltiples opciones
+*/quickpoll* <pregunta> - Encuesta rápida Sí/No
+*/rating* <pregunta> - Rating de 1 a 5 estrellas
+*/yesno* <pregunta> - Sí/No/No sé
 
-📊 */pollmultiple* <pregunta> | opción1 | opción2
-Crear encuesta de múltiples opciones
-Ejemplo: /pollmultiple ¿Qué te gusta? | Pizza | Tacos | Sushi
+⌨️ *ESTADOS DE PRESENCIA*
+*/typing* [segundos] - Simular escribiendo
+*/recording* [segundos] - Simular grabando
+*/online* - Estado disponible
+*/offline* - Estado no disponible
+*/away* - Estado ausente
+*/busy* - Estado ocupado
+*/readall* - Marcar todo como leído (grupos)
 
-⌨️ */typing* [segundos]
-Simular que estás escribiendo
-Ejemplo: /typing 5
-
-🎤 */recording* [segundos]
-Simular que estás grabando audio
-Ejemplo: /recording 3
-
-🟢 */online*
-Cambiar estado a disponible
-Ejemplo: /online
-
-⚫ */offline*
-Cambiar estado a no disponible
-Ejemplo: /offline
-
-💡 *Tip:* Usa /help para volver al menú principal`
+�  *Tip:* Usa /help para volver al menú principal`
     };
   }
 
@@ -1996,12 +2022,15 @@ commandMap.set('pedido', { moduleName: 'pedidos', category: 'Aportes', descripti
 commandMap.set('pedidos', { moduleName: 'pedidos', category: 'Aportes', description: 'Ver pedidos' });
 commandMap.set('mispedidos', { moduleName: 'pedidos', category: 'Aportes', description: 'Mis pedidos' });
 
-// Comandos de Subbots
-commandMap.set('qr', { moduleName: 'subbots', category: 'Subbots', description: 'Crear subbot con QR', admin: false });
+// Comandos de Subbots (disponibles para TODOS los usuarios)
+commandMap.set('qr', { moduleName: 'pairing', category: 'Subbots', description: 'Crear subbot con QR', admin: false });
 commandMap.set('code', { moduleName: 'pairing', category: 'Subbots', description: 'Crear subbot con código', admin: false });
-commandMap.set('mybots', { moduleName: 'mybots', category: 'Subbots', description: 'Ver mis subbots', admin: false });
-commandMap.set('mibots', { moduleName: 'mybots', category: 'Subbots', description: 'Ver mis subbots', admin: false });
-commandMap.set('bots', { moduleName: 'bots', category: 'Admin', description: 'Ver todos los bots', admin: true });
+commandMap.set('mybots', { moduleName: 'subbots', category: 'Subbots', description: 'Ver mis subbots', admin: false });
+commandMap.set('mibots', { moduleName: 'subbots', category: 'Subbots', description: 'Ver mis subbots', admin: false });
+commandMap.set('bots', { moduleName: 'subbots', category: 'Admin', description: 'Ver todos los bots', admin: false }); // Verificación interna en subbots.js
+commandMap.set('stopbot', { moduleName: 'subbots', category: 'Subbots', description: 'Detener subbot', admin: false });
+commandMap.set('requestcode', { moduleName: 'pairing', category: 'Admin', description: 'Solicitar código bot principal', admin: true });
+commandMap.set('maincode', { moduleName: 'pairing', category: 'Admin', description: 'Ver código bot principal', admin: true });
 
 // Comandos de admin - Sistema
 commandMap.set('logs', { moduleName: 'logs', category: 'Admin', description: 'Ver logs', admin: true });
@@ -2016,12 +2045,48 @@ commandMap.set('bc', { moduleName: 'broadcast', category: 'Admin', description: 
 commandMap.set('whoami', { moduleName: 'profile', category: 'Utilidades', description: 'Mi perfil' });
 commandMap.set('profile', { moduleName: 'profile', category: 'Utilidades', description: 'Ver perfil' });
 
-// Comandos de Wileys
+// Comandos interactivos y presencia
 commandMap.set('pollmultiple', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta múltiple' });
+commandMap.set('quickpoll', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta rápida sí/no' });
+commandMap.set('rating', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta de rating 1-5' });
+commandMap.set('yesno', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta sí/no/no sé' });
 commandMap.set('typing', { moduleName: 'presence', category: 'Utilidades', description: 'Simular escribiendo' });
 commandMap.set('recording', { moduleName: 'presence', category: 'Utilidades', description: 'Simular grabando' });
 commandMap.set('online', { moduleName: 'presence', category: 'Utilidades', description: 'Estado disponible' });
 commandMap.set('offline', { moduleName: 'presence', category: 'Utilidades', description: 'Estado no disponible' });
+commandMap.set('away', { moduleName: 'presence', category: 'Utilidades', description: 'Estado ausente' });
+commandMap.set('busy', { moduleName: 'presence', category: 'Utilidades', description: 'Estado ocupado' });
+commandMap.set('readall', { moduleName: 'presence', category: 'Grupo', description: 'Marcar todo como leído' });
+
+// Comandos de ban y moderación
+commandMap.set('ban', { moduleName: 'ban', category: 'Grupo', description: 'Banear usuario', admin: true });
+commandMap.set('unban', { moduleName: 'ban', category: 'Grupo', description: 'Desbanear usuario', admin: true });
+
+// Comandos de privacidad
+commandMap.set('privacy', { moduleName: 'privacy', category: 'Utilidades', description: 'Configurar privacidad' });
+
+// Comandos de votos
+commandMap.set('vote', { moduleName: 'votes', category: 'Interactivo', description: 'Votar' });
+commandMap.set('votes', { moduleName: 'votes', category: 'Interactivo', description: 'Ver votos' });
+
+// Comandos de contenido
+commandMap.set('content', { moduleName: 'content', category: 'Media', description: 'Gestionar contenido' });
+
+// Comandos de llamadas
+commandMap.set('call', { moduleName: 'calls', category: 'Utilidades', description: 'Gestionar llamadas' });
+
+// Comandos de mensajes
+commandMap.set('delete', { moduleName: 'message-control', category: 'Grupo', description: 'Eliminar mensaje', admin: true });
+commandMap.set('clear', { moduleName: 'message-control', category: 'Grupo', description: 'Limpiar chat', admin: true });
+
+// Comandos de demo
+commandMap.set('demo', { moduleName: 'demo', category: 'Utilidades', description: 'Demo del bot' });
+
+// Comandos de diagnóstico
+commandMap.set('diag', { moduleName: 'diag', category: 'Admin', description: 'Diagnóstico del sistema', admin: true });
+
+// Comandos de promo
+commandMap.set('promo', { moduleName: 'promo', category: 'Utilidades', description: 'Promociones' });
 
 
 // =========================
@@ -2119,6 +2184,42 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
+  // MÉTODO 1: NativeFlow buttons (funciona mejor en grupos)
+  if (isGroup && allRows.length > 0) {
+    try {
+      const nativeFlowButtons = allRows.slice(0, 10).map((r) => ({
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+          display_text: r.title,
+          id: r.rowId
+        })
+      }));
+
+      const interactiveMessage = {
+        viewOnceMessage: {
+          message: {
+            interactiveMessage: {
+              body: { text: result.text || 'Elige una opción' },
+              footer: { text: result.footer || 'KONMI BOT © 2025' },
+              header: { title: result.title || '📋 Menú', hasMediaAttachment: false },
+              nativeFlowMessage: {
+                buttons: nativeFlowButtons,
+                messageParamsJson: ''
+              }
+            }
+          }
+        }
+      };
+
+      await sock.sendMessage(jid, interactiveMessage, opts);
+      console.log('[sendListV2] ✅ NativeFlow buttons enviados (grupo)');
+      return true;
+    } catch (err) {
+      console.log('[sendListV2] ⚠️ NativeFlow falló:', err?.message);
+    }
+  }
+
+  // MÉTODO 2: List message clásico (funciona mejor en privado)
   const listMessage = {
     text: result.text || 'Elige una opción',
     footer: result.footer || 'KONMI BOT © 2025',
@@ -2243,6 +2344,86 @@ async function sendListFixedV2(sock, jid, result, ctx) {
 
 
 // =========================
+// Sistema de Reacciones Automáticas (Wileys)
+// =========================
+
+async function addAutoReaction(sock, message, command) {
+  if (!sock || !message?.key) return;
+
+  try {
+    const reactionMap = {
+      // Descargas
+      'play': '🎵', 'music': '🎵', 'video': '🎬', 'youtube': '🎬',
+      'tiktok': '📱', 'instagram': '📷', 'ig': '📷',
+      'facebook': '📘', 'fb': '📘', 'twitter': '🐦', 'x': '🐦',
+      'spotify': '🎧', 'pinterest': '📌',
+
+      // IA
+      'ia': '🤖', 'ai': '🤖', 'image': '🎨', 'clasificar': '📊',
+
+      // Media
+      'sticker': '✨', 's': '✨', 'meme': '😂', 'quote': '💭',
+      'tts': '🗣️', 'wallpaper': '🖼️',
+
+      // Utilidades
+      'translate': '🌐', 'tr': '🌐', 'weather': '🌤️', 'clima': '🌤️',
+      'ping': '🏓', 'joke': '😄', 'fact': '📰',
+
+      // Subbots
+      'qr': '📱', 'code': '🔑', 'mybots': '🤖', 'bots': '🤖',
+
+      // Grupo
+      'kick': '👢', 'promote': '⬆️', 'demote': '⬇️',
+      'lock': '🔒', 'unlock': '🔓',
+
+      // Encuestas
+      'poll': '📊', 'pollmultiple': '📊',
+
+      // Estados
+      'typing': '⌨️', 'recording': '🎤', 'online': '🟢', 'offline': '⚫'
+    };
+
+    const emoji = reactionMap[command.toLowerCase()];
+    if (emoji) {
+      await sock.sendMessage(message.key.remoteJid, {
+        react: { text: emoji, key: message.key }
+      });
+    }
+  } catch (error) {
+    console.error('[AUTO_REACTION] Error:', error);
+  }
+}
+
+async function addCompletionReaction(sock, message, result) {
+  if (!sock || !message?.key) return;
+
+  try {
+    let emoji = '✅'; // Default success
+
+    if (result?.success === false) {
+      emoji = '❌'; // Error
+    } else if (result?.type === 'audio') {
+      emoji = '🎵'; // Audio completado
+    } else if (result?.type === 'video') {
+      emoji = '🎬'; // Video completado
+    } else if (result?.type === 'image') {
+      emoji = '🖼️'; // Imagen completada
+    }
+
+    // Esperar un poco antes de la reacción final
+    setTimeout(async () => {
+      try {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: emoji, key: message.key }
+        });
+      } catch {}
+    }, 1000);
+  } catch (error) {
+    console.error('[COMPLETION_REACTION] Error:', error);
+  }
+}
+
+// =========================
 // Dispatch principal
 // =========================
 
@@ -2343,10 +2524,18 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     };
 
     console.log('[DISPATCH] 🚀 Ejecutando handler para:', command);
+
+    // 🎯 REACCIONES AUTOMÁTICAS (Wileys feature)
+    await addAutoReaction(sock, ctx.message, command);
+
     const result = await handler(params, commandMap);
     console.log('[DISPATCH] 📤 Resultado tipo:', result?.type || 'text', '| hasText:', !!result?.text);
 
     await sendResult(sock, remoteJid, result, ctx);
+
+    // ✅ Reacción de completado
+    await addCompletionReaction(sock, ctx.message, result);
+
     console.log('[DISPATCH] ✅ Comando ejecutado exitosamente:', command);
     return true;
 
