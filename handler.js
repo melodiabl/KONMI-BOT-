@@ -2984,31 +2984,52 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     headerType: 1
   };
 
-  // Intentar enviar con native flow
+  // Intentar enviar con native flow (formato correcto de Wileys)
   try {
-    await sock.sendMessage(jid, {
-      viewOnceMessage: {
-        message: {
-          interactiveMessage: {
-            body: { text: result.text || 'Elige una opción' },
-            footer: { text: result.footer || 'KONMI BOT © 2025' },
-            header: {
-              title: result.title || '📋 Menú de Comandos',
-              hasMediaAttachment: false
-            },
-            nativeFlowMessage: {
-              buttons: limitedButtons,
-              messageParamsJson: ''
-            }
-          }
-        }
+    const interactiveMessage = {
+      body: {
+        text: result.text || 'Elige una opción'
+      },
+      footer: {
+        text: result.footer || 'KONMI BOT © 2025'
+      },
+      header: {
+        title: result.title || '📋 Menú de Comandos',
+        hasMediaAttachment: false
+      },
+      nativeFlowMessage: {
+        buttons: limitedButtons
       }
+    };
+
+    await sock.sendMessage(jid, {
+      interactiveMessage: interactiveMessage
     }, opts);
 
     console.log('[sendListV2] ✅ Native flow enviado exitosamente');
     return true;
   } catch (err1) {
     console.log('[sendListV2] ⚠️ Native flow falló:', err1?.message);
+    console.log('[sendListV2] 🔄 Intentando botones simples...');
+  }
+
+  // Intentar con botones simples (formato alternativo)
+  try {
+    await sock.sendMessage(jid, {
+      text: result.text || 'Elige una opción',
+      footer: result.footer || 'KONMI BOT © 2025',
+      buttons: limitedButtons.map((btn, i) => ({
+        buttonId: JSON.parse(btn.buttonParamsJson).id,
+        buttonText: { displayText: JSON.parse(btn.buttonParamsJson).display_text },
+        type: 1
+      })),
+      headerType: 1
+    }, opts);
+
+    console.log('[sendListV2] ✅ Botones simples enviados');
+    return true;
+  } catch (err2) {
+    console.log('[sendListV2] ⚠️ Botones simples fallaron:', err2?.message);
     console.log('[sendListV2] 🔄 Intentando list button clásico...');
   }
 
