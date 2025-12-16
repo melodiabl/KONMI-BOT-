@@ -271,7 +271,7 @@ export async function cleanupInactiveSubbots() {
       if (!lastAt) continue;
       const diff = now - lastAt;
       if (diff > THRESHOLD) {
-        console.log(`🧹 Limpieza: marcando subbot ${row.code} como deleted (inactivo ${msToHuman(diff)})`);
+        console.log(`[CLEANUP] Limpieza: marcando subbot ${row.code} como deleted (inactivo ${msToHuman(diff)})`);
         await db("subbots").where({ id: row.id }).update({
           status: "deleted",
           is_active: false,
@@ -492,7 +492,7 @@ async function handleStartSubbot(ctx) {
   const row = await ensureSubbotForUser(cleanPhone, name);
   if (!row) {
     await sock.sendMessage(remoteJid, {
-      text: "⚠️ No se pudo crear o recuperar tu subbot. Intenta de nuevo.",
+      text: "[ERROR] No se pudo crear o recuperar tu subbot. Intenta de nuevo.",
     });
     return { success: false };
   }
@@ -520,7 +520,7 @@ async function handleStartSubbot(ctx) {
   });
   if (!startResult || !startResult.success) {
     await sock.sendMessage(remoteJid, {
-      text: "⚠️ No se pudo iniciar tu subbot. Intenta más tarde o contacta soporte.",
+      text: "[ERROR] No se pudo iniciar tu subbot. Intenta más tarde o contacta soporte.",
     });
     return { success: false };
   }
@@ -530,10 +530,10 @@ async function handleStartSubbot(ctx) {
   }
   const messages = [];
   messages.push(
-    `✅ Tu subbot se está iniciando.\n\n` +
-    `📛 *Código:* ${code}\n` +
-    `👤 *Usuario:* ${row.user_name || "Sin nombre"}\n` +
-    `📱 *Teléfono:* ${row.user_phone}\n`
+    `[OK] Tu subbot se está iniciando.\n\n` +
+    `[CODIGO] *Código:* ${code}\n` +
+    `[USUARIO] *Usuario:* ${row.user_name || "Sin nombre"}\n` +
+    `[TELEFONO] *Teléfono:* ${row.user_phone}\n`
   );
   if (startResult.qrCode) {
     try {
@@ -550,16 +550,16 @@ async function handleStartSubbot(ctx) {
       });
     } catch (err) {
       console.error("Error generando QR:", err);
-      messages.push("⚠️ No se pudo generar el código QR. Intenta más tarde o pide un /code.");
+      messages.push("[WARNING] No se pudo generar el código QR. Intenta más tarde o pide un /code.");
     }
   }
   if (startResult.pairingCode) {
     messages.push(
-      `🔑 *Código de vinculación:* \`${startResult.pairingCode}\`\n` +
-      `📌 Úsalo en tu WhatsApp para conectar el subbot.`
+      `[KEY] *Código de vinculación:* \`${startResult.pairingCode}\`\n` +
+      `[PIN] Úsalo en tu WhatsApp para conectar el subbot.`
     );
   }
-  messages.push("ℹ️ Una vez conectado, tu subbot aparecerá como *online* en /mybots.");
+  messages.push("[INFO] Una vez conectado, tu subbot apareceráo *online* en /mybots.");
   await sock.sendMessage(remoteJid, { text: messages.join("\n") });
   await emitSubbotEvent(code, "subbot_started", {
     connectionType,
@@ -590,7 +590,7 @@ async function handleStopSubbot(ctx) {
     const found = rows.find((r) => r.code === explicitCode);
     if (!found) {
       await sock.sendMessage(remoteJid, {
-        text: `⚠️ No se encontró el subbot con código: ${explicitCode}.`,
+        text: `[WARNING] No se encontró el subbot con código: ${explicitCode}.`,
       });
       return { success: false };
     }
@@ -1145,19 +1145,19 @@ export async function handleDebugAdmin(ctx) {
       usuarios: await db("usuarios").count("* as count").first(),
       subbots: await db("subbots").count("* as count").first(),
     };
-    let message = "🔍 *Información del Sistema*\n\n";
-    message += `📚 **Aportes:** ${stats.aportes?.count || 0}\n`;
-    message += `📝 **Pedidos:** ${stats.pedidos?.count || 0}\n`;
-    message += `👥 **Usuarios:** ${stats.usuarios?.count || 0}\n`;
-    message += `🤖 **Subbots:** ${stats.subbots?.count || 0}\n`;
-    message += `\n💾 **Base de datos:** Operativa\n`;
-    message += `⏰ **Tiempo:** ${new Date().toLocaleString("es-ES")}`;
+    let message = "[INFO] *Información del Sistema*\n\n";
+    message += `[APORTES] **Aportes:** ${stats.aportes?.count || 0}\n`;
+    message += `[PEDIDOS] **Pedidos:** ${stats.pedidos?.count || 0}\n`;
+    message += `[USUARIOS] **Usuarios:** ${stats.usuarios?.count || 0}\n`;
+    message += `[SUBBOTS] **Subbots:** ${stats.subbots?.count || 0}\n`;
+    message += `\n[DB] **Base de datos:** Operativa\n`;
+    message += `[TIEMPO] **Tiempo:** ${new Date().toLocaleString("es-ES")}`;
     return { success: true, message };
   } catch (error) {
-    console.error("❌ Error en /debugadmin:", error);
+    console.error("[ERROR] Error en /debugadmin:", error);
     return {
       success: false,
-      message: "⚠️ Error obteniendo información del sistema.",
+      message: "[WARNING] Error obteniendo información del sistema.",
     };
   }
 }
@@ -1592,51 +1592,210 @@ async function handleHelpCommand(ctx) {
   const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
   const isAdmin = await isSuperAdmin(userPhone);
 
-  // TEXTO PLANO SIMPLE - Sin interactivos
-  let helpText = `*🤖 KONMI BOT - MENÚ DE AYUDA*\n\n`;
-  helpText += `¡Hola! 👋 Aquí tienes todos los comandos disponibles:\n\n`;
+  // Organizar comandos por categorías desde COMMAND_FUNCTION_MAP
+  const commandCategories = {
+    'DESCARGAS': [
+      { cmd: 'play', desc: 'Descargar audio de YouTube', usage: '/play <nombre>' },
+      { cmd: 'music', desc: 'Descargar música', usage: '/music <nombre>' },
+      { cmd: 'video', desc: 'Descargar video de YouTube', usage: '/video <nombre>' },
+      { cmd: 'youtube', desc: 'Descargar de YouTube', usage: '/youtube <url>' },
+      { cmd: 'tiktok', desc: 'Descargar de TikTok', usage: '/tiktok <url>' },
+      { cmd: 'instagram', desc: 'Descargar de Instagram', usage: '/instagram <url>' },
+      { cmd: 'ig', desc: 'Descargar de Instagram', usage: '/ig <url>' },
+      { cmd: 'facebook', desc: 'Descargar de Facebook', usage: '/facebook <url>' },
+      { cmd: 'fb', desc: 'Descargar de Facebook', usage: '/fb <url>' },
+      { cmd: 'twitter', desc: 'Descargar de Twitter/X', usage: '/twitter <url>' },
+      { cmd: 'x', desc: 'Descargar de X', usage: '/x <url>' },
+      { cmd: 'pinterest', desc: 'Descargar de Pinterest', usage: '/pinterest <url>' },
+      { cmd: 'spotify', desc: 'Buscar en Spotify', usage: '/spotify <búsqueda>' },
+      { cmd: 'soundcloud', desc: 'Descargar de SoundCloud', usage: '/soundcloud <url>' },
+      { cmd: 'reddit', desc: 'Descargar de Reddit', usage: '/reddit <url>' },
+      { cmd: 'twitch', desc: 'Descargar de Twitch', usage: '/twitch <url>' },
+      { cmd: 'dailymotion', desc: 'Descargar de Dailymotion', usage: '/dailymotion <url>' },
+      { cmd: 'vimeo', desc: 'Descargar de Vimeo', usage: '/vimeo <url>' },
+      { cmd: 'kwai', desc: 'Descargar de Kwai', usage: '/kwai <url>' },
+      { cmd: 'bilibili', desc: 'Descargar de Bilibili', usage: '/bilibili <url>' },
+      { cmd: 'downloads', desc: 'Ver historial de descargas', usage: '/downloads' }
+    ],
+    'INTELIGENCIA ARTIFICIAL': [
+      { cmd: 'ia', desc: 'Chatear con IA', usage: '/ia <texto>' },
+      { cmd: 'ai', desc: 'Chatear con IA', usage: '/ai <texto>' },
+      { cmd: 'clasificar', desc: 'Clasificar texto', usage: '/clasificar <texto>' },
+      { cmd: 'translate', desc: 'Traducir texto', usage: '/translate <texto>' },
+      { cmd: 'tr', desc: 'Traducir texto', usage: '/tr <texto>' },
+      { cmd: 'resume', desc: 'Resumir texto', usage: '/resume <texto>' },
+      { cmd: 'explain', desc: 'Explicar concepto', usage: '/explain <concepto>' },
+      { cmd: 'sentiment', desc: 'Análisis de sentimientos', usage: '/sentiment <texto>' },
+      { cmd: 'grammar', desc: 'Corrección gramatical', usage: '/grammar <texto>' },
+      { cmd: 'analyze', desc: 'Analizar texto', usage: '/analyze <texto>' },
+      { cmd: 'brainstorm', desc: 'Lluvia de ideas', usage: '/brainstorm <tema>' }
+    ],
+    'MEDIA Y MULTIMEDIA': [
+      { cmd: 'sticker', desc: 'Crear sticker', usage: '/sticker (responder a imagen)' },
+      { cmd: 's', desc: 'Crear sticker', usage: '/s (responder a imagen)' },
+      { cmd: 'image', desc: 'Buscar imagen', usage: '/image <búsqueda>' },
+      { cmd: 'wallpaper', desc: 'Buscar wallpaper', usage: '/wallpaper <búsqueda>' },
+      { cmd: 'tts', desc: 'Texto a voz', usage: '/tts <texto>' },
+      { cmd: 'compress', desc: 'Comprimir imagen', usage: '/compress (responder a imagen)' },
+      { cmd: 'convert', desc: 'Convertir formato', usage: '/convert <formato>' },
+      { cmd: 'removebg', desc: 'Remover fondo', usage: '/removebg (responder a imagen)' },
+      { cmd: 'addtext', desc: 'Agregar texto a imagen', usage: '/addtext <texto>' },
+      { cmd: 'gif', desc: 'Crear GIF', usage: '/gif (responder a video)' },
+      { cmd: 'collage', desc: 'Crear collage', usage: '/collage (múltiples imágenes)' },
+      { cmd: 'filter', desc: 'Aplicar filtro', usage: '/filter <tipo>' },
+      { cmd: 'resize', desc: 'Redimensionar imagen', usage: '/resize <tamaño>' },
+      { cmd: 'mediahelp', desc: 'Ayuda de media', usage: '/mediahelp' }
+    ],
+    'MUSICA': [
+      { cmd: 'identify', desc: 'Identificar canción', usage: '/identify (responder a audio)' },
+      { cmd: 'lyrics', desc: 'Buscar letra', usage: '/lyrics <canción>' },
+      { cmd: 'playlist', desc: 'Crear playlist', usage: '/playlist <nombre>' },
+      { cmd: 'radio', desc: 'Escuchar radio', usage: '/radio <estación>' },
+      { cmd: 'nowplaying', desc: 'Canción actual', usage: '/nowplaying' },
+      { cmd: 'musichelp', desc: 'Ayuda de música', usage: '/musichelp' }
+    ],
+    'UTILIDADES': [
+      { cmd: 'weather', desc: 'Ver clima', usage: '/weather <ciudad>' },
+      { cmd: 'clima', desc: 'Ver clima', usage: '/clima <ciudad>' },
+      { cmd: 'quote', desc: 'Cita inspiradora', usage: '/quote' },
+      { cmd: 'fact', desc: 'Dato curioso', usage: '/fact' },
+      { cmd: 'trivia', desc: 'Pregunta de trivia', usage: '/trivia' },
+      { cmd: 'meme', desc: 'Generar meme', usage: '/meme' },
+      { cmd: 'qrcode', desc: 'Generar código QR', usage: '/qrcode <texto>' },
+      { cmd: 'calc', desc: 'Calculadora', usage: '/calc <operación>' },
+      { cmd: 'short', desc: 'Acortar URL', usage: '/short <url>' },
+      { cmd: 'password', desc: 'Generar contraseña', usage: '/password <longitud>' },
+      { cmd: 'email', desc: 'Validar email', usage: '/email <correo>' },
+      { cmd: 'color', desc: 'Información de color', usage: '/color <código>' },
+      { cmd: 'timezone', desc: 'Zona horaria', usage: '/timezone <zona>' }
+    ],
+    'JUEGOS': [
+      { cmd: 'game', desc: 'Menú de juegos', usage: '/game' },
+      { cmd: 'juego', desc: 'Menú de juegos', usage: '/juego' },
+      { cmd: 'rps', desc: 'Piedra, papel o tijera', usage: '/rps <opción>' },
+      { cmd: 'guess', desc: 'Adivinar número', usage: '/guess <número>' },
+      { cmd: 'dice', desc: 'Lanzar dado', usage: '/dice' },
+      { cmd: 'sorteo', desc: 'Hacer sorteo', usage: '/sorteo <opciones>' },
+      { cmd: 'coin', desc: 'Lanzar moneda', usage: '/coin' },
+      { cmd: 'hangman', desc: 'Juego del ahorcado', usage: '/hangman' },
+      { cmd: 'memory', desc: 'Juego de memoria', usage: '/memory' },
+      { cmd: 'blackjack', desc: 'Juego de blackjack', usage: '/blackjack' },
+      { cmd: 'lottery', desc: 'Lotería', usage: '/lottery' }
+    ],
+    'ENCUESTAS': [
+      { cmd: 'poll', desc: 'Crear encuesta', usage: '/poll <pregunta>' },
+      { cmd: 'encuesta', desc: 'Crear encuesta', usage: '/encuesta <pregunta>' },
+      { cmd: 'pollmultiple', desc: 'Encuesta múltiple', usage: '/pollmultiple <opciones>' },
+      { cmd: 'quickpoll', desc: 'Encuesta rápida', usage: '/quickpoll <pregunta>' },
+      { cmd: 'rating', desc: 'Sistema de calificación', usage: '/rating <tema>' },
+      { cmd: 'yesno', desc: 'Encuesta sí/no', usage: '/yesno <pregunta>' },
+      { cmd: 'vote', desc: 'Votar', usage: '/vote <opción>' },
+      { cmd: 'votes', desc: 'Ver votos', usage: '/votes' }
+    ],
+    'GRUPOS': [
+      { cmd: 'kick', desc: 'Expulsar usuario', usage: '/kick @usuario' },
+      { cmd: 'promote', desc: 'Promover a admin', usage: '/promote @usuario' },
+      { cmd: 'demote', desc: 'Quitar admin', usage: '/demote @usuario' },
+      { cmd: 'lock', desc: 'Bloquear grupo', usage: '/lock' },
+      { cmd: 'unlock', desc: 'Desbloquear grupo', usage: '/unlock' },
+      { cmd: 'settings', desc: 'Configuración del grupo', usage: '/settings' },
+      { cmd: 'config', desc: 'Configuración del grupo', usage: '/config' },
+      { cmd: 'groupinfo', desc: 'Información del grupo', usage: '/groupinfo' },
+      { cmd: 'welcome', desc: 'Mensaje de bienvenida', usage: '/welcome <mensaje>' },
+      { cmd: 'automod', desc: 'Moderación automática', usage: '/automod on/off' },
+      { cmd: 'rules', desc: 'Reglas del grupo', usage: '/rules' },
+      { cmd: 'groupstats', desc: 'Estadísticas del grupo', usage: '/groupstats' },
+      { cmd: 'clean', desc: 'Limpiar mensajes', usage: '/clean <cantidad>' }
+    ],
+    'SUBBOTS': [
+      { cmd: 'qr', desc: 'Crear subbot con QR', usage: '/qr' },
+      { cmd: 'code', desc: 'Crear subbot con código', usage: '/code' },
+      { cmd: 'mybots', desc: 'Mis subbots', usage: '/mybots' },
+      { cmd: 'mibots', desc: 'Mis subbots', usage: '/mibots' },
+      { cmd: 'bots', desc: 'Lista de subbots', usage: '/bots' },
+      { cmd: 'stopbot', desc: 'Detener subbot', usage: '/stopbot <código>' },
+      { cmd: 'requestcode', desc: 'Solicitar código', usage: '/requestcode' },
+      { cmd: 'maincode', desc: 'Código del bot principal', usage: '/maincode' },
+      { cmd: 'subbotstats', desc: 'Estadísticas de subbots', usage: '/subbotstats' },
+      { cmd: 'subbotmanage', desc: 'Gestionar subbots', usage: '/subbotmanage' },
+      { cmd: 'subbotmonitor', desc: 'Monitor de subbots', usage: '/subbotmonitor' }
+    ],
+    'SEGURIDAD': [
+      { cmd: 'whitelist', desc: 'Lista blanca', usage: '/whitelist <usuario>' },
+      { cmd: 'blacklist', desc: 'Lista negra', usage: '/blacklist <usuario>' },
+      { cmd: 'enable2fa', desc: 'Activar 2FA', usage: '/enable2fa' },
+      { cmd: 'verify2fa', desc: 'Verificar 2FA', usage: '/verify2fa <código>' },
+      { cmd: 'disable2fa', desc: 'Desactivar 2FA', usage: '/disable2fa' },
+      { cmd: 'spamcheck', desc: 'Verificar spam', usage: '/spamcheck' },
+      { cmd: 'securitylogs', desc: 'Logs de seguridad', usage: '/securitylogs' },
+      { cmd: 'securitystatus', desc: 'Estado de seguridad', usage: '/securitystatus' },
+      { cmd: 'ban', desc: 'Banear usuario', usage: '/ban @usuario' },
+      { cmd: 'unban', desc: 'Desbanear usuario', usage: '/unban @usuario' },
+      { cmd: 'privacy', desc: 'Configurar privacidad', usage: '/privacy' }
+    ],
+    'ARCHIVOS': [
+      { cmd: 'descargar', desc: 'Descargar archivo', usage: '/descargar <url>' },
+      { cmd: 'guardar', desc: 'Guardar archivo', usage: '/guardar (responder a archivo)' },
+      { cmd: 'archivos', desc: 'Lista de archivos', usage: '/archivos' },
+      { cmd: 'misarchivos', desc: 'Mis archivos', usage: '/misarchivos' }
+    ],
+    'APORTES': [
+      { cmd: 'addaporte', desc: 'Agregar aporte', usage: '/addaporte (con media)' },
+      { cmd: 'aportes', desc: 'Ver aportes', usage: '/aportes' },
+      { cmd: 'myaportes', desc: 'Mis aportes', usage: '/myaportes' },
+      { cmd: 'misaportes', desc: 'Mis aportes', usage: '/misaportes' },
+      { cmd: 'aporteestado', desc: 'Estado del aporte', usage: '/aporteestado <id>' },
+      { cmd: 'pedido', desc: 'Hacer pedido', usage: '/pedido <descripción>' },
+      { cmd: 'pedidos', desc: 'Ver pedidos', usage: '/pedidos' },
+      { cmd: 'mispedidos', desc: 'Mis pedidos', usage: '/mispedidos' }
+    ],
+    'ENTRETENIMIENTO': [
+      { cmd: 'joke', desc: 'Chiste aleatorio', usage: '/joke' },
+      { cmd: 'horoscope', desc: 'Horóscopo', usage: '/horoscope <signo>' },
+      { cmd: 'horoscopo', desc: 'Horóscopo', usage: '/horoscopo <signo>' }
+    ],
+    'PERFIL': [
+      { cmd: 'whoami', desc: 'Mi información', usage: '/whoami' },
+      { cmd: 'profile', desc: 'Ver perfil', usage: '/profile' }
+    ],
+    'PRESENCIA': [
+      { cmd: 'typing', desc: 'Simular escribiendo', usage: '/typing' },
+      { cmd: 'recording', desc: 'Simular grabando', usage: '/recording' },
+      { cmd: 'online', desc: 'Aparecer en línea', usage: '/online' },
+      { cmd: 'offline', desc: 'Aparecer desconectado', usage: '/offline' },
+      { cmd: 'away', desc: 'Aparecer ausente', usage: '/away' },
+      { cmd: 'busy', desc: 'Aparecer ocupado', usage: '/busy' },
+      { cmd: 'readall', desc: 'Marcar todo como leído', usage: '/readall' }
+    ],
+    'BASICOS': [
+      { cmd: 'ping', desc: 'Ver latencia del bot', usage: '/ping' },
+      { cmd: 'status', desc: 'Estado del sistema', usage: '/status' },
+      { cmd: 'comandos', desc: 'Lista de comandos', usage: '/comandos' }
+    ]
+  };
 
-  helpText += `*📥 DESCARGAS*\n`;
-  helpText += `• /play <nombre> - Descargar audio de YouTube\n`;
-  helpText += `• /video <nombre> - Descargar video de YouTube\n`;
-  helpText += `• /tiktok <url> - Descargar de TikTok\n`;
-  helpText += `• /instagram <url> - Descargar de Instagram\n`;
-  helpText += `• /spotify <búsqueda> - Buscar en Spotify\n\n`;
-
-  helpText += `*🤖 INTELIGENCIA ARTIFICIAL*\n`;
-  helpText += `• /ia <texto> - Chatear con IA\n`;
-  helpText += `• /clasificar <texto> - Clasificar texto\n`;
-  helpText += `• /translate <texto> - Traducir texto\n\n`;
-
-  helpText += `*🎨 MEDIA*\n`;
-  helpText += `• /sticker - Crear sticker\n`;
-  helpText += `• /toimg - Convertir sticker a imagen\n\n`;
-
-  helpText += `*🛠 UTILIDADES*\n`;
-  helpText += `• /clima <ciudad> - Ver clima\n`;
-  helpText += `• /qr <texto> - Generar código QR\n`;
-  helpText += `• /ping - Ver latencia del bot\n\n`;
-
-  helpText += `*👥 GRUPO*\n`;
-  helpText += `• /groupinfo - Info del grupo\n`;
-  helpText += `• /tagall - Mencionar a todos\n\n`;
-
+  // Agregar comandos de admin solo si es admin
   if (isAdmin) {
-    helpText += `*🔧 ADMIN*\n`;
-    helpText += `• /bot on/off - Activar/desactivar bot\n`;
-    helpText += `• /bots - Ver subbots\n`;
-    helpText += `• /status - Estado del sistema\n\n`;
+    commandCategories['ADMINISTRACION'] = [
+      { cmd: 'bot', desc: 'Controlar bot', usage: '/bot on/off' },
+      { cmd: 'logs', desc: 'Ver logs del sistema', usage: '/logs' },
+      { cmd: 'stats', desc: 'Estadísticas del bot', usage: '/stats' },
+      { cmd: 'estadisticas', desc: 'Estadísticas del bot', usage: '/estadisticas' },
+      { cmd: 'export', desc: 'Exportar datos', usage: '/export' },
+      { cmd: 'update', desc: 'Actualizar bot', usage: '/update' },
+      { cmd: 'broadcast', desc: 'Mensaje masivo', usage: '/broadcast <mensaje>' },
+      { cmd: 'bc', desc: 'Mensaje masivo', usage: '/bc <mensaje>' }
+    ];
   }
 
-  helpText += `*💡 Cómo usar:*\n`;
-  helpText += `Escribe el comando seguido de los parámetros necesarios.\n`;
-  helpText += `Ejemplo: */play despacito*\n\n`;
-  helpText += `KONMI BOT © 2025 - Bot WhatsApp Multifuncional`;
+  // Crear texto de ayuda con estilo BL
+  let helpText = `╔═══════════════════════════════════════╗\n`;
+  helpText += `║           [KONMI BOT]                 ║\n`;
+  helpText += `║        Menu de Comandos               ║\n`;
+  helpText += `╚═══════════════════════════════════════╝`;
 
-  return {
-    type: 'text',
-    text: helpText
-  };
+  await sock.sendMessage(remoteJid, { text: helpText });
+  return { success: true };
 }
 
 // Manejador para respuestas del menú help
@@ -1647,49 +1806,49 @@ async function handleHelpResponse(ctx) {
 
   if (category === 'cat_descargas') {
     return {
-      text: `📥 *COMANDOS DE DESCARGAS*
+      text: `[DESCARGAS] *COMANDOS DE DESCARGAS*
 
-🎵 */play* <nombre o URL>
+♪ */play* <nombre o URL>
 Descarga audio de YouTube
 Ejemplo: /play despacito
 
-🎬 */video* <nombre o URL>
+♦ */video* <nombre o URL>
 Descarga video de YouTube
 Ejemplo: /video tutorial javascript
 
-📱 */tiktok* <URL>
+♠ */tiktok* <URL>
 Descarga videos de TikTok
 Ejemplo: /tiktok https://vm.tiktok.com/...
 
-📷 */instagram* <URL>
+♣ */instagram* <URL>
 Descarga contenido de Instagram
 Ejemplo: /instagram https://instagram.com/p/...
 
-🎧 */spotify* <búsqueda>
+♫ */spotify* <búsqueda>
 Busca música en Spotify
 Ejemplo: /spotify bad bunny
 
- */downloads*
+• */downloads*
 Ver todas las plataformas de descarga
 Ejemplo: /downloads
 
-🎵 */soundcloud* <URL>
+♪ */soundcloud* <URL>
 Música de SoundCloud
 Ejemplo: /soundcloud https://soundcloud.com/...
 
-🔴 */reddit* <URL>
+• */reddit* <URL>
 Videos/imágenes de Reddit
 Ejemplo: /reddit https://reddit.com/r/...
 
-🟣 */twitch* <URL>
+• */twitch* <URL>
 Clips y videos de Twitch
 Ejemplo: /twitch https://clips.twitch.tv/...
 
-🔵 */dailymotion* <URL>
+• */dailymotion* <URL>
 Videos de Dailymotion
 Ejemplo: /dailymotion https://dailymotion.com/...
 
-🎥 */vimeo* <URL>
+• */vimeo* <URL>
 Videos de Vimeo
 Ejemplo: /vimeo https://vimeo.com/...
 
@@ -1699,7 +1858,7 @@ Ejemplo: /vimeo https://vimeo.com/...
 
   if (category === 'cat_ia') {
     return {
-      text: `🤖 *COMANDOS DE INTELIGENCIA ARTIFICIAL*
+      text: `[IA] *COMANDOS DE INTELIGENCIA ARTIFICIAL*
 
 🧠 */ia* <pregunta>
 Pregunta a Gemini AI
@@ -1731,7 +1890,7 @@ Ejemplo: /explain inteligencia artificial
 
   if (category === 'cat_media') {
     return {
-      text: `🎨 *COMANDOS DE MEDIA & STICKERS*
+      text: `[MEDIA] *COMANDOS DE MEDIA & STICKERS*
 
 ✨ */sticker* (también */s*)
 Crear sticker de imagen o video
@@ -1812,7 +1971,7 @@ Ejemplo: /short https://google.com
 
   if (category === 'cat_grupo') {
     return {
-      text: `👥 *COMANDOS DE GRUPO*
+      text: `[GRUPO] *COMANDOS DE GRUPO*
 
 🤖 */bot* <on/off/status>
 Controlar el bot en este grupo
@@ -2487,7 +2646,7 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       comando: command,
       usuario: ctx.pushName || 'Usuario',
       chat: chatName,
-      chatIcon: isGroup ? '👥' : '💬',
+      chatIcon: isGroup ? '[GROUP]' : '[PRIVATE]',
       resultado: result?.success !== false ? 'EXITOSO' : 'ERROR',
       exitoso: result?.success !== false,
       tiempo: `${endTime - startTime}ms`
@@ -2500,7 +2659,7 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     console.error("Error in dispatch:", error);
     try {
       await sock.sendMessage(remoteJid, {
-        text: `⚠️ Error ejecutando el comando: ${error?.message || error}`
+        text: `[ERROR] Error ejecutando el comando: ${error?.message || error}`
       });
     } catch (e) {
       // ignore
