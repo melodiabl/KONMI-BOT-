@@ -1585,250 +1585,365 @@ function parseCommand(text) {
 }
 
 
-// Comando de ayuda integrado con listas interactivas
+// =========================
+// SISTEMA DE HELP MEJORADO CON TEMÁTICA BL + WILEYS
+// =========================
+
+// Funcionalidades Wileys completas + Temática BL integrada para Help
+const BL_HELP_REACTIONS = ['💖', '✨', '🌸', '💕', '💝', '🌟', '🥰', '😍', '💫', '🎀'];
+const BL_HELP_MESSAGES = {
+  welcome: ['💖 ¡Hola! Te ayudo con mucho amor', '✨ ¡Bienvenido! Aquí tienes todo', '🌸 ¡Hola cariño! ¿En qué te ayudo?'],
+  categories: ['💕 Explora las categorías con amor', '🌟 Encuentra lo que necesitas', '💖 Todo organizado para ti'],
+  commands: ['✨ Aquí están todos los comandos', '💝 Lista completa con amor', '🌸 Todos los comandos disponibles']
+};
+
+// Wileys: Reacciones automáticas BL mejoradas para help
+const addBLHelpReaction = async (sock, message, type = 'help') => {
+  try {
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      help: ['💖', '✨', '🌸'],
+      categories: ['📋', '💕', '🌟'],
+      commands: ['📝', '💖', '💫'],
+      search: ['🔍', '✨', '💝']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.help;
+
+    // Aplicar secuencia de reacciones con timing BL
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
+    }
+  } catch (error) {
+    console.error('[BL_HELP_REACTION] Error:', error);
+  }
+};
+
+// Wileys: Decoración BL para mensajes de help
+const decorateBLHelpMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖',
+      separator: '💕'
+    },
+    categories: {
+      header: '╔🌸═══════════════════════════════════════🌸╗',
+      footer: '╚🌸═══════════════════════════════════════🌸╝',
+      bullet: '🌸',
+      separator: '✨'
+    },
+    commands: {
+      header: '╔💝═══════════════════════════════════════💝╗',
+      footer: '╚💝═══════════════════════════════════════💝╝',
+      bullet: '💝',
+      separator: '🌟'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += `║${' '.repeat(39)}║\n`;
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      const lines = item.split('\n');
+      lines.forEach(line => {
+        if (line.trim()) {
+          message += `║ ${line.padEnd(37)}║\n`;
+        }
+      });
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      if (line.trim()) {
+        message += `║ ${line.padEnd(37)}║\n`;
+      }
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Comando de ayuda integrado con temática BL completa
 async function handleHelpCommand(ctx) {
-  const { sock, remoteJid, sender, isGroup } = ctx;
+  const { sock, remoteJid, sender, isGroup, message, args } = ctx;
+
+  // Funcionalidad Wileys: Reacción automática BL
+  await addBLHelpReaction(sock, message, 'help');
 
   const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
   const isAdmin = await isSuperAdmin(userPhone);
 
-  // Organizar comandos por categorías desde COMMAND_FUNCTION_MAP
+  // Si hay argumentos, mostrar ayuda específica
+  if (args && args.length > 0) {
+    const command = args[0].toLowerCase();
+    return await handleSpecificCommandHelp(ctx, command);
+  }
+
+  // Organizar comandos por categorías con temática BL
   const commandCategories = {
-    'DESCARGAS': [
-      { cmd: 'play', desc: 'Descargar audio de YouTube', usage: '/play <nombre>' },
-      { cmd: 'music', desc: 'Descargar música', usage: '/music <nombre>' },
-      { cmd: 'video', desc: 'Descargar video de YouTube', usage: '/video <nombre>' },
-      { cmd: 'youtube', desc: 'Descargar de YouTube', usage: '/youtube <url>' },
-      { cmd: 'tiktok', desc: 'Descargar de TikTok', usage: '/tiktok <url>' },
-      { cmd: 'instagram', desc: 'Descargar de Instagram', usage: '/instagram <url>' },
-      { cmd: 'ig', desc: 'Descargar de Instagram', usage: '/ig <url>' },
-      { cmd: 'facebook', desc: 'Descargar de Facebook', usage: '/facebook <url>' },
-      { cmd: 'fb', desc: 'Descargar de Facebook', usage: '/fb <url>' },
-      { cmd: 'twitter', desc: 'Descargar de Twitter/X', usage: '/twitter <url>' },
-      { cmd: 'x', desc: 'Descargar de X', usage: '/x <url>' },
-      { cmd: 'pinterest', desc: 'Descargar de Pinterest', usage: '/pinterest <url>' },
-      { cmd: 'spotify', desc: 'Buscar en Spotify', usage: '/spotify <búsqueda>' },
-      { cmd: 'soundcloud', desc: 'Descargar de SoundCloud', usage: '/soundcloud <url>' },
-      { cmd: 'reddit', desc: 'Descargar de Reddit', usage: '/reddit <url>' },
-      { cmd: 'twitch', desc: 'Descargar de Twitch', usage: '/twitch <url>' },
-      { cmd: 'dailymotion', desc: 'Descargar de Dailymotion', usage: '/dailymotion <url>' },
-      { cmd: 'vimeo', desc: 'Descargar de Vimeo', usage: '/vimeo <url>' },
-      { cmd: 'kwai', desc: 'Descargar de Kwai', usage: '/kwai <url>' },
-      { cmd: 'bilibili', desc: 'Descargar de Bilibili', usage: '/bilibili <url>' },
-      { cmd: 'downloads', desc: 'Ver historial de descargas', usage: '/downloads' }
-    ],
-    'INTELIGENCIA ARTIFICIAL': [
-      { cmd: 'ia', desc: 'Chatear con IA', usage: '/ia <texto>' },
-      { cmd: 'ai', desc: 'Chatear con IA', usage: '/ai <texto>' },
-      { cmd: 'clasificar', desc: 'Clasificar texto', usage: '/clasificar <texto>' },
-      { cmd: 'translate', desc: 'Traducir texto', usage: '/translate <texto>' },
-      { cmd: 'tr', desc: 'Traducir texto', usage: '/tr <texto>' },
-      { cmd: 'resume', desc: 'Resumir texto', usage: '/resume <texto>' },
-      { cmd: 'explain', desc: 'Explicar concepto', usage: '/explain <concepto>' },
-      { cmd: 'sentiment', desc: 'Análisis de sentimientos', usage: '/sentiment <texto>' },
-      { cmd: 'grammar', desc: 'Corrección gramatical', usage: '/grammar <texto>' },
-      { cmd: 'analyze', desc: 'Analizar texto', usage: '/analyze <texto>' },
-      { cmd: 'brainstorm', desc: 'Lluvia de ideas', usage: '/brainstorm <tema>' }
-    ],
-    'MEDIA Y MULTIMEDIA': [
-      { cmd: 'sticker', desc: 'Crear sticker', usage: '/sticker (responder a imagen)' },
-      { cmd: 's', desc: 'Crear sticker', usage: '/s (responder a imagen)' },
-      { cmd: 'image', desc: 'Buscar imagen', usage: '/image <búsqueda>' },
-      { cmd: 'wallpaper', desc: 'Buscar wallpaper', usage: '/wallpaper <búsqueda>' },
-      { cmd: 'tts', desc: 'Texto a voz', usage: '/tts <texto>' },
-      { cmd: 'compress', desc: 'Comprimir imagen', usage: '/compress (responder a imagen)' },
-      { cmd: 'convert', desc: 'Convertir formato', usage: '/convert <formato>' },
-      { cmd: 'removebg', desc: 'Remover fondo', usage: '/removebg (responder a imagen)' },
-      { cmd: 'addtext', desc: 'Agregar texto a imagen', usage: '/addtext <texto>' },
-      { cmd: 'gif', desc: 'Crear GIF', usage: '/gif (responder a video)' },
-      { cmd: 'collage', desc: 'Crear collage', usage: '/collage (múltiples imágenes)' },
-      { cmd: 'filter', desc: 'Aplicar filtro', usage: '/filter <tipo>' },
-      { cmd: 'resize', desc: 'Redimensionar imagen', usage: '/resize <tamaño>' },
-      { cmd: 'mediahelp', desc: 'Ayuda de media', usage: '/mediahelp' }
-    ],
-    'MUSICA': [
-      { cmd: 'identify', desc: 'Identificar canción', usage: '/identify (responder a audio)' },
-      { cmd: 'lyrics', desc: 'Buscar letra', usage: '/lyrics <canción>' },
-      { cmd: 'playlist', desc: 'Crear playlist', usage: '/playlist <nombre>' },
-      { cmd: 'radio', desc: 'Escuchar radio', usage: '/radio <estación>' },
-      { cmd: 'nowplaying', desc: 'Canción actual', usage: '/nowplaying' },
-      { cmd: 'musichelp', desc: 'Ayuda de música', usage: '/musichelp' }
-    ],
-    'UTILIDADES': [
-      { cmd: 'weather', desc: 'Ver clima', usage: '/weather <ciudad>' },
-      { cmd: 'clima', desc: 'Ver clima', usage: '/clima <ciudad>' },
-      { cmd: 'quote', desc: 'Cita inspiradora', usage: '/quote' },
-      { cmd: 'fact', desc: 'Dato curioso', usage: '/fact' },
-      { cmd: 'trivia', desc: 'Pregunta de trivia', usage: '/trivia' },
-      { cmd: 'meme', desc: 'Generar meme', usage: '/meme' },
-      { cmd: 'qrcode', desc: 'Generar código QR', usage: '/qrcode <texto>' },
-      { cmd: 'calc', desc: 'Calculadora', usage: '/calc <operación>' },
-      { cmd: 'short', desc: 'Acortar URL', usage: '/short <url>' },
-      { cmd: 'password', desc: 'Generar contraseña', usage: '/password <longitud>' },
-      { cmd: 'email', desc: 'Validar email', usage: '/email <correo>' },
-      { cmd: 'color', desc: 'Información de color', usage: '/color <código>' },
-      { cmd: 'timezone', desc: 'Zona horaria', usage: '/timezone <zona>' }
-    ],
-    'JUEGOS': [
-      { cmd: 'game', desc: 'Menú de juegos', usage: '/game' },
-      { cmd: 'juego', desc: 'Menú de juegos', usage: '/juego' },
-      { cmd: 'rps', desc: 'Piedra, papel o tijera', usage: '/rps <opción>' },
-      { cmd: 'guess', desc: 'Adivinar número', usage: '/guess <número>' },
-      { cmd: 'dice', desc: 'Lanzar dado', usage: '/dice' },
-      { cmd: 'sorteo', desc: 'Hacer sorteo', usage: '/sorteo <opciones>' },
-      { cmd: 'coin', desc: 'Lanzar moneda', usage: '/coin' },
-      { cmd: 'hangman', desc: 'Juego del ahorcado', usage: '/hangman' },
-      { cmd: 'memory', desc: 'Juego de memoria', usage: '/memory' },
-      { cmd: 'blackjack', desc: 'Juego de blackjack', usage: '/blackjack' },
-      { cmd: 'lottery', desc: 'Lotería', usage: '/lottery' }
-    ],
-    'ENCUESTAS': [
-      { cmd: 'poll', desc: 'Crear encuesta', usage: '/poll <pregunta>' },
-      { cmd: 'encuesta', desc: 'Crear encuesta', usage: '/encuesta <pregunta>' },
-      { cmd: 'pollmultiple', desc: 'Encuesta múltiple', usage: '/pollmultiple <opciones>' },
-      { cmd: 'quickpoll', desc: 'Encuesta rápida', usage: '/quickpoll <pregunta>' },
-      { cmd: 'rating', desc: 'Sistema de calificación', usage: '/rating <tema>' },
-      { cmd: 'yesno', desc: 'Encuesta sí/no', usage: '/yesno <pregunta>' },
-      { cmd: 'vote', desc: 'Votar', usage: '/vote <opción>' },
-      { cmd: 'votes', desc: 'Ver votos', usage: '/votes' }
-    ],
-    'GRUPOS': [
-      { cmd: 'kick', desc: 'Expulsar usuario', usage: '/kick @usuario' },
-      { cmd: 'promote', desc: 'Promover a admin', usage: '/promote @usuario' },
-      { cmd: 'demote', desc: 'Quitar admin', usage: '/demote @usuario' },
-      { cmd: 'lock', desc: 'Bloquear grupo', usage: '/lock' },
-      { cmd: 'unlock', desc: 'Desbloquear grupo', usage: '/unlock' },
-      { cmd: 'settings', desc: 'Configuración del grupo', usage: '/settings' },
-      { cmd: 'config', desc: 'Configuración del grupo', usage: '/config' },
-      { cmd: 'groupinfo', desc: 'Información del grupo', usage: '/groupinfo' },
-      { cmd: 'welcome', desc: 'Mensaje de bienvenida', usage: '/welcome <mensaje>' },
-      { cmd: 'automod', desc: 'Moderación automática', usage: '/automod on/off' },
-      { cmd: 'rules', desc: 'Reglas del grupo', usage: '/rules' },
-      { cmd: 'groupstats', desc: 'Estadísticas del grupo', usage: '/groupstats' },
-      { cmd: 'clean', desc: 'Limpiar mensajes', usage: '/clean <cantidad>' }
-    ],
-    'SUBBOTS': [
-      { cmd: 'qr', desc: 'Crear subbot con QR', usage: '/qr' },
-      { cmd: 'code', desc: 'Crear subbot con código', usage: '/code' },
-      { cmd: 'mybots', desc: 'Mis subbots', usage: '/mybots' },
-      { cmd: 'mibots', desc: 'Mis subbots', usage: '/mibots' },
-      { cmd: 'bots', desc: 'Lista de subbots', usage: '/bots' },
-      { cmd: 'stopbot', desc: 'Detener subbot', usage: '/stopbot <código>' },
-      { cmd: 'requestcode', desc: 'Solicitar código', usage: '/requestcode' },
-      { cmd: 'maincode', desc: 'Código del bot principal', usage: '/maincode' },
-      { cmd: 'subbotstats', desc: 'Estadísticas de subbots', usage: '/subbotstats' },
-      { cmd: 'subbotmanage', desc: 'Gestionar subbots', usage: '/subbotmanage' },
-      { cmd: 'subbotmonitor', desc: 'Monitor de subbots', usage: '/subbotmonitor' }
-    ],
-    'SEGURIDAD': [
-      { cmd: 'whitelist', desc: 'Lista blanca', usage: '/whitelist <usuario>' },
-      { cmd: 'blacklist', desc: 'Lista negra', usage: '/blacklist <usuario>' },
-      { cmd: 'enable2fa', desc: 'Activar 2FA', usage: '/enable2fa' },
-      { cmd: 'verify2fa', desc: 'Verificar 2FA', usage: '/verify2fa <código>' },
-      { cmd: 'disable2fa', desc: 'Desactivar 2FA', usage: '/disable2fa' },
-      { cmd: 'spamcheck', desc: 'Verificar spam', usage: '/spamcheck' },
-      { cmd: 'securitylogs', desc: 'Logs de seguridad', usage: '/securitylogs' },
-      { cmd: 'securitystatus', desc: 'Estado de seguridad', usage: '/securitystatus' },
-      { cmd: 'ban', desc: 'Banear usuario', usage: '/ban @usuario' },
-      { cmd: 'unban', desc: 'Desbanear usuario', usage: '/unban @usuario' },
-      { cmd: 'privacy', desc: 'Configurar privacidad', usage: '/privacy' }
-    ],
-    'ARCHIVOS': [
-      { cmd: 'descargar', desc: 'Descargar archivo', usage: '/descargar <url>' },
-      { cmd: 'guardar', desc: 'Guardar archivo', usage: '/guardar (responder a archivo)' },
-      { cmd: 'archivos', desc: 'Lista de archivos', usage: '/archivos' },
-      { cmd: 'misarchivos', desc: 'Mis archivos', usage: '/misarchivos' }
-    ],
-    'APORTES': [
-      { cmd: 'addaporte', desc: 'Agregar aporte', usage: '/addaporte (con media)' },
-      { cmd: 'aportes', desc: 'Ver aportes', usage: '/aportes' },
-      { cmd: 'myaportes', desc: 'Mis aportes', usage: '/myaportes' },
-      { cmd: 'misaportes', desc: 'Mis aportes', usage: '/misaportes' },
-      { cmd: 'aporteestado', desc: 'Estado del aporte', usage: '/aporteestado <id>' },
-      { cmd: 'pedido', desc: 'Hacer pedido', usage: '/pedido <descripción>' },
-      { cmd: 'pedidos', desc: 'Ver pedidos', usage: '/pedidos' },
-      { cmd: 'mispedidos', desc: 'Mis pedidos', usage: '/mispedidos' }
-    ],
-    'ENTRETENIMIENTO': [
-      { cmd: 'joke', desc: 'Chiste aleatorio', usage: '/joke' },
-      { cmd: 'horoscope', desc: 'Horóscopo', usage: '/horoscope <signo>' },
-      { cmd: 'horoscopo', desc: 'Horóscopo', usage: '/horoscopo <signo>' }
-    ],
-    'PERFIL': [
-      { cmd: 'whoami', desc: 'Mi información', usage: '/whoami' },
-      { cmd: 'profile', desc: 'Ver perfil', usage: '/profile' }
-    ],
-    'PRESENCIA': [
-      { cmd: 'typing', desc: 'Simular escribiendo', usage: '/typing' },
-      { cmd: 'recording', desc: 'Simular grabando', usage: '/recording' },
-      { cmd: 'online', desc: 'Aparecer en línea', usage: '/online' },
-      { cmd: 'offline', desc: 'Aparecer desconectado', usage: '/offline' },
-      { cmd: 'away', desc: 'Aparecer ausente', usage: '/away' },
-      { cmd: 'busy', desc: 'Aparecer ocupado', usage: '/busy' },
-      { cmd: 'readall', desc: 'Marcar todo como leído', usage: '/readall' }
-    ],
-    'BASICOS': [
-      { cmd: 'ping', desc: 'Ver latencia del bot', usage: '/ping' },
-      { cmd: 'status', desc: 'Estado del sistema', usage: '/status' },
-      { cmd: 'comandos', desc: 'Lista de comandos', usage: '/comandos' }
-    ]
+    '📥 DESCARGAS': {
+      icon: '📥',
+      description: 'Descarga contenido de redes sociales',
+      commands: [
+        { cmd: 'play', desc: '🎵 Descargar audio de YouTube', usage: '/play <nombre>' },
+        { cmd: 'music', desc: '🎶 Descargar música', usage: '/music <nombre>' },
+        { cmd: 'video', desc: '🎬 Descargar video de YouTube', usage: '/video <nombre>' },
+        { cmd: 'tiktok', desc: '📱 Descargar de TikTok', usage: '/tiktok <url>' },
+        { cmd: 'instagram', desc: '📸 Descargar de Instagram', usage: '/instagram <url>' },
+        { cmd: 'facebook', desc: '📘 Descargar de Facebook', usage: '/facebook <url>' },
+        { cmd: 'twitter', desc: '🐦 Descargar de Twitter/X', usage: '/twitter <url>' },
+        { cmd: 'spotify', desc: '🎧 Buscar en Spotify', usage: '/spotify <búsqueda>' }
+      ]
+    },
+    '🤖 INTELIGENCIA ARTIFICIAL': {
+      icon: '🤖',
+      description: 'Funciones de IA avanzadas',
+      commands: [
+        { cmd: 'ai', desc: '🧠 Chatear con IA', usage: '/ai <pregunta>' },
+        { cmd: 'clasificar', desc: '📊 Clasificar contenido', usage: '/clasificar <texto>' },
+        { cmd: 'translate', desc: '🌐 Traducir texto', usage: '/translate <idioma> <texto>' },
+        { cmd: 'resume', desc: '📝 Resumir texto', usage: '/resume <texto>' },
+        { cmd: 'sentiment', desc: '😊 Análisis de sentimientos', usage: '/sentiment <texto>' },
+        { cmd: 'grammar', desc: '✏️ Corrección gramatical', usage: '/grammar <texto>' },
+        { cmd: 'analyze', desc: '🔍 Analizar texto completo', usage: '/analyze <texto>' },
+        { cmd: 'brainstorm', desc: '💡 Lluvia de ideas', usage: '/brainstorm <tema>' }
+      ]
+    },
+    '🎵 MÚSICA': {
+      icon: '🎵',
+      description: 'Herramientas musicales avanzadas',
+      commands: [
+        { cmd: 'identify', desc: '🎧 Identificar canción', usage: '/identify (responder a audio)' },
+        { cmd: 'lyrics', desc: '📝 Buscar letras', usage: '/lyrics <título> <artista>' },
+        { cmd: 'playlist', desc: '📋 Gestionar playlists', usage: '/playlist <acción>' },
+        { cmd: 'radio', desc: '📻 Radio online', usage: '/radio <estación>' },
+        { cmd: 'nowplaying', desc: '🎶 Canción actual', usage: '/nowplaying' }
+      ]
+    },
+    '🎮 JUEGOS': {
+      icon: '🎮',
+      description: 'Entretenimiento y diversión',
+      commands: [
+        { cmd: 'rps', desc: '🪨 Piedra, papel o tijera', usage: '/rps <opción>' },
+        { cmd: 'guess', desc: '🎯 Adivinar número', usage: '/guess <número>' },
+        { cmd: 'dice', desc: '🎲 Lanzar dados', usage: '/dice <cantidad>' },
+        { cmd: 'coin', desc: '🪙 Lanzar moneda', usage: '/coin' },
+        { cmd: 'hangman', desc: '🎪 Juego del ahorcado', usage: '/hangman <palabra>' },
+        { cmd: 'blackjack', desc: '🃏 Blackjack', usage: '/blackjack <acción>' },
+        { cmd: 'lottery', desc: '🎲 Lotería de números', usage: '/lottery <números>' }
+      ]
+    },
+    '👥 GRUPOS': {
+      icon: '👥',
+      description: 'Administración de grupos',
+      commands: [
+        { cmd: 'kick', desc: '⚠️ Expulsar usuario', usage: '/kick @usuario' },
+        { cmd: 'promote', desc: '👑 Promover a admin', usage: '/promote @usuario' },
+        { cmd: 'demote', desc: '👤 Quitar admin', usage: '/demote @usuario' },
+        { cmd: 'lock', desc: '🔒 Bloquear grupo', usage: '/lock' },
+        { cmd: 'unlock', desc: '🔓 Desbloquear grupo', usage: '/unlock' },
+        { cmd: 'welcome', desc: '👋 Mensaje de bienvenida', usage: '/welcome <mensaje>' },
+        { cmd: 'rules', desc: '📋 Reglas del grupo', usage: '/rules' },
+        { cmd: 'groupstats', desc: '📊 Estadísticas del grupo', usage: '/groupstats' }
+      ]
+    },
+    '🤖 SUBBOTS': {
+      icon: '🤖',
+      description: 'Gestión de bots secundarios',
+      commands: [
+        { cmd: 'qr', desc: '📱 Crear subbot con QR', usage: '/qr' },
+        { cmd: 'code', desc: '🔑 Crear subbot con código', usage: '/code' },
+        { cmd: 'mybots', desc: '📋 Mis subbots', usage: '/mybots' },
+        { cmd: 'subbotstats', desc: '📊 Estadísticas de subbots', usage: '/subbotstats' },
+        { cmd: 'subbotmanage', desc: '⚙️ Gestionar subbots', usage: '/subbotmanage <acción>' },
+        { cmd: 'subbotmonitor', desc: '📈 Monitor de actividad', usage: '/subbotmonitor' }
+      ]
+    },
+    '🛠️ UTILIDADES': {
+      icon: '🛠️',
+      description: 'Herramientas útiles',
+      commands: [
+        { cmd: 'weather', desc: '🌦️ Ver clima', usage: '/weather <ciudad>' },
+        { cmd: 'quote', desc: '💬 Cita inspiradora', usage: '/quote' },
+        { cmd: 'fact', desc: '🧠 Dato curioso', usage: '/fact' },
+        { cmd: 'meme', desc: '😂 Generar meme', usage: '/meme' },
+        { cmd: 'qrcode', desc: '📱 Generar código QR', usage: '/qrcode <texto>' },
+        { cmd: 'calc', desc: '🧮 Calculadora', usage: '/calc <operación>' }
+      ]
+    }
   };
 
-  // Agregar comandos de admin solo si es admin
+  // Agregar categoría de admin si es admin
   if (isAdmin) {
-    commandCategories['ADMINISTRACION'] = [
-      { cmd: 'bot', desc: 'Controlar bot', usage: '/bot on/off' },
-      { cmd: 'logs', desc: 'Ver logs del sistema', usage: '/logs' },
-      { cmd: 'stats', desc: 'Estadísticas del bot', usage: '/stats' },
-      { cmd: 'estadisticas', desc: 'Estadísticas del bot', usage: '/estadisticas' },
-      { cmd: 'export', desc: 'Exportar datos', usage: '/export' },
-      { cmd: 'update', desc: 'Actualizar bot', usage: '/update' },
-      { cmd: 'broadcast', desc: 'Mensaje masivo', usage: '/broadcast <mensaje>' },
-      { cmd: 'bc', desc: 'Mensaje masivo', usage: '/bc <mensaje>' }
+    commandCategories['⚙️ ADMINISTRACIÓN'] = {
+      icon: '⚙️',
+      description: 'Comandos de administrador',
+      commands: [
+        { cmd: 'bot', desc: '🤖 Controlar bot', usage: '/bot on/off' },
+        { cmd: 'logs', desc: '📋 Ver logs del sistema', usage: '/logs' },
+        { cmd: 'stats', desc: '📊 Estadísticas del bot', usage: '/stats' },
+        { cmd: 'broadcast', desc: '📢 Mensaje masivo', usage: '/broadcast <mensaje>' }
+      ]
+    };
+  }
+
+  // Crear mensaje principal con temática BL
+  const welcomeMessage = BL_HELP_MESSAGES.welcome[Math.floor(Math.random() * BL_HELP_MESSAGES.welcome.length)];
+
+  let helpContent = [
+    `${welcomeMessage}`,
+    '',
+    '🌟 CATEGORÍAS DISPONIBLES:',
+    ''
+  ];
+
+  // Agregar categorías con descripción
+  for (const [categoryName, categoryData] of Object.entries(commandCategories)) {
+    helpContent.push(`${categoryData.icon} ${categoryName.replace(/^[^\s]+ /, '')}`);
+    helpContent.push(`   ${categoryData.description}`);
+    helpContent.push(`   ${categoryData.commands.length} comandos disponibles`);
+    helpContent.push('');
+  }
+
+  helpContent.push('💡 COMANDOS RÁPIDOS:');
+  helpContent.push('• /comandos - Lista completa');
+  helpContent.push('• /help <comando> - Ayuda específica');
+  helpContent.push('• /ping - Estado del bot');
+  helpContent.push('');
+  helpContent.push('💖 ¡Usa /comandos para ver todo!');
+
+  const helpMessage = decorateBLHelpMessage('KONMI BOT - MENÚ PRINCIPAL', helpContent, 'love');
+
+  await sock.sendMessage(remoteJid, { text: helpMessage });
+  return { success: true };
+}
+
+// Función para ayuda específica de comandos
+async function handleSpecificCommandHelp(ctx, command) {
+  const { sock, remoteJid, message } = ctx;
+
+  await addBLHelpReaction(sock, message, 'search');
+
+  // Base de datos de ayuda específica para comandos
+  const commandHelp = {
+    'play': {
+      title: 'Comando Play 🎵',
+      description: 'Descarga audio de YouTube con alta calidad',
+      usage: '/play <nombre de la canción>',
+      examples: [
+        '/play despacito',
+        '/play bad bunny tití me preguntó',
+        '/play https://youtube.com/watch?v=...'
+      ],
+      tips: [
+        '💡 Puedes usar nombres o URLs',
+        '🎵 Descarga en formato MP3',
+        '⚡ Proceso rápido y automático'
+      ]
+    },
+    'ai': {
+      title: 'Inteligencia Artificial 🤖',
+      description: 'Chatea con IA avanzada (Gemini)',
+      usage: '/ai <tu pregunta>',
+      examples: [
+        '/ai ¿Cómo funciona JavaScript?',
+        '/ai Explícame la fotosíntesis',
+        '/ai Ayúdame con mi tarea de matemáticas'
+      ],
+      tips: [
+        '🧠 IA muy inteligente',
+        '💬 Respuestas detalladas',
+        '🌟 Múltiples idiomas'
+      ]
+    },
+    'tiktok': {
+      title: 'Descarga TikTok 📱',
+      description: 'Descarga videos de TikTok sin marca de agua',
+      usage: '/tiktok <URL del video>',
+      examples: [
+        '/tiktok https://vm.tiktok.com/ZMh...',
+        '/tiktok https://tiktok.com/@user/video/...'
+      ],
+      tips: [
+        '📱 Sin marca de agua',
+        '🎬 Calidad original',
+        '⚡ Descarga rápida'
+      ]
+    },
+    'rps': {
+      title: 'Piedra, Papel o Tijera 🪨',
+      description: 'Juega piedra, papel o tijera con el bot',
+      usage: '/rps <tu elección>',
+      examples: [
+        '/rps piedra',
+        '/rps papel',
+        '/rps tijera'
+      ],
+      tips: [
+        '🎮 Juego clásico',
+        '🏆 Resultados instantáneos',
+        '💖 Diversión garantizada'
+      ]
+    }
+  };
+
+  const helpData = commandHelp[command];
+
+  if (!helpData) {
+    const errorContent = [
+      `Comando "${command}" no encontrado 🥺`,
+      '',
+      '💡 Comandos disponibles:',
+      '• /help - Menú principal',
+      '• /comandos - Lista completa',
+      '• /help play - Ayuda de música',
+      '• /help ai - Ayuda de IA',
+      '',
+      '💖 ¡Intenta con otro comando!'
     ];
+
+    const errorMessage = decorateBLHelpMessage('Comando No Encontrado', errorContent, 'love');
+    await sock.sendMessage(remoteJid, { text: errorMessage });
+    return { success: false };
   }
 
-  // Crear texto de ayuda completo
-  let helpText = `╔═══════════════════════════════════════╗\n`;
-  helpText += `║           [KONMI BOT]                 ║\n`;
-  helpText += `║        Menu de Comandos               ║\n`;
-  helpText += `╚═══════════════════════════════════════╝\n\n`;
+  let helpContent = [
+    helpData.description,
+    '',
+    '📋 USO:',
+    helpData.usage,
+    '',
+    '💡 EJEMPLOS:'
+  ];
 
-  // Agregar todas las categorías y comandos
-  for (const [categoryName, commands] of Object.entries(commandCategories)) {
-    helpText += `*[${categoryName}]*\n`;
+  helpData.examples.forEach(example => {
+    helpContent.push(`• ${example}`);
+  });
 
-    // Mostrar solo los primeros 5 comandos de cada categoría para no hacer el mensaje muy largo
-    const displayCommands = commands.slice(0, 5);
-    for (const cmd of displayCommands) {
-      helpText += `• /${cmd.cmd} - ${cmd.desc}\n`;
-    }
+  helpContent.push('');
+  helpContent.push('✨ CONSEJOS:');
 
-    if (commands.length > 5) {
-      helpText += `• ... y ${commands.length - 5} comandos más\n`;
-    }
-    helpText += `\n`;
-  }
+  helpData.tips.forEach(tip => {
+    helpContent.push(`• ${tip}`);
+  });
 
-  helpText += `*[COMANDOS BÁSICOS]*\n`;
-  helpText += `• /help - Mostrar este menú\n`;
-  helpText += `• /ping - Ver latencia del bot\n`;
-  helpText += `• /status - Estado del sistema\n\n`;
+  helpContent.push('');
+  helpContent.push('💖 ¡Pruébalo ahora!');
 
-  helpText += `*[SUBBOTS]*\n`;
-  helpText += `• /qr - Crear subbot con QR\n`;
-  helpText += `• /code - Crear subbot con código\n`;
-  helpText += `• /mybots - Ver mis subbots\n\n`;
+  const specificHelpMessage = decorateBLHelpMessage(helpData.title, helpContent, 'commands');
 
-  helpText += `*[APORTES]*\n`;
-  helpText += `• /addaporte - Agregar aporte (con media)\n`;
-  helpText += `• /aportes - Ver aportes\n`;
-  helpText += `• /pedido - Hacer pedido\n\n`;
-
-  helpText += `[TIP] *Tip:* Usa /comandos para ver la lista completa\n`;
-  helpText += `[HELP] Para ayuda específica: /help <comando>`;
-
-  await sock.sendMessage(remoteJid, { text: helpText });
+  await sock.sendMessage(remoteJid, { text: specificHelpMessage });
   return { success: true };
 }
 
@@ -2272,57 +2387,124 @@ Ejemplo: /subbotmonitor
 
 
 // Función para mostrar todos los comandos
+// Función mejorada para mostrar todos los comandos con temática BL
 async function handleAllCommandsCommand(ctx) {
-  const { sock, remoteJid, sender } = ctx;
+  const { sock, remoteJid, sender, message } = ctx;
+
+  // Funcionalidad Wileys: Reacción automática BL
+  await addBLHelpReaction(sock, message, 'commands');
 
   const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
   const isAdmin = await isSuperAdmin(userPhone);
 
-  let commandText = `[LISTA COMPLETA DE COMANDOS]\n\n`;
-
   // Obtener todos los comandos del COMMAND_FUNCTION_MAP
   const allCommands = Object.keys(COMMAND_FUNCTION_MAP);
 
-  // Organizar por categorías
+  // Organizar por categorías con temática BL y descripciones
   const categories = {
-    'DESCARGAS': ['play', 'music', 'video', 'youtube', 'tiktok', 'instagram', 'ig', 'facebook', 'fb', 'twitter', 'x', 'pinterest', 'spotify', 'soundcloud', 'reddit', 'twitch', 'dailymotion', 'vimeo', 'kwai', 'bilibili', 'downloads'],
-    'IA': ['ia', 'ai', 'clasificar', 'translate', 'tr', 'resume', 'explain', 'sentiment', 'grammar', 'analyze', 'brainstorm'],
-    'MEDIA': ['sticker', 's', 'image', 'wallpaper', 'tts', 'compress', 'convert', 'removebg', 'addtext', 'gif', 'collage', 'filter', 'resize', 'mediahelp'],
-    'MUSICA': ['identify', 'lyrics', 'playlist', 'radio', 'nowplaying', 'musichelp'],
-    'UTILIDADES': ['weather', 'clima', 'quote', 'fact', 'trivia', 'meme', 'qrcode', 'calc', 'short', 'password', 'email', 'color', 'timezone'],
-    'JUEGOS': ['game', 'juego', 'rps', 'guess', 'dice', 'sorteo', 'coin', 'hangman', 'memory', 'blackjack', 'lottery'],
-    'GRUPOS': ['kick', 'promote', 'demote', 'lock', 'unlock', 'settings', 'config', 'groupinfo', 'welcome', 'automod', 'rules', 'groupstats', 'clean'],
-    'SUBBOTS': ['qr', 'code', 'mybots', 'mibots', 'bots', 'stopbot', 'requestcode', 'maincode', 'subbotstats', 'subbotmanage', 'subbotmonitor'],
-    'BASICOS': ['ping', 'status', 'help', 'ayuda', 'menu', 'comandos']
+    '📥 DESCARGAS': {
+      icon: '📥',
+      commands: ['play', 'music', 'video', 'youtube', 'tiktok', 'instagram', 'ig', 'facebook', 'fb', 'twitter', 'x', 'pinterest', 'spotify', 'soundcloud', 'reddit', 'twitch', 'dailymotion', 'vimeo', 'kwai', 'bilibili', 'downloads'],
+      description: 'Descarga contenido multimedia'
+    },
+    '🤖 INTELIGENCIA ARTIFICIAL': {
+      icon: '🤖',
+      commands: ['ia', 'ai', 'clasificar', 'translate', 'tr', 'resume', 'explain', 'sentiment', 'grammar', 'analyze', 'brainstorm'],
+      description: 'IA avanzada y procesamiento de texto'
+    },
+    '🎵 MÚSICA': {
+      icon: '🎵',
+      commands: ['identify', 'lyrics', 'playlist', 'radio', 'nowplaying', 'musichelp'],
+      description: 'Herramientas musicales completas'
+    },
+    '🎮 JUEGOS': {
+      icon: '🎮',
+      commands: ['game', 'juego', 'rps', 'guess', 'dice', 'sorteo', 'coin', 'hangman', 'memory', 'blackjack', 'lottery'],
+      description: 'Entretenimiento y diversión'
+    },
+    '👥 GRUPOS': {
+      icon: '👥',
+      commands: ['kick', 'promote', 'demote', 'lock', 'unlock', 'settings', 'config', 'groupinfo', 'welcome', 'automod', 'rules', 'groupstats', 'clean'],
+      description: 'Administración de grupos'
+    },
+    '🤖 SUBBOTS': {
+      icon: '🤖',
+      commands: ['qr', 'code', 'mybots', 'mibots', 'bots', 'stopbot', 'requestcode', 'maincode', 'subbotstats', 'subbotmanage', 'subbotmonitor'],
+      description: 'Gestión de bots secundarios'
+    },
+    '🛠️ UTILIDADES': {
+      icon: '🛠️',
+      commands: ['weather', 'clima', 'quote', 'fact', 'trivia', 'meme', 'qrcode', 'calc', 'short', 'password', 'email', 'color', 'timezone'],
+      description: 'Herramientas útiles variadas'
+    },
+    '📱 MEDIA': {
+      icon: '📱',
+      commands: ['sticker', 's', 'image', 'wallpaper', 'tts', 'compress', 'convert', 'removebg', 'addtext', 'gif', 'collage', 'filter', 'resize', 'mediahelp'],
+      description: 'Edición y manipulación de media'
+    },
+    '📋 BÁSICOS': {
+      icon: '📋',
+      commands: ['ping', 'status', 'help', 'ayuda', 'menu', 'comandos', 'whoami'],
+      description: 'Comandos fundamentales'
+    }
   };
 
-  for (const [categoryName, commands] of Object.entries(categories)) {
-    const availableCommands = commands.filter(cmd => allCommands.includes(cmd));
+  let commandsContent = [
+    '¡Aquí tienes todos los comandos! 💖',
+    '',
+    `Total disponibles: ${allCommands.length} comandos`,
+    ''
+  ];
+
+  // Procesar cada categoría
+  for (const [categoryName, categoryData] of Object.entries(categories)) {
+    const availableCommands = categoryData.commands.filter(cmd => allCommands.includes(cmd));
+
     if (availableCommands.length > 0) {
-      commandText += `*[${categoryName}]*\n`;
-      for (const cmd of availableCommands) {
-        commandText += `• /${cmd}\n`;
+      commandsContent.push(`${categoryData.icon} ${categoryName.replace(/^[^\s]+ /, '')}`);
+      commandsContent.push(`   ${categoryData.description}`);
+
+      // Dividir comandos en líneas de máximo 3 comandos
+      const commandLines = [];
+      for (let i = 0; i < availableCommands.length; i += 3) {
+        const chunk = availableCommands.slice(i, i + 3);
+        commandLines.push(`   /${chunk.join(' • /')}`);
       }
-      commandText += `\n`;
+
+      commandsContent.push(...commandLines);
+      commandsContent.push('');
     }
   }
 
   // Agregar comandos de admin si es admin
   if (isAdmin) {
-    commandText += `*[ADMIN]*\n`;
     const adminCommands = ['bot', 'logs', 'stats', 'estadisticas', 'export', 'update', 'broadcast', 'bc'];
-    for (const cmd of adminCommands) {
-      if (allCommands.includes(cmd)) {
-        commandText += `• /${cmd}\n`;
+    const availableAdminCommands = adminCommands.filter(cmd => allCommands.includes(cmd));
+
+    if (availableAdminCommands.length > 0) {
+      commandsContent.push('⚙️ ADMINISTRACIÓN');
+      commandsContent.push('   Comandos de administrador');
+
+      const adminLines = [];
+      for (let i = 0; i < availableAdminCommands.length; i += 3) {
+        const chunk = availableAdminCommands.slice(i, i + 3);
+        adminLines.push(`   /${chunk.join(' • /')}`);
       }
+
+      commandsContent.push(...adminLines);
+      commandsContent.push('');
     }
-    commandText += `\n`;
   }
 
-  commandText += `Total de comandos disponibles: ${allCommands.length}\n`;
-  commandText += `[TIP] Usa /help <comando> para ayuda específica`;
+  commandsContent.push('💡 AYUDA ESPECÍFICA:');
+  commandsContent.push('• /help <comando> - Ayuda detallada');
+  commandsContent.push('• /help - Menú principal');
+  commandsContent.push('');
+  commandsContent.push('💖 ¡Disfruta usando el bot!');
 
-  await sock.sendMessage(remoteJid, { text: commandText });
+  const commandsMessage = decorateBLHelpMessage('LISTA COMPLETA DE COMANDOS', commandsContent, 'commands');
+
+  await sock.sendMessage(remoteJid, { text: commandsMessage });
   return { success: true };
 }
 

@@ -1,5 +1,5 @@
 // commands/download-commands.js
-// Comandos con progreso FLUIDO y EDICIÓN GARANTIZADA del mismo mensaje
+// Comandos con progreso FLUIDO y EDICIÓN GARANTIZADA del mismo mensaje + Temática BL
 
 import {
   downloadTikTok,
@@ -20,29 +20,91 @@ import {
 import logger from './config/logger.js'
 import { createProgressNotifier } from './utils/utils/progress-notifier.js'
 
-/* ===== Utilidades ===== */
+/* ===== Utilidades BL + Wileys ===== */
 
-// Funcionalidad Wileys: Reacciones automáticas para descargas
-const addDownloadReaction = async (sock, message, emoji = '📥') => {
+// Funcionalidades Wileys completas + Temática BL integrada
+const BL_DOWNLOAD_REACTIONS = ['📥', '💖', '✨', '🎵', '💕', '🌸', '💝', '🌟', '🥰', '😍'];
+const BL_DOWNLOAD_MESSAGES = {
+  downloading: ['💖 Descargando con amor...', '✨ Preparando tu contenido...', '🌸 Procesando con cariño...'],
+  success: ['✅ ¡Descarga completa! 💖', '🌸 ¡Listo! Disfrútalo mucho', '💕 ¡Perfecto! Con mucho amor'],
+  error: ['🥺 Algo salió mal, pero no te rindas 💔', '😢 Error en descarga, lo siento', '💔 No pude completarlo, perdóname']
+};
+
+// Wileys: Reacciones automáticas BL mejoradas para descargas
+const addBLDownloadReaction = async (sock, message, type = 'download') => {
   try {
-    if (sock && message?.key) {
-      await sock.sendMessage(message.key.remoteJid, {
-        react: { text: emoji, key: message.key }
-      });
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      download: ['📥', '💖', '✨'],
+      music: ['🎵', '💕', '🌸'],
+      video: ['🎬', '💖', '🌟'],
+      image: ['📸', '🌸', '💝'],
+      success: ['✅', '💖', '🎉'],
+      error: ['❌', '💔', '🥺']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.download;
+
+    // Aplicar secuencia de reacciones con timing BL
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
     }
   } catch (error) {
-    console.error('[DOWNLOAD_REACTION] Error:', error);
+    console.error('[BL_DOWNLOAD_REACTION] Error:', error);
   }
+};
+
+// Wileys: Decoración BL para mensajes de descarga
+const decorateBLDownloadMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    download: {
+      header: '╔📥═══════════════════════════════════════📥╗',
+      footer: '╚📥═══════════════════════════════════════📥╝',
+      bullet: '📥'
+    },
+    success: {
+      header: '╔✅═══════════════════════════════════════✅╗',
+      footer: '╚✅═══════════════════════════════════════✅╝',
+      bullet: '✅'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
 };
 
 const addCompletionReaction = async (sock, message, success = true) => {
   try {
     if (sock && message?.key) {
-      const emoji = success ? '✅' : '❌';
+      const type = success ? 'success' : 'error';
       setTimeout(async () => {
-        await sock.sendMessage(message.key.remoteJid, {
-          react: { text: emoji, key: message.key }
-        });
+        await addBLDownloadReaction(sock, message, type);
       }, 1000);
     }
   } catch (error) {
@@ -114,43 +176,46 @@ async function handleTikTokDownload(ctx) {
   const url = args.join(' ')
 
   if (!url || !url.includes('tiktok.com')) {
-    return { success: false, message: '❌ Uso: /tiktok <url>' }
+    return { success: false, message: decorateBLDownloadMessage('Error TikTok', '❌ Uso: /tiktok <url>\n💡 Ejemplo: /tiktok https://tiktok.com/...', 'love') }
   }
+
+  // Funcionalidad Wileys: Reacción automática BL
+  await addBLDownloadReaction(sock, message, 'download');
 
   const progress = createProgressNotifier({
     resolveSocket: () => Promise.resolve(sock),
     chatId: remoteJid,
     quoted: message,
-    title: 'Descargando TikTok',
+    title: '💖 Descargando TikTok',
     icon: '🎵',
   })
 
   const simulator = new ProgressSimulator(progress, 85, 4000)
 
   try {
-    await progress.update(5, 'Conectando con TikTok...')
+    await progress.update(5, '💖 Conectando con TikTok...')
     simulator.start()
 
     const result = await downloadTikTok(url)
 
-    await simulator.jumpTo(95, 'Procesando video...')
+    await simulator.jumpTo(95, '✨ Procesando video...')
 
     if (!result.success || !result.video) {
       throw new Error('No se pudo obtener el video')
     }
 
-    await progress.complete('✅ Descarga completa')
+    await progress.complete('✅ Descarga completa 💖')
 
     return {
       type: 'video',
       video: toMediaInput(result.video),
-      caption: `🎵 *TikTok*\n👤 Autor: ${result.author || 'Desconocido'}\n📝 ${result.description || ''}\n\n${senderTag(sender)}`,
+      caption: decorateBLDownloadMessage('TikTok Descargado', `👤 Autor: ${result.author || 'Desconocido'}\n📝 ${result.description || ''}\n\n${senderTag(sender)}`, 'success'),
       mentions: mentionSender(sender),
     }
   } catch (e) {
     logger.error('TikTok error:', e)
-    await progress.fail(e.message)
-    return { success: false, message: `❌ Error TikTok: ${e.message}` }
+    await progress.fail(`💔 ${e.message}`)
+    return { success: false, message: decorateBLDownloadMessage('Error TikTok', `❌ Error TikTok: ${e.message}\n🥺 Intenta con otro enlace`, 'love') }
   } finally {
     simulator.stop()
     progress.cleanup?.()
@@ -362,8 +427,8 @@ async function handleMusicDownload(ctx) {
     return { success: false, message: '❌ Uso: /music <nombre o url>' }
   }
 
-  // Funcionalidad Wileys: Reacción automática al iniciar
-  await addDownloadReaction(sock, message, '🎵');
+  // Funcionalidad Wileys: Reacción automática BL al iniciar
+  await addBLDownloadReaction(sock, message, 'music');
 
   const progress = createProgressNotifier({
     resolveSocket: () => Promise.resolve(sock),

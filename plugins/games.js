@@ -1,18 +1,87 @@
 // =========================
-// PLUGIN DE JUEGOS - Funcionalidades Wileys
+// PLUGIN DE JUEGOS - Funcionalidades Wileys + Temática BL
 // =========================
 
-// Funcionalidad Wileys: Reacciones automáticas para juegos
-const addGameReaction = async (sock, message, emoji = '🎮') => {
+// Funcionalidades Wileys completas + Temática BL integrada
+const BL_GAME_REACTIONS = ['🎮', '💖', '✨', '🎯', '💕', '🌸', '💝', '🌟', '🥰', '😍'];
+const BL_GAME_MESSAGES = {
+  playing: ['💖 ¡Jugando con amor!', '✨ ¡Que tengas suerte!', '🌸 ¡Diviértete mucho!'],
+  win: ['🎉 ¡Ganaste! ¡Eres increíble! 💖', '✨ ¡Victoria! ¡Lo hiciste genial!', '🌸 ¡Perfecto! ¡Eres el mejor!'],
+  lose: ['🥺 No ganaste esta vez, pero no te rindas 💔', '😢 Casi lo logras, inténtalo de nuevo', '💔 No fue tu turno, pero sigue intentando']
+};
+
+// Wileys: Reacciones automáticas BL mejoradas para juegos
+const addBLGameReaction = async (sock, message, type = 'game') => {
   try {
-    if (sock && message?.key) {
-      await sock.sendMessage(message.key.remoteJid, {
-        react: { text: emoji, key: message.key }
-      });
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      game: ['🎮', '💖', '✨'],
+      win: ['🎉', '💖', '🌟'],
+      lose: ['🥺', '💔', '🌸'],
+      dice: ['🎲', '💕', '✨'],
+      card: ['🃏', '💖', '🌸']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.game;
+
+    // Aplicar secuencia de reacciones con timing BL
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
     }
   } catch (error) {
-    console.error('[GAME_REACTION] Error:', error);
+    console.error('[BL_GAME_REACTION] Error:', error);
   }
+};
+
+// Wileys: Decoración BL para mensajes de juegos
+const decorateBLGameMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    game: {
+      header: '╔🎮═══════════════════════════════════════🎮╗',
+      footer: '╚🎮═══════════════════════════════════════🎮╝',
+      bullet: '🎮'
+    },
+    win: {
+      header: '╔🎉═══════════════════════════════════════🎉╗',
+      footer: '╚🎉═══════════════════════════════════════🎉╝',
+      bullet: '🎉'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Wileys: Mensaje de estado BL para juegos
+const createBLGameStatusMessage = (type) => {
+  const messages = BL_GAME_MESSAGES[type] || BL_GAME_MESSAGES.playing;
+  return messages[Math.floor(Math.random() * messages.length)];
 };
 
 /**
@@ -25,37 +94,45 @@ export async function rps(ctx) {
 
   if (!userChoice) {
     return {
-      text: `🎮 *Piedra, Papel o Tijera*\n\n*Uso:* /rps <opción>\n\n*Opciones:*\n🪨 piedra\n📄 papel\n✂️ tijera\n\n*Ejemplo:* /rps piedra`
+      text: decorateBLGameMessage('Piedra, Papel o Tijera', 'Uso: /rps <opción>\n\nOpciones:\n🪨 piedra\n📄 papel\n✂️ tijera\n\nEjemplo: /rps piedra', 'game')
     };
   }
 
   if (!choices.includes(userChoice)) {
     return {
-      text: "❌ Opción inválida. Usa: piedra, papel o tijera"
+      text: decorateBLGameMessage('Error', '❌ Opción inválida. Usa: piedra, papel o tijera\n🥺 Intenta de nuevo', 'love')
     };
   }
 
-  // Funcionalidad Wileys: Reacción automática
-  await addGameReaction(sock, message, '🪨');
+  // Funcionalidad Wileys: Reacción automática BL
+  await addBLGameReaction(sock, message, 'game');
 
   const botChoice = choices[Math.floor(Math.random() * choices.length)];
   const emojis = { piedra: "🪨", papel: "📄", tijera: "✂️" };
 
   let result;
+  let resultType = 'game';
   if (userChoice === botChoice) {
-    result = "🤝 ¡Empate!";
+    result = "🤝 ¡Empate! 💖";
   } else if (
     (userChoice === "piedra" && botChoice === "tijera") ||
     (userChoice === "papel" && botChoice === "piedra") ||
     (userChoice === "tijera" && botChoice === "papel")
   ) {
-    result = "🎉 ¡Ganaste!";
+    result = "🎉 ¡Ganaste! ¡Eres increíble! 💖";
+    resultType = 'win';
   } else {
-    result = "😅 ¡Perdiste!";
+    result = "😅 ¡Perdiste! Pero no te rindas 🥺💕";
+    resultType = 'lose';
   }
 
+  // Reacción adicional según resultado
+  setTimeout(() => addBLGameReaction(sock, message, resultType), 1500);
+
+  const gameContent = `👤 Tú: ${emojis[userChoice]} ${userChoice}\n🤖 Bot: ${emojis[botChoice]} ${botChoice}\n\n${result}`;
+
   return {
-    text: `🎮 *Piedra, Papel o Tijera*\n\n👤 Tú: ${emojis[userChoice]} ${userChoice}\n🤖 Bot: ${emojis[botChoice]} ${botChoice}\n\n${result}`
+    text: decorateBLGameMessage('Piedra, Papel o Tijera', gameContent, resultType === 'win' ? 'win' : 'game')
   };
 }
 

@@ -58,16 +58,19 @@ function isBotGroupAdmin(ctx) {
 
 export async function kick(ctx) {
   const { isGroup, remoteJid, args, sock, message, sender, fromMe } = ctx
-  if (!isGroup) return { success: false, message: 'Este comando solo funciona en grupos.' }
+  if (!isGroup) return { success: false, message: decorateBLGroupMessage('Error', 'Este comando solo funciona en grupos.\n🥺 Úsalo en un grupo', 'love') }
 
   try {
+    // Funcionalidad Wileys: Reacción automática BL
+    await addBLGroupReaction(sock, message, 'kick');
+
     // ?? Verificar permisos usando helpers
     if (!fromMe && !isUserAdmin(ctx)) {
-      return { success: false, message: ' No tienes permisos de administrador para hacer esto.' }
+      return { success: false, message: decorateBLGroupMessage('Sin Permisos', 'No tienes permisos de administrador\n🥺 Solo admins pueden expulsar', 'love') }
     }
 
     if (!isBotGroupAdmin(ctx)) {
-      return { success: false, message: ' El bot necesita ser administrador para poder expulsar miembros.' }
+      return { success: false, message: decorateBLGroupMessage('Bot Sin Permisos', 'El bot necesita ser administrador\n💔 Hazme admin para usar este comando', 'love') }
     }
 
     let targetJid =
@@ -80,7 +83,7 @@ export async function kick(ctx) {
     }
 
     if (!targetJid) {
-      return { success: false, message: ' Uso: /kick @usuario o responde al mensaje de alguien con /kick.' }
+      return { success: false, message: decorateBLGroupMessage('Uso de Kick', 'Uso: /kick @usuario\no responde al mensaje de alguien\ncon /kick', 'admin') }
     }
 
     const meta = await getGroupMetadataCached(sock, remoteJid)
@@ -88,30 +91,36 @@ export async function kick(ctx) {
     const actorLabel = formatMentionWithName(sender, meta)
 
     await sock.groupParticipantsUpdate(remoteJid, [targetJid], 'remove')
+
+    const kickMessage = `Usuario ${targetLabel} ha sido expulsado\npor ${actorLabel} 💔\n\n🥺 Esperamos que puedas regresar`;
+
     return {
       success: true,
-      message: ` Usuario ${targetLabel} ha sido expulsado por ${actorLabel}.`,
+      message: decorateBLGroupMessage('Usuario Expulsado', kickMessage, 'admin'),
       mentions: [targetJid, sender],
     }
   } catch (error) {
     console.error('Error en /kick:', error)
-    return { success: false, message: ' Ocurrio un error al intentar expulsar al usuario.' }
+    return { success: false, message: decorateBLGroupMessage('Error', 'Ocurrió un error al intentar\nexpulsar al usuario 😢', 'love') }
   }
 }
 
 
 export async function promote(ctx) {
   const { isGroup, remoteJid, args, sock, message, sender } = ctx
-  if (!isGroup) return { success: false, message: ' Comando solo para grupos.' }
+  if (!isGroup) return { success: false, message: decorateBLGroupMessage('Error', 'Comando solo para grupos.\n🥺 Úsalo en un grupo', 'love') }
 
   try {
+    // Funcionalidad Wileys: Reacción automática BL
+    await addBLGroupReaction(sock, message, 'promote');
+
     // ?? Verificar permisos
     if (!isUserAdmin(ctx)) {
-      return { success: false, message: ' No eres administrador.' }
+      return { success: false, message: decorateBLGroupMessage('Sin Permisos', 'No eres administrador.\n🥺 Solo admins pueden promover', 'love') }
     }
 
     if (!isBotGroupAdmin(ctx)) {
-      return { success: false, message: ' El bot no es administrador.' }
+      return { success: false, message: decorateBLGroupMessage('Bot Sin Permisos', 'El bot no es administrador.\n💔 Hazme admin para usar este comando', 'love') }
     }
 
     const targetJid =
@@ -120,21 +129,24 @@ export async function promote(ctx) {
       (Array.isArray(args) && args.length > 0 ? `${onlyDigits(args[0])}@s.whatsapp.net` : null)
 
     if (!targetJid) {
-      return { success: false, message: ' Menciona a un usuario o responde a su mensaje para promoverlo.' }
+      return { success: false, message: decorateBLGroupMessage('Uso de Promote', 'Menciona a un usuario o responde\na su mensaje para promoverlo.\n💡 Ejemplo: /promote @usuario', 'admin') }
     }
 
     const meta = await getGroupMetadataCached(sock, remoteJid)
     const targetLabel = formatMentionWithName(targetJid, meta)
 
     await sock.groupParticipantsUpdate(remoteJid, [targetJid], 'promote')
+
+    const promoteMessage = `${targetLabel} ha sido promovido\na administrador 👑\n\n🎉 ¡Felicidades! Con mucho amor 💖`;
+
     return {
       success: true,
-      message: `?? ${targetLabel} ha sido promovido a administrador.`,
+      message: decorateBLGroupMessage('Usuario Promovido', promoteMessage, 'admin'),
       mentions: [targetJid],
     }
   } catch (e) {
     console.error('Error en /promote:', e)
-    return { success: false, message: ' Error al promover al usuario.' }
+    return { success: false, message: decorateBLGroupMessage('Error', 'Error al promover al usuario.\n😢 Intenta de nuevo', 'love') }
   }
 }
 
@@ -460,20 +472,90 @@ function normalizePhoneNumber(jidOrNumber) {
 }
 
 // =========================
-// FUNCIONALIDADES WILEYS PARA GRUPOS
+// FUNCIONALIDADES WILEYS PARA GRUPOS + TEMÁTICA BL
 // =========================
 
-// Funcionalidad Wileys: Reacciones automáticas para comandos de grupo
-const addGroupReaction = async (sock, message, emoji = '👥') => {
+// Funcionalidades Wileys completas + Temática BL integrada
+const BL_GROUP_REACTIONS = ['👥', '💖', '✨', '👑', '💕', '🌸', '💝', '🌟', '🥰', '😍'];
+const BL_GROUP_MESSAGES = {
+  admin: ['💖 Gestionando con amor...', '✨ Administrando con cariño...', '🌸 Cuidando el grupo...'],
+  success: ['✅ ¡Completado! 💖', '🌸 ¡Listo! Todo perfecto', '💕 ¡Éxito! Con mucho amor'],
+  error: ['🥺 Algo salió mal, pero no te rindas 💔', '😢 Error detectado, lo siento', '💔 No pude completarlo, perdóname']
+};
+
+// Wileys: Reacciones automáticas BL mejoradas para grupos
+const addBLGroupReaction = async (sock, message, type = 'group') => {
   try {
-    if (sock && message?.key) {
-      await sock.sendMessage(message.key.remoteJid, {
-        react: { text: emoji, key: message.key }
-      });
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      group: ['👥', '💖', '✨'],
+      admin: ['👑', '💕', '🌸'],
+      kick: ['⚠️', '💔', '🥺'],
+      promote: ['👑', '🎉', '💖'],
+      welcome: ['👋', '💖', '🌸'],
+      rules: ['📋', '✨', '💝']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.group;
+
+    // Aplicar secuencia de reacciones con timing BL
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
     }
   } catch (error) {
-    console.error('[GROUP_REACTION] Error:', error);
+    console.error('[BL_GROUP_REACTION] Error:', error);
   }
+};
+
+// Wileys: Decoración BL para mensajes de grupo
+const decorateBLGroupMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    admin: {
+      header: '╔👑═══════════════════════════════════════👑╗',
+      footer: '╚👑═══════════════════════════════════════👑╝',
+      bullet: '👑'
+    },
+    group: {
+      header: '╔👥═══════════════════════════════════════👥╗',
+      footer: '╚👥═══════════════════════════════════════👥╝',
+      bullet: '👥'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Wileys: Mensaje de estado BL para grupos
+const createBLGroupStatusMessage = (type) => {
+  const messages = BL_GROUP_MESSAGES[type] || BL_GROUP_MESSAGES.admin;
+  return messages[Math.floor(Math.random() * messages.length)];
 };
 
 // Funcionalidad Wileys: Mensaje de bienvenida automático

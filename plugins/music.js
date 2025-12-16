@@ -1,8 +1,7 @@
 // plugins/music.js
 // Sistema de música avanzado - Reproductor, playlists, identificación, etc.
 
-import fs from 'fs'
-import path from 'path'
+// Removed unused imports
 
 // Importaciones opcionales para música avanzada
 let mm, NodeID3, ytsr;
@@ -13,11 +12,7 @@ try {
   console.log('⚠️ music-metadata no disponible, usando análisis básico');
 }
 
-try {
-  NodeID3 = (await import('node-id3')).default;
-} catch (e) {
-  console.log('⚠️ node-id3 no disponible, sin manipulación de tags');
-}
+// NodeID3 removed - not used in current implementation
 
 try {
   ytsr = (await import('ytsr')).default;
@@ -25,22 +20,91 @@ try {
   console.log('⚠️ ytsr no disponible, búsquedas limitadas');
 }
 
-// Funcionalidad Wileys: Reacciones automáticas para música
-const addMusicReaction = async (sock, message, emoji = '🎵') => {
+// Funcionalidades Wileys completas + Temática BL integrada
+const BL_MUSIC_REACTIONS = ['💖', '🌸', '✨', '💕', '🎵', '�', '💝', '🌟', '🥰', '😍'];
+const BL_MESSAGES = {
+  processing: ['💖 Procesando tu música con amor...', '✨ Buscando la canción perfecta para ti...', '🌸 Preparando algo especial...'],
+  success: ['✨ ¡Listo! Disfruta tu música 🎵', '💖 ¡Aquí tienes! Con mucho amor', '🌸 ¡Perfecto! Espero que te guste'],
+  error: ['🥺 Algo salió mal, pero no te rindas 💔', '😢 Error detectado, lo siento mucho', '💔 No pude completarlo, perdóname']
+};
+
+// Wileys: Reacciones automáticas BL mejoradas
+const addBLMusicReaction = async (sock, message, type = 'music') => {
   try {
-    if (sock && message?.key) {
-      await sock.sendMessage(message.key.remoteJid, {
-        react: { text: emoji, key: message.key }
-      });
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      music: ['🎵', '💖', '✨'],
+      search: ['🔍', '🎶', '💕'],
+      download: ['📥', '🎵', '💖'],
+      playlist: ['📝', '🎵', '🌸'],
+      identify: ['🎧', '🔍', '✨']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.music;
+
+    // Aplicar secuencia de reacciones con timing BL
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
     }
   } catch (error) {
-    console.error('[MUSIC_REACTION] Error:', error);
+    console.error('[BL_MUSIC_REACTION] Error:', error);
   }
+};
+
+// Wileys: Decoración BL para mensajes
+const decorateBLMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    cute: {
+      header: '╔🌸═══════════════════════════════════════🌸╗',
+      footer: '╚🌸═══════════════════════════════════════🌸╝',
+      bullet: '🌸'
+    },
+    music: {
+      header: '╔🎵═══════════════════════════════════════🎵╗',
+      footer: '╚🎵═══════════════════════════════════════🎵╝',
+      bullet: '🎵'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Wileys: Mensaje de estado BL
+const createBLStatusMessage = (type) => {
+  const messages = BL_MESSAGES[type] || BL_MESSAGES.processing;
+  return messages[Math.floor(Math.random() * messages.length)];
 };
 
 // Base de datos simulada para playlists (en producción sería una DB real)
 const groupPlaylists = new Map();
-const userPlaylists = new Map();
+const globalUserPlaylists = new Map();
 
 // Identificación real de música usando metadatos
 const identifySong = async (audioBuffer) => {
@@ -126,7 +190,7 @@ const getLyrics = async (title, artist) => {
 export async function identify(ctx) {
   const { sock, message, remoteJid } = ctx;
 
-  await addMusicReaction(sock, message, '🎵');
+  await addBLMusicReaction(sock, message, 'identify');
 
   // Verificar si hay audio en el mensaje
   const audioMessage = message?.message?.audioMessage;
@@ -193,11 +257,11 @@ export async function lyrics(ctx) {
   if (args.length < 2) {
     return {
       success: false,
-      message: '❌ Uso: /lyrics <título> <artista>\nEjemplo: /lyrics Despacito Luis Fonsi'
+      message: decorateBLMessage('Uso de Lyrics', '❌ Uso: /lyrics <título> <artista>\nEjemplo: /lyrics Despacito Luis Fonsi', 'music')
     };
   }
 
-  await addMusicReaction(sock, message, '📝');
+  await addBLMusicReaction(sock, message, 'search');
 
   const title = args[0];
   const artist = args.slice(1).join(' ');
@@ -223,7 +287,7 @@ export async function playlist(ctx) {
   const { args, sock, message, remoteJid, sender, isGroup } = ctx;
   const action = args[0]?.toLowerCase();
 
-  await addMusicReaction(sock, message, '📋');
+  await addBLMusicReaction(sock, message, 'playlist');
 
   if (!action || !['create', 'add', 'remove', 'list', 'play', 'delete'].includes(action)) {
     return {
@@ -234,13 +298,13 @@ export async function playlist(ctx) {
 
   const playlistName = args[1];
   const playlistKey = isGroup ? `group_${remoteJid}` : `user_${sender}`;
-  const storage = isGroup ? groupPlaylists : userPlaylists;
+  const storage = isGroup ? groupPlaylists : globalUserPlaylists;
 
   if (!storage.has(playlistKey)) {
     storage.set(playlistKey, new Map());
   }
 
-  const userPlaylists = storage.get(playlistKey);
+  const userPlaylistsData = storage.get(playlistKey);
 
   switch (action) {
     case 'create':
@@ -248,11 +312,11 @@ export async function playlist(ctx) {
         return { success: false, message: '❌ Especifica el nombre de la playlist\nEjemplo: /playlist create MiFavorita' };
       }
 
-      if (userPlaylists.has(playlistName)) {
+      if (userPlaylistsData.has(playlistName)) {
         return { success: false, message: `❌ La playlist "${playlistName}" ya existe` };
       }
 
-      userPlaylists.set(playlistName, []);
+      userPlaylistsData.set(playlistName, []);
       return {
         success: true,
         message: `✅ Playlist "${playlistName}" creada exitosamente\n\n💡 Usa */playlist add ${playlistName} <canción>* para agregar música`
@@ -263,7 +327,7 @@ export async function playlist(ctx) {
         return { success: false, message: '❌ Especifica el nombre de la playlist' };
       }
 
-      if (!userPlaylists.has(playlistName)) {
+      if (!userPlaylistsData.has(playlistName)) {
         return { success: false, message: `❌ La playlist "${playlistName}" no existe` };
       }
 
@@ -272,7 +336,7 @@ export async function playlist(ctx) {
         return { success: false, message: '❌ Especifica la canción a agregar\nEjemplo: /playlist add MiFavorita Despacito - Luis Fonsi' };
       }
 
-      const playlist = userPlaylists.get(playlistName);
+      const playlist = userPlaylistsData.get(playlistName);
       playlist.push({
         title: songToAdd,
         addedBy: sender,
@@ -287,14 +351,14 @@ export async function playlist(ctx) {
     case 'list':
       if (!playlistName) {
         // Listar todas las playlists
-        const playlists = Array.from(userPlaylists.keys());
+        const playlists = Array.from(userPlaylistsData.keys());
         if (playlists.length === 0) {
           return { success: true, message: '📋 No tienes playlists creadas\n\n💡 Usa */playlist create <nombre>* para crear una' };
         }
 
         let message = `📋 *${isGroup ? 'Playlists del Grupo' : 'Tus Playlists'}*\n\n`;
         playlists.forEach((name, index) => {
-          const songs = userPlaylists.get(name);
+          const songs = userPlaylistsData.get(name);
           message += `${index + 1}. **${name}** (${songs.length} canciones)\n`;
         });
         message += '\n💡 Usa */playlist list <nombre>* para ver las canciones';
@@ -302,11 +366,11 @@ export async function playlist(ctx) {
         return { success: true, message };
       } else {
         // Listar canciones de una playlist específica
-        if (!userPlaylists.has(playlistName)) {
+        if (!userPlaylistsData.has(playlistName)) {
           return { success: false, message: `❌ La playlist "${playlistName}" no existe` };
         }
 
-        const songs = userPlaylists.get(playlistName);
+        const songs = userPlaylistsData.get(playlistName);
         if (songs.length === 0) {
           return { success: true, message: `📋 La playlist "${playlistName}" está vacía\n\n💡 Usa */playlist add ${playlistName} <canción>* para agregar música` };
         }
@@ -325,7 +389,7 @@ export async function playlist(ctx) {
         return { success: false, message: '❌ Especifica el nombre de la playlist' };
       }
 
-      if (!userPlaylists.has(playlistName)) {
+      if (!userPlaylistsData.has(playlistName)) {
         return { success: false, message: `❌ La playlist "${playlistName}" no existe` };
       }
 
@@ -334,7 +398,7 @@ export async function playlist(ctx) {
         return { success: false, message: '❌ Especifica el número de la canción a quitar\nEjemplo: /playlist remove MiFavorita 1' };
       }
 
-      const playlistToModify = userPlaylists.get(playlistName);
+      const playlistToModify = userPlaylistsData.get(playlistName);
       if (indexToRemove < 0 || indexToRemove >= playlistToModify.length) {
         return { success: false, message: `❌ Número inválido. La playlist tiene ${playlistToModify.length} canciones` };
       }
@@ -350,11 +414,11 @@ export async function playlist(ctx) {
         return { success: false, message: '❌ Especifica el nombre de la playlist a reproducir' };
       }
 
-      if (!userPlaylists.has(playlistName)) {
+      if (!userPlaylistsData.has(playlistName)) {
         return { success: false, message: `❌ La playlist "${playlistName}" no existe` };
       }
 
-      const playlistToPlay = userPlaylists.get(playlistName);
+      const playlistToPlay = userPlaylistsData.get(playlistName);
       if (playlistToPlay.length === 0) {
         return { success: false, message: `❌ La playlist "${playlistName}" está vacía` };
       }
@@ -371,11 +435,11 @@ export async function playlist(ctx) {
         return { success: false, message: '❌ Especifica el nombre de la playlist a eliminar' };
       }
 
-      if (!userPlaylists.has(playlistName)) {
+      if (!userPlaylistsData.has(playlistName)) {
         return { success: false, message: `❌ La playlist "${playlistName}" no existe` };
       }
 
-      userPlaylists.delete(playlistName);
+      userPlaylistsData.delete(playlistName);
       return {
         success: true,
         message: `✅ Playlist "${playlistName}" eliminada exitosamente`
@@ -390,7 +454,7 @@ export async function radio(ctx) {
   const { args, sock, message } = ctx;
   const station = args[0]?.toLowerCase();
 
-  await addMusicReaction(sock, message, '📻');
+  await addBLMusicReaction(sock, message, 'music');
 
   const stations = {
     'pop': { name: 'Pop Hits', genre: 'Pop', country: 'Global' },
@@ -428,7 +492,7 @@ export async function radio(ctx) {
 export async function nowplaying(ctx) {
   const { sock, message } = ctx;
 
-  await addMusicReaction(sock, message, '🎵');
+  await addBLMusicReaction(sock, message, 'music');
 
   // Simulación de "ahora reproduciendo"
   const currentSongs = [
@@ -450,7 +514,7 @@ export async function nowplaying(ctx) {
 export async function musichelp(ctx) {
   const { sock, message } = ctx;
 
-  await addMusicReaction(sock, message, '🎵');
+  await addBLMusicReaction(sock, message, 'music');
 
   return {
     success: true,

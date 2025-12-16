@@ -18,14 +18,17 @@ function isOwner(usuario){
 }
 
 // Comando /mybots - Muestra solo los subbots del usuario
-export async function mybots({ usuario }){
+export async function mybots({ usuario, sock, message }){
   try{
+    // Funcionalidad Wileys: Reacción automática BL
+    if (sock && message) await addBLSubbotReaction(sock, message, 'subbot');
+
     const phone = normalizeDigits(usuario)
     const rows = await listUserSubbots(phone)
 
-    if(!rows.length) return { success:true, message:'📦 No tienes subbots creados.' }
+    if(!rows.length) return { success:true, message: decorateBLSubbotMessage('Mis Subbots', 'No tienes subbots creados.\n💡 Usa /qr o /code para crear uno', 'love') }
 
-    let msg = `🤖 *Mis Subbots* (${rows.length})\n\n`
+    let subbotList = [];
     rows.forEach((r,i)=>{
       const online = (r.status||'').toLowerCase()==='connected' || r.is_active===1 || r.is_active===true || r.is_online===true
       const type = r.type || r.method || r.connection_type || 'qr'
@@ -36,17 +39,18 @@ export async function mybots({ usuario }){
       const pushName = metadata.creatorPushName || 'Sin nombre'
       const displayName = `KONMISUB(${pushName})`
 
-      msg += `${i+1}. *Código:* ${pairingCode}\n`
-      msg += `   *Identificación:* ${displayName}\n`
-      msg += `   *Tipo:* ${type}\n`
-      msg += `   *Estado:* ${online?'🟢 Online':'⚪ Offline'}\n`
-      msg += '\n'
+      subbotList.push(`${i+1}. Código: ${pairingCode}`);
+      subbotList.push(`   Identificación: ${displayName}`);
+      subbotList.push(`   Tipo: ${type}`);
+      subbotList.push(`   Estado: ${online?'🟢 Online':'⚪ Offline'}`);
+      if (i < rows.length - 1) subbotList.push('');
     })
 
-    return { success:true, message: msg.trim() }
+    const title = `Mis Subbots (${rows.length})`;
+    return { success:true, message: decorateBLSubbotMessage(title, subbotList, 'bot') }
   }catch(e){
     console.error('Error en mybots:', e)
-    return { success:false, message:'⚠️ Error listando tus subbots.' }
+    return { success:false, message: decorateBLSubbotMessage('Error', 'Error listando tus subbots.\n🥺 Intenta de nuevo más tarde', 'love') }
   }
 }
 
@@ -97,27 +101,96 @@ export async function mine(ctx){ return mybots(ctx) }
 export async function all(ctx){ return bots(ctx) }
 
 // =========================
-// FUNCIONALIDADES WILEYS PARA SUBBOTS
+// FUNCIONALIDADES WILEYS PARA SUBBOTS + TEMÁTICA BL
 // =========================
 
-// Funcionalidad Wileys: Reacciones automáticas para comandos de subbots
-const addSubbotReaction = async (sock, message, emoji = '🤖') => {
+// Funcionalidades Wileys completas + Temática BL integrada
+const BL_SUBBOT_REACTIONS = ['🤖', '💖', '✨', '🌸', '💕', '💝', '🌟', '🥰', '😍', '💫'];
+const BL_SUBBOT_MESSAGES = {
+  managing: ['💖 Gestionando subbots con amor...', '✨ Administrando con cariño...', '🌸 Cuidando tus bots...'],
+  success: ['✅ ¡Completado! 💖', '🌸 ¡Listo! Todo perfecto', '💕 ¡Éxito! Con mucho amor'],
+  error: ['🥺 Algo salió mal, pero no te rindas 💔', '😢 Error detectado, lo siento', '💔 No pude completarlo, perdóname']
+};
+
+// Wileys: Reacciones automáticas BL mejoradas para subbots
+const addBLSubbotReaction = async (sock, message, type = 'subbot') => {
   try {
-    if (sock && message?.key) {
-      await sock.sendMessage(message.key.remoteJid, {
-        react: { text: emoji, key: message.key }
-      });
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      subbot: ['🤖', '💖', '✨'],
+      stats: ['📊', '🌸', '💕'],
+      manage: ['⚙️', '💖', '🌟'],
+      monitor: ['📈', '✨', '💝'],
+      info: ['📋', '🌸', '💫']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.subbot;
+
+    // Aplicar secuencia de reacciones con timing BL
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
     }
   } catch (error) {
-    console.error('[SUBBOT_REACTION] Error:', error);
+    console.error('[BL_SUBBOT_REACTION] Error:', error);
   }
+};
+
+// Wileys: Decoración BL para mensajes de subbots
+const decorateBLSubbotMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    bot: {
+      header: '╔🤖═══════════════════════════════════════🤖╗',
+      footer: '╚🤖═══════════════════════════════════════🤖╝',
+      bullet: '🤖'
+    },
+    stats: {
+      header: '╔📊═══════════════════════════════════════📊╗',
+      footer: '╚📊═══════════════════════════════════════📊╝',
+      bullet: '📊'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Wileys: Mensaje de estado BL para subbots
+const createBLSubbotStatusMessage = (type) => {
+  const messages = BL_SUBBOT_MESSAGES[type] || BL_SUBBOT_MESSAGES.managing;
+  return messages[Math.floor(Math.random() * messages.length)];
 };
 
 // Funcionalidad Wileys: Estadísticas avanzadas de subbots
 export async function subbotstats(ctx) {
   const { usuario, sock, message } = ctx;
 
-  await addSubbotReaction(sock, message, '📊');
+  await addBLSubbotReaction(sock, message, 'stats');
 
   try {
     const phone = normalizeDigits(usuario);
@@ -135,25 +208,23 @@ export async function subbotstats(ctx) {
     }).length;
 
     const stats = [
-      '📊 *Estadísticas de Subbots*',
-      '',
-      '👤 *Tus Subbots:*',
+      '👤 Tus Subbots:',
       `• Total: ${userSubbots.length}`,
       `• Online: ${userOnline}`,
       `• Offline: ${userSubbots.length - userOnline}`,
       '',
-      '🌐 *Sistema Global:*',
+      '🌐 Sistema Global:',
       `• Total subbots: ${allSubbots.length}`,
       `• Online: ${totalOnline}`,
       `• Offline: ${allSubbots.length - totalOnline}`,
       '',
-      '💡 Usa /mybots para ver detalles de tus subbots'
+      '💡 Usa /mybots para ver detalles'
     ];
 
-    return { success: true, message: stats.join('\n') };
+    return { success: true, message: decorateBLSubbotMessage('Estadísticas de Subbots', stats, 'stats') };
   } catch (error) {
     console.error('Error en subbotstats:', error);
-    return { success: false, message: '⚠️ Error al obtener estadísticas.' };
+    return { success: false, message: decorateBLSubbotMessage('Error', 'Error al obtener estadísticas.\n🥺 Intenta de nuevo más tarde', 'love') };
   }
 }
 

@@ -1,5 +1,5 @@
 // commands/ai.js
-// IA: chat y clasificación + Funcionalidades Wileys
+// IA: chat y clasificación + Funcionalidades Wileys + Temática BL
 
 import db from './database/db.js'
 import { chatWithAI, analyzeManhwaContent, analyzeContentWithAI } from '../handler.js'
@@ -32,42 +32,111 @@ try {
   console.log('⚠️ franc no disponible, usando detección básica de idioma');
 }
 
-// Funcionalidad Wileys: Reacciones automáticas para IA
-const addAIReaction = async (sock, message, emoji = '🤖') => {
+// Funcionalidades Wileys completas + Temática BL integrada
+const BL_AI_REACTIONS = ['🤖', '💖', '✨', '🧠', '💕', '🌸', '💝', '🌟', '🥰', '😍'];
+const BL_AI_MESSAGES = {
+  thinking: ['💖 Pensando con amor...', '✨ Procesando tu consulta...', '🌸 Analizando con cariño...'],
+  success: ['✨ ¡Aquí tienes la respuesta! 💖', '🌸 ¡Listo! Espero que te ayude', '💕 ¡Perfecto! Con mucho amor'],
+  error: ['🥺 Algo salió mal, pero no te rindas 💔', '😢 Error detectado, lo siento mucho', '💔 No pude completarlo, perdóname']
+};
+
+// Wileys: Reacciones automáticas BL mejoradas para IA
+const addBLAIReaction = async (sock, message, type = 'ai') => {
   try {
-    if (sock && message?.key) {
-      await sock.sendMessage(message.key.remoteJid, {
-        react: { text: emoji, key: message.key }
-      });
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      ai: ['🤖', '💖', '✨'],
+      classify: ['📊', '🧠', '💕'],
+      translate: ['🌐', '💖', '🌸'],
+      analyze: ['🔍', '✨', '💝'],
+      code: ['💻', '🌟', '💖']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.ai;
+
+    // Aplicar secuencia de reacciones con timing BL
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
     }
   } catch (error) {
-    console.error('[AI_REACTION] Error:', error);
+    console.error('[BL_AI_REACTION] Error:', error);
   }
 };
 
-// Funcionalidad Wileys: Mostrar "pensando..." mientras procesa
-const showThinking = async (sock, remoteJid, duration = 3000) => {
+// Wileys: Decoración BL para mensajes de IA
+const decorateBLAIMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    brain: {
+      header: '╔🧠═══════════════════════════════════════🧠╗',
+      footer: '╚🧠═══════════════════════════════════════🧠╝',
+      bullet: '🧠'
+    },
+    tech: {
+      header: '╔💻═══════════════════════════════════════💻╗',
+      footer: '╚💻═══════════════════════════════════════💻╝',
+      bullet: '💻'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Wileys: Mostrar "pensando..." mientras procesa con temática BL
+const showBLThinking = async (sock, remoteJid, duration = 3000) => {
   try {
     await sock.sendPresenceUpdate('composing', remoteJid);
     setTimeout(async () => {
       await sock.sendPresenceUpdate('paused', remoteJid);
     }, duration);
   } catch (error) {
-    console.error('[AI_THINKING] Error:', error);
+    console.error('[BL_AI_THINKING] Error:', error);
   }
+};
+
+// Wileys: Mensaje de estado BL para IA
+const createBLAIStatusMessage = (type) => {
+  const messages = BL_AI_MESSAGES[type] || BL_AI_MESSAGES.thinking;
+  return messages[Math.floor(Math.random() * messages.length)];
 };
 
 export async function ai(ctx) {
   const { args, sender, remoteJid, fecha, sock, message } = ctx;
   const pregunta = (args || []).join(' ').trim();
-  if (!pregunta) return { success: true, message: 'ℹ️ Uso: /ai <pregunta>' };
+  if (!pregunta) return { success: true, message: decorateBLAIMessage('Uso de IA', 'ℹ️ Uso: /ai <pregunta>\n💡 Ejemplo: /ai ¿Cómo estás?', 'love') };
 
-  // Funcionalidad Wileys: Reacción automática y mostrar "pensando..."
-  await addAIReaction(sock, message, '🤖');
-  await showThinking(sock, remoteJid, 2000);
+  // Funcionalidad Wileys: Reacción automática BL y mostrar "pensando..."
+  await addBLAIReaction(sock, message, 'ai');
+  await showBLThinking(sock, remoteJid, 2000);
 
   const aiResult = await chatWithAI(pregunta, `Usuario: ${sender}, Grupo: ${remoteJid}`);
-  if (!aiResult?.success) return { success: false, message: `⚠️ ${aiResult?.error || 'IA no disponible'}` };
+  if (!aiResult?.success) return { success: false, message: decorateBLAIMessage('Error de IA', `⚠️ ${aiResult?.error || 'IA no disponible'}\n🥺 Intenta de nuevo más tarde`, 'love') };
 
   try {
     await db('logs').insert({ tipo: 'ai_command', comando: '/ai', usuario: sender, grupo: remoteJid, fecha: fecha || new Date().toISOString(), detalles: JSON.stringify({ pregunta, respuesta: aiResult.response, modelo: aiResult.model || 'gemini' }) });
@@ -75,30 +144,30 @@ export async function ai(ctx) {
       console.error('Error al guardar log de IA:', e.message);
   }
 
-  return { success: true, message: `🤖 *Respuesta de IA:*\n\n${aiResult.response}\n\n_${aiResult.model || 'Gemini AI'}_` };
+  const responseMessage = decorateBLAIMessage('Respuesta de IA', `${aiResult.response}\n\n💖 _${aiResult.model || 'Gemini AI'}_`, 'brain');
+  return { success: true, message: responseMessage };
 }
 
 export async function clasificar(ctx) {
   const { args, sender, remoteJid, fecha, sock, message } = ctx;
   const texto = (args || []).join(' ').trim();
-  if (!texto) return { success: true, message: 'ℹ️ Uso: /clasificar <texto>' };
+  if (!texto) return { success: true, message: decorateBLAIMessage('Uso de Clasificar', 'ℹ️ Uso: /clasificar <texto>\n💡 Ejemplo: /clasificar Este es un manhwa BL', 'brain') };
 
-  // Funcionalidad Wileys: Reacción automática
-  await addAIReaction(sock, message, '📊');
-  await showThinking(sock, remoteJid, 1500);
+  // Funcionalidad Wileys: Reacción automática BL
+  await addBLAIReaction(sock, message, 'classify');
+  await showBLThinking(sock, remoteJid, 1500);
 
   let res = await analyzeManhwaContent(texto);
   if (!res?.success) res = await analyzeContentWithAI(texto, '');
-  if (!res?.success) return { success: false, message: `⚠️ Error IA: ${res?.error || 'no disponible'}` };
+  if (!res?.success) return { success: false, message: decorateBLAIMessage('Error de Clasificación', `⚠️ Error IA: ${res?.error || 'no disponible'}\n🥺 Intenta con otro texto`, 'love') };
 
   const data = res.analysis || {};
-  const msg = [
-    '🧠 *Clasificación de IA*',
-    `• *Título:* ${data.titulo || 'N/A'}`,
-    `• *Tipo:* ${data.tipo || 'extra'}`,
-    data.capitulo ? `• *Capítulo:* ${data.capitulo}` : null,
-    `• *Confianza:* ${Math.round(data.confianza || 50)}%`,
-  ].filter(Boolean).join('\n');
+  const classificationContent = [
+    `• Título: ${data.titulo || 'N/A'}`,
+    `• Tipo: ${data.tipo || 'extra'}`,
+    data.capitulo ? `• Capítulo: ${data.capitulo}` : null,
+    `• Confianza: ${Math.round(data.confianza || 50)}%`,
+  ].filter(Boolean);
 
   try {
     await db('logs').insert({ tipo: 'clasificar_command', comando: '/clasificar', usuario: sender, grupo: remoteJid, fecha: fecha || new Date().toISOString(), detalles: JSON.stringify({ texto, resultado: data }) });
@@ -106,7 +175,8 @@ export async function clasificar(ctx) {
       console.error('Error al guardar log de clasificación:', e.message);
   }
 
-  return { success: true, message: msg };
+  const responseMessage = decorateBLAIMessage('Clasificación de IA', classificationContent, 'brain');
+  return { success: true, message: responseMessage };
 }
 
 // =========================
@@ -118,21 +188,21 @@ export async function resume(ctx) {
   const texto = args.join(' ').trim();
 
   if (!texto) {
-    return { text: '❌ Uso: /resume <texto largo>\nEjemplo: /resume Este es un texto muy largo que quiero resumir...' };
+    return { text: decorateBLAIMessage('Uso de Resume', '❌ Uso: /resume <texto largo>\n💡 Ejemplo: /resume Este es un texto muy largo que quiero resumir...', 'love') };
   }
 
-  await addAIReaction(sock, message, '📝');
-  await showThinking(sock, remoteJid, 2000);
+  await addBLAIReaction(sock, message, 'analyze');
+  await showBLThinking(sock, remoteJid, 2000);
 
   const prompt = `Resume el siguiente texto en máximo 3 puntos principales:\n\n${texto}`;
   const aiResult = await chatWithAI(prompt);
 
   if (!aiResult?.success) {
-    return { text: `⚠️ Error: ${aiResult?.error || 'IA no disponible'}` };
+    return { text: decorateBLAIMessage('Error de Resume', `⚠️ Error: ${aiResult?.error || 'IA no disponible'}\n🥺 Intenta con otro texto`, 'love') };
   }
 
   return {
-    text: `📝 *Resumen:*\n\n${aiResult.response}`
+    text: decorateBLAIMessage('Resumen', aiResult.response, 'brain')
   };
 }
 
@@ -140,24 +210,24 @@ export async function translate(ctx) {
   const { args, sock, message, remoteJid } = ctx;
 
   if (args.length < 2) {
-    return { text: '❌ Uso: /translate <idioma> <texto>\nEjemplo: /translate english Hola mundo' };
+    return { text: decorateBLAIMessage('Uso de Translate', '❌ Uso: /translate <idioma> <texto>\n💡 Ejemplo: /translate english Hola mundo', 'love') };
   }
 
   const idioma = args[0];
   const texto = args.slice(1).join(' ');
 
-  await addAIReaction(sock, message, '🌐');
-  await showThinking(sock, remoteJid, 1500);
+  await addBLAIReaction(sock, message, 'translate');
+  await showBLThinking(sock, remoteJid, 1500);
 
   const prompt = `Traduce el siguiente texto al ${idioma}:\n\n${texto}`;
   const aiResult = await chatWithAI(prompt);
 
   if (!aiResult?.success) {
-    return { text: `⚠️ Error: ${aiResult?.error || 'IA no disponible'}` };
+    return { text: decorateBLAIMessage('Error de Traducción', `⚠️ Error: ${aiResult?.error || 'IA no disponible'}\n🥺 Intenta de nuevo`, 'love') };
   }
 
   return {
-    text: `🌐 *Traducción (${idioma}):*\n\n${aiResult.response}`
+    text: decorateBLAIMessage(`Traducción (${idioma})`, aiResult.response, 'brain')
   };
 }
 
