@@ -2354,7 +2354,34 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // MÉTODO 1: Template buttons (más confiable para categorías)
+  // MÉTODO 1: List Message (mejor para grupos con wileys)
+  if (allRows.length > 3) {
+    logger.info(`Intentando enviar list message con ${allRows.length} opciones`);
+    try {
+      const listMessage = {
+        text: result.text || 'Elige una opción',
+        footer: result.footer || 'KONMI BOT © 2025',
+        title: result.title || '📋 Menú de Comandos',
+        buttonText: result.buttonText || '📋 Ver Opciones',
+        sections: (result.sections || []).map(sec => ({
+          title: sec.title || '',
+          rows: (sec.rows || []).map(r => ({
+            title: r.title || 'Opción',
+            description: r.description || '',
+            rowId: r.rowId || r.id || 'noop'
+          }))
+        }))
+      };
+
+      await sock.sendMessage(jid, listMessage, opts);
+      logger.success('List message enviado exitosamente');
+      return true;
+    } catch (err) {
+      logger.warning('List message falló, intentando template buttons', err?.message);
+    }
+  }
+
+  // MÉTODO 2: Template buttons (para pocas opciones)
   if (allRows.length > 0 && allRows.length <= 10) {
     logger.info(`Intentando enviar ${allRows.length} template buttons`);
     try {
@@ -2380,7 +2407,7 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // MÉTODO 2: Simple buttons (fallback para pocos elementos)
+  // MÉTODO 3: Simple buttons (fallback para pocos elementos)
   if (allRows.length <= 3) {
     try {
       await sock.sendMessage(jid, {
@@ -2401,7 +2428,7 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // MÉTODO 3: Botones básicos (fallback adicional)
+  // MÉTODO 4: Botones básicos (fallback adicional)
   if (allRows.length <= 3) {
     try {
       await sock.sendMessage(jid, {
@@ -2421,7 +2448,7 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // MÉTODO 4: Lista con texto (para muchas opciones)
+  // MÉTODO 5: Lista con texto (último recurso)
   if (allRows.length > 3) {
     try {
       // Dividir en páginas de máximo 10 botones nativeFlow
