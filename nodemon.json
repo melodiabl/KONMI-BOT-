@@ -1,0 +1,30 @@
+{
+  "watch": [
+    "*.js",
+    "routes/**/*.js",
+    "middleware/**/*.js",
+    "utils/**/*.js",
+    "config/**/*.js",
+    "!storage/**",
+    "!logs/**",
+    "!tests/**",
+    "!node_modules/**"
+  ],
+  "ignore": [
+    "storage/baileys_full/**",
+    "storage/database.sqlite",
+    "logs/**",
+    "*.log",
+    "node_modules/**",
+    "*.test.js",
+    "*.spec.js"
+  ],
+  "delay": 1000,
+  "ext": "js,json",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "verbose": true,
+  "restartable": "rs",
+  "colours": true
+}

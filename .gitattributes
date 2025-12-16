@@ -1,0 +1,22 @@
+# Normaliza fin de lヴnea y declara UTF-8 para archivos de texto
+
+# Por defecto, trata archivos como texto y normaliza a LF en el working tree
+* text=auto eol=lf
+
+# Scripts de Windows deben mantener CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Fuerza UTF-8 en tipos de texto comunes (requiere Git moderno para working-tree-encoding)
+*.{js,jsx,ts,tsx,mjs,cjs}           text working-tree-encoding=UTF-8
+*.{json,json5}                      text working-tree-encoding=UTF-8
+*.{yml,yaml}                        text working-tree-encoding=UTF-8
+*.{md,markdown,mdx}                 text working-tree-encoding=UTF-8
+*.{html,htm}                        text working-tree-encoding=UTF-8
+*.{css,scss,sass,less}              text working-tree-encoding=UTF-8
+*.{env,env.example}                 text working-tree-encoding=UTF-8
+*.{sh,sql,ini,conf,properties,txt}  text working-tree-encoding=UTF-8
+*.{csv,tsv}                         text working-tree-encoding=UTF-8
+
+# Configuracion extra generada por Codex CLI
