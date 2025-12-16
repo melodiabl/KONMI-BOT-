@@ -34,8 +34,8 @@ async function up(knex) {
     await ensureCol('created_at', (t) => t.timestamp('created_at').defaultTo(knex.fn.now()), (t)=> t.timestamp('created_at'));
     await ensureCol('updated_at', (t) => t.timestamp('updated_at').defaultTo(knex.fn.now()), (t)=> t.timestamp('updated_at'));
     // Backfill for sqlite if timestamps were just added without defaults
-    try { await knex('group_settings').whereNull('created_at').update({ created_at: knex.fn.now() }); } catch (_) {}
-    try { await knex('group_settings').whereNull('updated_at').update({ updated_at: knex.fn.now() }); } catch (_) {}
+    try { await knex('group_settings').whereNull('created_at').update({ created_at: new Date().toISOString() }); } catch (_) {}
+    try { await knex('group_settings').whereNull('updated_at').update({ updated_at: new Date().toISOString() }); } catch (_) {}
   }
 }
 

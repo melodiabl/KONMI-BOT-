@@ -12,15 +12,25 @@ async function up(knex) {
     }
     const hasCreatedAt = await knex.schema.hasColumn('bot_global_state', 'created_at');
     if (!hasCreatedAt) {
+      // Para SQLite, agregar columna sin default y luego actualizar
       await knex.schema.alterTable('bot_global_state', (table) => {
-        table.timestamp('created_at').defaultTo(knex.fn.now());
+        table.timestamp('created_at').nullable();
       });
+      // Actualizar registros existentes con timestamp actual
+      await knex('bot_global_state').update({
+        created_at: new Date().toISOString()
+      }).whereNull('created_at');
     }
     const hasUpdatedAt = await knex.schema.hasColumn('bot_global_state', 'updated_at');
     if (!hasUpdatedAt) {
+      // Para SQLite, agregar columna sin default y luego actualizar
       await knex.schema.alterTable('bot_global_state', (table) => {
-        table.timestamp('updated_at').defaultTo(knex.fn.now());
+        table.timestamp('updated_at').nullable();
       });
+      // Actualizar registros existentes con timestamp actual
+      await knex('bot_global_state').update({
+        updated_at: new Date().toISOString()
+      }).whereNull('updated_at');
     }
     return;
   }

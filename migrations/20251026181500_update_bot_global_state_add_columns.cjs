@@ -56,17 +56,17 @@ async function up(knex) {
   try {
     await knex('bot_global_state')
       .whereNull('fecha_cambio')
-      .update({ fecha_cambio: knex.fn.now() });
+      .update({ fecha_cambio: new Date().toISOString() });
   } catch (_) {}
   try {
     await knex('bot_global_state')
       .whereNull('created_at')
-      .update({ created_at: knex.fn.now() });
+      .update({ created_at: new Date().toISOString() });
   } catch (_) {}
   try {
     await knex('bot_global_state')
       .whereNull('updated_at')
-      .update({ updated_at: knex.fn.now() });
+      .update({ updated_at: new Date().toISOString() });
   } catch (_) {}
 }
 
