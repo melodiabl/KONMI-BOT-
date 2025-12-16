@@ -1428,25 +1428,7 @@ const COMMAND_FUNCTION_MAP = {
   'securitylogs': 'securitylogs',
   'securitystatus': 'securitystatus',
 
-  // Categorías del menú de ayuda
-  'cat_descargas': { isLocal: true, handler: handleHelpResponse },
-  'cat_ia': { isLocal: true, handler: handleHelpResponse },
-  'cat_interactivo': { isLocal: true, handler: handleHelpResponse },
-  'cat_media': { isLocal: true, handler: handleHelpResponse },
-  'cat_utilidades': { isLocal: true, handler: handleHelpResponse },
-  'cat_grupo': { isLocal: true, handler: handleHelpResponse },
-  'cat_admin': { isLocal: true, handler: handleHelpResponse },
-  'cat_entretenimiento': { isLocal: true, handler: handleHelpResponse },
-  'cat_archivos': { isLocal: true, handler: handleHelpResponse },
-  'cat_aportes': { isLocal: true, handler: handleHelpResponse },
-  'cat_subbots': { isLocal: true, handler: handleHelpResponse },
-
-  // Comandos de ayuda específicos
-  'help_play': { isLocal: true, handler: handleHelpResponse },
-  'help_video': { isLocal: true, handler: handleHelpResponse },
-  'help_tiktok': { isLocal: true, handler: handleHelpResponse },
-  'help_instagram': { isLocal: true, handler: handleHelpResponse },
-  'help_spotify': { isLocal: true, handler: handleHelpResponse },
+  // Sistema simplificado - sin categorías interactivas
 };
 
 async function loadCommandModule(moduleName, commandName = null) {
@@ -1606,43 +1588,54 @@ function parseCommand(text) {
 // Comando de ayuda integrado con listas interactivas
 async function handleHelpCommand(ctx) {
   const { sock, remoteJid, sender, isGroup } = ctx;
-  // Help command executed
+
   const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
   const isAdmin = await isSuperAdmin(userPhone);
 
-  const sections = [{
-    title: '📋 Categorías Disponibles',
-    rows: [
-      { title: '📥 Descargas', description: 'YouTube, TikTok, Instagram, Facebook, Twitter', rowId: 'cat_descargas', id: 'cat_descargas' },
-      { title: '🤖 Inteligencia Artificial', description: 'IA, Resumir, Traducir, Explicar, Clasificar', rowId: 'cat_ia', id: 'cat_ia' },
-      { title: '✨ Interactivo', description: 'Reacciones, Encuestas, Estados', rowId: 'cat_interactivo', id: 'cat_interactivo' },
-      { title: '🎨 Media & Stickers', description: 'Stickers, Memes, TTS, Wallpapers', rowId: 'cat_media', id: 'cat_media' },
-      { title: '🧰 Utilidades', description: 'Traducir, Clima, Ping, Horóscopo', rowId: 'cat_utilidades', id: 'cat_utilidades' },
-      { title: '🎮 Entretenimiento', description: 'Juegos, Trivia, Chistes', rowId: 'cat_entretenimiento', id: 'cat_entretenimiento' },
-      { title: '📁 Archivos', description: 'Guardar, Descargar, Mis archivos', rowId: 'cat_archivos', id: 'cat_archivos' },
-      { title: '👥 Grupo', description: 'Administración, Bienvenida, Auto-moderación, Reglas', rowId: 'cat_grupo', id: 'cat_grupo' },
-      { title: '🤖 Subbots', description: 'Crear y gestionar tus subbots', rowId: 'cat_subbots', id: 'cat_subbots' },
-      { title: '📊 Aportes & Pedidos', description: 'Sistema de aportes y pedidos', rowId: 'cat_aportes', id: 'cat_aportes' }
-    ]
-  }];
+  // TEXTO PLANO SIMPLE - Sin interactivos
+  let helpText = `*🤖 KONMI BOT - MENÚ DE AYUDA*\n\n`;
+  helpText += `¡Hola! 👋 Aquí tienes todos los comandos disponibles:\n\n`;
+
+  helpText += `*📥 DESCARGAS*\n`;
+  helpText += `• /play <nombre> - Descargar audio de YouTube\n`;
+  helpText += `• /video <nombre> - Descargar video de YouTube\n`;
+  helpText += `• /tiktok <url> - Descargar de TikTok\n`;
+  helpText += `• /instagram <url> - Descargar de Instagram\n`;
+  helpText += `• /spotify <búsqueda> - Buscar en Spotify\n\n`;
+
+  helpText += `*🤖 INTELIGENCIA ARTIFICIAL*\n`;
+  helpText += `• /ia <texto> - Chatear con IA\n`;
+  helpText += `• /clasificar <texto> - Clasificar texto\n`;
+  helpText += `• /translate <texto> - Traducir texto\n\n`;
+
+  helpText += `*🎨 MEDIA*\n`;
+  helpText += `• /sticker - Crear sticker\n`;
+  helpText += `• /toimg - Convertir sticker a imagen\n\n`;
+
+  helpText += `*🛠 UTILIDADES*\n`;
+  helpText += `• /clima <ciudad> - Ver clima\n`;
+  helpText += `• /qr <texto> - Generar código QR\n`;
+  helpText += `• /ping - Ver latencia del bot\n\n`;
+
+  helpText += `*👥 GRUPO*\n`;
+  helpText += `• /groupinfo - Info del grupo\n`;
+  helpText += `• /tagall - Mencionar a todos\n\n`;
 
   if (isAdmin) {
-    sections[0].rows.push({
-      title: '⚙️ Administración',
-      description: 'Subbots, Sistema, Logs, Broadcast',
-      rowId: 'cat_admin',
-      id: 'cat_admin'
-    });
+    helpText += `*🔧 ADMIN*\n`;
+    helpText += `• /bot on/off - Activar/desactivar bot\n`;
+    helpText += `• /bots - Ver subbots\n`;
+    helpText += `• /status - Estado del sistema\n\n`;
   }
 
-  // Returning main menu
+  helpText += `*💡 Cómo usar:*\n`;
+  helpText += `Escribe el comando seguido de los parámetros necesarios.\n`;
+  helpText += `Ejemplo: */play despacito*\n\n`;
+  helpText += `KONMI BOT © 2025 - Bot WhatsApp Multifuncional`;
+
   return {
-    type: 'list',
-    text: '🤖 *KONMI BOT - MENÚ PRINCIPAL*\n\nHola! Soy tu asistente de WhatsApp.\n\nSelecciona una categoría para ver todos los comandos disponibles:',
-    title: '📋 Menú de Comandos',
-    buttonText: 'Seleccionar Categoría',
-    footer: `KONMI BOT © 2025 | ${isAdmin ? '👑 Admin' : '👤 Usuario'}`,
-    sections: sections
+    type: 'text',
+    text: helpText
   };
 }
 
@@ -2091,17 +2084,7 @@ commandMap.set('ayuda', { handler: handleHelpCommand, category: 'Básicos', desc
 commandMap.set('menu', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar menú', isLocal: true });
 commandMap.set('comandos', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar comandos', isLocal: true });
 
-// Registrar manejadores para respuestas del menú
-for (const key of Object.keys({
-  cat_descargas: 1, cat_ia: 1, cat_interactivo: 1, cat_media: 1, cat_utilidades: 1, cat_grupo: 1, cat_admin: 1,
-  cat_entretenimiento: 1, cat_archivos: 1, cat_aportes: 1, cat_subbots: 1,
-  help_play: 1, help_video: 1, help_tiktok: 1, help_instagram: 1, help_spotify: 1,
-  help_ia: 1, help_image: 1, help_clasificar: 1, help_sticker: 1, help_meme: 1,
-  help_quote: 1, help_translate: 1, help_weather: 1, help_ping: 1, help_bot: 1,
-  help_groupinfo: 1, help_qr: 1, help_code: 1, help_mybots: 1, help_menu: 1
-})) {
-  commandMap.set(key, { handler: handleHelpResponse, category: 'Sistema', description: 'Respuesta de menú', isLocal: true });
-}
+// Sistema simplificado - sin categorías interactivas
 
 // ===== REGISTRO COMPLETO DE COMANDOS =====
 commandMap.set('bot', { moduleName: 'bot-control', category: 'Admin', description: 'Activar/desactivar bot', admin: false });
@@ -2339,10 +2322,9 @@ function buildSendOptions(result, ctx) {
 }
 
 async function sendListFixedV2(sock, jid, result, ctx) {
-  const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const opts = buildSendOptions(result, ctx);
-  // Sending list message
 
+  // Extraer todas las opciones de las secciones
   const allRows = [];
   for (const sec of result.sections || []) {
     for (const r of sec.rows || []) {
@@ -2354,151 +2336,15 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // MÉTODO 1: List Message (mejor para grupos con wileys)
-  if (allRows.length > 3) {
-    logger.info(`Intentando enviar list message con ${allRows.length} opciones`);
-    try {
-      const listMessage = {
-        text: result.text || 'Elige una opción',
-        footer: result.footer || 'KONMI BOT © 2025',
-        title: result.title || '📋 Menú de Comandos',
-        buttonText: result.buttonText || '📋 Ver Opciones',
-        sections: (result.sections || []).map(sec => ({
-          title: sec.title || '',
-          rows: (sec.rows || []).map(r => ({
-            title: r.title || 'Opción',
-            description: r.description || '',
-            rowId: r.rowId || r.id || 'noop'
-          }))
-        }))
-      };
-
-      await sock.sendMessage(jid, listMessage, opts);
-      logger.success('List message enviado exitosamente');
-      return true;
-    } catch (err) {
-      logger.warning('List message falló, intentando template buttons', err?.message);
-    }
-  }
-
-  // MÉTODO 2: Template buttons (para pocas opciones)
-  if (allRows.length > 0 && allRows.length <= 10) {
-    logger.info(`Intentando enviar ${allRows.length} template buttons`);
-    try {
-      const templateButtons = allRows.map((r, i) => ({
-        index: i + 1,
-        quickReplyButton: {
-          displayText: r.title,
-          id: r.rowId
-        }
-      }));
-
-      const templateMessage = {
-        text: result.text || 'Elige una opción',
-        footer: result.footer || 'KONMI BOT © 2025',
-        templateButtons: templateButtons
-      };
-
-      await sock.sendMessage(jid, templateMessage, opts);
-      logger.success('Template buttons enviados exitosamente');
-      return true;
-    } catch (err) {
-      logger.warning('Template buttons fallaron, intentando botones simples', err?.message);
-    }
-  }
-
-  // MÉTODO 3: Simple buttons (fallback para pocos elementos)
-  if (allRows.length <= 3) {
-    try {
-      await sock.sendMessage(jid, {
-        text: result.text || 'Elige una opción',
-        footer: result.footer || 'KONMI BOT © 2025',
-        templateButtons: allRows.map((r, i) => ({
-          index: i + 1,
-          quickReplyButton: {
-            displayText: r.title,
-            id: r.rowId
-          }
-        }))
-      }, opts);
-      // Template buttons sent successfully
-      return true;
-    } catch (err2) {
-      // Template buttons failed
-    }
-  }
-
-  // MÉTODO 4: Botones básicos (fallback adicional)
-  if (allRows.length <= 3) {
-    try {
-      await sock.sendMessage(jid, {
-        text: result.text || 'Elige una opción',
-        footer: result.footer || 'KONMI BOT © 2025',
-        buttons: allRows.map((r, i) => ({
-          buttonId: r.rowId,
-          buttonText: { displayText: r.title },
-          type: 1
-        })),
-        headerType: 1
-      }, opts);
-      // Simple buttons sent successfully
-      return true;
-    } catch (err3) {
-      // Simple buttons failed
-    }
-  }
-
-  // MÉTODO 5: Lista con texto (último recurso)
-  if (allRows.length > 3) {
-    try {
-      // Dividir en páginas de máximo 10 botones nativeFlow
-      const nativeFlowButtons = allRows.slice(0, 10).map((r) => ({
-        name: 'quick_reply',
-        buttonParamsJson: JSON.stringify({
-          display_text: r.title,
-          id: r.rowId
-        })
-      }));
-
-      // Si hay más de 10, agregar botón "Ver más"
-      if (allRows.length > 10) {
-        nativeFlowButtons.push({
-          name: 'quick_reply',
-          buttonParamsJson: JSON.stringify({
-            display_text: '➡️ Ver más opciones',
-            id: 'help_more'
-          })
-        });
-      }
-
-      const interactiveMessage = {
-        viewOnceMessage: {
-          message: {
-            interactiveMessage: {
-              body: { text: `${result.text || 'Elige una opción'}\n\n📄 Mostrando ${Math.min(10, allRows.length)} de ${allRows.length} opciones` },
-              footer: { text: result.footer || 'KONMI BOT © 2025' },
-              header: { title: result.title || '📋 Menú', hasMediaAttachment: false },
-              nativeFlowMessage: {
-                buttons: nativeFlowButtons,
-                messageParamsJson: ''
-              }
-            }
-          }
-        }
-      };
-
-      await sock.sendMessage(jid, interactiveMessage, opts);
-      // Paginated nativeFlow buttons sent successfully
-      return true;
-    } catch (err4) {
-      // Paginated nativeFlow failed
-    }
-  }
-
+  // SOLO TEXTO PLANO - Sin interactivos
   let txt = `${result.text || 'Menú'}\n\n`;
-  txt += `*📋 CATEGORÍAS DISPONIBLES*\n\n`;
+  txt += `*📋 OPCIONES DISPONIBLES*\n\n`;
+
   let num = 1;
   for (const sec of result.sections || []) {
+    if (sec.title) {
+      txt += `*${sec.title}*\n`;
+    }
     for (const r of sec.rows || []) {
       txt += `${num}️⃣ ${r.title}\n`;
       if (r.description) txt += `   ${r.description}\n`;
@@ -2506,17 +2352,17 @@ async function sendListFixedV2(sock, jid, result, ctx) {
       num++;
     }
   }
+
   txt += `\n💡 *Cómo usar:*\n`;
-  txt += `Escribe el comando de la categoría.\n`;
+  txt += `Escribe el comando directamente.\n`;
   txt += `Ejemplo: *cat_descargas*\n\n`;
   txt += `${result.footer || 'KONMI BOT © 2025'}`;
 
   try {
     await sock.sendMessage(jid, { text: txt }, opts);
-    // Plain text sent successfully
     return true;
-  } catch (err5) {
-    logger.error('Error enviando mensaje', err5?.message);
+  } catch (err) {
+    logger.error('Error enviando mensaje', err?.message);
     return false;
   }
 }
