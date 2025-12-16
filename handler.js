@@ -1761,7 +1761,7 @@ Ejemplo: /weather Madrid
 Verificar latencia del bot
 Ejemplo: /ping
 
-�*/qrcode* <texto>
+*/qrcode* <texto>
 Generar código QR
 Ejemplo: /qrcode https://google.com
 
@@ -2356,19 +2356,15 @@ async function sendListFixedV2(sock, jid, result, ctx) {
           },
           nativeFlowMessage: {
             buttons: nativeFlowButtons,
-            messageParamsJson: JSON.stringify({
-              from: 'api',
-              templateId: 'quick_reply'
-            })
+            messageParamsJson: ''
           }
         }
       };
 
       await sock.sendMessage(jid, interactiveMessage, opts);
-      logger.success('NativeFlow buttons enviados correctamente');
       return true;
     } catch (err) {
-      logger.warning('NativeFlow falló, intentando fallback', err?.message);
+      // NativeFlow failed, trying fallback
     }
   }
 
@@ -2539,7 +2535,6 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     // Command config loaded
 
     if (!commandConfig) {
-      console.log('[DISPATCH] ❌ Comando no encontrado en commandMap:', command);
       return false;
     }
 
@@ -2557,15 +2552,11 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     let handler = null;
 
     if (commandConfig.isLocal && typeof commandConfig.handler === 'function') {
-      console.log('[DISPATCH] ✅ Usando handler local para:', command);
       handler = commandConfig.handler;
     } else {
-      console.log('[DISPATCH] 🔄 Cargando módulo:', commandConfig.moduleName || commandConfig.handler, 'para comando:', command);
       const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler, command);
-      console.log('[DISPATCH] 📦 Módulo cargado:', !!module, '| handler encontrado:', !!module?.handler);
 
       if (!module || !module.handler) {
-        console.log('[DISPATCH] ❌ Error: módulo o handler no encontrado');
         await sock.sendMessage(remoteJid, {
           text: `⚠️ Comando "${command}" no disponible temporalmente.`
         });
@@ -2589,14 +2580,8 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       commandConfig
     };
 
-    console.log('[DISPATCH] 🚀 Ejecutando handler para:', command);
-
     const result = await handler(params, commandMap);
-    console.log('[DISPATCH] 📤 Resultado tipo:', result?.type || 'text', '| hasText:', !!result?.text);
-
     await sendResult(sock, remoteJid, result, ctx);
-
-    console.log('[DISPATCH] ✅ Comando ejecutado exitosamente:', command);
     return true;
 
   } catch (error) {
