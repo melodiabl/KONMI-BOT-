@@ -1788,11 +1788,45 @@ async function handleHelpCommand(ctx) {
     ];
   }
 
-  // Crear texto de ayuda con estilo BL
+  // Crear texto de ayuda completo
   let helpText = `╔═══════════════════════════════════════╗\n`;
   helpText += `║           [KONMI BOT]                 ║\n`;
   helpText += `║        Menu de Comandos               ║\n`;
-  helpText += `╚═══════════════════════════════════════╝`;
+  helpText += `╚═══════════════════════════════════════╝\n\n`;
+
+  // Agregar todas las categorías y comandos
+  for (const [categoryName, commands] of Object.entries(commandCategories)) {
+    helpText += `*[${categoryName}]*\n`;
+
+    // Mostrar solo los primeros 5 comandos de cada categoría para no hacer el mensaje muy largo
+    const displayCommands = commands.slice(0, 5);
+    for (const cmd of displayCommands) {
+      helpText += `• /${cmd.cmd} - ${cmd.desc}\n`;
+    }
+
+    if (commands.length > 5) {
+      helpText += `• ... y ${commands.length - 5} comandos más\n`;
+    }
+    helpText += `\n`;
+  }
+
+  helpText += `*[COMANDOS BÁSICOS]*\n`;
+  helpText += `• /help - Mostrar este menú\n`;
+  helpText += `• /ping - Ver latencia del bot\n`;
+  helpText += `• /status - Estado del sistema\n\n`;
+
+  helpText += `*[SUBBOTS]*\n`;
+  helpText += `• /qr - Crear subbot con QR\n`;
+  helpText += `• /code - Crear subbot con código\n`;
+  helpText += `• /mybots - Ver mis subbots\n\n`;
+
+  helpText += `*[APORTES]*\n`;
+  helpText += `• /addaporte - Agregar aporte (con media)\n`;
+  helpText += `• /aportes - Ver aportes\n`;
+  helpText += `• /pedido - Hacer pedido\n\n`;
+
+  helpText += `[TIP] *Tip:* Usa /comandos para ver la lista completa\n`;
+  helpText += `[HELP] Para ayuda específica: /help <comando>`;
 
   await sock.sendMessage(remoteJid, { text: helpText });
   return { success: true };
@@ -2237,11 +2271,66 @@ Ejemplo: /subbotmonitor
 }
 
 
+// Función para mostrar todos los comandos
+async function handleAllCommandsCommand(ctx) {
+  const { sock, remoteJid, sender } = ctx;
+
+  const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
+  const isAdmin = await isSuperAdmin(userPhone);
+
+  let commandText = `[LISTA COMPLETA DE COMANDOS]\n\n`;
+
+  // Obtener todos los comandos del COMMAND_FUNCTION_MAP
+  const allCommands = Object.keys(COMMAND_FUNCTION_MAP);
+
+  // Organizar por categorías
+  const categories = {
+    'DESCARGAS': ['play', 'music', 'video', 'youtube', 'tiktok', 'instagram', 'ig', 'facebook', 'fb', 'twitter', 'x', 'pinterest', 'spotify', 'soundcloud', 'reddit', 'twitch', 'dailymotion', 'vimeo', 'kwai', 'bilibili', 'downloads'],
+    'IA': ['ia', 'ai', 'clasificar', 'translate', 'tr', 'resume', 'explain', 'sentiment', 'grammar', 'analyze', 'brainstorm'],
+    'MEDIA': ['sticker', 's', 'image', 'wallpaper', 'tts', 'compress', 'convert', 'removebg', 'addtext', 'gif', 'collage', 'filter', 'resize', 'mediahelp'],
+    'MUSICA': ['identify', 'lyrics', 'playlist', 'radio', 'nowplaying', 'musichelp'],
+    'UTILIDADES': ['weather', 'clima', 'quote', 'fact', 'trivia', 'meme', 'qrcode', 'calc', 'short', 'password', 'email', 'color', 'timezone'],
+    'JUEGOS': ['game', 'juego', 'rps', 'guess', 'dice', 'sorteo', 'coin', 'hangman', 'memory', 'blackjack', 'lottery'],
+    'GRUPOS': ['kick', 'promote', 'demote', 'lock', 'unlock', 'settings', 'config', 'groupinfo', 'welcome', 'automod', 'rules', 'groupstats', 'clean'],
+    'SUBBOTS': ['qr', 'code', 'mybots', 'mibots', 'bots', 'stopbot', 'requestcode', 'maincode', 'subbotstats', 'subbotmanage', 'subbotmonitor'],
+    'BASICOS': ['ping', 'status', 'help', 'ayuda', 'menu', 'comandos']
+  };
+
+  for (const [categoryName, commands] of Object.entries(categories)) {
+    const availableCommands = commands.filter(cmd => allCommands.includes(cmd));
+    if (availableCommands.length > 0) {
+      commandText += `*[${categoryName}]*\n`;
+      for (const cmd of availableCommands) {
+        commandText += `• /${cmd}\n`;
+      }
+      commandText += `\n`;
+    }
+  }
+
+  // Agregar comandos de admin si es admin
+  if (isAdmin) {
+    commandText += `*[ADMIN]*\n`;
+    const adminCommands = ['bot', 'logs', 'stats', 'estadisticas', 'export', 'update', 'broadcast', 'bc'];
+    for (const cmd of adminCommands) {
+      if (allCommands.includes(cmd)) {
+        commandText += `• /${cmd}\n`;
+      }
+    }
+    commandText += `\n`;
+  }
+
+  commandText += `Total de comandos disponibles: ${allCommands.length}\n`;
+  commandText += `[TIP] Usa /help <comando> para ayuda específica`;
+
+  await sock.sendMessage(remoteJid, { text: commandText });
+  return { success: true };
+}
+
 // Registrar comandos en el mapa
 commandMap.set('help', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar ayuda', isLocal: true });
 commandMap.set('ayuda', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar ayuda', isLocal: true });
 commandMap.set('menu', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar menú', isLocal: true });
-commandMap.set('comandos', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar comandos', isLocal: true });
+commandMap.set('comandos', { handler: handleAllCommandsCommand, category: 'Básicos', description: 'Mostrar todos los comandos', isLocal: true });
 
 // Sistema simplificado - sin categorías interactivas
 
