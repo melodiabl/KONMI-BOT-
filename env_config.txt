@@ -1,4 +1,0 @@
-NODE_ENV=development
-PORT=3001
-DATABASE_PATH=./storage/database.sqlite
-JWT_SECRET=whatsapp-bot-panel-secret-key-2025-change-in-production
