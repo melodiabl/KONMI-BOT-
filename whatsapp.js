@@ -1333,25 +1333,25 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const messageType = isChannel ? 'CANAL' : (isGroup ? 'GRUPO' : 'PRIVADO');
 
   // Obtener nombre del chat si es grupo
-  let chatName = 'Chat';
+  let displayChatName = 'Chat';
   if (isGroup && remoteJid) {
     try {
       const groupMetadata = await sock.groupMetadata(remoteJid).catch(() => null);
-      chatName = groupMetadata?.subject || 'Grupo';
+      displayChatName = groupMetadata?.subject || 'Grupo';
     } catch (e) {
-      chatName = 'Grupo';
+      displayChatName = 'Grupo';
     }
   } else if (isChannel) {
-    chatName = 'Canal';
+    displayChatName = 'Canal';
   } else {
-    chatName = pushName || 'Usuario';
+    displayChatName = pushName || 'Usuario';
   }
 
   const messageData = {
     texto: rawText.substring(0, 60) + (rawText.length > 60 ? '...' : ''),
     tipo: isCommand ? 'COMANDO' : 'MENSAJE',
     esComando: isCommand,
-    chat: chatName,
+    chat: displayChatName,
     chatIcon: isChannel ? '📢' : (isGroup ? '👥' : '💬'),
     usuario: fromMe ? 'BOT' : (pushName || 'Usuario'),
     origen: messageType,
@@ -1372,9 +1372,6 @@ export async function handleMessage(message, customSock = null, prefix = '', run
     });
   }
 
-  const isCommand = /^[\\/!.#?$~]/.test(rawText);
-
-  const messageType = isChannel ? 'CHANNEL' : (isGroup ? 'GROUP' : 'DM');
   const messageSource = fromMe ? 'FROM_BOT' : 'FROM_USER';
 
   // Normalizar botJid
