@@ -56,7 +56,6 @@ frontend-panel-backup-*/
 **/*.db
 storage/
 session_data/
-migrations/
 
 # Backup files
 *.backup
