@@ -2508,39 +2508,13 @@ commandMap.set('comandos', { handler: handleHelpCommand, category: 'Básicos', d
 
 // Sistema simplificado - sin categorías interactivas
 
-// ===== REGISTRO COMPLETO DE COMANDOS =====
-commandMap.set('bot', { moduleName: 'bot-control', category: 'Admin', description: 'Activar/desactivar bot', admin: false });
+// ===== REGISTRO COMPLETO DE COMANDOS (SIN DUPLICACIONES) =====
+
+// Comandos básicos (funciones locales en handler)
 commandMap.set('ping', { handler: ping, category: 'Básicos', description: 'Verificar latencia', isLocal: true });
-commandMap.set('status', { handler: status, category: 'Básicos', description: 'Ver estado del bot', isLocal: true });
-
-// Comandos de descargas
-commandMap.set('play', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
-commandMap.set('music', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
-commandMap.set('video', { moduleName: 'download-commands', category: 'Descargas', description: 'Video de YouTube' });
-commandMap.set('youtube', { moduleName: 'download-commands', category: 'Descargas', description: 'Video de YouTube' });
-commandMap.set('tiktok', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de TikTok' });
-commandMap.set('instagram', { moduleName: 'download-commands', category: 'Descargas', description: 'Contenido de Instagram' });
-commandMap.set('ig', { moduleName: 'download-commands', category: 'Descargas', description: 'Contenido de Instagram' });
-commandMap.set('facebook', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Facebook' });
-commandMap.set('fb', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Facebook' });
-commandMap.set('twitter', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Twitter' });
-commandMap.set('x', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Twitter/X' });
-commandMap.set('pinterest', { moduleName: 'download-commands', category: 'Descargas', description: 'Imágenes de Pinterest' });
-commandMap.set('spotify', { moduleName: 'download-commands', category: 'Descargas', description: 'Buscar en Spotify' });
-
-// Comandos de IA
-commandMap.set('ia', { moduleName: 'ai', category: 'IA', description: 'Pregunta a Gemini AI' });
-commandMap.set('ai', { moduleName: 'ai', category: 'IA', description: 'Pregunta a Gemini AI' });
-commandMap.set('image', { moduleName: 'images', category: 'IA', description: 'Generar imagen con IA' });
-commandMap.set('clasificar', { moduleName: 'ai', category: 'IA', description: 'Clasificar texto' });
-commandMap.set('wallpaper', { moduleName: 'images', category: 'Media', description: 'Buscar wallpapers' });
-
-// Comandos de media
-commandMap.set('sticker', { moduleName: 'stickers', category: 'Media', description: 'Crear sticker' });
-commandMap.set('s', { moduleName: 'stickers', category: 'Media', description: 'Crear sticker' });
-commandMap.set('meme', { moduleName: 'download-commands', category: 'Media', description: 'Meme aleatorio' });
-commandMap.set('quote', { moduleName: 'download-commands', category: 'Media', description: 'Frase motivacional' });
-commandMap.set('tts', { moduleName: 'media', category: 'Media', description: 'Texto a voz' });
+commandMap.set('status', { handler: status, category: 'Básicos', description: 'Estado del sistema', isLocal: true });
+commandMap.set('whoami', { handler: whoami, category: 'Básicos', description: 'Mi información', isLocal: true });
+commandMap.set('profile', { handler: profile, category: 'Básicos', description: 'Mi perfil', isLocal: true });
 
 // Comandos de utilidades (funciones locales en handler)
 commandMap.set('calc', { handler: calc, category: 'Utilidades', description: 'Calculadora', isLocal: true });
@@ -2558,18 +2532,45 @@ commandMap.set('horoscopo', { handler: horoscope, category: 'Entretenimiento', d
 commandMap.set('fact', { handler: fact, category: 'Entretenimiento', description: 'Dato curioso', isLocal: true });
 commandMap.set('quote', { handler: quote, category: 'Entretenimiento', description: 'Frase inspiradora', isLocal: true });
 
-// Comandos básicos (funciones locales en handler)
-commandMap.set('ping', { handler: ping, category: 'Básicos', description: 'Verificar latencia', isLocal: true });
-commandMap.set('status', { handler: status, category: 'Básicos', description: 'Estado del sistema', isLocal: true });
-commandMap.set('whoami', { handler: whoami, category: 'Básicos', description: 'Mi información', isLocal: true });
-commandMap.set('profile', { handler: profile, category: 'Básicos', description: 'Mi perfil', isLocal: true });
-
-// Comandos externos (mantener los existentes)
+// Comandos de descargas
+commandMap.set('play', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
+commandMap.set('music', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
+commandMap.set('video', { moduleName: 'download-commands', category: 'Descargas', description: 'Video de YouTube' });
+commandMap.set('youtube', { moduleName: 'download-commands', category: 'Descargas', description: 'Video de YouTube' });
+commandMap.set('tiktok', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de TikTok' });
+commandMap.set('instagram', { moduleName: 'download-commands', category: 'Descargas', description: 'Contenido de Instagram' });
+commandMap.set('ig', { moduleName: 'download-commands', category: 'Descargas', description: 'Contenido de Instagram' });
+commandMap.set('facebook', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Facebook' });
+commandMap.set('fb', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Facebook' });
+commandMap.set('twitter', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Twitter' });
+commandMap.set('x', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Twitter/X' });
+commandMap.set('pinterest', { moduleName: 'download-commands', category: 'Descargas', description: 'Imágenes de Pinterest' });
+commandMap.set('spotify', { moduleName: 'download-commands', category: 'Descargas', description: 'Buscar en Spotify' });
 commandMap.set('translate', { moduleName: 'download-commands', category: 'Utilidades', description: 'Traducir texto' });
 commandMap.set('tr', { moduleName: 'download-commands', category: 'Utilidades', description: 'Traducir texto' });
 commandMap.set('weather', { moduleName: 'download-commands', category: 'Utilidades', description: 'Consultar clima' });
 commandMap.set('clima', { moduleName: 'download-commands', category: 'Utilidades', description: 'Consultar clima' });
 commandMap.set('trivia', { moduleName: 'download-commands', category: 'Entretenimiento', description: 'Preguntas de trivia' });
+commandMap.set('meme', { moduleName: 'download-commands', category: 'Media', description: 'Meme aleatorio' });
+
+// Comandos de IA
+commandMap.set('ia', { moduleName: 'ai', category: 'IA', description: 'Pregunta a Gemini AI' });
+commandMap.set('ai', { moduleName: 'ai', category: 'IA', description: 'Pregunta a Gemini AI' });
+commandMap.set('clasificar', { moduleName: 'ai', category: 'IA', description: 'Clasificar texto' });
+
+// Comandos de media
+commandMap.set('sticker', { moduleName: 'stickers', category: 'Media', description: 'Crear sticker' });
+commandMap.set('s', { moduleName: 'stickers', category: 'Media', description: 'Crear sticker' });
+commandMap.set('image', { moduleName: 'images', category: 'IA', description: 'Generar imagen con IA' });
+commandMap.set('wallpaper', { moduleName: 'images', category: 'Media', description: 'Buscar wallpapers' });
+commandMap.set('tts', { moduleName: 'media', category: 'Media', description: 'Texto a voz' });
+
+// Comandos de música
+commandMap.set('identify', { moduleName: 'music', category: 'Música', description: 'Identificar canción' });
+commandMap.set('lyrics', { moduleName: 'music', category: 'Música', description: 'Obtener letras' });
+commandMap.set('playlist', { moduleName: 'music', category: 'Música', description: 'Crear playlist' });
+commandMap.set('radio', { moduleName: 'music', category: 'Música', description: 'Radio online' });
+commandMap.set('nowplaying', { moduleName: 'music', category: 'Música', description: 'Canción actual' });
 
 // Comandos de archivos
 commandMap.set('descargar', { moduleName: 'files', category: 'Archivos', description: 'Descargar archivo' });
@@ -2629,9 +2630,8 @@ commandMap.set('update', { moduleName: 'maintenance', category: 'Admin', descrip
 commandMap.set('broadcast', { moduleName: 'broadcast', category: 'Admin', description: 'Enviar a todos', admin: true });
 commandMap.set('bc', { moduleName: 'broadcast', category: 'Admin', description: 'Enviar a todos', admin: true });
 
-// Comandos de perfil (funciones locales en handler)
-commandMap.set('whoami', { handler: whoami, category: 'Utilidades', description: 'Mi información', isLocal: true });
-commandMap.set('profile', { handler: profile, category: 'Utilidades', description: 'Mi perfil', isLocal: true });
+// Comandos de admin - Sistema
+commandMap.set('bot', { moduleName: 'bot-control', category: 'Admin', description: 'Activar/desactivar bot', admin: false });
 
 // Comandos interactivos y presencia
 commandMap.set('pollmultiple', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta múltiple' });
@@ -2672,14 +2672,13 @@ commandMap.set('demo', { moduleName: 'demo', category: 'Utilidades', description
 
 // Comandos de diagnóstico
 commandMap.set('diag', { moduleName: 'diag', category: 'Admin', description: 'Diagnóstico del sistema', admin: true });
+commandMap.set('debugcommands', { handler: debugCommands, category: 'Admin', description: 'Debug de comandos', admin: true, isLocal: true });
 
 // Comandos de promo
 commandMap.set('promo', { moduleName: 'promo', category: 'Utilidades', description: 'Promociones' });
 
-// Comandos adicionales de utils (Wileys)
-commandMap.set('qrcode', { moduleName: 'utils', category: 'Utilidades', description: 'Generar código QR' });
-commandMap.set('calc', { moduleName: 'utils', category: 'Utilidades', description: 'Calculadora' });
-commandMap.set('short', { moduleName: 'utils', category: 'Utilidades', description: 'Acortar URL' });
+// Comandos adicionales de matemáticas
+commandMap.set('math', { moduleName: 'util-math', category: 'Utilidades', description: 'Operaciones matemáticas' });
 
 
 // =========================
@@ -4086,6 +4085,45 @@ export async function whoami(ctx) {
 // Perfil del usuario (alias de whoami)
 export async function profile(ctx) {
   return whoami(ctx);
+}
+
+// Función de diagnóstico para comandos
+export async function debugCommands(ctx) {
+  const { sock, remoteJid } = ctx;
+
+  const registeredCommands = Array.from(commandMap.keys()).sort();
+  const localCommands = Array.from(commandMap.entries())
+    .filter(([_, config]) => config.isLocal)
+    .map(([cmd, _]) => cmd)
+    .sort();
+
+  const moduleCommands = Array.from(commandMap.entries())
+    .filter(([_, config]) => config.moduleName)
+    .map(([cmd, config]) => `${cmd} → ${config.moduleName}`)
+    .sort();
+
+  const debugInfo = [
+    '🔍 DIAGNÓSTICO DE COMANDOS',
+    '',
+    `📊 Total registrados: ${registeredCommands.length}`,
+    `🏠 Funciones locales: ${localCommands.length}`,
+    `📦 Módulos externos: ${moduleCommands.length}`,
+    '',
+    '🏠 COMANDOS LOCALES (en handler.js):',
+    localCommands.map(cmd => `• /${cmd}`).join('\n'),
+    '',
+    '📦 COMANDOS DE MÓDULOS:',
+    moduleCommands.slice(0, 20).map(cmd => `• /${cmd}`).join('\n'),
+    moduleCommands.length > 20 ? `... y ${moduleCommands.length - 20} más` : '',
+    '',
+    '🎯 TODOS LOS COMANDOS DISPONIBLES:',
+    registeredCommands.slice(0, 30).map(cmd => `/${cmd}`).join(', '),
+    registeredCommands.length > 30 ? `... y ${registeredCommands.length - 30} más` : ''
+  ].filter(Boolean).join('\n');
+
+  await sock.sendMessage(remoteJid, { text: debugInfo });
+
+  return { success: true };
 }
 
 // Adaptador para mantener compatibilidad con la API anterior
