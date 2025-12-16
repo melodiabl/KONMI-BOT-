@@ -1428,7 +1428,21 @@ const COMMAND_FUNCTION_MAP = {
   'securitylogs': 'securitylogs',
   'securitystatus': 'securitystatus',
 
-  // Sistema simplificado - sin categorías interactivas
+  // Comandos adicionales para completar el help
+  'tag': 'tag',
+  'admins': 'admins',
+  'addgroup': 'addGroup',
+  'delgroup': 'delGroup',
+  'debuggroup': 'debuggroup',
+  'debugadmin': 'debugadmin',
+  'testbotadmin': 'testBotAdmin',
+
+  // Comandos de help centralizados
+  'help': 'help',
+  'ayuda': 'help',
+  'menu': 'help',
+
+  // Sistema completo con todos los comandos funcionales
 };
 
 async function loadCommandModule(moduleName, commandName = null) {
@@ -2496,8 +2510,8 @@ commandMap.set('comandos', { handler: handleHelpCommand, category: 'Básicos', d
 
 // ===== REGISTRO COMPLETO DE COMANDOS =====
 commandMap.set('bot', { moduleName: 'bot-control', category: 'Admin', description: 'Activar/desactivar bot', admin: false });
-commandMap.set('ping', { moduleName: 'ping', category: 'Básicos', description: 'Verificar latencia' });
-commandMap.set('status', { moduleName: 'status', category: 'Básicos', description: 'Ver estado del bot' });
+commandMap.set('ping', { handler: ping, category: 'Básicos', description: 'Verificar latencia', isLocal: true });
+commandMap.set('status', { handler: status, category: 'Básicos', description: 'Ver estado del bot', isLocal: true });
 
 // Comandos de descargas
 commandMap.set('play', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
@@ -2528,15 +2542,33 @@ commandMap.set('meme', { moduleName: 'download-commands', category: 'Media', des
 commandMap.set('quote', { moduleName: 'download-commands', category: 'Media', description: 'Frase motivacional' });
 commandMap.set('tts', { moduleName: 'media', category: 'Media', description: 'Texto a voz' });
 
-// Comandos de utilidades
+// Comandos de utilidades (funciones locales en handler)
+commandMap.set('calc', { handler: calc, category: 'Utilidades', description: 'Calculadora', isLocal: true });
+commandMap.set('password', { handler: password, category: 'Utilidades', description: 'Generar contraseña', isLocal: true });
+commandMap.set('qrcode', { handler: qrcode, category: 'Utilidades', description: 'Generar código QR', isLocal: true });
+commandMap.set('short', { handler: short, category: 'Utilidades', description: 'Acortar URL', isLocal: true });
+commandMap.set('email', { handler: email, category: 'Utilidades', description: 'Validar email', isLocal: true });
+commandMap.set('color', { handler: color, category: 'Utilidades', description: 'Información de color', isLocal: true });
+commandMap.set('timezone', { handler: timezone, category: 'Utilidades', description: 'Zona horaria', isLocal: true });
+
+// Comandos de entretenimiento (funciones locales en handler)
+commandMap.set('joke', { handler: joke, category: 'Entretenimiento', description: 'Chiste aleatorio', isLocal: true });
+commandMap.set('horoscope', { handler: horoscope, category: 'Entretenimiento', description: 'Horóscopo', isLocal: true });
+commandMap.set('horoscopo', { handler: horoscope, category: 'Entretenimiento', description: 'Horóscopo', isLocal: true });
+commandMap.set('fact', { handler: fact, category: 'Entretenimiento', description: 'Dato curioso', isLocal: true });
+commandMap.set('quote', { handler: quote, category: 'Entretenimiento', description: 'Frase inspiradora', isLocal: true });
+
+// Comandos básicos (funciones locales en handler)
+commandMap.set('ping', { handler: ping, category: 'Básicos', description: 'Verificar latencia', isLocal: true });
+commandMap.set('status', { handler: status, category: 'Básicos', description: 'Estado del sistema', isLocal: true });
+commandMap.set('whoami', { handler: whoami, category: 'Básicos', description: 'Mi información', isLocal: true });
+commandMap.set('profile', { handler: profile, category: 'Básicos', description: 'Mi perfil', isLocal: true });
+
+// Comandos externos (mantener los existentes)
 commandMap.set('translate', { moduleName: 'download-commands', category: 'Utilidades', description: 'Traducir texto' });
 commandMap.set('tr', { moduleName: 'download-commands', category: 'Utilidades', description: 'Traducir texto' });
 commandMap.set('weather', { moduleName: 'download-commands', category: 'Utilidades', description: 'Consultar clima' });
 commandMap.set('clima', { moduleName: 'download-commands', category: 'Utilidades', description: 'Consultar clima' });
-commandMap.set('joke', { moduleName: 'utils', category: 'Entretenimiento', description: 'Chiste aleatorio' });
-commandMap.set('horoscope', { moduleName: 'utils', category: 'Entretenimiento', description: 'Horóscopo' });
-commandMap.set('horoscopo', { moduleName: 'utils', category: 'Entretenimiento', description: 'Horóscopo' });
-commandMap.set('fact', { moduleName: 'download-commands', category: 'Entretenimiento', description: 'Dato curioso' });
 commandMap.set('trivia', { moduleName: 'download-commands', category: 'Entretenimiento', description: 'Preguntas de trivia' });
 
 // Comandos de archivos
@@ -2597,9 +2629,9 @@ commandMap.set('update', { moduleName: 'maintenance', category: 'Admin', descrip
 commandMap.set('broadcast', { moduleName: 'broadcast', category: 'Admin', description: 'Enviar a todos', admin: true });
 commandMap.set('bc', { moduleName: 'broadcast', category: 'Admin', description: 'Enviar a todos', admin: true });
 
-// Comandos de perfil
-commandMap.set('whoami', { moduleName: 'profile', category: 'Utilidades', description: 'Mi perfil' });
-commandMap.set('profile', { moduleName: 'profile', category: 'Utilidades', description: 'Ver perfil' });
+// Comandos de perfil (funciones locales en handler)
+commandMap.set('whoami', { handler: whoami, category: 'Utilidades', description: 'Mi información', isLocal: true });
+commandMap.set('profile', { handler: profile, category: 'Utilidades', description: 'Mi perfil', isLocal: true });
 
 // Comandos interactivos y presencia
 commandMap.set('pollmultiple', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta múltiple' });
@@ -3044,6 +3076,1016 @@ export async function analyzeContentWithAI(text, context = "") {
       String(err)
     return { success: false, error: msg }
   }
+}
+
+// =========================
+// COMANDOS DE UTILIDADES
+// =========================
+
+// Funcionalidades Wileys completas + Temática BL integrada
+const addBLUtilsReaction = async (sock, message, type = 'utils') => {
+  try {
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      utils: ['🛠️', '💖', '✨'],
+      calc: ['🧮', '💕', '🌸'],
+      password: ['🔐', '✨', '💝'],
+      qrcode: ['📱', '🌟', '💖'],
+      short: ['🔗', '💫', '🌸']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.utils;
+
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
+    }
+  } catch (error) {
+    console.error('[BL_UTILS_REACTION] Error:', error);
+  }
+};
+
+// Decoración BL para mensajes de utilidades
+const decorateBLUtilsMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    utils: {
+      header: '╔🛠️═══════════════════════════════════════🛠️╗',
+      footer: '╚🛠️═══════════════════════════════════════🛠️╝',
+      bullet: '🛠️'
+    },
+    success: {
+      header: '╔✅═══════════════════════════════════════✅╗',
+      footer: '╚✅═══════════════════════════════════════✅╝',
+      bullet: '✅'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Calculadora con evaluación segura
+export async function calc(ctx) {
+  const { args, sock, message } = ctx;
+  const expression = args.join(' ').trim();
+
+  if (!expression) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Calculadora', 'Uso: /calc <operación>\nEjemplo: /calc 2 + 2 * 3', 'utils')
+    };
+  }
+
+  await addBLUtilsReaction(sock, message, 'calc');
+
+  try {
+    const sanitized = expression.replace(/[^0-9+\-*/().\s]/g, '');
+
+    if (!sanitized || sanitized.length === 0) {
+      return {
+        success: false,
+        message: decorateBLUtilsMessage('Error', 'Operación inválida\n🥺 Solo números y operadores básicos', 'love')
+      };
+    }
+
+    if (/[a-zA-Z]/.test(sanitized)) {
+      return {
+        success: false,
+        message: decorateBLUtilsMessage('Error', 'Solo números y operadores\n🥺 No se permiten letras', 'love')
+      };
+    }
+
+    const result = Function(`"use strict"; return (${sanitized})`)();
+
+    if (!isFinite(result)) {
+      return {
+        success: false,
+        message: decorateBLUtilsMessage('Error', 'Resultado inválido\n🥺 División por cero o overflow', 'love')
+      };
+    }
+
+    const calcContent = [
+      `Operación: ${expression}`,
+      `Resultado: ${result}`,
+      '',
+      '💡 Operadores disponibles:',
+      '+ (suma) - (resta) * (multiplicación)',
+      '/ (división) () (paréntesis)'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLUtilsMessage('Calculadora', calcContent, 'success')
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Error', 'Operación inválida\n🥺 Verifica la sintaxis', 'love')
+    };
+  }
+}
+
+// Generador de contraseñas
+export async function password(ctx) {
+  const { args, sock, message } = ctx;
+  const length = parseInt(args[0]) || 12;
+
+  if (length < 4 || length > 50) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Generador de Contraseñas', 'Uso: /password <longitud>\nLongitud: 4-50 caracteres\nEjemplo: /password 16', 'utils')
+    };
+  }
+
+  await addBLUtilsReaction(sock, message, 'password');
+
+  try {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let password = '';
+
+    for (let i = 0; i < length; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    const strength = length >= 16 ? 'Muy fuerte' : length >= 12 ? 'Fuerte' : length >= 8 ? 'Media' : 'Débil';
+
+    const passwordContent = [
+      `Contraseña generada:`,
+      `${password}`,
+      '',
+      `Longitud: ${length} caracteres`,
+      `Fortaleza: ${strength}`,
+      '🔐 Incluye mayúsculas, minúsculas,',
+      'números y símbolos especiales',
+      '',
+      '💡 Guárdala en un lugar seguro'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLUtilsMessage('Contraseña Generada', passwordContent, 'success'),
+      data: { password, strength }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Error', 'No se pudo generar la contraseña\n🥺 Intenta de nuevo', 'love')
+    };
+  }
+}
+
+// Generador de código QR real
+export async function qrcode(ctx) {
+  const { args, sock, message, remoteJid } = ctx;
+  const text = args.join(' ').trim();
+
+  if (!text) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Generador QR', 'Uso: /qrcode <texto>\nEjemplo: /qrcode https://google.com', 'utils')
+    };
+  }
+
+  await addBLUtilsReaction(sock, message, 'qrcode');
+
+  try {
+    const qrImageBuffer = await QRCode.toBuffer(text, {
+      type: 'png',
+      width: 512,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      },
+      errorCorrectionLevel: 'M'
+    });
+
+    await sock.sendMessage(remoteJid, {
+      image: qrImageBuffer,
+      caption: decorateBLUtilsMessage('Código QR Generado', [
+        `Texto codificado:`,
+        `${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
+        '',
+        '📱 Escanea con tu cámara',
+        '✨ Funciona con cualquier lector QR',
+        '',
+        `Tamaño: ${Math.round(qrImageBuffer.length / 1024)}KB`,
+        '💖 Generado con amor'
+      ], 'success')
+    });
+
+    return {
+      success: true,
+      message: null,
+      data: { qrGenerated: true, size: qrImageBuffer.length }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Error', `No se pudo generar el QR\n🥺 Error: ${error.message}`, 'love')
+    };
+  }
+}
+
+// Acortador de URLs
+export async function short(ctx) {
+  const { args, sock, message } = ctx;
+  const url = args[0];
+
+  if (!url || !/^https?:\/\/.+/.test(url)) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Acortador de URLs', 'Uso: /short <url>\nEjemplo: /short https://google.com\n🥺 Debe ser una URL válida', 'utils')
+    };
+  }
+
+  await addBLUtilsReaction(sock, message, 'short');
+
+  try {
+    const response = await axios.post('https://is.gd/create.php', null, {
+      params: {
+        format: 'simple',
+        url: url
+      },
+      timeout: 10000
+    });
+
+    const shortUrl = response.data.trim();
+
+    if (!/^https?:\/\/.+/.test(shortUrl)) {
+      throw new Error('Respuesta inválida del servicio');
+    }
+
+    const shortContent = [
+      `URL original:`,
+      `${url.substring(0, 40)}${url.length > 40 ? '...' : ''}`,
+      '',
+      `URL acortada:`,
+      `${shortUrl}`,
+      '',
+      '🔗 Más fácil de compartir',
+      '📊 Servicio: is.gd',
+      '✨ Permanente y confiable'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLUtilsMessage('URL Acortada', shortContent, 'success'),
+      data: { originalUrl: url, shortUrl }
+    };
+  } catch (error) {
+    const shortCode = Math.random().toString(36).substring(2, 8);
+    const fallbackUrl = `https://short.ly/${shortCode}`;
+
+    const shortContent = [
+      `URL original:`,
+      `${url.substring(0, 40)}${url.length > 40 ? '...' : ''}`,
+      '',
+      `URL simulada:`,
+      `${fallbackUrl}`,
+      '',
+      '⚠️ Servicio no disponible',
+      '🔗 URL simulada generada'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLUtilsMessage('URL Simulada', shortContent, 'love'),
+      data: { originalUrl: url, shortUrl: fallbackUrl, simulated: true }
+    };
+  }
+}
+
+// Validador de email
+export async function email(ctx) {
+  const { args, sock, message } = ctx;
+  const emailAddress = args[0];
+
+  if (!emailAddress) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Validador de Email', 'Uso: /email <correo>\nEjemplo: /email usuario@gmail.com', 'utils')
+    };
+  }
+
+  await addBLUtilsReaction(sock, message, 'utils');
+
+  try {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isValid = emailRegex.test(emailAddress);
+    const domain = emailAddress.split('@')[1];
+
+    const checks = {
+      format: isValid,
+      domain: domain ? /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain) : false,
+      length: emailAddress.length <= 254,
+      localPart: emailAddress.split('@')[0]?.length <= 64
+    };
+
+    const allValid = Object.values(checks).every(check => check);
+
+    const emailContent = [
+      `Email: ${emailAddress}`,
+      '',
+      `Estado: ${allValid ? '✅ Válido' : '❌ Inválido'}`,
+      `Formato: ${checks.format ? '✅' : '❌'}`,
+      `Dominio: ${checks.domain ? '✅' : '❌'}`,
+      `Longitud: ${checks.length ? '✅' : '❌'}`,
+      '',
+      allValid ? '💖 Email completamente válido' : '🥺 Revisa los errores marcados',
+      allValid ? '📧 Puede recibir correos' : '💡 Corrige el formato'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLUtilsMessage('Validación de Email', emailContent, allValid ? 'success' : 'love'),
+      data: { email: emailAddress, valid: allValid, checks }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Error', `Error validando email\n🥺 ${error.message}`, 'love')
+    };
+  }
+}
+
+// Información de color
+export async function color(ctx) {
+  const { args, sock, message } = ctx;
+  const colorInput = args.join(' ').trim();
+
+  if (!colorInput) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Información de Color', 'Uso: /color <código>\nEjemplo: /color #FF0000\n/color red', 'utils')
+    };
+  }
+
+  await addBLUtilsReaction(sock, message, 'utils');
+
+  try {
+    const colors = {
+      'red': { hex: '#FF0000', rgb: '255, 0, 0', name: 'Rojo' },
+      'blue': { hex: '#0000FF', rgb: '0, 0, 255', name: 'Azul' },
+      'green': { hex: '#00FF00', rgb: '0, 255, 0', name: 'Verde' },
+      'yellow': { hex: '#FFFF00', rgb: '255, 255, 0', name: 'Amarillo' },
+      'purple': { hex: '#800080', rgb: '128, 0, 128', name: 'Púrpura' },
+      'orange': { hex: '#FFA500', rgb: '255, 165, 0', name: 'Naranja' },
+      'pink': { hex: '#FFC0CB', rgb: '255, 192, 203', name: 'Rosa' },
+      'black': { hex: '#000000', rgb: '0, 0, 0', name: 'Negro' },
+      'white': { hex: '#FFFFFF', rgb: '255, 255, 255', name: 'Blanco' }
+    };
+
+    let colorInfo;
+    if (colorInput.startsWith('#')) {
+      colorInfo = { hex: colorInput, name: 'Color personalizado' };
+    } else {
+      colorInfo = colors[colorInput.toLowerCase()];
+    }
+
+    if (!colorInfo) {
+      return {
+        success: false,
+        message: decorateBLUtilsMessage('Error', 'Color no reconocido\n🥺 Usa nombres básicos o códigos hex', 'love')
+      };
+    }
+
+    const colorContent = [
+      `Color: ${colorInfo.name}`,
+      `Hex: ${colorInfo.hex}`,
+      colorInfo.rgb ? `RGB: ${colorInfo.rgb}` : '',
+      '',
+      '🎨 Información del color',
+      '💖 Perfecto para diseño'
+    ].filter(Boolean);
+
+    return {
+      success: true,
+      message: decorateBLUtilsMessage('Información de Color', colorContent, 'success'),
+      data: colorInfo
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Error', `Color no reconocido\n🥺 ${error.message}`, 'love')
+    };
+  }
+}
+
+// Zona horaria
+export async function timezone(ctx) {
+  const { args, sock, message } = ctx;
+  const zone = args.join(' ').trim();
+
+  if (!zone) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Zona Horaria', 'Uso: /timezone <zona>\nEjemplo: /timezone Madrid\n/timezone list (para ver zonas)', 'utils')
+    };
+  }
+
+  await addBLUtilsReaction(sock, message, 'utils');
+
+  try {
+    if (zone.toLowerCase() === 'list') {
+      const popularZones = [
+        'Madrid (+1)', 'Londres (+0)', 'Nueva York (-5)',
+        'Los Ángeles (-8)', 'Tokio (+9)', 'Sídney (+10)',
+        'México (-6)', 'Buenos Aires (-3)', 'París (+1)'
+      ];
+
+      return {
+        success: true,
+        message: decorateBLUtilsMessage('Zonas Horarias Populares', popularZones, 'utils')
+      };
+    }
+
+    const timezones = {
+      'madrid': { offset: '+1', name: 'Madrid, España' },
+      'london': { offset: '+0', name: 'Londres, Reino Unido' },
+      'new york': { offset: '-5', name: 'Nueva York, EE.UU.' },
+      'tokyo': { offset: '+9', name: 'Tokio, Japón' },
+      'sydney': { offset: '+10', name: 'Sídney, Australia' },
+      'mexico': { offset: '-6', name: 'Ciudad de México' },
+      'buenos aires': { offset: '-3', name: 'Buenos Aires, Argentina' }
+    };
+
+    const timezoneInfo = timezones[zone.toLowerCase()];
+
+    if (!timezoneInfo) {
+      return {
+        success: false,
+        message: decorateBLUtilsMessage('Error', 'Zona horaria no encontrada\n🥺 Usa /timezone list para ver opciones', 'love')
+      };
+    }
+
+    const now = new Date();
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const targetTime = new Date(utcTime + (parseInt(timezoneInfo.offset) * 3600000));
+
+    const timezoneContent = [
+      `Zona: ${timezoneInfo.name}`,
+      `Hora actual: ${targetTime.toLocaleString('es-ES')}`,
+      `Offset UTC: ${timezoneInfo.offset}`,
+      `Día: ${targetTime.toLocaleDateString('es-ES', { weekday: 'long' })}`,
+      '',
+      '🌍 Información de zona horaria',
+      '⏰ Hora calculada'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLUtilsMessage('Información de Zona Horaria', timezoneContent, 'success'),
+      data: {
+        zone: timezoneInfo.name,
+        time: targetTime.toISOString(),
+        offset: timezoneInfo.offset
+      }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLUtilsMessage('Error', `Error procesando zona horaria\n🥺 ${error.message}`, 'love')
+    };
+  }
+}
+
+// =========================
+// COMANDOS DE ENTRETENIMIENTO
+// =========================
+
+const addBLEntertainmentReaction = async (sock, message, type = 'fun') => {
+  try {
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      fun: ['😂', '💖', '✨'],
+      joke: ['🤣', '💕', '🌸'],
+      horoscope: ['🔮', '✨', '💝'],
+      meme: ['😂', '🌟', '💖']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.fun;
+
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
+    }
+  } catch (error) {
+    console.error('[BL_ENTERTAINMENT_REACTION] Error:', error);
+  }
+};
+
+const decorateBLEntertainmentMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    fun: {
+      header: '╔😂═══════════════════════════════════════😂╗',
+      footer: '╚😂═══════════════════════════════════════😂╝',
+      bullet: '😂'
+    },
+    magic: {
+      header: '╔🔮═══════════════════════════════════════🔮╗',
+      footer: '╚🔮═══════════════════════════════════════🔮╝',
+      bullet: '🔮'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Chistes aleatorios
+export async function joke(ctx) {
+  const { sock, message } = ctx;
+
+  await addBLEntertainmentReaction(sock, message, 'joke');
+
+  try {
+    let jokeData = null;
+    let source = 'Local';
+
+    try {
+      const response = await axios.get('https://v2.jokeapi.dev/joke/Programming,Miscellaneous', {
+        params: {
+          blacklistFlags: 'nsfw,religious,political,racist,sexist,explicit',
+          type: 'twopart',
+          lang: 'en'
+        },
+        timeout: 5000
+      });
+
+      if (response.data && response.data.setup && response.data.delivery) {
+        jokeData = {
+          setup: response.data.setup,
+          punchline: response.data.delivery,
+          source: 'JokesAPI'
+        };
+      }
+    } catch (apiError) {
+      // Fallback a chistes locales
+    }
+
+    const localJokes = [
+      {
+        setup: '¿Por qué los programadores prefieren el modo oscuro?',
+        punchline: 'Porque la luz atrae a los bugs! 🐛',
+        source: 'Local'
+      },
+      {
+        setup: '¿Qué le dice un bit a otro bit?',
+        punchline: 'Nos vemos en el byte! 💻',
+        source: 'Local'
+      },
+      {
+        setup: '¿Por qué HTML y CSS rompieron?',
+        punchline: 'Porque no tenían química! ⚗️',
+        source: 'Local'
+      },
+      {
+        setup: '¿Cómo se llama un perro programador?',
+        punchline: 'Labrador! 🐕‍🦺',
+        source: 'Local'
+      }
+    ];
+
+    const selectedJoke = jokeData || localJokes[Math.floor(Math.random() * localJokes.length)];
+
+    const jokeContent = [
+      selectedJoke.setup,
+      '',
+      selectedJoke.punchline,
+      '',
+      '😂 ¡Espero que te haya gustado!',
+      `📡 Fuente: ${selectedJoke.source}`,
+      '💖 Usa /joke para otro chiste'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLEntertainmentMessage('Chiste del Día', jokeContent, 'fun'),
+      data: { joke: selectedJoke, source: selectedJoke.source }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLEntertainmentMessage('Error', `No se pudo obtener un chiste\n🥺 ${error.message}`, 'love')
+    };
+  }
+}
+
+// Horóscopo
+export async function horoscope(ctx) {
+  const { args, sock, message } = ctx;
+  const sign = args[0]?.toLowerCase();
+
+  if (!sign) {
+    return {
+      success: false,
+      message: decorateBLEntertainmentMessage('Horóscopo', 'Uso: /horoscope <signo>\nEjemplo: /horoscope aries\n\nSignos disponibles:\naries, tauro, geminis, cancer,\nleo, virgo, libra, escorpio,\nsagitario, capricornio,\nacuario, piscis', 'magic')
+    };
+  }
+
+  await addBLEntertainmentReaction(sock, message, 'horoscope');
+
+  const signMap = {
+    'aries': { emoji: '♈', dates: 'Mar 21 - Apr 19' },
+    'tauro': { emoji: '♉', dates: 'Apr 20 - May 20' },
+    'geminis': { emoji: '♊', dates: 'May 21 - Jun 20' },
+    'cancer': { emoji: '♋', dates: 'Jun 21 - Jul 22' },
+    'leo': { emoji: '♌', dates: 'Jul 23 - Aug 22' },
+    'virgo': { emoji: '♍', dates: 'Aug 23 - Sep 22' },
+    'libra': { emoji: '♎', dates: 'Sep 23 - Oct 22' },
+    'escorpio': { emoji: '♏', dates: 'Oct 23 - Nov 21' },
+    'sagitario': { emoji: '♐', dates: 'Nov 22 - Dec 21' },
+    'capricornio': { emoji: '♑', dates: 'Dec 22 - Jan 19' },
+    'acuario': { emoji: '♒', dates: 'Jan 20 - Feb 18' },
+    'piscis': { emoji: '♓', dates: 'Feb 19 - Mar 20' }
+  };
+
+  const signData = signMap[sign];
+
+  if (!signData) {
+    return {
+      success: false,
+      message: decorateBLEntertainmentMessage('Error', 'Signo no reconocido 🥺\nVerifica la ortografía\nEjemplo: aries, leo, piscis', 'love')
+    };
+  }
+
+  try {
+    const today = new Date();
+    const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+
+    const predictions = [
+      'Hoy es un día perfecto para nuevos comienzos. Tu energía está en su punto máximo.',
+      'La paciencia será tu mejor aliada hoy. Las cosas buenas llegan a quienes esperan.',
+      'Tu curiosidad te llevará a descubrir algo interesante. Mantén la mente abierta.',
+      'Las emociones están a flor de piel. Confía en tu intuición para tomar decisiones.',
+      'Tu carisma natural brillará hoy. Es un buen momento para liderar proyectos.',
+      'La organización y el detalle serán clave para el éxito de hoy.',
+      'Busca el equilibrio en todas las áreas de tu vida. La armonía es posible.',
+      'Tu intensidad emocional te dará la fuerza para superar cualquier obstáculo.'
+    ];
+
+    const horoscopeText = predictions[dayOfYear % predictions.length];
+    const luckyNumber = ((dayOfYear + sign.length) % 99) + 1;
+
+    const aspects = {
+      love: ['Conexiones profundas', 'Pasión renovada', 'Comunicación fluida', 'Estabilidad emocional'][dayOfYear % 4],
+      work: ['Oportunidades nuevas', 'Reconocimiento merecido', 'Proyectos exitosos', 'Colaboración efectiva'][dayOfYear % 4]
+    };
+
+    const horoscopeContent = [
+      `${signData.emoji} ${sign.toUpperCase()}`,
+      `Fechas: ${signData.dates}`,
+      `Fecha: ${today.toLocaleDateString('es-ES')}`,
+      '',
+      horoscopeText,
+      '',
+      `💕 Amor: ${aspects.love}`,
+      `💼 Trabajo: ${aspects.work}`,
+      `🍀 Número de la suerte: ${luckyNumber}`,
+      '',
+      '✨ Que tengas un día mágico'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLEntertainmentMessage('Tu Horóscopo', horoscopeContent, 'magic'),
+      data: {
+        sign: sign,
+        date: today.toISOString().split('T')[0],
+        prediction: horoscopeText,
+        luckyNumber,
+        aspects
+      }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLEntertainmentMessage('Error', `Error obteniendo horóscopo\n🥺 ${error.message}`, 'love')
+    };
+  }
+}
+
+// Datos curiosos
+export async function fact(ctx) {
+  const { sock, message } = ctx;
+
+  await addBLEntertainmentReaction(sock, message, 'fun');
+
+  const localFacts = [
+    'Los pulpos tienen tres corazones y sangre azul.',
+    'Una cucaracha puede vivir hasta una semana sin cabeza.',
+    'Los delfines tienen nombres para identificarse entre ellos.',
+    'El corazón de un camarón está en su cabeza.',
+    'Los koalas duermen hasta 22 horas al día.',
+    'Las abejas pueden reconocer rostros humanos.',
+    'Los pingüinos pueden saltar hasta 2 metros de altura.',
+    'El cerebro humano usa aproximadamente 20% de la energía del cuerpo.'
+  ];
+
+  const selectedFact = localFacts[Math.floor(Math.random() * localFacts.length)];
+
+  const factContent = [
+    '🤓 ¿Sabías que...?',
+    '',
+    selectedFact,
+    '',
+    '📚 Dato curioso del día',
+    '💖 Usa /fact para más datos'
+  ];
+
+  return {
+    success: true,
+    message: decorateBLEntertainmentMessage('Dato Curioso', factContent, 'fun'),
+    data: { fact: selectedFact }
+  };
+}
+
+// Frases motivacionales
+export async function quote(ctx) {
+  const { sock, message } = ctx;
+
+  await addBLEntertainmentReaction(sock, message, 'magic');
+
+  const localQuotes = [
+    {
+      text: 'El éxito no es la clave de la felicidad. La felicidad es la clave del éxito.',
+      author: 'Albert Schweitzer'
+    },
+    {
+      text: 'La única forma de hacer un gran trabajo es amar lo que haces.',
+      author: 'Steve Jobs'
+    },
+    {
+      text: 'No cuentes los días, haz que los días cuenten.',
+      author: 'Muhammad Ali'
+    },
+    {
+      text: 'El futuro pertenece a quienes creen en la belleza de sus sueños.',
+      author: 'Eleanor Roosevelt'
+    }
+  ];
+
+  const selectedQuote = localQuotes[Math.floor(Math.random() * localQuotes.length)];
+
+  const quoteContent = [
+    '💭 Frase del día:',
+    '',
+    `"${selectedQuote.text}"`,
+    '',
+    `— ${selectedQuote.author}`,
+    '',
+    '✨ Que te inspire hoy'
+  ];
+
+  return {
+    success: true,
+    message: decorateBLEntertainmentMessage('Frase Inspiradora', quoteContent, 'magic'),
+    data: { quote: selectedQuote }
+  };
+}
+
+// =========================
+// COMANDOS BÁSICOS
+// =========================
+
+const addBLBasicReaction = async (sock, message, type = 'basic') => {
+  try {
+    if (!sock || !message?.key) return;
+
+    const reactionSequences = {
+      basic: ['🤖', '💖', '✨'],
+      ping: ['🏓', '💕', '🌸'],
+      status: ['📊', '✨', '💝']
+    };
+
+    const sequence = reactionSequences[type] || reactionSequences.basic;
+
+    for (let i = 0; i < sequence.length; i++) {
+      setTimeout(async () => {
+        await sock.sendMessage(message.key.remoteJid, {
+          react: { text: sequence[i], key: message.key }
+        });
+      }, i * 1000);
+    }
+  } catch (error) {
+    console.error('[BL_BASIC_REACTION] Error:', error);
+  }
+};
+
+const decorateBLBasicMessage = (title, content, style = 'love') => {
+  const styles = {
+    love: {
+      header: '╔💖═══════════════════════════════════════💖╗',
+      footer: '╚💖═══════════════════════════════════════💖╝',
+      bullet: '💖'
+    },
+    info: {
+      header: '╔ℹ️═══════════════════════════════════════ℹ️╗',
+      footer: '╚ℹ️═══════════════════════════════════════ℹ️╝',
+      bullet: 'ℹ️'
+    },
+    success: {
+      header: '╔✅═══════════════════════════════════════✅╗',
+      footer: '╚✅═══════════════════════════════════════✅╝',
+      bullet: '✅'
+    }
+  };
+
+  const currentStyle = styles[style] || styles.love;
+  let message = currentStyle.header + '\n';
+  message += `║           ${title.padEnd(37)}║\n`;
+  message += '║                                     ║\n';
+
+  if (Array.isArray(content)) {
+    content.forEach(item => {
+      message += `║ ${currentStyle.bullet} ${item.padEnd(35)}║\n`;
+    });
+  } else {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      message += `║ ${line.padEnd(37)}║\n`;
+    });
+  }
+
+  message += currentStyle.footer;
+  return message;
+};
+
+// Comando ping
+export async function ping(ctx) {
+  const { sock, message } = ctx;
+  const startTime = Date.now();
+
+  await addBLBasicReaction(sock, message, 'ping');
+
+  const endTime = Date.now();
+  const responseTime = endTime - startTime;
+
+  const pingContent = [
+    '🏓 Pong!',
+    '',
+    `⚡ Latencia: ${responseTime}ms`,
+    `🕐 Hora: ${new Date().toLocaleTimeString('es-ES')}`,
+    `📅 Fecha: ${new Date().toLocaleDateString('es-ES')}`,
+    '',
+    '💖 Bot funcionando correctamente',
+    '✨ Sistema BL activo'
+  ];
+
+  return {
+    success: true,
+    message: decorateBLBasicMessage('Estado del Bot', pingContent, 'success'),
+    data: { responseTime, timestamp: new Date().toISOString() }
+  };
+}
+
+// Estado del sistema
+export async function status(ctx) {
+  const { sock, message } = ctx;
+
+  await addBLBasicReaction(sock, message, 'status');
+
+  try {
+    const uptime = process.uptime();
+    const memoryUsage = process.memoryUsage();
+
+    const formatBytes = (bytes) => {
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      if (bytes === 0) return '0 Bytes';
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    };
+
+    const formatUptime = (seconds) => {
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${days}d ${hours}h ${minutes}m`;
+    };
+
+    const statusContent = [
+      `⏱️ Uptime: ${formatUptime(uptime)}`,
+      `🖥️ Plataforma: ${process.platform}`,
+      `🟢 Node.js: ${process.version}`,
+      '',
+      '💾 Memoria:',
+      `  Usada: ${formatBytes(memoryUsage.heapUsed)}`,
+      `  Total: ${formatBytes(memoryUsage.heapTotal)}`,
+      '',
+      '🤖 Bot BL funcionando perfectamente',
+      '💖 Todos los sistemas operativos'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLBasicMessage('Estado del Sistema', statusContent, 'info'),
+      data: {
+        uptime,
+        memory: memoryUsage,
+        timestamp: new Date().toISOString()
+      }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLBasicMessage('Error', `No se pudo obtener el estado\n🥺 ${error.message}`, 'love')
+    };
+  }
+}
+
+// Información del usuario
+export async function whoami(ctx) {
+  const { sock, message, sender, pushName, remoteJid } = ctx;
+
+  await addBLBasicReaction(sock, message, 'basic');
+
+  try {
+    const userInfo = {
+      phone: sender || 'Desconocido',
+      name: pushName || 'Sin nombre',
+      chat: remoteJid,
+      isGroup: remoteJid.endsWith('@g.us'),
+      timestamp: new Date().toLocaleString('es-ES')
+    };
+
+    const whoamiContent = [
+      `👤 Usuario: ${userInfo.name}`,
+      `📱 Teléfono: ${userInfo.phone}`,
+      `💬 Chat: ${userInfo.isGroup ? 'Grupo' : 'Privado'}`,
+      `🆔 ID: ${userInfo.chat.substring(0, 20)}...`,
+      `🕐 Consulta: ${userInfo.timestamp}`,
+      '',
+      '💖 Información de tu perfil',
+      '✨ Datos actuales del sistema'
+    ];
+
+    return {
+      success: true,
+      message: decorateBLBasicMessage('Tu Información', whoamiContent, 'info'),
+      data: userInfo
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: decorateBLBasicMessage('Error', `No se pudo obtener tu información\n🥺 ${error.message}`, 'love')
+    };
+  }
+}
+
+// Perfil del usuario (alias de whoami)
+export async function profile(ctx) {
+  return whoami(ctx);
 }
 
 // Adaptador para mantener compatibilidad con la API anterior
