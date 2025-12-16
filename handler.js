@@ -1427,6 +1427,26 @@ const COMMAND_FUNCTION_MAP = {
   'spamcheck': 'spamcheck',
   'securitylogs': 'securitylogs',
   'securitystatus': 'securitystatus',
+
+  // Categorías del menú de ayuda
+  'cat_descargas': { isLocal: true, handler: handleHelpResponse },
+  'cat_ia': { isLocal: true, handler: handleHelpResponse },
+  'cat_interactivo': { isLocal: true, handler: handleHelpResponse },
+  'cat_media': { isLocal: true, handler: handleHelpResponse },
+  'cat_utilidades': { isLocal: true, handler: handleHelpResponse },
+  'cat_grupo': { isLocal: true, handler: handleHelpResponse },
+  'cat_admin': { isLocal: true, handler: handleHelpResponse },
+  'cat_entretenimiento': { isLocal: true, handler: handleHelpResponse },
+  'cat_archivos': { isLocal: true, handler: handleHelpResponse },
+  'cat_aportes': { isLocal: true, handler: handleHelpResponse },
+  'cat_subbots': { isLocal: true, handler: handleHelpResponse },
+
+  // Comandos de ayuda específicos
+  'help_play': { isLocal: true, handler: handleHelpResponse },
+  'help_video': { isLocal: true, handler: handleHelpResponse },
+  'help_tiktok': { isLocal: true, handler: handleHelpResponse },
+  'help_instagram': { isLocal: true, handler: handleHelpResponse },
+  'help_spotify': { isLocal: true, handler: handleHelpResponse },
 };
 
 async function loadCommandModule(moduleName, commandName = null) {
@@ -2334,32 +2354,7 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // MÉTODO 1: List Button (mejor para muchas opciones)
-  if (allRows.length > 3) {
-    try {
-      const listMessage = {
-        text: result.text || 'Elige una opción',
-        footer: result.footer || 'KONMI BOT © 2025',
-        title: result.title || '📋 Menú de Comandos',
-        buttonText: result.buttonText || '📋 Ver Opciones',
-        sections: (result.sections || []).map(sec => ({
-          title: sec.title || '',
-          rows: (sec.rows || []).map(r => ({
-            title: r.title || 'Opción',
-            description: r.description || '',
-            rowId: r.rowId || r.id || 'noop'
-          }))
-        }))
-      };
-
-      await sock.sendMessage(jid, listMessage, opts);
-      return true;
-    } catch (err) {
-      // List button failed, trying nativeFlow
-    }
-  }
-
-  // MÉTODO 2: NativeFlow buttons (fallback para listas y pocos elementos)
+  // MÉTODO 1: NativeFlow buttons (prioridad para categorías)
   if (allRows.length > 0) {
     try {
       const maxButtons = Math.min(allRows.length, 10);
