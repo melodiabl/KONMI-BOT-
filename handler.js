@@ -2356,6 +2356,7 @@ async function sendListFixedV2(sock, jid, result, ctx) {
 
   // MÉTODO 1: NativeFlow buttons (prioridad para categorías)
   if (allRows.length > 0) {
+    logger.info(`Intentando enviar ${allRows.length} botones nativeFlow`);
     try {
       const maxButtons = Math.min(allRows.length, 10);
       const nativeFlowButtons = allRows.slice(0, maxButtons).map((r) => ({
@@ -2367,25 +2368,55 @@ async function sendListFixedV2(sock, jid, result, ctx) {
       }));
 
       const interactiveMessage = {
-        interactiveMessage: {
-          body: { text: result.text || 'Elige una opción' },
-          footer: { text: result.footer || 'KONMI BOT © 2025' },
-          header: {
-            title: result.title || '📋 Menú',
-            subtitle: '',
-            hasMediaAttachment: false
-          },
-          nativeFlowMessage: {
-            buttons: nativeFlowButtons,
-            messageParamsJson: ''
+        viewOnceMessage: {
+          message: {
+            interactiveMessage: {
+              body: { text: result.text || 'Elige una opción' },
+              footer: { text: result.footer || 'KONMI BOT © 2025' },
+              header: {
+                title: result.title || '📋 Menú',
+                hasMediaAttachment: false
+              },
+              nativeFlowMessage: {
+                buttons: nativeFlowButtons,
+                messageParamsJson: JSON.stringify({
+                  flow_token: "unused"
+                })
+              }
+            }
           }
         }
       };
 
       await sock.sendMessage(jid, interactiveMessage, opts);
+      logger.success('NativeFlow viewOnce enviado exitosamente');
       return true;
     } catch (err) {
-      // NativeFlow failed, trying template buttons
+      logger.warning('NativeFlow viewOnce falló, intentando formato directo', err?.message);
+      // NativeFlow viewOnce failed, trying direct format
+      try {
+        const directInteractiveMessage = {
+          interactiveMessage: {
+            body: { text: result.text || 'Elige una opción' },
+            footer: { text: result.footer || 'KONMI BOT © 2025' },
+            header: {
+              title: result.title || '📋 Menú',
+              hasMediaAttachment: false
+            },
+            nativeFlowMessage: {
+              buttons: nativeFlowButtons,
+              messageParamsJson: ''
+            }
+          }
+        };
+
+        await sock.sendMessage(jid, directInteractiveMessage, opts);
+        logger.success('NativeFlow directo enviado exitosamente');
+        return true;
+      } catch (err2) {
+        logger.warning('Ambos formatos nativeFlow fallaron, usando template buttons', err2?.message);
+        // Both nativeFlow formats failed, trying template buttons
+      }
     }
   }
 
