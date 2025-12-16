@@ -1,4 +1,4 @@
-import { buildQuickReplyFlow } from './utils/utils/flows.js'
+import { buildQuickReplyFlow } from '../plugins/utils/utils/flows.js'
 import { sendCopyableCode, sendInteractiveButtons } from './ui-interactive.js'
 
 import {

@@ -1,9 +1,9 @@
 // commands/admin.js
 // Debug y utilidades de owner/admin usando ctx unificado y helper de metadata
 
-import { getTheme } from './utils/utils/theme.js'
+import { getTheme } from '../plugins/utils/utils/theme.js'
 import { setPrimaryOwner } from './config/global-config.js'
-import { getGroupRoles, getGroupMetadataCached } from './utils/utils/group-helper.js'
+import { getGroupRoles, getGroupMetadataCached } from '../plugins/utils/utils/group-helper.js'
 
 // ✅ Helper mejorado para normalizar números
 function normalizePhoneNumber(jidOrNumber) {

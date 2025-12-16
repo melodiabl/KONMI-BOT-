@@ -16,9 +16,9 @@ import {
   getRandomFact,
   getTrivia,
   getRandomMeme,
-} from '../utils/utils/api-providers.js'
-import logger from './config/logger.js'
-import { createProgressNotifier } from './utils/utils/progress-notifier.js'
+} from '../plugins/utils/utils/api-providers.js'
+import logger from '../plugins/config/logger.js'
+import { createProgressNotifier } from '../plugins/utils/utils/progress-notifier.js'
 
 /* ===== Utilidades BL + Wileys ===== */
 
