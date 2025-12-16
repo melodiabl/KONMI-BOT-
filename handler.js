@@ -1656,7 +1656,7 @@ Ejemplo: /instagram https://instagram.com/p/...
 Busca música en Spotify
 Ejemplo: /spotify bad bunny
 
-� */downloaads*
+ */downloads*
 Ver todas las plataformas de descarga
 Ejemplo: /downloads
 
@@ -1700,7 +1700,7 @@ Ejemplo: /image un gato astronauta
 Clasificar texto (positivo/negativo)
 Ejemplo: /clasificar este producto es excelente
 
-� */iresume* <texto largo>
+ */resume* <texto largo>
 Resumir texto en puntos principales
 Ejemplo: /resume Este es un texto muy largo...
 
@@ -1761,7 +1761,7 @@ Ejemplo: /weather Madrid
 Verificar latencia del bot
 Ejemplo: /ping
 
-� */iqrcode* <texto>
+�*/qrcode* <texto>
 Generar código QR
 Ejemplo: /qrcode https://google.com
 
@@ -2346,26 +2346,29 @@ async function sendListFixedV2(sock, jid, result, ctx) {
       }));
 
       const interactiveMessage = {
-        viewOnceMessage: {
-          message: {
-            interactiveMessage: {
-              body: { text: result.text || 'Elige una opción' },
-              footer: { text: result.footer || 'KONMI BOT © 2025' },
-              header: { title: result.title || '📋 Menú', hasMediaAttachment: false },
-              nativeFlowMessage: {
-                buttons: nativeFlowButtons,
-                messageParamsJson: ''
-              }
-            }
+        interactiveMessage: {
+          body: { text: result.text || 'Elige una opción' },
+          footer: { text: result.footer || 'KONMI BOT © 2025' },
+          header: {
+            title: result.title || '📋 Menú',
+            subtitle: '',
+            hasMediaAttachment: false
+          },
+          nativeFlowMessage: {
+            buttons: nativeFlowButtons,
+            messageParamsJson: JSON.stringify({
+              from: 'api',
+              templateId: 'quick_reply'
+            })
           }
         }
       };
 
       await sock.sendMessage(jid, interactiveMessage, opts);
-      // NativeFlow buttons sent successfully
+      logger.success('NativeFlow buttons enviados correctamente');
       return true;
     } catch (err) {
-      // NativeFlow failed, trying fallback
+      logger.warning('NativeFlow falló, intentando fallback', err?.message);
     }
   }
 
