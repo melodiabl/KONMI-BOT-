@@ -1,6 +1,7 @@
 # Node & dependencies
 node_modules/
 **/node_modules/
+package-lock.json
 
 # Env files
 .env
@@ -10,6 +11,7 @@ node_modules/
 .env.production.local
 !.env.example
 all_cookies.txt
+env_config.txt
 
 # Logs
 logs/
@@ -17,6 +19,7 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+lerna-debug.log*
 
 # Build outputs
 dist/
@@ -29,17 +32,76 @@ coverage/
 # OS files
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 
-# Editor settings (keep tracked ones as needed)
+# Editor & IDE settings
+.vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
+.atom/
+.brackets.json
+
+# Development tools
+.qodo/
+.devcontainer/
 
 # Project-specific sensitive data
 pgdata/
 backend/full/storage/
 frontend-panel-backup-*/
 **/*.sqlite
-storage/baileys_full
-package-lock.json
-.env
+**/*.db
+storage/
 session_data/
+migrations/
+
+# Backup files
+*.backup
+*.bak
+*.old
+*.tmp
+**/*.backup
+plugins/**/*.backup
 src/commands/pairing.js.backup
+
+# Temporary files
+lexica.json
+all_cookies.txt
+temp/
+tmp/
+
+# Development & utility scripts
+fix-all-paths.js
+verify-paths.js
+start-test.js
+install-dependencies.js
+install-essential.js
+install-wileys-windows.bat
+clean-project.js
+
+# Documentation files (development)
+INSTALACION_WILEYS.md
+WILEYS_IMPLEMENTATION_STATUS.md
+
+# Media uploads
+uploads/
+media/
+downloads/
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+*.cert
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Testing
+test-results/
+playwright-report/
+coverage/
