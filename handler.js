@@ -10,6 +10,7 @@ import QRCode from "qrcode";
 import pino from "pino";
 import { EventEmitter } from "events";
 import appLogger from "./plugins/config/logger.js";
+import logger from "./plugins/utils/bl-logger.js";
 import antibanMiddleware from "./plugins/utils/utils/anti-ban-middleware.js";
 import antibanSystem from "./plugins/utils/utils/anti-ban.js";
 import { getGroupBool } from "./plugins/utils/utils/group-config.js";
@@ -40,7 +41,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const SESSION_DIR = "./sessions/subbots";
 const activeSubbots = new Map();
 const subbotSessions = new Map();
-const logger = pino({ level: "silent" });
+const pinoLogger = pino({ level: "silent" });
 const subbotEmitter = new EventEmitter();
 subbotEmitter.setMaxListeners(100);
 
@@ -152,7 +153,7 @@ async function loadSubbotSession(code) {
     const json = JSON.parse(raw);
     return json;
   } catch (err) {
-    console.error("Error cargando session de subbot:", err);
+    logger.error("Error cargando session de subbot", err?.message);
     return null;
   }
 }
@@ -164,7 +165,7 @@ async function saveSubbotSession(code, data) {
     await fs.promises.mkdir(SESSION_DIR, { recursive: true });
     await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
   } catch (err) {
-    console.error("Error guardando session de subbot:", err);
+    logger.error("Error guardando session de subbot", err?.message);
   }
 }
 
@@ -176,7 +177,7 @@ async function deleteSubbotSession(code) {
       await fs.promises.unlink(filePath);
     }
   } catch (err) {
-    console.error("Error eliminando session de subbot:", err);
+    logger.error("Error eliminando session de subbot", err?.message);
   }
 }
 
@@ -243,7 +244,7 @@ async function emitSubbotEvent(code, event, payload = null) {
     });
     subbotEmitter.emit(event, { code, payload, at: new Date().toISOString() });
   } catch (err) {
-    console.error("Error registrando evento de subbot:", err);
+    logger.error("Error registrando evento de subbot", err?.message);
   }
 }
 
@@ -1462,7 +1463,7 @@ async function loadCommandModule(moduleName, commandName = null) {
       for (const variant of variations) {
         if (typeof module[variant] === 'function') {
           handler = module[variant];
-          console.log(`✅ Encontrado handler: ${variant} para módulo ${moduleName}`);
+          // Handler encontrado
           break;
         }
       }
@@ -1470,7 +1471,7 @@ async function loadCommandModule(moduleName, commandName = null) {
         const functions = Object.keys(module).filter(k => typeof module[k] === 'function');
         if (functions.length > 0) {
           handler = module[functions[0]];
-          console.log(`✅ Usando primera función: ${functions[0]} para módulo ${moduleName}`);
+          // Usando primera función disponible
         }
       }
     }
@@ -1484,16 +1485,15 @@ async function loadCommandModule(moduleName, commandName = null) {
       commandModules.set(cacheKey, wrappedModule);
       return wrappedModule;
     } else {
-      console.warn(`⚠️ No se encontró handler en el módulo: ${moduleName}`);
-      console.warn(`   Exports disponibles:`, Object.keys(module));
+      logger.warning(`No se encontró handler en el módulo: ${moduleName}`);
     }
   } catch (error) {
-    console.warn(`⚠️ No se pudo cargar el módulo: ${moduleName}`, error.message);
+    logger.warning(`No se pudo cargar el módulo: ${moduleName}`, error.message);
   }
   return null;
 }
 
-console.log(`✅ Sistema de comandos inicializado con ${Object.keys(COMMAND_FUNCTION_MAP).length} comandos mapeados`);
+logger.bot(`Sistema de comandos inicializado con ${Object.keys(COMMAND_FUNCTION_MAP).length} comandos mapeados`);
 
 function cleanText(text) {
   try {
@@ -1586,7 +1586,7 @@ function parseCommand(text) {
 // Comando de ayuda integrado con listas interactivas
 async function handleHelpCommand(ctx) {
   const { sock, remoteJid, sender, isGroup } = ctx;
-  console.log('[HELP] Comando help ejecutado en:', remoteJid, 'isGroup:', isGroup);
+  // Help command executed
   const userPhone = normalizePhone(sender || ctx.participant || remoteJid);
   const isAdmin = await isSuperAdmin(userPhone);
 
@@ -1615,7 +1615,7 @@ async function handleHelpCommand(ctx) {
     });
   }
 
-  console.log('[HELP] Retornando menú principal con', sections[0].rows.length, 'categorías');
+  // Returning main menu
   return {
     type: 'list',
     text: '🤖 *KONMI BOT - MENÚ PRINCIPAL*\n\nHola! Soy tu asistente de WhatsApp.\n\nSelecciona una categoría para ver todos los comandos disponibles:',
@@ -1630,7 +1630,7 @@ async function handleHelpCommand(ctx) {
 async function handleHelpResponse(ctx) {
   const { sock, remoteJid, args, text } = ctx;
   const category = args[0] || text || '';
-  console.log('[HELP_RESPONSE] Procesando:', category);
+  // Processing help category
 
   if (category === 'cat_descargas') {
     return {
@@ -2302,7 +2302,7 @@ async function sendResult(sock, jid, result, ctx) {
     const message = result.message || result.text || '✅ Listo';
     await sock.sendMessage(jid, { text: message });
   } catch (error) {
-    console.error("Error in sendResult:", error);
+    logger.error("Error enviando resultado", error?.message);
   }
 }
 
@@ -2321,7 +2321,7 @@ function buildSendOptions(result, ctx) {
 async function sendListFixedV2(sock, jid, result, ctx) {
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const opts = buildSendOptions(result, ctx);
-  console.log('[sendListV2] 📤 Enviando lista a:', jid.substring(0, 20) + '...', '| Grupo:', isGroup);
+  // Sending list message
 
   const allRows = [];
   for (const sec of result.sections || []) {
@@ -2362,10 +2362,10 @@ async function sendListFixedV2(sock, jid, result, ctx) {
       };
 
       await sock.sendMessage(jid, interactiveMessage, opts);
-      console.log('[sendListV2] ✅ NativeFlow buttons enviados (grupo)');
+      // NativeFlow buttons sent successfully
       return true;
     } catch (err) {
-      console.log('[sendListV2] ⚠️ NativeFlow falló:', err?.message);
+      // NativeFlow failed, trying fallback
     }
   }
 
@@ -2387,11 +2387,10 @@ async function sendListFixedV2(sock, jid, result, ctx) {
 
   try {
     await sock.sendMessage(jid, listMessage, opts);
-    console.log('[sendListV2] ✅ List button enviado');
+    // List button sent successfully
     return true;
   } catch (err) {
-    console.log('[sendListV2] ⚠️ List button falló:', err?.message);
-    console.log('[sendListV2] 🔄 Intentando botones simples...');
+    // List button failed, trying simple buttons
   }
 
   if (allRows.length <= 3) {
@@ -2406,10 +2405,10 @@ async function sendListFixedV2(sock, jid, result, ctx) {
         })),
         headerType: 1
       }, opts);
-      console.log('[sendListV2] ✅ Botones simples enviados');
+      // Simple buttons sent successfully
       return true;
     } catch (err2) {
-      console.log('[sendListV2] ⚠️ Botones simples fallaron:', err2?.message);
+      // Simple buttons failed
     }
   }
 
@@ -2426,10 +2425,10 @@ async function sendListFixedV2(sock, jid, result, ctx) {
           }
         }))
       }, opts);
-      console.log('[sendListV2] ✅ Template buttons enviados');
+      // Template buttons sent successfully
       return true;
     } catch (err3) {
-      console.log('[sendListV2] ⚠️ Template buttons fallaron:', err3?.message);
+      // Template buttons failed
     }
   }
 
@@ -2459,10 +2458,10 @@ async function sendListFixedV2(sock, jid, result, ctx) {
         buttons: buttons,
         headerType: 1
       }, opts);
-      console.log('[sendListV2] ✅ Botones paginados enviados (página 1)');
+      // Paginated buttons sent successfully
       return true;
     } catch (err4) {
-      console.log('[sendListV2] ⚠️ Botones paginados fallaron:', err4?.message);
+      // Paginated buttons failed
     }
   }
 
@@ -2484,10 +2483,10 @@ async function sendListFixedV2(sock, jid, result, ctx) {
 
   try {
     await sock.sendMessage(jid, { text: txt }, opts);
-    console.log('[sendListV2] ✅ Texto plano enviado');
+    // Plain text sent successfully
     return true;
   } catch (err5) {
-    console.error('[sendListV2] ❌ Todo falló:', err5);
+    logger.error('Error enviando mensaje', err5?.message);
     return false;
   }
 }
@@ -2511,7 +2510,7 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
   try {
     const text = (ctx.text != null ? String(ctx.text) : extractText(ctx.message));
     const { command, args } = parseCommand(text);
-    console.log('[DISPATCH] Texto:', text, '| Comando:', command, '| Args:', args);
+    // Command parsed
 
     if (!command) return false;
 
@@ -2528,25 +2527,21 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     if (!alwaysAllowedCommands.includes(command.toLowerCase())) {
       if (isGroup) {
         const groupActive = await getGroupBool(remoteJid, 'active', true);
-        console.log('[DISPATCH] 🔍 Estado del bot en grupo:', groupActive ? '✅ ACTIVO' : '❌ INACTIVO');
         if (groupActive === false) {
-          console.log('[DISPATCH] ⏭️ Bot desactivado en este grupo, ignorando comando:', command);
           return false;
         }
       } else {
         const botActive = await isBotGloballyActive();
-        console.log('[DISPATCH] 🔍 Verificando estado global del bot:', botActive ? '✅ ACTIVO' : '❌ INACTIVO');
         if (!botActive) {
-          console.log('[DISPATCH] ⏭️ Bot desactivado globalmente, ignorando comando:', command);
           return false;
         }
       }
     } else {
-      console.log('[DISPATCH] ✅ Comando permitido siempre:', command);
+      // Command always allowed
     }
 
     const commandConfig = commandMap.get(command.toLowerCase());
-    console.log('[DISPATCH] CommandConfig encontrado:', !!commandConfig, '| isLocal:', commandConfig?.isLocal);
+    // Command config loaded
 
     if (!commandConfig) {
       console.log('[DISPATCH] ❌ Comando no encontrado en commandMap:', command);

@@ -6,12 +6,13 @@ import { execSync } from "child_process";
 import path from "path";
 import readline from "readline";
 import { fileURLToPath } from "url";
+import logger from "./plugins/utils/bl-logger.js";
 
 // ======================================
 // 1. VERIFICAR SI DOTENV ESTÁ INSTALADO
 // ======================================
 
-console.log("🔍 Verificando dependencia dotenv...");
+logger.loading("Verificando dependencia dotenv");
 
 let dotenvExists = false;
 
@@ -19,21 +20,21 @@ try {
     // Nota: 'require.resolve' se mantiene por compatibilidad en este bloque
     require.resolve("dotenv");
     dotenvExists = true;
-    console.log("✔ dotenv encontrado.");
+    logger.success("dotenv encontrado");
 } catch (e) {
-    console.log("⚠ dotenv NO encontrado. Instalando...");
+    logger.warning("dotenv no encontrado, instalando automáticamente");
     try {
-        execSync("npm install dotenv", { stdio: "inherit" });
+        execSync("npm install dotenv", { stdio: "pipe" });
         dotenvExists = true;
-        console.log("✔ dotenv instalado correctamente.");
+        logger.success("dotenv instalado correctamente");
     } catch (err) {
-        console.error("❌ Error instalando dotenv:", err);
+        logger.error("Error instalando dotenv", err.message);
     }
 }
 
 // Cargar dotenv SOLO si existe
 if (dotenvExists) {
-    console.log("⚙ Cargando dotenv...");
+    logger.loading("Cargando configuración de entorno");
     await import("dotenv/config");
 }
 
@@ -44,13 +45,13 @@ if (dotenvExists) {
 const arch = os.arch();
 
 if (arch === "arm64") {
-    console.log("🛑 ARM64 detectado — omitiendo Chromium/Puppeteer...");
+    logger.warning("ARM64 detectado, omitiendo Chromium/Puppeteer");
 
     process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true";
     process.env.PUPPETEER_SKIP_DOWNLOAD = "true";
     process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium";
 
-    console.log("✔ Variables aplicadas (sin Chromium).");
+    logger.success("Variables de entorno aplicadas para ARM64");
 }
 
 // ======================================
@@ -71,14 +72,54 @@ import {
     sanitizePhoneNumberInput
 } from "./whatsapp.js";
 
+// ✅ CORRECCIÓN 3: Importar knex para migraciones automáticas
+import knex from 'knex';
+import knexfile from './knexfile.js';
+
+async function runMigrationsIfNeeded() {
+    try {
+        logger.database("Verificando migraciones de base de datos");
+
+        const environment = process.env.NODE_ENV || 'development';
+        const config = (knexfile.default || knexfile)[environment];
+
+        if (!config) {
+            logger.warning("No se encontró configuración de base de datos", environment);
+            return;
+        }
+
+        const db = knex(config);
+
+        // Verificar si hay migraciones pendientes
+        const [, pending] = await Promise.all([
+            db.migrate.currentVersion(),
+            db.migrate.list()
+        ]);
+
+        const pendingMigrations = pending[1]; // pending[1] contiene las migraciones pendientes
+
+        if (pendingMigrations && pendingMigrations.length > 0) {
+            logger.database(`Ejecutando ${pendingMigrations.length} migraciones pendientes`);
+            await db.migrate.latest();
+            logger.success("Migraciones completadas exitosamente");
+        } else {
+            logger.success("Base de datos actualizada, no hay migraciones pendientes");
+        }
+
+        await db.destroy();
+    } catch (error) {
+        logger.error("Error en migraciones automáticas", error.message);
+        logger.info("Puedes ejecutar manualmente: npm run migrate");
+    }
+}
+
 async function restoreSubbotsOnBoot() {
     try {
         const mod = await import("./plugins/services/subbot-manager.js");
-        const clean = 0;
         const restored = await mod.restoreActiveSubbots?.().catch(() => 0);
-        console.log(`♻️ Subbots autostart (boot): restaurados=${restored || 0}, limpieza=${clean || 0}`);
+        logger.bot(`Subbots restaurados en arranque: ${restored || 0}`);
     } catch (e) {
-        console.warn("⚠️ Subbots autostart (boot) falló:", e?.message || e);
+        logger.warning("Subbots autostart falló", e?.message || e);
     }
 }
 
@@ -94,34 +135,32 @@ const ask = (q) => new Promise((res) => rl.question(q, (ans) => res((ans || "").
 // Se elimina la función 'onlyDigits' local ya que se usa 'sanitizePhoneNumberInput'
 
 function printBanner() {
-  console.log('\n🤖 KONMI BOT 🤖\n');
-  console.log('🔐 Sistema de Autenticación\n');
+    logger.createBanner('KONMI BOT', 'Sistema de Autenticación WhatsApp');
 }
 
 function printMenu() {
-  console.log('╔════════════════════════════════════════╗');
-  console.log('║   🔐 SELECCIÓN DE AUTENTICACIÓN        ║');
-  console.log('╠════════════════════════════════════════╣');
-  console.log('║ 1) 📱 Código QR (recomendado)          ║');
-  console.log('║ 2) 🔢 Pairing Code (código en el tel.) ║');
-  console.log('╚════════════════════════════════════════╝');
+    logger.createMenu('SELECCIÓN DE AUTENTICACIÓN', [
+        { text: 'Código QR (recomendado)', icon: '📱' },
+        { text: 'Pairing Code (código en el teléfono)', icon: '🔢' }
+    ]);
 }
 
 function dumpEnvPreview(authPath) {
-  const credsPath = path.join(authPath, 'creds.json');
-  const exists = fs.existsSync(credsPath);
-  console.log('─────────────────────────────────────────────');
-  console.log('📄 Directorio de Autenticación:', authPath);
-  console.log('💾 creds.json:', exists ? 'Existe ✅' : 'No existe ❌');
-  console.log('📦 Módulo Baileys:', process.env.BAILEYS_MODULE || '(por defecto)');
-  console.log('─────────────────────────────────────────────');
+    const credsPath = path.join(authPath, 'creds.json');
+    const exists = fs.existsSync(credsPath);
+
+    logger.createInfoSection('Configuración de Autenticación', [
+        { key: 'Directorio', value: authPath },
+        { key: 'Credenciales', value: 'creds.json', status: exists ? 'ok' : 'missing' },
+        { key: 'Módulo Baileys', value: process.env.BAILEYS_MODULE || 'por defecto' }
+    ]);
 }
 
 async function startWebServer(config) {
-    console.log(`\n🌐 Starting web server on port ${config.server.port}...`);
+    logger.server(`Iniciando servidor web en puerto ${config.server.port}`);
     app.listen(config.server.port, config.server.host, () => {
-        console.log(`✅ Server running at http://${config.server.host}:${config.server.port}`);
-        console.log(`📊 Health check: http://${config.server.host}:${config.server.port}/api/health`);
+        logger.success(`Servidor ejecutándose en http://${config.server.host}:${config.server.port}`);
+        logger.info(`Health check disponible en /api/health`);
     });
 }
 
@@ -130,16 +169,19 @@ async function main() {
     const DEFAULT_AUTH_DIR = path.join(__dirname, 'session_data', 'baileys_full');
     const authPath = path.resolve(process.env.AUTH_DIR || DEFAULT_AUTH_DIR);
 
+    // ✅ CORRECCIÓN 4: Ejecutar migraciones automáticas antes de iniciar
+    await runMigrationsIfNeeded();
+
     // Autostart de subbots al arrancar el proceso (no depender de que el bot principal conecte).
     await restoreSubbotsOnBoot();
 
     // ===============================================
-    // ✅ CORRECCIÓN 4: Lógica de Chequeo de Sesión
+    // ✅ CORRECCIÓN 5: Lógica de Chequeo de Sesión
     // ===============================================
     try {
         const session = await checkSessionState(authPath);
         if (session.hasCreds) {
-            console.log(`\n🎉 ¡Sesión encontrada! Conectando automáticamente desde ${session.authPath}`);
+            logger.connection("Sesión encontrada, conectando automáticamente");
             dumpEnvPreview(session.authPath);
             await connectToWhatsApp(session.authPath, false, null);
 
@@ -149,7 +191,7 @@ async function main() {
             return;
         }
     } catch (e) {
-        console.warn('⚠️ Error al verificar la sesión, continuando al menú:', e.message);
+        logger.warning('Error al verificar la sesión, continuando al menú', e.message);
         // Continuar al menú si hay un error al chequear la sesión
     }
     // ===============================================
@@ -163,7 +205,8 @@ async function main() {
     method = method || '1';
 
     if (method === '2') {
-        console.log('\nHas elegido: 🔢 Pairing Code\n');
+        logger.auth('Has elegido: Pairing Code');
+        logger.space();
         dumpEnvPreview(authPath);
 
         let phoneNumber = await ask('Ingresa tu número de WhatsApp en formato internacional (ej: 595974154768): ');
@@ -171,13 +214,13 @@ async function main() {
         phoneNumber = sanitizePhoneNumberInput(phoneNumber || process.env.PAIR_NUMBER);
 
         if (!phoneNumber) {
-            console.log('❌ Número de teléfono inválido. Por favor, reinicia el script e inténtalo de nuevo.');
+            logger.error('Número de teléfono inválido. Por favor, reinicia el script e inténtalo de nuevo.');
             rl.close();
             return;
         }
 
-        console.log(`✅ Número proporcionado: +${phoneNumber}`);
-        console.log('⏳ Solicitando código de emparejamiento...');
+        logger.success(`Número proporcionado: +${phoneNumber}`);
+        logger.loading('Solicitando código de emparejamiento');
 
         try {
             // Para pairing, usar SIEMPRE sesión limpia para evitar errores loggedOut
@@ -186,17 +229,18 @@ async function main() {
             } catch {}
             await connectWithPairingCode(phoneNumber, authPath);
         } catch (e) {
-            console.error('❌ Error al iniciar la conexión con Pairing Code:', e?.message || e);
+            logger.error('Error al iniciar la conexión con Pairing Code', e?.message || e);
         }
     } else {
-        console.log('\nHas elegido: 📱 Código QR\n');
+        logger.auth('Has elegido: Código QR');
+        logger.space();
         dumpEnvPreview(authPath);
-        console.log('⏳ Generando código QR...');
+        logger.loading('Generando código QR');
 
         try {
             await connectToWhatsApp(authPath, false, null);
         } catch (e) {
-            console.error('❌ Error al iniciar la conexión con Código QR:', e?.message || e);
+            logger.error('Error al iniciar la conexión con Código QR', e?.message || e);
         }
     }
 
@@ -205,10 +249,10 @@ async function main() {
     rl.close();
 }
 
-process.on('unhandledRejection', (err) => console.error('UNHANDLED REJECTION:', err?.stack || err));
-process.on('uncaughtException', (err) => console.error('UNCAUGHT EXCEPTION:', err?.stack || err));
+process.on('unhandledRejection', (err) => logger.error('UNHANDLED REJECTION', err?.stack || err));
+process.on('uncaughtException', (err) => logger.error('UNCAUGHT EXCEPTION', err?.stack || err));
 
 main().catch((e) => {
-    console.error('Error en la ejecución principal:', e?.stack || e);
+    logger.error('Error en la ejecución principal', e?.stack || e);
     process.exit(1);
 });
