@@ -1,4 +1,4 @@
-import { sendInteractiveButtons, humanBytes } from './utils/interactive.js'
+import { sendInteractiveButtons, humanBytes } from './ui-interactive.js'
 import os from 'os'
 import {
   getConnectionStatus,

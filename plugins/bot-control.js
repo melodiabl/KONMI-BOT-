@@ -1,9 +1,9 @@
 // commands/bot-control.js
 // Activar/desactivar bot en grupos o globalmente
 
-import { setGroupConfig, getGroupBool } from './utils/group-config.js'
+import { setGroupConfig, getGroupBool } from './utils/utils/group-config.js'
 import { isBotGloballyActive, setBotGlobalState } from './services/subbot-manager.js'
-import { getGroupRoles } from './utils/group-helper.js'
+import { getGroupRoles } from './utils/utils/group-helper.js'
 
 export async function bot(ctx) {
   const { isOwner, remoteJid, args, isGroup, sock, sender } = ctx

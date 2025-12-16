@@ -1,4 +1,4 @@
-import { getTheme } from './utils/theme.js'
+import { getTheme } from './utils/utils/theme.js'
 import { promotionalLinks } from './config/config/links.js'
 
 export async function help(ctx, commandMap) {

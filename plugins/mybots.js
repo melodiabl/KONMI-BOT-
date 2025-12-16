@@ -1,5 +1,5 @@
 import { listUserSubbots } from './services/subbot-manager.js'
-import { normalizeDigits } from './utils/user.js'
+import { normalizeDigits } from './commands/user.js'
 
 export async function mybots({ usuario }) {
   try {

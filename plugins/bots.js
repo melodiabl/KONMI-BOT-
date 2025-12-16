@@ -1,5 +1,5 @@
 import { listAllSubbots } from './services/subbot-manager.js'
-import { isOwner } from './utils/user.js'
+import { isOwner } from './commands/user.js'
 
 export async function bots({ usuario }) {
   if (!isOwner(usuario)) {

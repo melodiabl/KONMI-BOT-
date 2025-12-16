@@ -1,4 +1,4 @@
-import { sendInteractiveButtons } from './utils/interactive.js'
+import { sendInteractiveButtons } from './ui-interactive.js'
 
 export async function menu(ctx) {
   const who = (ctx && (ctx.sender || ctx.usuario || ctx.remoteJid)) || ''

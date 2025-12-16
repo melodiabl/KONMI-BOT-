@@ -29,7 +29,7 @@ export async function tagall(ctx){
 }
 
 
-import { getTheme } from './utils/theme.js'
+import { getTheme } from './utils/utils/theme.js'
 
 export async function groupinfo(ctx){
   const { sock, remoteJid } = ctx
