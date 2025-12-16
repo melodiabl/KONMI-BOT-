@@ -209,6 +209,66 @@ class BLLogger {
         return text.replace(/\u001b\[[0-9;]*m/g, '').length;
     }
 
+    // Log de mensaje con recuadro detallado
+    messageBox(messageData) {
+        const width = 70;
+        const border = colors.border('═'.repeat(width));
+
+        console.log('\n' + colors.border('╔') + border + colors.border('╗'));
+        console.log(colors.border('║') + this.centerText(colors.primary.bold(`${symbols.connection} MENSAJE RECIBIDO ${symbols.connection}`), width) + colors.border('║'));
+        console.log(colors.border('╠') + border + colors.border('╣'));
+
+        // Información del mensaje
+        const items = [
+            { label: 'Texto', value: messageData.texto, icon: symbols.sparkle },
+            { label: 'Tipo', value: messageData.tipo, icon: messageData.esComando ? '⚡' : '💬' },
+            { label: 'Chat', value: messageData.chat, icon: messageData.chatIcon },
+            { label: 'Usuario', value: messageData.usuario, icon: '👤' },
+            { label: 'Origen', value: messageData.origen, icon: messageData.origenIcon },
+            { label: 'Hora', value: messageData.hora, icon: symbols.moon }
+        ];
+
+        items.forEach(item => {
+            const label = colors.secondary(item.label + ':');
+            const value = colors.text(item.value);
+            const icon = colors.accent(item.icon);
+            const line = ` ${icon} ${label} ${value}`;
+            const padding = ' '.repeat(Math.max(0, width - this.getCleanLength(line)));
+            console.log(colors.border('║') + line + padding + colors.border('║'));
+        });
+
+        console.log(colors.border('╚') + border + colors.border('╝'));
+    }
+
+    // Log de comando ejecutado con recuadro
+    commandBox(commandData) {
+        const width = 70;
+        const border = colors.border('═'.repeat(width));
+
+        console.log('\n' + colors.border('╔') + border + colors.border('╗'));
+        console.log(colors.border('║') + this.centerText(colors.highlight.bold(`${symbols.star} COMANDO EJECUTADO ${symbols.star}`), width) + colors.border('║'));
+        console.log(colors.border('╠') + border + colors.border('╣'));
+
+        const items = [
+            { label: 'Comando', value: commandData.comando, icon: '⚡' },
+            { label: 'Usuario', value: commandData.usuario, icon: '👤' },
+            { label: 'Chat', value: commandData.chat, icon: commandData.chatIcon },
+            { label: 'Resultado', value: commandData.resultado, icon: commandData.exitoso ? symbols.success : symbols.error },
+            { label: 'Tiempo', value: commandData.tiempo, icon: symbols.moon }
+        ];
+
+        items.forEach(item => {
+            const label = colors.secondary(item.label + ':');
+            const value = colors.text(item.value);
+            const icon = colors.accent(item.icon);
+            const line = ` ${icon} ${label} ${value}`;
+            const padding = ' '.repeat(Math.max(0, width - this.getCleanLength(line)));
+            console.log(colors.border('║') + line + padding + colors.border('║'));
+        });
+
+        console.log(colors.border('╚') + border + colors.border('╝'));
+    }
+
     // Separador decorativo
     separator() {
         console.log(colors.muted('─'.repeat(60)));

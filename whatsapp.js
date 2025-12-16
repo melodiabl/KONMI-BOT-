@@ -14,6 +14,7 @@ import logger from './plugins/config/logger.js'
 import { isSuperAdmin, setPrimaryOwner } from './plugins/config/global-config.js'
 import { initStore } from './plugins/utils/utils/store.js'
 import { dispatch } from './handler.js'
+import blLogger from './plugins/utils/bl-logger.js'
 // port { extractText } from './plugins/utils/text-extractor.js'
 // ==============================================================================
 // Funciones locales de normalización y extracción de texto
@@ -1327,7 +1328,38 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   const rawText = extractText(message);
   const pushName = message?.pushName || null;
 
-  // Message received
+  // ✅ LOG DE MENSAJE CON RECUADRO DETALLADO
+  const isCommand = /^[\\/!.#?$~]/.test(rawText);
+  const messageType = isChannel ? 'CANAL' : (isGroup ? 'GRUPO' : 'PRIVADO');
+
+  // Obtener nombre del chat si es grupo
+  let chatName = 'Chat';
+  if (isGroup && remoteJid) {
+    try {
+      const groupMetadata = await sock.groupMetadata(remoteJid).catch(() => null);
+      chatName = groupMetadata?.subject || 'Grupo';
+    } catch (e) {
+      chatName = 'Grupo';
+    }
+  } else if (isChannel) {
+    chatName = 'Canal';
+  } else {
+    chatName = pushName || 'Usuario';
+  }
+
+  const messageData = {
+    texto: rawText.substring(0, 60) + (rawText.length > 60 ? '...' : ''),
+    tipo: isCommand ? 'COMANDO' : 'MENSAJE',
+    esComando: isCommand,
+    chat: chatName,
+    chatIcon: isChannel ? '📢' : (isGroup ? '👥' : '💬'),
+    usuario: fromMe ? 'BOT' : (pushName || 'Usuario'),
+    origen: messageType,
+    origenIcon: isChannel ? '📢' : (isGroup ? '👥' : '👤'),
+    hora: new Date().toLocaleTimeString('es-ES')
+  };
+
+  blLogger.messageBox(messageData);
 
   // ✅ LOG DE DEBUG CRÍTICO
   if (process.env.TRACE_ROUTER === 'true') {
@@ -1582,7 +1614,14 @@ export async function handleMessage(message, customSock = null, prefix = '', run
   try {
     // Usamos el dispatch importado directamente de handler.js
     if (typeof dispatch === 'function') {
+      blLogger.loading(`Procesando comando: ${rawText.split(' ')[0]}`);
       const handled = await dispatch(ctx, runtimeContext);
+
+      if (handled) {
+        blLogger.success('Comando ejecutado exitosamente');
+      } else {
+        blLogger.info('Comando no procesado o ignorado');
+      }
 
       if (process.env.TRACE_ROUTER === 'true') {
         logMessage('INFO', 'DISPATCH', `Resultado: ${handled === true ? '✅ MANEJADO' : '⏭️ NO MANEJADO'}`, {

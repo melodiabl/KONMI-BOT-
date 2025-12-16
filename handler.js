@@ -2580,8 +2580,35 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
       commandConfig
     };
 
+    const startTime = Date.now();
     const result = await handler(params, commandMap);
     await sendResult(sock, remoteJid, result, ctx);
+    const endTime = Date.now();
+
+    // Log de comando ejecutado con recuadro detallado
+    let chatName = 'Chat';
+    if (isGroup && remoteJid) {
+      try {
+        const groupMetadata = await sock.groupMetadata(remoteJid).catch(() => null);
+        chatName = groupMetadata?.subject || 'Grupo';
+      } catch (e) {
+        chatName = 'Grupo';
+      }
+    } else {
+      chatName = ctx.pushName || 'Usuario';
+    }
+
+    const commandData = {
+      comando: command,
+      usuario: ctx.pushName || 'Usuario',
+      chat: chatName,
+      chatIcon: isGroup ? '👥' : '💬',
+      resultado: result?.success !== false ? 'EXITOSO' : 'ERROR',
+      exitoso: result?.success !== false,
+      tiempo: `${endTime - startTime}ms`
+    };
+
+    logger.commandBox(commandData);
     return true;
 
   } catch (error) {
