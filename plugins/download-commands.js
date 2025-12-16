@@ -125,28 +125,40 @@ const senderTag = (sender) => `@${String(sender || '').split('@')[0]}`
 
 // Simular progreso fluido cuando no hay callbacks reales
 class ProgressSimulator {
-  constructor(progressNotifier, targetPercent = 90, durationMs = 3000) {
+  constructor(progressNotifier, targetPercent = 90, durationMs = 4000) {
     this.notifier = progressNotifier
     this.currentPercent = 0
     this.targetPercent = targetPercent
     this.durationMs = durationMs
-    this.intervalMs = 150 // Más fluido
+    this.intervalMs = 2000 // Reducido para evitar rate-limit: 2 segundos
     this.timer = null
     this.stopped = false
+    this.lastUpdate = 0
   }
 
   start() {
-    const steps = this.durationMs / this.intervalMs
+    const steps = Math.max(2, this.durationMs / this.intervalMs) // Mínimo 2 pasos
     const increment = (this.targetPercent - this.currentPercent) / steps
 
-    this.timer = setInterval(() => {
+    this.timer = setInterval(async () => {
       if (this.stopped) {
         this.stop()
         return
       }
 
+      const now = Date.now()
+      // Evitar actualizaciones muy frecuentes
+      if (now - this.lastUpdate < 1500) return
+
       this.currentPercent = Math.min(this.targetPercent, this.currentPercent + increment)
-      this.notifier.update(this.currentPercent).catch(() => {})
+
+      try {
+        await this.notifier.update(this.currentPercent)
+        this.lastUpdate = now
+      } catch (e) {
+        // Ignorar errores para evitar spam
+        console.log('Progress update skipped to avoid rate-limit')
+      }
 
       if (this.currentPercent >= this.targetPercent) {
         this.stop()
@@ -165,7 +177,12 @@ class ProgressSimulator {
     this.stopped = true
     this.stop()
     this.currentPercent = percent
-    await this.notifier.update(percent, status)
+    try {
+      await this.notifier.update(percent, status)
+      this.lastUpdate = Date.now()
+    } catch (e) {
+      console.log('Progress jump skipped to avoid rate-limit')
+    }
   }
 }
 

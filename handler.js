@@ -1242,234 +1242,236 @@ function normalizeDigits(userOrJid){
 const commandModules = new Map();
 const commandMap = new Map();
 
-const COMMAND_FUNCTION_MAP = {
-  // Descargas
-  'play': 'handleMusicDownload',
-  'music': 'handleMusicDownload',
-  'video': 'handleVideoDownload',
-  'youtube': 'handleVideoDownload',
-  'tiktok': 'handleTikTokDownload',
-  'instagram': 'handleInstagramDownload',
-  'ig': 'handleInstagramDownload',
-  'facebook': 'handleFacebookDownload',
-  'fb': 'handleFacebookDownload',
-  'twitter': 'handleTwitterDownload',
-  'x': 'handleTwitterDownload',
-  'pinterest': 'handlePinterestDownload',
-  'spotify': 'handleSpotifySearch',
-  // Descargas avanzadas (Wileys)
-  'soundcloud': 'soundcloud',
-  'reddit': 'reddit',
-  'twitch': 'twitch',
-  'dailymotion': 'dailymotion',
-  'vimeo': 'vimeo',
-  'kwai': 'kwai',
-  'bilibili': 'bilibili',
-  'downloads': 'downloads',
-  'translate': 'handleTranslate',
-  'tr': 'handleTranslate',
-  'weather': 'handleWeather',
-  'clima': 'handleWeather',
-  'quote': 'handleQuote',
-  'fact': 'handleFact',
-  'trivia': 'handleTriviaCommand',
-  'meme': 'handleMemeCommand',
-  // IA
-  'ia': 'ai',
-  'ai': 'ai',
-  'clasificar': 'clasificar',
-  // Básicos
-  'ping': 'ping',
-  'status': 'status',
-  'comandos': 'help',
-  // Subbots - IMPORTANTE: qr y code están en pairing.js
-  'qr': 'qr',
-  'code': 'code',
-  'mybots': 'mybots',
-  'mibots': 'mybots',
-  'bots': 'bots',
-  'stopbot': 'stopbot',
-  'requestcode': 'requestMainBotPairingCode',
-  'maincode': 'mainCode',
-  // Aportes
-  'addaporte': 'addaporte',
-  'aportes': 'aportes',
-  'myaportes': 'myaportes',
-  'misaportes': 'myaportes',
-  'aporteestado': 'aporteestado',
-  'pedido': 'pedido',
-  'pedidos': 'pedidos',
-  'mispedidos': 'pedidos',
-  // Media
-  'sticker': 'sticker',
-  's': 'sticker',
-  'image': 'image',
-  'wallpaper': 'wallpaper',
-  'tts': 'tts',
-  // Entretenimiento
-  'joke': 'joke',
-  'horoscope': 'horoscope',
-  'horoscopo': 'horoscope',
-  // Archivos
-  'descargar': 'descargar',
-  'guardar': 'guardar',
-  'archivos': 'archivos',
-  'misarchivos': 'misarchivos',
-  // Juegos
-  'game': 'game',
-  'juego': 'game',
-  'rps': 'rps',
-  'guess': 'guess',
-  'dice': 'dice',
-  'sorteo': 'sorteo',
-  'coin': 'coin',
-  // Encuestas
-  'poll': 'poll',
-  'encuesta': 'poll',
-  'pollmultiple': 'pollMultiple',
-  'quickpoll': 'quickpoll',
-  'rating': 'rating',
-  'yesno': 'yesno',
-  // Grupo
-  'kick': 'kick',
-  'promote': 'promote',
-  'demote': 'demote',
-  'lock': 'lock',
-  'unlock': 'unlock',
-  'settings': 'settings',
-  'config': 'settings',
-  'groupinfo': 'groupinfo',
-  // Admin
-  'bot': 'bot',
-  'logs': 'logs',
-  'stats': 'stats',
-  'estadisticas': 'stats',
-  'export': 'export',
-  'update': 'update',
-  'broadcast': 'broadcast',
-  'bc': 'broadcast',
-  // Perfil
-  'whoami': 'whoami',
-  'profile': 'profile',
-  // Presencia
-  'typing': 'typing',
-  'recording': 'recording',
-  'online': 'online',
-  'offline': 'offline',
-  'away': 'away',
-  'busy': 'busy',
-  'readall': 'readall',
-  // Ban
-  'ban': 'ban',
-  'unban': 'unban',
-  // Privacidad
-  'privacy': 'privacy',
-  // Votos
-  'vote': 'vote',
-  'votes': 'votes',
-  // Utils adicionales
-  'qrcode': 'qrcode',
-  'calc': 'calc',
-  'short': 'short',
-  // Nuevos comandos de utilidades (Wileys)
-  'password': 'password',
-  'convert': 'convert',
-  'email': 'email',
-  'color': 'color',
-  'timezone': 'timezone',
-  // Nuevos comandos de IA (Wileys)
-  'resume': 'resume',
-  'translate': 'translate',
-  'explain': 'explain',
-  'sentiment': 'sentiment',
-  'grammar': 'grammar',
-  'code': 'code',
-  'analyze': 'analyze',
-  'brainstorm': 'brainstorm',
-  // Nuevos comandos de juegos (Wileys)
-  'hangman': 'hangman',
-  'memory': 'memory',
-  'blackjack': 'blackjack',
-  'lottery': 'lottery',
-  // Nuevos comandos de grupos (Wileys)
-  'welcome': 'welcome',
-  'automod': 'automod',
-  'rules': 'rules',
-  'groupstats': 'groupstats',
-  'clean': 'clean',
-  // Nuevos comandos de subbots (Wileys)
-  'subbotstats': 'subbotstats',
-  'subbotmanage': 'subbotmanage',
-  'subbotmonitor': 'subbotmonitor',
-  // Nuevos comandos de música (Wileys)
-  'identify': 'identify',
-  'lyrics': 'lyrics',
-  'playlist': 'playlist',
-  'radio': 'radio',
-  'nowplaying': 'nowplaying',
-  'musichelp': 'musichelp',
-  // Nuevos comandos de media avanzado (Wileys)
-  'compress': 'compress',
-  'convert': 'convert',
-  'removebg': 'removeBackground',
-  'addtext': 'addText',
-  'gif': 'createGif',
-  'collage': 'collage',
-  'filter': 'filter',
-  'resize': 'resize',
-  'mediahelp': 'mediahelp',
-  // Nuevos comandos de seguridad (Wileys)
-  'whitelist': 'whitelist',
-  'blacklist': 'blacklist',
-  'enable2fa': 'enable2fa',
-  'verify2fa': 'verify2fa',
-  'disable2fa': 'disable2fa',
-  'spamcheck': 'spamcheck',
-  'securitylogs': 'securitylogs',
-  'securitystatus': 'securitystatus',
+// =========================
+// SISTEMA DE AUTO-DISCOVERY DE PLUGINS
+// =========================
 
-  // Comandos adicionales para completar el help
-  'tag': 'tag',
-  'admins': 'admins',
-  'addgroup': 'addGroup',
-  'delgroup': 'delGroup',
-  'debuggroup': 'debuggroup',
-  'debugadmin': 'debugadmin',
-  'testbotadmin': 'testBotAdmin',
+import { readdir } from 'fs/promises';
+import { join } from 'path';
 
-  // Comandos de help centralizados
-  'help': 'help',
-  'ayuda': 'help',
-  'menu': 'help',
+// Cache para plugins cargados
+const pluginCache = new Map();
+const pluginCommands = new Map();
 
-  // Sistema completo con todos los comandos funcionales
-};
+// Función para escanear y cargar todos los plugins automáticamente
+async function loadAllPlugins() {
+  try {
+    const pluginsDir = './plugins';
+    const files = await readdir(pluginsDir);
 
+    // Filtrar solo archivos .js (excluyendo directorios y otros archivos)
+    const pluginFiles = files.filter(file =>
+      file.endsWith('.js') &&
+      !file.startsWith('.') &&
+      file !== 'index.js'
+    );
+
+    // Ordenar plugins por prioridad (plugins importantes primero)
+    const priorityPlugins = [
+      'download-commands.js',
+      'ai.js',
+      'games.js',
+      'music.js',
+      'groups.js',
+      'subbots.js'
+    ];
+
+    const sortedPlugins = [
+      ...pluginFiles.filter(file => priorityPlugins.includes(file)),
+      ...pluginFiles.filter(file => !priorityPlugins.includes(file))
+    ];
+
+    console.log(`🔍 Encontrados ${pluginFiles.length} archivos de plugins`);
+
+    // Limitar a los primeros 30 plugins para evitar problemas
+    const limitedPlugins = sortedPlugins.slice(0, 30);
+    console.log(`📋 Cargando los primeros ${limitedPlugins.length} plugins por seguridad`);
+
+    // Cargar plugins en lotes de 3 para evitar sobrecarga
+    const batchSize = 3;
+    let loadedCount = 0;
+
+    for (let i = 0; i < limitedPlugins.length; i += batchSize) {
+      const batch = limitedPlugins.slice(i, i + batchSize);
+
+      // Cargar lote actual
+      const promises = batch.map(file => {
+        const pluginName = file.replace('.js', '');
+        return loadPlugin(pluginName);
+      });
+
+      await Promise.allSettled(promises);
+      loadedCount += batch.length;
+
+      console.log(`📦 Progreso: ${loadedCount}/${limitedPlugins.length} plugins procesados`);
+
+      // Pausa entre lotes para evitar sobrecarga
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    console.log(`✅ Cargados ${pluginCache.size} plugins exitosamente`);
+    console.log(`📋 Total de comandos registrados: ${commandMap.size}`);
+
+  } catch (error) {
+    console.error('❌ Error cargando plugins:', error);
+  }
+}
+
+// Función para cargar un plugin individual
+async function loadPlugin(pluginName) {
+  try {
+    console.log(`🔄 Cargando plugin: ${pluginName}`);
+
+    // Timeout para evitar cuelgues
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout loading plugin')), 3000);
+    });
+
+    const loadPromise = import(`./plugins/${pluginName}.js`);
+    const module = await Promise.race([loadPromise, timeoutPromise]);
+
+    // Guardar el módulo en cache
+    pluginCache.set(pluginName, module);
+
+    // Auto-registrar comandos si el plugin los define (con timeout)
+    const registerPromise = autoRegisterCommands(pluginName, module);
+    const registerTimeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout registering commands')), 2000);
+    });
+
+    await Promise.race([registerPromise, registerTimeoutPromise]);
+
+    console.log(`✅ Plugin cargado: ${pluginName}`);
+    return module;
+
+  } catch (error) {
+    console.log(`⚠️ No se pudo cargar plugin ${pluginName}: ${error.message}`);
+    return null;
+  }
+}
+
+// Función para auto-registrar comandos de un plugin
+async function autoRegisterCommands(pluginName, module) {
+  try {
+    // 1. Buscar configuración de comandos en el módulo
+    if (module.commands && Array.isArray(module.commands)) {
+      for (const cmdConfig of module.commands) {
+        registerCommand(cmdConfig.name, {
+          handler: module[cmdConfig.handler] || module.default,
+          category: cmdConfig.category || 'General',
+          description: cmdConfig.description || 'Sin descripción',
+          admin: cmdConfig.admin || false,
+          isLocal: true,
+          plugin: pluginName
+        });
+      }
+      return;
+    }
+
+    // 2. Buscar objeto de configuración COMMANDS
+    if (module.COMMANDS && typeof module.COMMANDS === 'object') {
+      for (const [cmdName, config] of Object.entries(module.COMMANDS)) {
+        registerCommand(cmdName, {
+          handler: module[config.handler] || module[cmdName] || module.default,
+          category: config.category || 'General',
+          description: config.description || 'Sin descripción',
+          admin: config.admin || false,
+          isLocal: true,
+          plugin: pluginName
+        });
+      }
+      return;
+    }
+
+    // 3. Auto-detectar funciones exportadas (SIMPLIFICADO)
+    const exportedFunctions = Object.keys(module).filter(key =>
+      typeof module[key] === 'function' &&
+      !key.startsWith('_') &&
+      key !== 'default' &&
+      key.length < 15 // Solo nombres cortos
+    ).slice(0, 5); // Máximo 5 funciones por plugin
+
+    // Solo registrar si hay pocas funciones para evitar spam
+    if (exportedFunctions.length > 0 && exportedFunctions.length <= 5) {
+      console.log(`🔍 Auto-detectando ${exportedFunctions.length} funciones en ${pluginName}: ${exportedFunctions.join(', ')}`);
+
+      for (const funcName of exportedFunctions) {
+        registerCommand(funcName, {
+          handler: module[funcName],
+          category: `🔧 ${pluginName}`,
+          description: `Comando ${funcName}`,
+          admin: false,
+          isLocal: true,
+          plugin: pluginName,
+          moduleName: pluginName
+        });
+      }
+    }
+
+    // Registrar el plugin para carga dinámica
+    pluginCommands.set(pluginName, {
+      moduleName: pluginName,
+      functions: exportedFunctions,
+      module: module
+    });
+
+  } catch (error) {
+    console.log(`⚠️ Error registrando comandos de ${pluginName}: ${error.message}`);
+  }
+}
+
+// Función para registrar un comando
+function registerCommand(name, config) {
+  if (commandMap.has(name)) {
+    console.log(`⚠️ Comando '${name}' ya existe, sobrescribiendo...`);
+  }
+
+  commandMap.set(name, config);
+  console.log(`📝 Comando registrado: /${name} (${config.category})`);
+}
+
+// Función mejorada para cargar módulos de comandos
 async function loadCommandModule(moduleName, commandName = null) {
   const cacheKey = commandName ? `${moduleName}:${commandName}` : moduleName;
+
+  // Verificar cache primero
   if (commandModules.has(cacheKey)) {
     return commandModules.get(cacheKey);
   }
+
+  // Verificar si ya está en el cache de plugins
+  if (pluginCache.has(moduleName)) {
+    const module = pluginCache.get(moduleName);
+    return createModuleWrapper(module, moduleName, commandName);
+  }
+
+  // Cargar dinámicamente si no está en cache
   try {
     const module = await import(`./plugins/${moduleName}.js`);
-    let handler = null;
-    if (commandName && COMMAND_FUNCTION_MAP[commandName]) {
-      const functionName = COMMAND_FUNCTION_MAP[commandName];
-      if (typeof module[functionName] === 'function') {
-        handler = module[functionName];
-      } else if (typeof module.default?.[functionName] === 'function') {
-        handler = module.default[functionName];
-      }
-    }
-    if (!handler && typeof module.handler === 'function') {
-      handler = module.handler;
-    } else if (typeof module.default?.handler === 'function') {
-      handler = module.default.handler;
-    } else if (typeof module.default === 'function') {
-      handler = module.default;
-    } else if (typeof module[moduleName] === 'function') {
-      handler = module[moduleName];
-    } else {
+    pluginCache.set(moduleName, module);
+    return createModuleWrapper(module, moduleName, commandName);
+  } catch (error) {
+    logger.warning(`No se pudo cargar el módulo: ${moduleName}`, error.message);
+    return null;
+  }
+}
+
+// Función para crear wrapper de módulo
+function createModuleWrapper(module, moduleName, commandName = null) {
+  let handler = null;
+
+  // Estrategias para encontrar el handler correcto
+  const strategies = [
+    // 1. Handler específico por nombre de comando
+    () => commandName && module[commandName],
+    // 2. Handler genérico
+    () => module.handler,
+    // 3. Handler por defecto
+    () => module.default?.handler || module.default,
+    // 4. Handler por nombre de módulo
+    () => module[moduleName],
+    // 5. Variaciones del nombre del módulo
+    () => {
       const variations = [
         moduleName.replace(/-/g, ''),
         moduleName.split('-').pop(),
@@ -1478,38 +1480,785 @@ async function loadCommandModule(moduleName, commandName = null) {
       ];
       for (const variant of variations) {
         if (typeof module[variant] === 'function') {
-          handler = module[variant];
-          // Handler encontrado
-          break;
+          return module[variant];
         }
       }
-      if (!handler) {
-        const functions = Object.keys(module).filter(k => typeof module[k] === 'function');
-        if (functions.length > 0) {
-          handler = module[functions[0]];
-          // Usando primera función disponible
-        }
-      }
+      return null;
+    },
+    // 6. Primera función disponible
+    () => {
+      const functions = Object.keys(module).filter(k =>
+        typeof module[k] === 'function' &&
+        !k.startsWith('_') &&
+        k !== 'default'
+      );
+      return functions.length > 0 ? module[functions[0]] : null;
     }
-    if (typeof handler === 'function') {
-      const wrappedModule = {
-        ...module,
-        handler: async (ctx) => {
-          return await handler(ctx);
-        }
-      };
-      commandModules.set(cacheKey, wrappedModule);
-      return wrappedModule;
-    } else {
-      logger.warning(`No se encontró handler en el módulo: ${moduleName}`);
+  ];
+
+  // Ejecutar estrategias hasta encontrar un handler
+  for (const strategy of strategies) {
+    const result = strategy();
+    if (typeof result === 'function') {
+      handler = result;
+      break;
     }
-  } catch (error) {
-    logger.warning(`No se pudo cargar el módulo: ${moduleName}`, error.message);
   }
-  return null;
+
+  if (!handler) {
+    logger.warning(`No se encontró handler en el módulo: ${moduleName}`);
+    return null;
+  }
+
+  // Crear wrapper del módulo
+  const wrappedModule = {
+    ...module,
+    handler: async (ctx) => {
+      try {
+        return await handler(ctx);
+      } catch (error) {
+        logger.error(`Error en comando ${commandName || moduleName}:`, error);
+        return {
+          success: false,
+          message: `❌ Error ejecutando comando: ${error.message}`
+        };
+      }
+    }
+  };
+
+  // Guardar en cache
+  const cacheKey = commandName ? `${moduleName}:${commandName}` : moduleName;
+  commandModules.set(cacheKey, wrappedModule);
+
+  return wrappedModule;
 }
 
-logger.bot(`Sistema de comandos inicializado con ${Object.keys(COMMAND_FUNCTION_MAP).length} comandos mapeados`);
+// =========================
+// INICIALIZACIÓN DEL SISTEMA DE PLUGINS
+// =========================
+
+async function initializePluginSystem() {
+  console.log('🚀 Inicializando sistema de plugins...');
+
+  // 1. Registrar comandos básicos (funciones locales)
+  registerBasicCommands();
+
+  // 2. Cargar todos los plugins automáticamente
+  await loadAllPlugins();
+
+  // 3. Registrar comandos manuales importantes
+  registerManualCommands();
+
+  // 4. Mostrar resumen
+  showSystemSummary();
+}
+
+function registerBasicCommands() {
+  // Comandos de ayuda
+  registerCommand('help', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar ayuda', isLocal: true });
+  registerCommand('ayuda', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar ayuda', isLocal: true });
+  registerCommand('menu', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar menú', isLocal: true });
+  registerCommand('comandos', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar ayuda', isLocal: true });
+
+  // Comandos básicos (funciones locales en handler)
+  registerCommand('ping', { handler: ping, category: 'Básicos', description: 'Verificar latencia', isLocal: true });
+  registerCommand('status', { handler: status, category: 'Básicos', description: 'Estado del sistema', isLocal: true });
+  registerCommand('whoami', { handler: whoami, category: 'Básicos', description: 'Mi información', isLocal: true });
+  registerCommand('profile', { handler: profile, category: 'Básicos', description: 'Mi perfil', isLocal: true });
+
+  // Comandos de utilidades (funciones locales)
+  registerCommand('calc', { handler: calc, category: 'Utilidades', description: 'Calculadora', isLocal: true });
+  registerCommand('password', { handler: password, category: 'Utilidades', description: 'Generar contraseña', isLocal: true });
+  registerCommand('qrcode', { handler: qrcode, category: 'Utilidades', description: 'Generar código QR', isLocal: true });
+  registerCommand('short', { handler: short, category: 'Utilidades', description: 'Acortar URL', isLocal: true });
+  registerCommand('email', { handler: email, category: 'Utilidades', description: 'Validar email', isLocal: true });
+  registerCommand('color', { handler: color, category: 'Utilidades', description: 'Información de color', isLocal: true });
+  registerCommand('timezone', { handler: timezone, category: 'Utilidades', description: 'Zona horaria', isLocal: true });
+
+  // Comandos de entretenimiento (funciones locales)
+  registerCommand('joke', { handler: joke, category: 'Entretenimiento', description: 'Chiste aleatorio', isLocal: true });
+  registerCommand('horoscope', { handler: horoscope, category: 'Entretenimiento', description: 'Horóscopo', isLocal: true });
+  registerCommand('horoscopo', { handler: horoscope, category: 'Entretenimiento', description: 'Horóscopo', isLocal: true });
+  registerCommand('fact', { handler: fact, category: 'Entretenimiento', description: 'Dato curioso', isLocal: true });
+  registerCommand('quote', { handler: quote, category: 'Entretenimiento', description: 'Frase inspiradora', isLocal: true });
+
+  // Comando de debug
+  registerCommand('debugcommands', { handler: debugCommands, category: 'Admin', description: 'Debug de comandos', admin: true, isLocal: true });
+
+  // Comando de estadísticas del sistema
+  registerCommand('systemstats', { handler: systemStats, category: 'Admin', description: '📊 Estadísticas del sistema de plugins', admin: true, isLocal: true });
+}
+
+function registerManualCommands() {
+  // ===== COMANDOS DE DESCARGAS 📥 =====
+  const downloadCommands = [
+    { cmd: 'play', desc: '🎵 Reproducir música de YouTube', emoji: '🎵' },
+    { cmd: 'music', desc: '🎶 Descargar música', emoji: '🎶' },
+    { cmd: 'video', desc: '🎬 Descargar video de YouTube', emoji: '🎬' },
+    { cmd: 'youtube', desc: '📺 Descargar de YouTube', emoji: '📺' },
+    { cmd: 'tiktok', desc: '🎵 Descargar de TikTok', emoji: '🎵' },
+    { cmd: 'instagram', desc: '📸 Descargar de Instagram', emoji: '📸' },
+    { cmd: 'ig', desc: '📸 Descargar de Instagram', emoji: '📸' },
+    { cmd: 'facebook', desc: '📘 Descargar de Facebook', emoji: '📘' },
+    { cmd: 'fb', desc: '📘 Descargar de Facebook', emoji: '📘' },
+    { cmd: 'twitter', desc: '🐦 Descargar de Twitter/X', emoji: '🐦' },
+    { cmd: 'x', desc: '🐦 Descargar de Twitter/X', emoji: '🐦' },
+    { cmd: 'pinterest', desc: '📌 Descargar de Pinterest', emoji: '📌' },
+    { cmd: 'spotify', desc: '🎧 Buscar en Spotify y descargar', emoji: '🎧' }
+  ];
+
+  downloadCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'download-commands',
+      category: '📥 Descargas',
+      description: desc,
+      emoji: emoji,
+      plugin: 'download-commands'
+    });
+  });
+
+  // ===== COMANDOS DE UTILIDADES 🛠️ =====
+  registerCommand('translate', { moduleName: 'download-commands', category: '🛠️ Utilidades', description: '🔤 Traducir texto a cualquier idioma', emoji: '🔤' });
+  registerCommand('tr', { moduleName: 'download-commands', category: '🛠️ Utilidades', description: '🔤 Traducir texto (abreviado)', emoji: '🔤' });
+  registerCommand('weather', { moduleName: 'download-commands', category: '🛠️ Utilidades', description: '🌦️ Consultar clima de cualquier ciudad', emoji: '🌦️' });
+  registerCommand('clima', { moduleName: 'download-commands', category: '🛠️ Utilidades', description: '🌦️ Consultar clima', emoji: '🌦️' });
+
+  // ===== COMANDOS DE IA 🤖 =====
+  const aiCommands = [
+    { cmd: 'ai', desc: '🤖 Chat con inteligencia artificial', emoji: '🤖' },
+    { cmd: 'chat', desc: '💬 Conversar con IA', emoji: '💬' },
+    { cmd: 'gpt', desc: '🧠 Consultar GPT', emoji: '🧠' },
+    { cmd: 'gemini', desc: '✨ Consultar Gemini AI', emoji: '✨' },
+    { cmd: 'classify', desc: '📊 Clasificar contenido con IA', emoji: '📊' },
+    { cmd: 'analyze', desc: '🔍 Analizar texto con IA', emoji: '🔍' }
+  ];
+
+  aiCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'ai',
+      category: '🤖 Inteligencia Artificial',
+      description: desc,
+      emoji: emoji,
+      plugin: 'ai'
+    });
+  });
+
+  // ===== COMANDOS DE JUEGOS 🎮 =====
+  const gameCommands = [
+    { cmd: 'game', desc: '🎮 Menú de juegos', emoji: '🎮' },
+    { cmd: 'dice', desc: '🎲 Lanzar dados', emoji: '🎲' },
+    { cmd: 'dado', desc: '🎲 Lanzar dados', emoji: '🎲' },
+    { cmd: 'coin', desc: '🪙 Lanzar moneda', emoji: '🪙' },
+    { cmd: 'moneda', desc: '🪙 Lanzar moneda', emoji: '🪙' },
+    { cmd: 'rps', desc: '✂️ Piedra, papel o tijera', emoji: '✂️' },
+    { cmd: 'ppt', desc: '✂️ Piedra, papel o tijera', emoji: '✂️' },
+    { cmd: 'trivia', desc: '❓ Preguntas de trivia', emoji: '❓' },
+    { cmd: 'quiz', desc: '🧩 Quiz interactivo', emoji: '🧩' },
+    { cmd: 'riddle', desc: '🧠 Adivinanzas', emoji: '🧠' },
+    { cmd: 'adivinanza', desc: '🧠 Adivinanzas', emoji: '🧠' }
+  ];
+
+  gameCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'games',
+      category: '🎮 Juegos',
+      description: desc,
+      emoji: emoji,
+      plugin: 'games'
+    });
+  });
+
+  // ===== COMANDOS DE GRUPOS 👥 =====
+  const groupCommands = [
+    { cmd: 'group', desc: '👥 Información del grupo', emoji: '👥' },
+    { cmd: 'grupo', desc: '👥 Información del grupo', emoji: '👥' },
+    { cmd: 'kick', desc: '👢 Expulsar miembro', emoji: '👢', admin: true },
+    { cmd: 'ban', desc: '🚫 Banear usuario', emoji: '🚫', admin: true },
+    { cmd: 'unban', desc: '✅ Desbanear usuario', emoji: '✅', admin: true },
+    { cmd: 'promote', desc: '⬆️ Promover a admin', emoji: '⬆️', admin: true },
+    { cmd: 'demote', desc: '⬇️ Quitar admin', emoji: '⬇️', admin: true },
+    { cmd: 'add', desc: '➕ Agregar miembro', emoji: '➕', admin: true },
+    { cmd: 'invite', desc: '🔗 Obtener enlace de invitación', emoji: '🔗', admin: true },
+    { cmd: 'link', desc: '🔗 Enlace del grupo', emoji: '🔗' },
+    { cmd: 'tagall', desc: '📢 Mencionar a todos', emoji: '📢', admin: true },
+    { cmd: 'hidetag', desc: '👻 Mensaje oculto a todos', emoji: '👻', admin: true }
+  ];
+
+  groupCommands.forEach(({ cmd, desc, emoji, admin = false }) => {
+    registerCommand(cmd, {
+      moduleName: 'groups',
+      category: '👥 Administración de Grupos',
+      description: desc,
+      emoji: emoji,
+      admin: admin,
+      plugin: 'groups'
+    });
+  });
+
+  // ===== COMANDOS DE MÚSICA 🎵 =====
+  const musicCommands = [
+    { cmd: 'song', desc: '🎵 Buscar y descargar canción', emoji: '🎵' },
+    { cmd: 'cancion', desc: '🎵 Buscar canción', emoji: '🎵' },
+    { cmd: 'lyrics', desc: '📝 Obtener letra de canción', emoji: '📝' },
+    { cmd: 'letra', desc: '📝 Letra de canción', emoji: '📝' },
+    { cmd: 'playlist', desc: '📝 Crear playlist', emoji: '📝' },
+    { cmd: 'identify', desc: '🎧 Identificar canción', emoji: '🎧' },
+    { cmd: 'shazam', desc: '🎧 Identificar música (Shazam)', emoji: '🎧' }
+  ];
+
+  musicCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'music',
+      category: '🎵 Música',
+      description: desc,
+      emoji: emoji,
+      plugin: 'music'
+    });
+  });
+
+  // ===== COMANDOS DE SUBBOTS 🤖 =====
+  const subbotCommands = [
+    { cmd: 'qr', desc: '📱 Crear subbot con QR', emoji: '📱' },
+    { cmd: 'code', desc: '🔑 Crear subbot con código', emoji: '🔑' },
+    { cmd: 'pairing', desc: '🔗 Vincular subbot', emoji: '🔗' },
+    { cmd: 'mybots', desc: '🤖 Mis subbots', emoji: '🤖' },
+    { cmd: 'bots', desc: '🤖 Lista de subbots', emoji: '🤖' },
+    { cmd: 'stopbot', desc: '🛑 Detener subbot', emoji: '🛑' },
+    { cmd: 'botinfo', desc: 'ℹ️ Información del subbot', emoji: 'ℹ️' }
+  ];
+
+  subbotCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'subbots',
+      category: '🤖 Subbots',
+      description: desc,
+      emoji: emoji,
+      plugin: 'subbots'
+    });
+  });
+
+  // ===== COMANDOS DE ADMINISTRACIÓN 👑 =====
+  const adminCommands = [
+    { cmd: 'admin', desc: '👑 Panel de administración', emoji: '👑', admin: true },
+    { cmd: 'broadcast', desc: '📢 Difundir mensaje', emoji: '📢', admin: true },
+    { cmd: 'bc', desc: '📢 Difundir mensaje', emoji: '📢', admin: true },
+    { cmd: 'ban', desc: '🚫 Banear usuario globalmente', emoji: '🚫', admin: true },
+    { cmd: 'unban', desc: '✅ Desbanear usuario', emoji: '✅', admin: true },
+    { cmd: 'restart', desc: '🔄 Reiniciar bot', emoji: '🔄', admin: true },
+    { cmd: 'update', desc: '⬆️ Actualizar bot', emoji: '⬆️', admin: true },
+    { cmd: 'logs', desc: '📋 Ver logs del sistema', emoji: '📋', admin: true },
+    { cmd: 'stats', desc: '📊 Estadísticas del bot', emoji: '📊', admin: true }
+  ];
+
+  adminCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'admin',
+      category: '👑 Administración',
+      description: desc,
+      emoji: emoji,
+      admin: true,
+      plugin: 'admin'
+    });
+  });
+
+  // ===== COMANDOS DE MEDIOS 📷 =====
+  const mediaCommands = [
+    { cmd: 'sticker', desc: '🏷️ Crear sticker', emoji: '🏷️' },
+    { cmd: 's', desc: '🏷️ Crear sticker', emoji: '🏷️' },
+    { cmd: 'toimg', desc: '🖼️ Sticker a imagen', emoji: '🖼️' },
+    { cmd: 'tovideo', desc: '🎬 Sticker a video', emoji: '🎬' },
+    { cmd: 'toaudio', desc: '🎵 Video a audio', emoji: '🎵' },
+    { cmd: 'tomp3', desc: '🎵 Convertir a MP3', emoji: '🎵' },
+    { cmd: 'compress', desc: '📦 Comprimir archivo', emoji: '📦' },
+    { cmd: 'resize', desc: '📏 Redimensionar imagen', emoji: '📏' }
+  ];
+
+  mediaCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'media-advanced',
+      category: '📷 Medios',
+      description: desc,
+      emoji: emoji,
+      plugin: 'media-advanced'
+    });
+  });
+
+  // ===== COMANDOS DE ENTRETENIMIENTO 🎭 =====
+  const entertainmentCommands = [
+    { cmd: 'meme', desc: '😂 Meme aleatorio', emoji: '😂' },
+    { cmd: 'joke', desc: '😄 Chiste aleatorio', emoji: '😄' },
+    { cmd: 'chiste', desc: '😄 Chiste en español', emoji: '😄' },
+    { cmd: 'fact', desc: '🧠 Dato curioso', emoji: '🧠' },
+    { cmd: 'dato', desc: '🧠 Dato interesante', emoji: '🧠' },
+    { cmd: 'quote', desc: '💭 Frase inspiradora', emoji: '💭' },
+    { cmd: 'frase', desc: '💭 Frase motivacional', emoji: '💭' },
+    { cmd: 'horoscope', desc: '🔮 Horóscopo', emoji: '🔮' },
+    { cmd: 'horoscopo', desc: '🔮 Horóscopo del día', emoji: '🔮' }
+  ];
+
+  entertainmentCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'download-commands',
+      category: '🎭 Entretenimiento',
+      description: desc,
+      emoji: emoji,
+      plugin: 'download-commands'
+    });
+  });
+
+  // ===== COMANDOS DE SISTEMA 🔧 =====
+  const systemCommands = [
+    { cmd: 'system', desc: '💻 Información del sistema', emoji: '💻', admin: true },
+    { cmd: 'uptime', desc: '⏱️ Tiempo de actividad', emoji: '⏱️' },
+    { cmd: 'speed', desc: '⚡ Velocidad del bot', emoji: '⚡' },
+    { cmd: 'runtime', desc: '🕐 Tiempo de ejecución', emoji: '🕐' },
+    { cmd: 'memory', desc: '💾 Uso de memoria', emoji: '💾', admin: true },
+    { cmd: 'cpu', desc: '🖥️ Uso de CPU', emoji: '🖥️', admin: true }
+  ];
+
+  systemCommands.forEach(({ cmd, desc, emoji, admin = false }) => {
+    registerCommand(cmd, {
+      moduleName: 'system-info',
+      category: '🔧 Sistema',
+      description: desc,
+      emoji: emoji,
+      admin: admin,
+      plugin: 'system-info'
+    });
+  });
+
+  // ===== COMANDOS DE PRIVACIDAD 🔒 =====
+  const privacyCommands = [
+    { cmd: 'privacy', desc: '🔒 Configuración de privacidad', emoji: '🔒' },
+    { cmd: 'block', desc: '🚫 Bloquear usuario', emoji: '🚫', admin: true },
+    { cmd: 'unblock', desc: '✅ Desbloquear usuario', emoji: '✅', admin: true },
+    { cmd: 'antilink', desc: '🔗 Anti-enlaces', emoji: '🔗', admin: true },
+    { cmd: 'antispam', desc: '🛡️ Anti-spam', emoji: '🛡️', admin: true }
+  ];
+
+  privacyCommands.forEach(({ cmd, desc, emoji, admin = false }) => {
+    registerCommand(cmd, {
+      moduleName: 'privacy',
+      category: '🔒 Privacidad',
+      description: desc,
+      emoji: emoji,
+      admin: admin,
+      plugin: 'privacy'
+    });
+  });
+
+  // ===== COMANDOS DE ARCHIVOS 📁 =====
+  const fileCommands = [
+    { cmd: 'file', desc: '📁 Información de archivo', emoji: '📁' },
+    { cmd: 'zip', desc: '🗜️ Comprimir archivos', emoji: '🗜️' },
+    { cmd: 'unzip', desc: '📦 Descomprimir archivo', emoji: '📦' },
+    { cmd: 'pdf', desc: '📄 Crear PDF', emoji: '📄' },
+    { cmd: 'doc', desc: '📝 Crear documento', emoji: '📝' }
+  ];
+
+  fileCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'files',
+      category: '📁 Archivos',
+      description: desc,
+      emoji: emoji,
+      plugin: 'files'
+    });
+  });
+
+  // ===== COMANDOS DE ENCUESTAS 📊 =====
+  const pollCommands = [
+    { cmd: 'poll', desc: '📊 Crear encuesta', emoji: '📊' },
+    { cmd: 'encuesta', desc: '📊 Crear encuesta', emoji: '📊' },
+    { cmd: 'vote', desc: '🗳️ Votar en encuesta', emoji: '🗳️' },
+    { cmd: 'votar', desc: '🗳️ Emitir voto', emoji: '🗳️' },
+    { cmd: 'results', desc: '📈 Resultados de encuesta', emoji: '📈' },
+    { cmd: 'resultados', desc: '📈 Ver resultados', emoji: '📈' }
+  ];
+
+  pollCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'polls',
+      category: '📊 Encuestas',
+      description: desc,
+      emoji: emoji,
+      plugin: 'polls'
+    });
+  });
+
+  // ===== COMANDOS DE STICKERS Y MEDIA 🏷️ =====
+  const stickerCommands = [
+    { cmd: 'sticker', desc: '🏷️ Crear sticker desde imagen/video', emoji: '🏷️' },
+    { cmd: 's', desc: '🏷️ Crear sticker (abreviado)', emoji: '🏷️' },
+    { cmd: 'toimg', desc: '🖼️ Convertir sticker a imagen', emoji: '🖼️' },
+    { cmd: 'tovideo', desc: '🎬 Convertir sticker a video', emoji: '🎬' },
+    { cmd: 'toaudio', desc: '🎵 Extraer audio de video', emoji: '🎵' },
+    { cmd: 'tomp3', desc: '🎵 Convertir a MP3', emoji: '🎵' }
+  ];
+
+  stickerCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'stickers',
+      category: '🏷️ Stickers',
+      description: desc,
+      emoji: emoji,
+      plugin: 'stickers'
+    });
+  });
+
+  // ===== COMANDOS DE SISTEMA Y ADMINISTRACIÓN 🔧 =====
+  const systemCommands2 = [
+    { cmd: 'cleansession', desc: '🧹 Limpiar sesiones', emoji: '🧹', admin: true },
+    { cmd: 'logs', desc: '📋 Ver logs del sistema', emoji: '📋', admin: true },
+    { cmd: 'config', desc: '⚙️ Configuración del bot', emoji: '⚙️', admin: true },
+    { cmd: 'registrar', desc: '📝 Registrar usuario', emoji: '📝', admin: true },
+    { cmd: 'resetpass', desc: '🔑 Resetear contraseña', emoji: '🔑', admin: true },
+    { cmd: 'miinfo', desc: 'ℹ️ Mi información de usuario', emoji: 'ℹ️' }
+  ];
+
+  systemCommands2.forEach(({ cmd, desc, emoji, admin = false }) => {
+    registerCommand(cmd, {
+      moduleName: 'system',
+      category: '🔧 Sistema',
+      description: desc,
+      emoji: emoji,
+      admin: admin,
+      plugin: 'system'
+    });
+  });
+
+  // ===== COMANDOS DE MEDIA AVANZADOS 📷 =====
+  const mediaAdvancedCommands = [
+    { cmd: 'image', desc: '🖼️ Enviar imagen por URL', emoji: '🖼️' },
+    { cmd: 'video', desc: '🎬 Enviar video por URL', emoji: '🎬' },
+    { cmd: 'audio', desc: '🎵 Enviar audio por URL', emoji: '🎵' },
+    { cmd: 'document', desc: '📄 Enviar documento', emoji: '📄' },
+    { cmd: 'compress', desc: '📦 Comprimir archivo', emoji: '📦' },
+    { cmd: 'resize', desc: '📏 Redimensionar imagen', emoji: '📏' },
+    { cmd: 'convert', desc: '🔄 Convertir formato', emoji: '🔄' },
+    { cmd: 'removebg', desc: '🎭 Remover fondo de imagen', emoji: '🎭' }
+  ];
+
+  mediaAdvancedCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'media-advanced',
+      category: '📷 Media Avanzado',
+      description: desc,
+      emoji: emoji,
+      plugin: 'media-advanced'
+    });
+  });
+
+  // ===== COMANDOS DE APORTES Y PEDIDOS 📂 =====
+  const aportesCommands = [
+    { cmd: 'addaporte', desc: '📤 Agregar aporte con media', emoji: '📤' },
+    { cmd: 'aportes', desc: '📂 Ver mis aportes', emoji: '📂' },
+    { cmd: 'myaportes', desc: '📂 Mis aportes (alias)', emoji: '📂' },
+    { cmd: 'pedido', desc: '📝 Hacer pedido especial', emoji: '📝' },
+    { cmd: 'pedidos', desc: '📋 Ver mis pedidos', emoji: '📋' },
+    { cmd: 'mypedidos', desc: '📋 Mis pedidos (alias)', emoji: '📋' }
+  ];
+
+  aportesCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'aportes',
+      category: '📂 Aportes y Pedidos',
+      description: desc,
+      emoji: emoji,
+      plugin: 'aportes'
+    });
+  });
+
+  // ===== COMANDOS DE MODERACIÓN 🛡️ =====
+  const moderationCommands = [
+    { cmd: 'warn', desc: '⚠️ Advertir usuario', emoji: '⚠️', admin: true },
+    { cmd: 'unwarn', desc: '✅ Quitar advertencia', emoji: '✅', admin: true },
+    { cmd: 'warnings', desc: '📊 Ver advertencias', emoji: '📊', admin: true },
+    { cmd: 'mute', desc: '🔇 Silenciar usuario', emoji: '🔇', admin: true },
+    { cmd: 'unmute', desc: '🔊 Quitar silencio', emoji: '🔊', admin: true },
+    { cmd: 'antilink', desc: '🔗 Configurar anti-enlaces', emoji: '🔗', admin: true },
+    { cmd: 'antispam', desc: '🛡️ Configurar anti-spam', emoji: '🛡️', admin: true },
+    { cmd: 'automod', desc: '🤖 Moderación automática', emoji: '🤖', admin: true }
+  ];
+
+  moderationCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'moderation',
+      category: '🛡️ Moderación',
+      description: desc,
+      emoji: emoji,
+      admin: true,
+      plugin: 'moderation'
+    });
+  });
+
+  // ===== COMANDOS DE CHAT Y MENSAJES 💬 =====
+  const chatCommands = [
+    { cmd: 'delete', desc: '🗑️ Eliminar mensaje', emoji: '🗑️', admin: true },
+    { cmd: 'del', desc: '🗑️ Eliminar mensaje (alias)', emoji: '🗑️', admin: true },
+    { cmd: 'purge', desc: '🧹 Limpiar mensajes', emoji: '🧹', admin: true },
+    { cmd: 'pin', desc: '📌 Fijar mensaje', emoji: '📌', admin: true },
+    { cmd: 'unpin', desc: '📌 Desfijar mensaje', emoji: '📌', admin: true },
+    { cmd: 'announce', desc: '📢 Anuncio importante', emoji: '📢', admin: true },
+    { cmd: 'broadcast', desc: '📡 Difundir mensaje', emoji: '📡', admin: true },
+    { cmd: 'bc', desc: '📡 Difundir (alias)', emoji: '📡', admin: true }
+  ];
+
+  chatCommands.forEach(({ cmd, desc, emoji, admin = false }) => {
+    registerCommand(cmd, {
+      moduleName: 'chat-management',
+      category: '💬 Gestión de Chat',
+      description: desc,
+      emoji: emoji,
+      admin: admin,
+      plugin: 'chat-management'
+    });
+  });
+
+  // ===== COMANDOS DE PRESENCIA Y ESTADO 👻 =====
+  const presenceCommands = [
+    { cmd: 'online', desc: '🟢 Marcar como en línea', emoji: '🟢' },
+    { cmd: 'offline', desc: '⚫ Marcar como desconectado', emoji: '⚫' },
+    { cmd: 'typing', desc: '⌨️ Simular escribiendo', emoji: '⌨️' },
+    { cmd: 'recording', desc: '🎤 Simular grabando', emoji: '🎤' },
+    { cmd: 'paused', desc: '⏸️ Pausar presencia', emoji: '⏸️' }
+  ];
+
+  presenceCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'presence',
+      category: '👻 Presencia',
+      description: desc,
+      emoji: emoji,
+      plugin: 'presence'
+    });
+  });
+
+  // ===== COMANDOS DE CONFIGURACIÓN DE GRUPOS 👥 =====
+  const groupSettingsCommands = [
+    { cmd: 'welcome', desc: '👋 Configurar mensaje de bienvenida', emoji: '👋', admin: true },
+    { cmd: 'goodbye', desc: '👋 Configurar mensaje de despedida', emoji: '👋', admin: true },
+    { cmd: 'rules', desc: '📜 Establecer reglas del grupo', emoji: '📜', admin: true },
+    { cmd: 'description', desc: '📝 Cambiar descripción', emoji: '📝', admin: true },
+    { cmd: 'subject', desc: '🏷️ Cambiar nombre del grupo', emoji: '🏷️', admin: true },
+    { cmd: 'icon', desc: '🖼️ Cambiar foto del grupo', emoji: '🖼️', admin: true },
+    { cmd: 'lock', desc: '🔒 Bloquear grupo', emoji: '🔒', admin: true },
+    { cmd: 'unlock', desc: '🔓 Desbloquear grupo', emoji: '🔓', admin: true }
+  ];
+
+  groupSettingsCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'group-settings',
+      category: '👥 Configuración de Grupos',
+      description: desc,
+      emoji: emoji,
+      admin: true,
+      plugin: 'group-settings'
+    });
+  });
+
+  // ===== COMANDOS DE UTILIDADES MATEMÁTICAS 🧮 =====
+  const mathCommands = [
+    { cmd: 'math', desc: '🧮 Resolver expresión matemática', emoji: '🧮' },
+    { cmd: 'calculate', desc: '🧮 Calculadora avanzada', emoji: '🧮' },
+    { cmd: 'convert', desc: '🔄 Convertir unidades', emoji: '🔄' },
+    { cmd: 'random', desc: '🎲 Número aleatorio', emoji: '🎲' },
+    { cmd: 'percentage', desc: '📊 Calcular porcentaje', emoji: '📊' }
+  ];
+
+  mathCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'util-math',
+      category: '🧮 Matemáticas',
+      description: desc,
+      emoji: emoji,
+      plugin: 'util-math'
+    });
+  });
+
+  // ===== COMANDOS DE CARACTERÍSTICAS AVANZADAS 🚀 =====
+  const advancedCommands = [
+    { cmd: 'advanced', desc: '🚀 Menú de funciones avanzadas', emoji: '🚀' },
+    { cmd: 'features', desc: '✨ Lista de características', emoji: '✨' },
+    { cmd: 'experimental', desc: '🧪 Funciones experimentales', emoji: '🧪', admin: true },
+    { cmd: 'beta', desc: '🔬 Funciones beta', emoji: '🔬', admin: true }
+  ];
+
+  advancedCommands.forEach(({ cmd, desc, emoji, admin = false }) => {
+    registerCommand(cmd, {
+      moduleName: 'advanced-features',
+      category: '🚀 Funciones Avanzadas',
+      description: desc,
+      emoji: emoji,
+      admin: admin,
+      plugin: 'advanced-features'
+    });
+  });
+
+  // ===== COMANDOS DE RENDIMIENTO ⚡ =====
+  const performanceCommands = [
+    { cmd: 'performance', desc: '⚡ Análisis de rendimiento', emoji: '⚡', admin: true },
+    { cmd: 'benchmark', desc: '📊 Prueba de rendimiento', emoji: '📊', admin: true },
+    { cmd: 'optimize', desc: '🔧 Optimizar sistema', emoji: '🔧', admin: true },
+    { cmd: 'cache', desc: '💾 Gestionar caché', emoji: '💾', admin: true },
+    { cmd: 'cleanup', desc: '🧹 Limpiar archivos temporales', emoji: '🧹', admin: true }
+  ];
+
+  performanceCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'performance-features',
+      category: '⚡ Rendimiento',
+      description: desc,
+      emoji: emoji,
+      admin: true,
+      plugin: 'performance-features'
+    });
+  });
+
+  // ===== COMANDOS DE COMUNIDAD 👥 =====
+  const communityCommands = [
+    { cmd: 'community', desc: '👥 Panel de comunidad', emoji: '👥' },
+    { cmd: 'leaderboard', desc: '🏆 Tabla de líderes', emoji: '🏆' },
+    { cmd: 'rank', desc: '📊 Mi ranking', emoji: '📊' },
+    { cmd: 'level', desc: '⭐ Mi nivel', emoji: '⭐' },
+    { cmd: 'exp', desc: '💎 Mi experiencia', emoji: '💎' },
+    { cmd: 'daily', desc: '🎁 Recompensa diaria', emoji: '🎁' },
+    { cmd: 'weekly', desc: '🎁 Recompensa semanal', emoji: '🎁' }
+  ];
+
+  communityCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'community-features',
+      category: '👥 Comunidad',
+      description: desc,
+      emoji: emoji,
+      plugin: 'community-features'
+    });
+  });
+
+  // ===== COMANDOS DE SEGURIDAD 🔐 =====
+  const securityCommands = [
+    { cmd: 'security', desc: '🔐 Panel de seguridad', emoji: '🔐', admin: true },
+    { cmd: 'whitelist', desc: '✅ Lista blanca', emoji: '✅', admin: true },
+    { cmd: 'blacklist', desc: '❌ Lista negra', emoji: '❌', admin: true },
+    { cmd: 'permissions', desc: '🔑 Gestionar permisos', emoji: '🔑', admin: true },
+    { cmd: 'audit', desc: '📋 Auditoría de seguridad', emoji: '📋', admin: true }
+  ];
+
+  securityCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'security',
+      category: '🔐 Seguridad',
+      description: desc,
+      emoji: emoji,
+      admin: true,
+      plugin: 'security'
+    });
+  });
+
+  // ===== COMANDOS DE MANTENIMIENTO 🔧 =====
+  const maintenanceCommands = [
+    { cmd: 'maintenance', desc: '🔧 Modo mantenimiento', emoji: '🔧', admin: true },
+    { cmd: 'backup', desc: '💾 Crear respaldo', emoji: '💾', admin: true },
+    { cmd: 'restore', desc: '♻️ Restaurar respaldo', emoji: '♻️', admin: true },
+    { cmd: 'database', desc: '🗄️ Gestionar base de datos', emoji: '🗄️', admin: true },
+    { cmd: 'repair', desc: '🔨 Reparar sistema', emoji: '🔨', admin: true }
+  ];
+
+  maintenanceCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'maintenance',
+      category: '🔧 Mantenimiento',
+      description: desc,
+      emoji: emoji,
+      admin: true,
+      plugin: 'maintenance'
+    });
+  });
+
+  // ===== COMANDOS DE INTERFAZ INTERACTIVA 🎛️ =====
+  const interactiveCommands = [
+    { cmd: 'menu', desc: '🎛️ Menú interactivo', emoji: '🎛️' },
+    { cmd: 'buttons', desc: '🔘 Botones interactivos', emoji: '🔘' },
+    { cmd: 'list', desc: '📋 Lista interactiva', emoji: '📋' },
+    { cmd: 'carousel', desc: '🎠 Carrusel de opciones', emoji: '🎠' }
+  ];
+
+  interactiveCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'ui-interactive',
+      category: '🎛️ Interfaz Interactiva',
+      description: desc,
+      emoji: emoji,
+      plugin: 'ui-interactive'
+    });
+  });
+
+  // ===== COMANDOS DE CONTENIDO 📝 =====
+  const contentCommands = [
+    { cmd: 'content', desc: '📝 Gestionar contenido', emoji: '📝', admin: true },
+    { cmd: 'post', desc: '📄 Crear publicación', emoji: '📄', admin: true },
+    { cmd: 'news', desc: '📰 Noticias', emoji: '📰' },
+    { cmd: 'tips', desc: '💡 Consejos útiles', emoji: '💡' },
+    { cmd: 'tutorial', desc: '📚 Tutoriales', emoji: '📚' }
+  ];
+
+  contentCommands.forEach(({ cmd, desc, emoji, admin = false }) => {
+    registerCommand(cmd, {
+      moduleName: 'content',
+      category: '📝 Contenido',
+      description: desc,
+      emoji: emoji,
+      admin: admin,
+      plugin: 'content'
+    });
+  });
+
+  // ===== COMANDOS DE PROMOCIONES 🎉 =====
+  const promoCommands = [
+    { cmd: 'promo', desc: '🎉 Ver promociones activas', emoji: '🎉' },
+    { cmd: 'discount', desc: '💰 Descuentos disponibles', emoji: '💰' },
+    { cmd: 'offer', desc: '🎁 Ofertas especiales', emoji: '🎁' },
+    { cmd: 'coupon', desc: '🎫 Cupones de descuento', emoji: '🎫' }
+  ];
+
+  promoCommands.forEach(({ cmd, desc, emoji }) => {
+    registerCommand(cmd, {
+      moduleName: 'promo',
+      category: '🎉 Promociones',
+      description: desc,
+      emoji: emoji,
+      plugin: 'promo'
+    });
+  });
+
+  console.log('✅ TODOS los comandos manuales registrados con emojis y categorías contextuales');
+  console.log(`📊 Total de comandos registrados manualmente: ${commandMap.size}`);
+}
+
+function showSystemSummary() {
+  const totalCommands = commandMap.size;
+  const localCommands = Array.from(commandMap.values()).filter(cmd => cmd.isLocal).length;
+  const moduleCommands = Array.from(commandMap.values()).filter(cmd => cmd.moduleName).length;
+  const pluginCount = pluginCache.size;
+
+  console.log('\n🎉 SISTEMA DE PLUGINS INICIALIZADO');
+  console.log('=====================================');
+  console.log(`📦 Plugins cargados: ${pluginCount}`);
+  console.log(`📋 Total comandos: ${totalCommands}`);
+  console.log(`🏠 Comandos locales: ${localCommands}`);
+  console.log(`🔗 Comandos de módulos: ${moduleCommands}`);
+  console.log('=====================================\n');
+
+  logger.bot(`Sistema de comandos inicializado con ${totalCommands} comandos (${pluginCount} plugins)`);
+}
+
+// Inicializar sistema de plugins automáticamente
+await initializePluginSystem();
+
+// Exponer commandMap globalmente para pruebas y debugging
+global.commandMap = commandMap;
+global.pluginCache = pluginCache;
 
 function cleanText(text) {
   try {
@@ -1704,194 +2453,60 @@ async function handleHelpCommand(ctx) {
     return await handleSpecificCommandHelp(ctx, command);
   }
 
-  // LISTA COMPLETA DE COMANDOS ORGANIZADOS CON TEMÁTICA BL
-  const commandCategories = {
-    '📥 DESCARGAS': {
-      icon: '📥',
-      color: '💖',
-      commands: [
-        { cmd: 'play', desc: 'Descargar audio de YouTube' },
-        { cmd: 'music', desc: 'Descargar música' },
-        { cmd: 'video', desc: 'Descargar video de YouTube' },
-        { cmd: 'tiktok', desc: 'Descargar de TikTok' },
-        { cmd: 'instagram', desc: 'Descargar de Instagram' },
-        { cmd: 'ig', desc: 'Descargar de Instagram (alias)' },
-        { cmd: 'facebook', desc: 'Descargar de Facebook' },
-        { cmd: 'fb', desc: 'Descargar de Facebook (alias)' },
-        { cmd: 'twitter', desc: 'Descargar de Twitter/X' },
-        { cmd: 'x', desc: 'Descargar de X (alias)' },
-        { cmd: 'pinterest', desc: 'Descargar de Pinterest' },
-        { cmd: 'spotify', desc: 'Buscar en Spotify' },
-        { cmd: 'soundcloud', desc: 'Descargar de SoundCloud' },
-        { cmd: 'reddit', desc: 'Descargar de Reddit' },
-        { cmd: 'youtube', desc: 'Descargar de YouTube directo' }
-      ]
-    },
-    '🤖 INTELIGENCIA ARTIFICIAL': {
-      icon: '🤖',
-      color: '✨',
-      commands: [
-        { cmd: 'ai', desc: 'Chatear con IA Gemini' },
-        { cmd: 'ia', desc: 'Chatear con IA (alias)' },
-        { cmd: 'clasificar', desc: 'Clasificar contenido' },
-        { cmd: 'translate', desc: 'Traducir texto' },
-        { cmd: 'tr', desc: 'Traducir texto (alias)' },
-        { cmd: 'resume', desc: 'Resumir texto largo' },
-        { cmd: 'explain', desc: 'Explicar conceptos' },
-        { cmd: 'sentiment', desc: 'Análisis de sentimientos' },
-        { cmd: 'grammar', desc: 'Corrección gramatical' },
-        { cmd: 'analyze', desc: 'Analizar texto completo' },
-        { cmd: 'brainstorm', desc: 'Lluvia de ideas' },
-        { cmd: 'code', desc: 'Generar código' }
-      ]
-    },
-    '🎵 MÚESICA': {
-      icon: '🎵',
-      color: '🌸',
-      commands: [
-        { cmd: 'identify', desc: 'Identificar canción por audio' },
-        { cmd: 'lyrics', desc: 'Buscar letras de canciones' },
-        { cmd: 'playlist', desc: 'Gestionar playlists' },
-        { cmd: 'radio', desc: 'Escuchar radio online' },
-        { cmd: 'nowplaying', desc: 'Ver canción actual' },
-        { cmd: 'musichelp', desc: 'Ayuda de música' }
-      ]
-    },
-    '🎮 JUEGOS': {
-      icon: '🎮',
-      color: '🎮',
-      commands: [
-        { cmd: 'game', desc: 'Menú de juegos' },
-        { cmd: 'juego', desc: 'Menú de juegos (alias)' },
-        { cmd: 'rps', desc: 'Piedra, papel o tijera' },
-        { cmd: 'guess', desc: 'Adivinar número' },
-        { cmd: 'dice', desc: 'Lanzar dados' },
-        { cmd: 'coin', desc: 'Lanzar moneda' },
-        { cmd: 'sorteo', desc: 'Hacer sorteo' },
-        { cmd: 'hangman', desc: 'Juego del ahorcado' },
-        { cmd: 'memory', desc: 'Juego de memoria' },
-        { cmd: 'blackjack', desc: 'Juego de blackjack' },
-        { cmd: 'lottery', desc: 'Lotería de números' }
-      ]
-    },
-    '👥 GRUPOS': {
-      icon: '👥',
-      color: '💝',
-      commands: [
-        { cmd: 'kick', desc: 'Expulsar usuario del grupo' },
-        { cmd: 'promote', desc: 'Promover a administrador' },
-        { cmd: 'demote', desc: 'Quitar administrador' },
-        { cmd: 'lock', desc: 'Bloquear grupo (solo admins)' },
-        { cmd: 'unlock', desc: 'Desbloquear grupo' },
-        { cmd: 'tag', desc: 'Mencionar a todos' },
-        { cmd: 'admins', desc: 'Lista de administradores' },
-        { cmd: 'welcome', desc: 'Configurar bienvenida' },
-        { cmd: 'automod', desc: 'Moderación automática' },
-        { cmd: 'rules', desc: 'Reglas del grupo' },
-        { cmd: 'groupstats', desc: 'Estadísticas del grupo' },
-        { cmd: 'clean', desc: 'Limpiar mensajes' }
-      ]
-    },
-    '🤖 SUBBOTS': {
-      icon: '🤖',
-      color: '🌟',
-      commands: [
-        { cmd: 'qr', desc: 'Crear subbot con código QR' },
-        { cmd: 'code', desc: 'Crear subbot con código' },
-        { cmd: 'mybots', desc: 'Ver mis subbots' },
-        { cmd: 'mibots', desc: 'Ver mis subbots (alias)' },
-        { cmd: 'bots', desc: 'Lista de todos los subbots' },
-        { cmd: 'stopbot', desc: 'Detener subbot' },
-        { cmd: 'subbotstats', desc: 'Estadísticas de subbots' },
-        { cmd: 'subbotmanage', desc: 'Gestionar subbots' },
-        { cmd: 'subbotmonitor', desc: 'Monitor de actividad' }
-      ]
-    },
-    '🛠️ UTILIDADES': {
-      icon: '🛠️',
-      color: '🥰',
-      commands: [
-        { cmd: 'weather', desc: 'Ver clima de ciudad' },
-        { cmd: 'clima', desc: 'Ver clima (alias)' },
-        { cmd: 'quote', desc: 'Cita inspiradora' },
-        { cmd: 'fact', desc: 'Dato curioso' },
-        { cmd: 'trivia', desc: 'Pregunta de trivia' },
-        { cmd: 'meme', desc: 'Generar meme aleatorio' },
-        { cmd: 'qrcode', desc: 'Generar código QR' },
-        { cmd: 'calc', desc: 'Calculadora' },
-        { cmd: 'short', desc: 'Acortar URL' },
-        { cmd: 'password', desc: 'Generar contraseña' }
-      ]
-    },
-    '📱 MEDIA': {
-      icon: '📱',
-      color: '😍',
-      commands: [
-        { cmd: 'sticker', desc: 'Crear sticker' },
-        { cmd: 's', desc: 'Crear sticker (alias)' },
-        { cmd: 'image', desc: 'Buscar imagen' },
-        { cmd: 'wallpaper', desc: 'Buscar wallpaper' },
-        { cmd: 'tts', desc: 'Texto a voz' },
-        { cmd: 'compress', desc: 'Comprimir imagen' },
-        { cmd: 'convert', desc: 'Convertir formato' },
-        { cmd: 'removebg', desc: 'Remover fondo' },
-        { cmd: 'gif', desc: 'Crear GIF' },
-        { cmd: 'mediahelp', desc: 'Ayuda de media' }
-      ]
-    },
-    '📋 BÁSICOS': {
-      icon: '📋',
-      color: '💫',
-      commands: [
-        { cmd: 'help', desc: 'Mostrar esta ayuda' },
-        { cmd: 'ayuda', desc: 'Mostrar ayuda (alias)' },
-        { cmd: 'menu', desc: 'Mostrar menú (alias)' },
-        { cmd: 'comandos', desc: 'Lista de comandos (alias)' },
-        { cmd: 'ping', desc: 'Ver latencia del bot' },
-        { cmd: 'status', desc: 'Estado del sistema' },
-        { cmd: 'whoami', desc: 'Mi información' }
-      ]
+  // GENERAR LISTA DINÁMICA DE COMANDOS DESDE commandMap
+  const commandsByCategory = new Map();
+
+  // Organizar comandos registrados por categoría
+  for (const [cmdName, cmdConfig] of commandMap.entries()) {
+    // Filtrar comandos de admin si no es admin
+    if (cmdConfig.admin && !isAdmin) continue;
+
+    const category = cmdConfig.category || 'General';
+    if (!commandsByCategory.has(category)) {
+      commandsByCategory.set(category, []);
     }
-  };
 
-  // Agregar categorías adicionales
-  commandCategories['📂 APORTES'] = {
-    icon: '📂',
-    color: '🎀',
-    commands: [
-      { cmd: 'addaporte', desc: 'Agregar aporte con media' },
-      { cmd: 'aportes', desc: 'Ver mis aportes' },
-      { cmd: 'myaportes', desc: 'Ver mis aportes (alias)' },
-      { cmd: 'pedido', desc: 'Hacer pedido' },
-      { cmd: 'pedidos', desc: 'Ver mis pedidos' }
-    ]
-  };
-
-  // Agregar categoría de admin si es admin
-  if (isAdmin) {
-    commandCategories['⚙️ ADMINISTRACIÓN'] = {
-      icon: '⚙️',
-      color: '👑',
-      commands: [
-        { cmd: 'bot', desc: 'Controlar bot on/off' },
-        { cmd: 'logs', desc: 'Ver logs del sistema' },
-        { cmd: 'stats', desc: 'Estadísticas del bot' },
-        { cmd: 'estadisticas', desc: 'Estadísticas (alias)' },
-        { cmd: 'broadcast', desc: 'Mensaje masivo' },
-        { cmd: 'bc', desc: 'Mensaje masivo (alias)' },
-        { cmd: 'export', desc: 'Exportar datos' },
-        { cmd: 'update', desc: 'Actualizar bot' }
-      ]
-    };
+    commandsByCategory.get(category).push({
+      cmd: cmdName,
+      desc: cmdConfig.description || 'Sin descripción',
+      emoji: cmdConfig.emoji || '•',
+      admin: cmdConfig.admin || false
+    });
   }
 
+  // Definir orden y estilos de categorías
+  const categoryStyles = {
+    '📥 Descargas': { icon: '📥', color: '💖' },
+    '🤖 Inteligencia Artificial': { icon: '🤖', color: '✨' },
+    '🎵 Música': { icon: '🎵', color: '🌸' },
+    '🎮 Juegos': { icon: '🎮', color: '🎮' },
+    '👥 Administración de Grupos': { icon: '👥', color: '💝' },
+    '🤖 Subbots': { icon: '🤖', color: '🌟' },
+    '🛠️ Utilidades': { icon: '🛠️', color: '🥰' },
+    '📷 Medios': { icon: '📷', color: '😍' },
+    '🎭 Entretenimiento': { icon: '🎭', color: '🎭' },
+    '📊 Encuestas': { icon: '📊', color: '📊' },
+    '🔧 Sistema': { icon: '🔧', color: '🔧' },
+    '🔒 Privacidad': { icon: '🔒', color: '🔒' },
+    '📁 Archivos': { icon: '📁', color: '📁' },
+    '👑 Administración': { icon: '👑', color: '👑' },
+    'Básicos': { icon: '📋', color: '💫' },
+    'General': { icon: '⚡', color: '⚡' }
+  };
+
   // Crear mensaje hermoso con TODOS los comandos organizados
-  const welcomeMessage = BL_HELP_MESSAGES.welcome[Math.floor(Math.random() * BL_HELP_MESSAGES.welcome.length)];
+  const welcomeMessages = [
+    '¡Hola! Aquí tienes todos mis comandos 💖',
+    '✨ ¡Bienvenido! Estos son mis poderes ✨',
+    '🌸 ¡Lista completa de comandos! 🌸',
+    '💕 ¡Todo lo que puedo hacer por ti! 💕'
+  ];
+  const welcomeMessage = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
 
   // Contar total de comandos
   let totalCommands = 0;
-  Object.values(commandCategories).forEach(category => {
-    totalCommands += category.commands.length;
+  commandsByCategory.forEach(commands => {
+    totalCommands += commands.length;
   });
 
   let helpText = `╔💖═══════════════════════════════════════💖╗\n`;
@@ -1903,20 +2518,22 @@ async function handleHelpCommand(ctx) {
   helpText += `╚💖═══════════════════════════════════════💖╝\n\n`;
 
   // Agregar todas las categorías con sus comandos
-  for (const [categoryName, categoryData] of Object.entries(commandCategories)) {
-    const cleanName = categoryName.replace(/^[^\s]+ /, '');
-    helpText += `${categoryData.color} ═══ ${categoryData.icon} ${cleanName} ═══ ${categoryData.color}\n`;
+  for (const [categoryName, commands] of commandsByCategory.entries()) {
+    const style = categoryStyles[categoryName] || { icon: '•', color: '💫' };
 
-    // Organizar comandos en filas de 2
-    const commands = categoryData.commands;
+    helpText += `${style.color} ═══ ${style.icon} ${categoryName} ═══ ${style.color}\n`;
+
+    // Organizar comandos en filas de 2 con emojis
     for (let i = 0; i < commands.length; i += 2) {
       const cmd1 = commands[i];
       const cmd2 = commands[i + 1];
 
+      const cmd1Text = `${cmd1.emoji} /${cmd1.cmd}`;
       if (cmd2) {
-        helpText += `• /${cmd1.cmd.padEnd(12)} • /${cmd2.cmd}\n`;
+        const cmd2Text = `${cmd2.emoji} /${cmd2.cmd}`;
+        helpText += `${cmd1Text.padEnd(20)} ${cmd2Text}\n`;
       } else {
-        helpText += `• /${cmd1.cmd}\n`;
+        helpText += `${cmd1Text}\n`;
       }
     }
     helpText += `\n`;
@@ -2500,185 +3117,8 @@ Ejemplo: /subbotmonitor
 
 // Función eliminada - Todo centralizado en handleHelpCommand
 
-// Registrar comandos en el mapa - CENTRALIZADO EN HELP
-commandMap.set('help', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar ayuda', isLocal: true });
-commandMap.set('ayuda', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar ayuda', isLocal: true });
-commandMap.set('menu', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar menú', isLocal: true });
-commandMap.set('comandos', { handler: handleHelpCommand, category: 'Básicos', description: 'Mostrar ayuda', isLocal: true });
-
-// Sistema simplificado - sin categorías interactivas
-
-// ===== REGISTRO COMPLETO DE COMANDOS (SIN DUPLICACIONES) =====
-
-// Comandos básicos (funciones locales en handler)
-commandMap.set('ping', { handler: ping, category: 'Básicos', description: 'Verificar latencia', isLocal: true });
-commandMap.set('status', { handler: status, category: 'Básicos', description: 'Estado del sistema', isLocal: true });
-commandMap.set('whoami', { handler: whoami, category: 'Básicos', description: 'Mi información', isLocal: true });
-commandMap.set('profile', { handler: profile, category: 'Básicos', description: 'Mi perfil', isLocal: true });
-
-// Comandos de utilidades (funciones locales en handler)
-commandMap.set('calc', { handler: calc, category: 'Utilidades', description: 'Calculadora', isLocal: true });
-commandMap.set('password', { handler: password, category: 'Utilidades', description: 'Generar contraseña', isLocal: true });
-commandMap.set('qrcode', { handler: qrcode, category: 'Utilidades', description: 'Generar código QR', isLocal: true });
-commandMap.set('short', { handler: short, category: 'Utilidades', description: 'Acortar URL', isLocal: true });
-commandMap.set('email', { handler: email, category: 'Utilidades', description: 'Validar email', isLocal: true });
-commandMap.set('color', { handler: color, category: 'Utilidades', description: 'Información de color', isLocal: true });
-commandMap.set('timezone', { handler: timezone, category: 'Utilidades', description: 'Zona horaria', isLocal: true });
-
-// Comandos de entretenimiento (funciones locales en handler)
-commandMap.set('joke', { handler: joke, category: 'Entretenimiento', description: 'Chiste aleatorio', isLocal: true });
-commandMap.set('horoscope', { handler: horoscope, category: 'Entretenimiento', description: 'Horóscopo', isLocal: true });
-commandMap.set('horoscopo', { handler: horoscope, category: 'Entretenimiento', description: 'Horóscopo', isLocal: true });
-commandMap.set('fact', { handler: fact, category: 'Entretenimiento', description: 'Dato curioso', isLocal: true });
-commandMap.set('quote', { handler: quote, category: 'Entretenimiento', description: 'Frase inspiradora', isLocal: true });
-
-// Comandos de descargas
-commandMap.set('play', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
-commandMap.set('music', { moduleName: 'download-commands', category: 'Descargas', description: 'Audio de YouTube' });
-commandMap.set('video', { moduleName: 'download-commands', category: 'Descargas', description: 'Video de YouTube' });
-commandMap.set('youtube', { moduleName: 'download-commands', category: 'Descargas', description: 'Video de YouTube' });
-commandMap.set('tiktok', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de TikTok' });
-commandMap.set('instagram', { moduleName: 'download-commands', category: 'Descargas', description: 'Contenido de Instagram' });
-commandMap.set('ig', { moduleName: 'download-commands', category: 'Descargas', description: 'Contenido de Instagram' });
-commandMap.set('facebook', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Facebook' });
-commandMap.set('fb', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Facebook' });
-commandMap.set('twitter', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Twitter' });
-commandMap.set('x', { moduleName: 'download-commands', category: 'Descargas', description: 'Videos de Twitter/X' });
-commandMap.set('pinterest', { moduleName: 'download-commands', category: 'Descargas', description: 'Imágenes de Pinterest' });
-commandMap.set('spotify', { moduleName: 'download-commands', category: 'Descargas', description: 'Buscar en Spotify' });
-commandMap.set('translate', { moduleName: 'download-commands', category: 'Utilidades', description: 'Traducir texto' });
-commandMap.set('tr', { moduleName: 'download-commands', category: 'Utilidades', description: 'Traducir texto' });
-commandMap.set('weather', { moduleName: 'download-commands', category: 'Utilidades', description: 'Consultar clima' });
-commandMap.set('clima', { moduleName: 'download-commands', category: 'Utilidades', description: 'Consultar clima' });
-commandMap.set('trivia', { moduleName: 'download-commands', category: 'Entretenimiento', description: 'Preguntas de trivia' });
-commandMap.set('meme', { moduleName: 'download-commands', category: 'Media', description: 'Meme aleatorio' });
-
-// Comandos de IA
-commandMap.set('ia', { moduleName: 'ai', category: 'IA', description: 'Pregunta a Gemini AI' });
-commandMap.set('ai', { moduleName: 'ai', category: 'IA', description: 'Pregunta a Gemini AI' });
-commandMap.set('clasificar', { moduleName: 'ai', category: 'IA', description: 'Clasificar texto' });
-
-// Comandos de media
-commandMap.set('sticker', { moduleName: 'stickers', category: 'Media', description: 'Crear sticker' });
-commandMap.set('s', { moduleName: 'stickers', category: 'Media', description: 'Crear sticker' });
-commandMap.set('image', { moduleName: 'images', category: 'IA', description: 'Generar imagen con IA' });
-commandMap.set('wallpaper', { moduleName: 'images', category: 'Media', description: 'Buscar wallpapers' });
-commandMap.set('tts', { moduleName: 'media', category: 'Media', description: 'Texto a voz' });
-
-// Comandos de música
-commandMap.set('identify', { moduleName: 'music', category: 'Música', description: 'Identificar canción' });
-commandMap.set('lyrics', { moduleName: 'music', category: 'Música', description: 'Obtener letras' });
-commandMap.set('playlist', { moduleName: 'music', category: 'Música', description: 'Crear playlist' });
-commandMap.set('radio', { moduleName: 'music', category: 'Música', description: 'Radio online' });
-commandMap.set('nowplaying', { moduleName: 'music', category: 'Música', description: 'Canción actual' });
-
-// Comandos de archivos
-commandMap.set('descargar', { moduleName: 'files', category: 'Archivos', description: 'Descargar archivo' });
-commandMap.set('guardar', { moduleName: 'files', category: 'Archivos', description: 'Guardar archivo' });
-commandMap.set('archivos', { moduleName: 'files', category: 'Archivos', description: 'Ver archivos' });
-commandMap.set('misarchivos', { moduleName: 'files', category: 'Archivos', description: 'Mis archivos' });
-
-// Comandos de juegos
-commandMap.set('game', { moduleName: 'games', category: 'Entretenimiento', description: 'Menú de juegos' });
-commandMap.set('juego', { moduleName: 'games', category: 'Entretenimiento', description: 'Menú de juegos' });
-commandMap.set('rps', { moduleName: 'games', category: 'Entretenimiento', description: 'Piedra, papel o tijera' });
-commandMap.set('guess', { moduleName: 'games', category: 'Entretenimiento', description: 'Adivinar número' });
-commandMap.set('dice', { moduleName: 'games', category: 'Entretenimiento', description: 'Lanzar dados' });
-commandMap.set('sorteo', { moduleName: 'games', category: 'Entretenimiento', description: 'Sorteo/ruleta' });
-commandMap.set('coin', { moduleName: 'games', category: 'Entretenimiento', description: 'Lanzar moneda' });
-
-// Comandos de encuestas
-commandMap.set('poll', { moduleName: 'polls', category: 'Entretenimiento', description: 'Crear encuesta' });
-commandMap.set('encuesta', { moduleName: 'polls', category: 'Entretenimiento', description: 'Crear encuesta' });
-
-// Comandos de grupo
-commandMap.set('groupinfo', { moduleName: 'groups', category: 'Grupo', description: 'Info del grupo' });
-commandMap.set('kick', { moduleName: 'groups', category: 'Grupo', description: 'Expulsar usuario', admin: true });
-commandMap.set('promote', { moduleName: 'groups', category: 'Grupo', description: 'Promover a admin', admin: true });
-commandMap.set('demote', { moduleName: 'groups', category: 'Grupo', description: 'Quitar admin', admin: true });
-commandMap.set('lock', { moduleName: 'groups', category: 'Grupo', description: 'Cerrar grupo', admin: true });
-commandMap.set('unlock', { moduleName: 'groups', category: 'Grupo', description: 'Abrir grupo', admin: true });
-commandMap.set('settings', { moduleName: 'group-settings', category: 'Grupo', description: 'Configuración', admin: true });
-commandMap.set('config', { moduleName: 'group-settings', category: 'Grupo', description: 'Configuración', admin: true });
-
-// Comandos de aportes y pedidos
-commandMap.set('addaporte', { moduleName: 'aportes', category: 'Aportes', description: 'Agregar aporte' });
-commandMap.set('aportes', { moduleName: 'aportes', category: 'Aportes', description: 'Ver aportes' });
-commandMap.set('myaportes', { moduleName: 'aportes', category: 'Aportes', description: 'Mis aportes' });
-commandMap.set('misaportes', { moduleName: 'aportes', category: 'Aportes', description: 'Mis aportes' });
-commandMap.set('aporteestado', { moduleName: 'aportes', category: 'Aportes', description: 'Estado de aporte' });
-commandMap.set('pedido', { moduleName: 'pedidos', category: 'Aportes', description: 'Hacer pedido' });
-commandMap.set('pedidos', { moduleName: 'pedidos', category: 'Aportes', description: 'Ver pedidos' });
-commandMap.set('mispedidos', { moduleName: 'pedidos', category: 'Aportes', description: 'Mis pedidos' });
-
-// Comandos de Subbots (disponibles para TODOS los usuarios)
-commandMap.set('qr', { moduleName: 'pairing', category: 'Subbots', description: 'Crear subbot con QR', admin: false });
-commandMap.set('code', { moduleName: 'pairing', category: 'Subbots', description: 'Crear subbot con código', admin: false });
-commandMap.set('mybots', { moduleName: 'subbots', category: 'Subbots', description: 'Ver mis subbots', admin: false });
-commandMap.set('mibots', { moduleName: 'subbots', category: 'Subbots', description: 'Ver mis subbots', admin: false });
-commandMap.set('bots', { moduleName: 'subbots', category: 'Admin', description: 'Ver todos los bots', admin: false }); // Verificación interna en subbots.js
-commandMap.set('stopbot', { moduleName: 'subbots', category: 'Subbots', description: 'Detener subbot', admin: false });
-commandMap.set('requestcode', { moduleName: 'pairing', category: 'Admin', description: 'Solicitar código bot principal', admin: true });
-commandMap.set('maincode', { moduleName: 'pairing', category: 'Admin', description: 'Ver código bot principal', admin: true });
-
-// Comandos de admin - Sistema
-commandMap.set('logs', { moduleName: 'logs', category: 'Admin', description: 'Ver logs', admin: true });
-commandMap.set('stats', { moduleName: 'system-info', category: 'Admin', description: 'Estadísticas', admin: true });
-commandMap.set('estadisticas', { moduleName: 'system-info', category: 'Admin', description: 'Estadísticas', admin: true });
-commandMap.set('export', { moduleName: 'system', category: 'Admin', description: 'Exportar datos', admin: true });
-commandMap.set('update', { moduleName: 'maintenance', category: 'Admin', description: 'Actualizar sistema', admin: true });
-commandMap.set('broadcast', { moduleName: 'broadcast', category: 'Admin', description: 'Enviar a todos', admin: true });
-commandMap.set('bc', { moduleName: 'broadcast', category: 'Admin', description: 'Enviar a todos', admin: true });
-
-// Comandos de admin - Sistema
-commandMap.set('bot', { moduleName: 'bot-control', category: 'Admin', description: 'Activar/desactivar bot', admin: false });
-
-// Comandos interactivos y presencia
-commandMap.set('pollmultiple', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta múltiple' });
-commandMap.set('quickpoll', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta rápida sí/no' });
-commandMap.set('rating', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta de rating 1-5' });
-commandMap.set('yesno', { moduleName: 'poll', category: 'Interactivo', description: 'Encuesta sí/no/no sé' });
-commandMap.set('typing', { moduleName: 'presence', category: 'Utilidades', description: 'Simular escribiendo' });
-commandMap.set('recording', { moduleName: 'presence', category: 'Utilidades', description: 'Simular grabando' });
-commandMap.set('online', { moduleName: 'presence', category: 'Utilidades', description: 'Estado disponible' });
-commandMap.set('offline', { moduleName: 'presence', category: 'Utilidades', description: 'Estado no disponible' });
-commandMap.set('away', { moduleName: 'presence', category: 'Utilidades', description: 'Estado ausente' });
-commandMap.set('busy', { moduleName: 'presence', category: 'Utilidades', description: 'Estado ocupado' });
-commandMap.set('readall', { moduleName: 'presence', category: 'Grupo', description: 'Marcar todo como leído' });
-
-// Comandos de ban y moderación
-commandMap.set('ban', { moduleName: 'ban', category: 'Grupo', description: 'Banear usuario', admin: true });
-commandMap.set('unban', { moduleName: 'ban', category: 'Grupo', description: 'Desbanear usuario', admin: true });
-
-// Comandos de privacidad
-commandMap.set('privacy', { moduleName: 'privacy', category: 'Utilidades', description: 'Configurar privacidad' });
-
-// Comandos de votos
-commandMap.set('vote', { moduleName: 'votes', category: 'Interactivo', description: 'Votar' });
-commandMap.set('votes', { moduleName: 'votes', category: 'Interactivo', description: 'Ver votos' });
-
-// Comandos de contenido
-commandMap.set('content', { moduleName: 'content', category: 'Media', description: 'Gestionar contenido' });
-
-// Comandos de llamadas
-commandMap.set('call', { moduleName: 'calls', category: 'Utilidades', description: 'Gestionar llamadas' });
-
-// Comandos de mensajes
-commandMap.set('delete', { moduleName: 'message-control', category: 'Grupo', description: 'Eliminar mensaje', admin: true });
-commandMap.set('clear', { moduleName: 'message-control', category: 'Grupo', description: 'Limpiar chat', admin: true });
-
-// Comandos de demo
-commandMap.set('demo', { moduleName: 'demo', category: 'Utilidades', description: 'Demo del bot' });
-
-// Comandos de diagnóstico
-commandMap.set('diag', { moduleName: 'diag', category: 'Admin', description: 'Diagnóstico del sistema', admin: true });
-commandMap.set('debugcommands', { handler: debugCommands, category: 'Admin', description: 'Debug de comandos', admin: true, isLocal: true });
-
-// Comandos de promo
-commandMap.set('promo', { moduleName: 'promo', category: 'Utilidades', description: 'Promociones' });
-
-// Comandos adicionales de matemáticas
-commandMap.set('math', { moduleName: 'util-math', category: 'Utilidades', description: 'Operaciones matemáticas' });
+// ===== COMANDOS REGISTRADOS AUTOMÁTICAMENTE =====
+// Los comandos se registran automáticamente en initializePluginSystem()
 
 
 // =========================
@@ -4123,6 +4563,74 @@ export async function debugCommands(ctx) {
 
   await sock.sendMessage(remoteJid, { text: debugInfo });
 
+  return { success: true };
+}
+
+// Función de estadísticas del sistema
+export async function systemStats(ctx) {
+  const { sock, remoteJid } = ctx;
+
+  // Estadísticas del sistema
+  const totalCommands = commandMap.size;
+  const totalPlugins = pluginCache.size;
+
+  // Agrupar por categorías
+  const categories = new Map();
+  const pluginStats = new Map();
+
+  for (const [cmd, config] of commandMap.entries()) {
+    // Estadísticas por categoría
+    const category = config.category || 'Sin categoría';
+    if (!categories.has(category)) {
+      categories.set(category, { count: 0, commands: [] });
+    }
+    categories.get(category).count++;
+    categories.get(category).commands.push(cmd);
+
+    // Estadísticas por plugin
+    const plugin = config.plugin || config.moduleName || 'local';
+    if (!pluginStats.has(plugin)) {
+      pluginStats.set(plugin, 0);
+    }
+    pluginStats.get(plugin)++;
+  }
+
+  let statsText = `╔💖═══════════════════════════════════════💖╗\n`;
+  statsText += `║           ESTADÍSTICAS DEL SISTEMA      ║\n`;
+  statsText += `╚💖═══════════════════════════════════════💖╝\n\n`;
+
+  statsText += `📊 **RESUMEN GENERAL**\n`;
+  statsText += `🔧 Plugins cargados: ${totalPlugins}\n`;
+  statsText += `⚡ Comandos registrados: ${totalCommands}\n`;
+  statsText += `🏷️ Categorías: ${categories.size}\n\n`;
+
+  statsText += `📂 **TOP CATEGORÍAS**\n`;
+  const sortedCategories = Array.from(categories.entries())
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10);
+
+  sortedCategories.forEach(([category, data]) => {
+    statsText += `• ${category}: ${data.count} comandos\n`;
+  });
+
+  statsText += `\n🔌 **TOP PLUGINS**\n`;
+  const sortedPlugins = Array.from(pluginStats.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  sortedPlugins.forEach(([plugin, count]) => {
+    statsText += `• ${plugin}: ${count} comandos\n`;
+  });
+
+  statsText += `\n✨ **ESTADO DEL SISTEMA**\n`;
+  statsText += `🟢 Sistema: Operativo\n`;
+  statsText += `🟢 Auto-discovery: Activo\n`;
+  statsText += `🟢 BL Theme: Integrado\n`;
+  statsText += `🟢 Wileys: Funcional\n\n`;
+
+  statsText += `💖 Sistema completamente funcional 💖`;
+
+  await sock.sendMessage(remoteJid, { text: statsText });
   return { success: true };
 }
 
