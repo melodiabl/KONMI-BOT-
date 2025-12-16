@@ -2334,8 +2334,8 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // MÉTODO 1: NativeFlow buttons (funciona mejor en grupos)
-  if (isGroup && allRows.length > 0) {
+  // MÉTODO 1: NativeFlow buttons (funciona en grupos y privado)
+  if (allRows.length > 0) {
     try {
       const nativeFlowButtons = allRows.slice(0, 10).map((r) => ({
         name: 'quick_reply',
@@ -2369,49 +2369,7 @@ async function sendListFixedV2(sock, jid, result, ctx) {
     }
   }
 
-  // MÉTODO 2: List message clásico (funciona mejor en privado)
-  const listMessage = {
-    text: result.text || 'Elige una opción',
-    footer: result.footer || 'KONMI BOT © 2025',
-    title: result.title || '📋 Menú de Comandos',
-    buttonText: result.buttonText || '📋 Ver Opciones',
-    sections: (result.sections || []).map(sec => ({
-      title: sec.title || '',
-      rows: (sec.rows || []).map(r => ({
-        title: r.title || 'Opción',
-        description: r.description || '',
-        rowId: r.rowId || r.id || 'noop'
-      }))
-    }))
-  };
-
-  try {
-    await sock.sendMessage(jid, listMessage, opts);
-    // List button sent successfully
-    return true;
-  } catch (err) {
-    // List button failed, trying simple buttons
-  }
-
-  if (allRows.length <= 3) {
-    try {
-      await sock.sendMessage(jid, {
-        text: result.text || 'Elige una opción',
-        footer: result.footer || 'KONMI BOT © 2025',
-        buttons: allRows.map((r, i) => ({
-          buttonId: r.rowId,
-          buttonText: { displayText: r.title },
-          type: 1
-        })),
-        headerType: 1
-      }, opts);
-      // Simple buttons sent successfully
-      return true;
-    } catch (err2) {
-      // Simple buttons failed
-    }
-  }
-
+  // MÉTODO 2: Template buttons (fallback para pocos elementos)
   if (allRows.length <= 3) {
     try {
       await sock.sendMessage(jid, {
@@ -2427,41 +2385,75 @@ async function sendListFixedV2(sock, jid, result, ctx) {
       }, opts);
       // Template buttons sent successfully
       return true;
-    } catch (err3) {
+    } catch (err2) {
       // Template buttons failed
     }
   }
 
-  if (allRows.length > 3) {
-    const pages = [];
-    for (let i = 0; i < allRows.length; i += 3) {
-      pages.push(allRows.slice(i, i + 3));
-    }
-    const page1 = pages[0];
-    const hasMorePages = pages.length > 1;
+  // MÉTODO 3: Simple buttons (fallback adicional)
+  if (allRows.length <= 3) {
     try {
-      const buttons = page1.map((r, i) => ({
-        buttonId: r.rowId,
-        buttonText: { displayText: r.title },
-        type: 1
-      }));
-      if (hasMorePages) {
-        buttons.push({
-          buttonId: 'help_page2',
-          buttonText: { displayText: '➡️ Más opciones' },
-          type: 1
-        });
-      }
       await sock.sendMessage(jid, {
-        text: `${result.text || 'Elige una opción'}\n\n📄 Página 1 de ${pages.length}`,
+        text: result.text || 'Elige una opción',
         footer: result.footer || 'KONMI BOT © 2025',
-        buttons: buttons,
+        buttons: allRows.map((r, i) => ({
+          buttonId: r.rowId,
+          buttonText: { displayText: r.title },
+          type: 1
+        })),
         headerType: 1
       }, opts);
-      // Paginated buttons sent successfully
+      // Simple buttons sent successfully
+      return true;
+    } catch (err3) {
+      // Simple buttons failed
+    }
+  }
+
+  // MÉTODO 4: Botones paginados para muchas opciones
+  if (allRows.length > 3) {
+    try {
+      // Dividir en páginas de máximo 10 botones nativeFlow
+      const nativeFlowButtons = allRows.slice(0, 10).map((r) => ({
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+          display_text: r.title,
+          id: r.rowId
+        })
+      }));
+
+      // Si hay más de 10, agregar botón "Ver más"
+      if (allRows.length > 10) {
+        nativeFlowButtons.push({
+          name: 'quick_reply',
+          buttonParamsJson: JSON.stringify({
+            display_text: '➡️ Ver más opciones',
+            id: 'help_more'
+          })
+        });
+      }
+
+      const interactiveMessage = {
+        viewOnceMessage: {
+          message: {
+            interactiveMessage: {
+              body: { text: `${result.text || 'Elige una opción'}\n\n📄 Mostrando ${Math.min(10, allRows.length)} de ${allRows.length} opciones` },
+              footer: { text: result.footer || 'KONMI BOT © 2025' },
+              header: { title: result.title || '📋 Menú', hasMediaAttachment: false },
+              nativeFlowMessage: {
+                buttons: nativeFlowButtons,
+                messageParamsJson: ''
+              }
+            }
+          }
+        }
+      };
+
+      await sock.sendMessage(jid, interactiveMessage, opts);
+      // Paginated nativeFlow buttons sent successfully
       return true;
     } catch (err4) {
-      // Paginated buttons failed
+      // Paginated nativeFlow failed
     }
   }
 
