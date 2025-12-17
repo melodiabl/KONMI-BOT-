@@ -30,30 +30,26 @@ const BL_DOWNLOAD_MESSAGES = {
   error: ['🥺 Algo salió mal, pero no te rindas 💔', '😢 Error en descarga, lo siento', '💔 No pude completarlo, perdóname']
 };
 
-// Wileys: Reacciones automáticas BL mejoradas para descargas
+// Wileys: Reacciones automáticas BL mejoradas para descargas (UNA SOLA REACCIÓN)
 const addBLDownloadReaction = async (sock, message, type = 'download') => {
   try {
     if (!sock || !message?.key) return;
 
-    const reactionSequences = {
-      download: ['📥', '💖', '✨'],
-      music: ['🎵', '💕', '🌸'],
-      video: ['🎬', '💖', '🌟'],
-      image: ['📸', '🌸', '💝'],
-      success: ['✅', '💖', '🎉'],
-      error: ['❌', '💔', '🥺']
+    const singleReactions = {
+      download: '📥',
+      music: '🎵',
+      video: '🎬',
+      image: '📸',
+      success: '✅',
+      error: '❌'
     };
 
-    const sequence = reactionSequences[type] || reactionSequences.download;
+    const reaction = singleReactions[type] || singleReactions.download;
 
-    // Aplicar secuencia de reacciones con timing BL
-    for (let i = 0; i < sequence.length; i++) {
-      setTimeout(async () => {
-        await sock.sendMessage(message.key.remoteJid, {
-          react: { text: sequence[i], key: message.key }
-        });
-      }, i * 1000);
-    }
+    // Enviar UNA SOLA reacción para evitar rate limit
+    await sock.sendMessage(message.key.remoteJid, {
+      react: { text: reaction, key: message.key }
+    });
   } catch (error) {
     console.error('[BL_DOWNLOAD_REACTION] Error:', error);
   }
@@ -99,18 +95,7 @@ const decorateBLDownloadMessage = (title, content, style = 'love') => {
   return message;
 };
 
-const addCompletionReaction = async (sock, message, success = true) => {
-  try {
-    if (sock && message?.key) {
-      const type = success ? 'success' : 'error';
-      setTimeout(async () => {
-        await addBLDownloadReaction(sock, message, type);
-      }, 1000);
-    }
-  } catch (error) {
-    console.error('[COMPLETION_REACTION] Error:', error);
-  }
-};
+// Función eliminada para evitar rate limit - las reacciones se manejan solo al inicio
 
 const toMediaInput = (val) => {
   if (!val) return null
@@ -196,8 +181,7 @@ async function handleTikTokDownload(ctx) {
     return { success: false, message: decorateBLDownloadMessage('Error TikTok', '❌ Uso: /tiktok <url>\n💡 Ejemplo: /tiktok https://tiktok.com/...', 'love') }
   }
 
-  // Funcionalidad Wileys: Reacción automática BL
-  await addBLDownloadReaction(sock, message, 'download');
+  // Reacción eliminada para evitar rate limit en TikTok
 
   const progress = createProgressNotifier({
     resolveSocket: () => Promise.resolve(sock),
@@ -464,8 +448,8 @@ async function handleMusicDownload(ctx) {
 
         const percent = Math.min(95, 20 + Math.floor(p.percent * 0.75))
 
-        // Solo actualizar si cambió significativamente
-        if (Math.abs(percent - lastPercent) >= 1) {
+        // Solo actualizar si cambió significativamente (mínimo 10% para evitar spam)
+        if (Math.abs(percent - lastPercent) >= 10) {
           const status = percent < 50 ? 'Conectando con servidor...' :
                         percent < 80 ? 'Descargando audio...' :
                         'Procesando con FFmpeg...'
@@ -486,8 +470,7 @@ async function handleMusicDownload(ctx) {
 
     await progress.complete('✅ Música lista')
 
-    // Funcionalidad Wileys: Reacción de completado exitoso
-    await addCompletionReaction(sock, message, true);
+    // Reacción de completado eliminada para evitar rate limit
 
     return {
       type: 'audio',
@@ -500,8 +483,7 @@ async function handleMusicDownload(ctx) {
     logger.error('Music error:', e)
     await progress.fail(e.message)
 
-    // Funcionalidad Wileys: Reacción de error
-    await addCompletionReaction(sock, message, false);
+    // Reacción de error eliminada para evitar rate limit
 
     return { success: false, message: `❌ Error /music: ${e.message}` }
   } finally {
@@ -549,7 +531,7 @@ async function handleVideoDownload(ctx) {
 
         const percent = Math.min(95, 20 + Math.floor(p.percent * 0.75))
 
-        if (Math.abs(percent - lastPercent) >= 1) {
+        if (Math.abs(percent - lastPercent) >= 10) {
           const status = percent < 40 ? 'Descargando video...' :
                         percent < 70 ? 'Descargando audio...' :
                         percent < 90 ? 'Mezclando video y audio...' :
@@ -639,7 +621,7 @@ async function handleSpotifySearch(ctx) {
 
         const percent = Math.min(95, 30 + Math.floor(p.percent * 0.65))
 
-        if (Math.abs(percent - lastPercent) >= 1) {
+        if (Math.abs(percent - lastPercent) >= 10) {
           const status = percent < 60 ? 'Descargando...' :
                         percent < 85 ? 'Procesando audio...' :
                         'Optimizando calidad...'

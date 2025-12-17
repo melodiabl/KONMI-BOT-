@@ -5,8 +5,8 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 
 // Configuración optimizada para fluidez
 const SPINNER_INTERVAL_MS = 200
-const MIN_SEND_INTERVAL_MS = 1500
-const MIN_PERCENT_STEP = 1
+const MIN_SEND_INTERVAL_MS = 3000  // Aumentado de 1500 a 3000ms para evitar rate limit
+const MIN_PERCENT_STEP = 5  // Aumentado de 1 a 5% para reducir actualizaciones
 const PROGRESS_BAR_LENGTH = 20
 const FORCE_UPDATE_EVERY_MS = 5000
 const MAX_RETRY_SEND = 3 // Reintentos para enviar mensaje inicial
