@@ -471,10 +471,8 @@ export const API_PROVIDERS = {
 /* ========== DO REQUEST & FALLBACK ========== */
 
 async function doRequest(provider, url, body, extraCtx) {
-  logAPI('INFO', provider.name, `🔄 Attempting request`, {
-    method: provider.method || 'GET',
-    url: typeof url === 'string' ? url.substring(0, 100) : 'complex'
-  })
+  // Logging reducido para evitar spam
+  // logAPI('INFO', provider.name, `🔄 Attempting request`)
 
   // LOCAL__YTSEARCH (yt-search lib)
   if (provider?.method === 'LOCAL__YTSEARCH') {
@@ -566,7 +564,7 @@ async function doRequest(provider, url, body, extraCtx) {
     return http.post(url, body, { headers: { ...dynHeaders }, timeout: provider?.timeoutMs || 10000 })
   }
 
-  logAPI('INFO', provider.name, 'Sending GET request')
+  // logAPI('INFO', provider.name, 'Sending GET request')
   return http.get(url, { headers: dynHeaders, timeout: provider?.timeoutMs || 10000 })
 }
 

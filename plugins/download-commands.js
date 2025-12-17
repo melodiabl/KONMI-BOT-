@@ -30,26 +30,35 @@ const BL_DOWNLOAD_MESSAGES = {
   error: ['🥺 Algo salió mal, pero no te rindas 💔', '😢 Error en descarga, lo siento', '💔 No pude completarlo, perdóname']
 };
 
-// Wileys: Reacciones automáticas BL mejoradas para descargas (UNA SOLA REACCIÓN)
-const addBLDownloadReaction = async (sock, message, type = 'download') => {
+// Wileys: Sistema de reacciones BL con timing seguro (inicio, descargando, enviando, completado)
+const BL_REACTION_DELAY = 5000; // 5 segundos entre reacciones para evitar rate limit
+let lastReactionTime = 0;
+
+const addBLDownloadReaction = async (sock, message, stage = 'inicio') => {
   try {
     if (!sock || !message?.key) return;
 
-    const singleReactions = {
-      download: '📥',
-      music: '🎵',
-      video: '🎬',
-      image: '📸',
-      success: '✅',
+    // Rate limiting: mínimo 5 segundos entre reacciones
+    const now = Date.now();
+    if (now - lastReactionTime < BL_REACTION_DELAY) {
+      return; // Skip para evitar rate limit
+    }
+
+    const stageReactions = {
+      inicio: '📥',
+      descargando: '⏬',
+      enviando: '📤',
+      completado: '✅',
       error: '❌'
     };
 
-    const reaction = singleReactions[type] || singleReactions.download;
+    const reaction = stageReactions[stage] || stageReactions.inicio;
 
-    // Enviar UNA SOLA reacción para evitar rate limit
     await sock.sendMessage(message.key.remoteJid, {
       react: { text: reaction, key: message.key }
     });
+
+    lastReactionTime = now;
   } catch (error) {
     console.error('[BL_DOWNLOAD_REACTION] Error:', error);
   }
@@ -413,8 +422,8 @@ async function handleMusicDownload(ctx) {
     return { success: false, message: '❌ Uso: /music <nombre o url>' }
   }
 
-  // Funcionalidad Wileys: Reacción automática BL al iniciar
-  await addBLDownloadReaction(sock, message, 'music');
+  // Funcionalidad Wileys: Reacción BL de inicio
+  await addBLDownloadReaction(sock, message, 'inicio');
 
   const progress = createProgressNotifier({
     resolveSocket: () => Promise.resolve(sock),
@@ -438,6 +447,9 @@ async function handleMusicDownload(ctx) {
 
     await progress.update(15, `Encontrado: ${video.title.substring(0, 40)}...`)
     await progress.update(20, 'Preparando descarga...')
+
+    // Reacción BL: descargando
+    await addBLDownloadReaction(sock, message, 'descargando');
 
     let lastPercent = 20
 
@@ -470,7 +482,11 @@ async function handleMusicDownload(ctx) {
 
     await progress.complete('✅ Música lista')
 
-    // Reacción de completado eliminada para evitar rate limit
+    // Reacción BL: enviando
+    await addBLDownloadReaction(sock, message, 'enviando');
+
+    // Reacción BL: completado
+    await addBLDownloadReaction(sock, message, 'completado');
 
     return {
       type: 'audio',
@@ -483,7 +499,8 @@ async function handleMusicDownload(ctx) {
     logger.error('Music error:', e)
     await progress.fail(e.message)
 
-    // Reacción de error eliminada para evitar rate limit
+    // Reacción BL: error
+    await addBLDownloadReaction(sock, message, 'error');
 
     return { success: false, message: `❌ Error /music: ${e.message}` }
   } finally {

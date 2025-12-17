@@ -3175,11 +3175,8 @@ async function sendResult(sock, jid, result, ctx) {
       success: result?.success
     });
 
-    const showPresence = process.env.SHOW_TYPING === 'true';
-    if (showPresence) {
-      await sock.sendPresenceUpdate('composing', jid).catch(() => {});
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
+    // Presence updates deshabilitados para evitar rate limit
+    const showPresence = false; // Forzado a false para evitar spam
     if (!result) {
       console.log('⚠️ No result provided');
       if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
