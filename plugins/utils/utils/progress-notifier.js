@@ -23,12 +23,12 @@ function buildProgressMessage(state) {
   const spinner = finished ? '✅' : SPINNER_FRAMES[spinnerIndex % SPINNER_FRAMES.length]
   const bar = renderProgressBar(percent)
   const pct = String(Math.max(0, Math.min(100, Math.floor(percent)))).padStart(3, ' ')
-  
+
   const header = `${icon || spinner} *${title || 'Procesando...'}*`
   const progressLine = `${spinner} ${bar} ${pct}%`
   const statusLine = status ? `\n📌 ${status}` : ''
   const etaLine = eta ? `\n⏱️ ${eta}` : ''
-  
+
   return `${header}\n\n${progressLine}${statusLine}${etaLine}`
 }
 
@@ -65,8 +65,8 @@ export function createProgressNotifier(options = {}) {
     startTime: Date.now(),
   }
 
-  const messageRef = { 
-    sock: null, 
+  const messageRef = {
+    sock: null,
     key: null,
     messageId: null, // ID único del mensaje
     initialized: false, // Flag para saber si ya enviamos el mensaje inicial
@@ -86,15 +86,15 @@ export function createProgressNotifier(options = {}) {
 
   function calculateETA() {
     if (state.percent <= 0 || state.percent >= 100) return null
-    
+
     const elapsed = Date.now() - state.startTime
     const rate = state.percent / elapsed
     const remaining = (100 - state.percent) / rate
-    
+
     const seconds = Math.floor(remaining / 1000)
     if (seconds < 5) return 'Casi listo...'
     if (seconds < 60) return `~${seconds}s`
-    
+
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `~${mins}m ${secs}s`
@@ -102,24 +102,24 @@ export function createProgressNotifier(options = {}) {
 
   function shouldSend(nextPercent, nextText, force) {
     if (force) return true
-    
+
     const now = Date.now()
-    
+
     // Actualización forzada periódica
     if (now - state.lastForceUpdateAt > FORCE_UPDATE_EVERY_MS) {
       return true
     }
-    
+
     // Rate limiting básico
     if (now - state.lastSentAt < MIN_SEND_INTERVAL_MS) return false
-    
+
     // Permitir cambios de 1% o más
     const percentDiff = Math.abs((nextPercent || 0) - (state.lastPercentSent || 0))
     if (percentDiff >= MIN_PERCENT_STEP) return true
-    
+
     // Permitir si cambió el texto de estado
     if (nextText && nextText !== state.lastTextSent) return true
-    
+
     return false
   }
 
@@ -147,37 +147,37 @@ export function createProgressNotifier(options = {}) {
 
       const text = buildProgressMessage(state)
       const payload = { text }
-      
+
       if (quoted) {
         payload.quoted = quoted
       }
 
       let lastError = null
-      
+
       // Intentar enviar el mensaje inicial con reintentos
       for (let attempt = 1; attempt <= MAX_RETRY_SEND; attempt++) {
         try {
           console.log(`📤 Enviando mensaje inicial (intento ${attempt}/${MAX_RETRY_SEND})...`)
-          
+
           const sent = await sock.sendMessage(chatId, payload)
-          
+
           if (sent?.key) {
             messageRef.key = sent.key
             messageRef.messageId = sent.key.id
             messageRef.initialized = true
-            
+
             console.log(`✅ Mensaje inicial enviado exitosamente (ID: ${messageRef.messageId})`)
-            
+
             state.lastSentAt = Date.now()
             state.lastPercentSent = state.percent
             state.lastTextSent = text
-            
+
             return messageRef.key
           }
         } catch (err) {
           lastError = err
           console.warn(`⚠️  Intento ${attempt} fallido:`, err.message)
-          
+
           // Esperar un poco antes de reintentar
           if (attempt < MAX_RETRY_SEND) {
             await new Promise(resolve => setTimeout(resolve, 500 * attempt))
@@ -185,8 +185,10 @@ export function createProgressNotifier(options = {}) {
         }
       }
 
-      // Si todos los intentos fallaron
-      throw new Error(`No se pudo enviar mensaje inicial después de ${MAX_RETRY_SEND} intentos: ${lastError?.message}`)
+      // Si todos los intentos fallaron, no lanzar error, solo loguear
+      console.error(`❌ Error en progress notifier: No se pudo enviar mensaje inicial después de ${MAX_RETRY_SEND} intentos: ${lastError?.message}`)
+      messageRef.initialized = true // Marcar como inicializado para evitar más intentos
+      return null
     })()
 
     return messageRef.initPromise
@@ -202,7 +204,7 @@ export function createProgressNotifier(options = {}) {
       updateQueue.push({ force, timestamp: Date.now() })
       return
     }
-    
+
     try {
       pendingUpdate = true
 
@@ -211,9 +213,9 @@ export function createProgressNotifier(options = {}) {
         await initializeMessage()
       }
 
-      // Si no tenemos key después de inicializar, algo salió mal
+      // Si no tenemos key después de inicializar, silenciosamente no hacer nada
       if (!messageRef.key) {
-        console.error('❌ No se pudo obtener key del mensaje inicial')
+        // No loguear error para evitar spam, simplemente no actualizar
         return
       }
 
@@ -232,7 +234,7 @@ export function createProgressNotifier(options = {}) {
         return
       }
 
-      const payload = { 
+      const payload = {
         text,
         edit: messageRef.key, // SIEMPRE editar el mismo mensaje
       }
@@ -240,12 +242,12 @@ export function createProgressNotifier(options = {}) {
       // Intentar editar el mensaje
       try {
         await sock.sendMessage(chatId, payload)
-        
+
         const now = Date.now()
         state.lastSentAt = now
         state.lastPercentSent = percent
         state.lastTextSent = text
-        
+
         if (force || (now - state.lastForceUpdateAt > FORCE_UPDATE_EVERY_MS)) {
           state.lastForceUpdateAt = now
         }
@@ -254,16 +256,16 @@ export function createProgressNotifier(options = {}) {
       } catch (editError) {
         // Si la edición falla, puede ser que el mensaje fue eliminado
         const errorMsg = String(editError?.message || editError || '')
-        
+
         if (/not found|message.?not.?found/i.test(errorMsg)) {
           console.warn('⚠️  Mensaje no encontrado, reinicializando...')
-          
+
           // Reset y reinicializar
           messageRef.initialized = false
           messageRef.key = null
           messageRef.messageId = null
           messageRef.initPromise = null
-          
+
           // Intentar enviar un nuevo mensaje
           await initializeMessage()
         } else if (/rate.?overlimit/i.test(errorMsg)) {
@@ -282,7 +284,7 @@ export function createProgressNotifier(options = {}) {
       }
     } finally {
       pendingUpdate = false
-      
+
       // Procesar cola si hay actualizaciones pendientes
       if (updateQueue.length > 0) {
         const next = updateQueue.shift()
@@ -313,7 +315,7 @@ export function createProgressNotifier(options = {}) {
   async function update(percent, status, options = {}) {
     const p = typeof percent === 'number' ? percent : state.percent
     state.percent = Math.max(0, Math.min(100, p))
-    
+
     if (typeof status === 'string' && status.length) {
       state.status = status
     }
@@ -359,9 +361,9 @@ export function createProgressNotifier(options = {}) {
     updateQueue = []
   }
 
-  return { 
-    update, 
-    complete, 
+  return {
+    update,
+    complete,
     fail,
     cleanup, // Método para limpiar recursos si es necesario
   }

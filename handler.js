@@ -1387,6 +1387,7 @@ async function autoRegisterCommands(pluginName, module) {
     const exportedFunctions = Object.keys(module).filter(key =>
       typeof module[key] === 'function' &&
       !key.startsWith('_') &&
+      !key.startsWith('handle') && // Excluir funciones handle para evitar duplicaciones
       key !== 'default' &&
       key.length < 15 // Solo nombres cortos
     ).slice(0, 5); // Máximo 5 funciones por plugin
@@ -1478,7 +1479,11 @@ function createModuleWrapper(module, moduleName, commandName = null) {
     'translate': 'handleTranslate',
     'tr': 'handleTranslate',
     'weather': 'handleWeather',
-    'clima': 'handleWeather'
+    'clima': 'handleWeather',
+    'fact': 'handleFact',
+    'quote': 'handleQuote',
+    'trivia': 'handleTriviaCommand',
+    'meme': 'handleMemeCommand'
   };
 
   // Estrategias para encontrar el handler correcto
@@ -1642,10 +1647,16 @@ function registerManualCommands() {
   });
 
   // ===== COMANDOS DE UTILIDADES 🛠️ =====
-  registerCommand('translate', { moduleName: 'download-commands', category: '🛠️ Utilidades', description: '🔤 Traducir texto a cualquier idioma', emoji: '🔤' });
-  registerCommand('tr', { moduleName: 'download-commands', category: '🛠️ Utilidades', description: '🔤 Traducir texto (abreviado)', emoji: '🔤' });
-  registerCommand('weather', { moduleName: 'download-commands', category: '🛠️ Utilidades', description: '🌦️ Consultar clima de cualquier ciudad', emoji: '🌦️' });
-  registerCommand('clima', { moduleName: 'download-commands', category: '🛠️ Utilidades', description: '🌦️ Consultar clima', emoji: '🌦️' });
+  registerCommand('translate', { moduleName: 'download-commands', commandName: 'translate', category: '🛠️ Utilidades', description: '🔤 Traducir texto a cualquier idioma', emoji: '🔤' });
+  registerCommand('tr', { moduleName: 'download-commands', commandName: 'tr', category: '🛠️ Utilidades', description: '🔤 Traducir texto (abreviado)', emoji: '🔤' });
+  registerCommand('weather', { moduleName: 'download-commands', commandName: 'weather', category: '🛠️ Utilidades', description: '🌦️ Consultar clima de cualquier ciudad', emoji: '🌦️' });
+  registerCommand('clima', { moduleName: 'download-commands', commandName: 'clima', category: '🛠️ Utilidades', description: '🌦️ Consultar clima', emoji: '🌦️' });
+
+  // ===== COMANDOS DE ENTRETENIMIENTO 🎭 =====
+  registerCommand('fact', { moduleName: 'download-commands', commandName: 'fact', category: '🎭 Entretenimiento', description: '🧠 Dato curioso aleatorio', emoji: '🧠' });
+  registerCommand('quote', { moduleName: 'download-commands', commandName: 'quote', category: '🎭 Entretenimiento', description: '💬 Frase inspiradora', emoji: '💬' });
+  registerCommand('trivia', { moduleName: 'download-commands', commandName: 'trivia', category: '🎭 Entretenimiento', description: '❓ Pregunta de trivia', emoji: '❓' });
+  registerCommand('meme', { moduleName: 'download-commands', commandName: 'meme', category: '🎭 Entretenimiento', description: '😂 Meme aleatorio', emoji: '😂' });
 
   // ===== COMANDOS DE IA 🤖 =====
   const aiCommands = [
@@ -3154,48 +3165,81 @@ Ejemplo: /subbotmonitor
 async function sendResult(sock, jid, result, ctx) {
   if (!sock || !jid) return;
   try {
+    // Debug logging
+    console.log('📤 sendResult called with:', {
+      hasResult: !!result,
+      resultType: result?.type,
+      hasAudio: !!result?.audio,
+      hasVideo: !!result?.video,
+      hasImage: !!result?.image,
+      success: result?.success
+    });
+
     const showPresence = process.env.SHOW_TYPING === 'true';
     if (showPresence) {
       await sock.sendPresenceUpdate('composing', jid).catch(() => {});
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     if (!result) {
+      console.log('⚠️ No result provided');
       if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
       return;
     }
-    if (result.success === true && !result.text && !result.message) {
+    if (result.success === true && !result.text && !result.message && !result.type && !result.audio && !result.video && !result.image) {
+      console.log('⚠️ Success result but no content');
       if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
       return;
     }
     if (typeof result === 'string') {
+      console.log('📝 Sending text result');
       await sock.sendMessage(jid, { text: result });
       if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
       return;
     }
     if (result.type === 'audio' && result.audio) {
+      console.log('🎵 Sending audio:', {
+        audioType: typeof result.audio,
+        mimetype: result.mimetype,
+        hasCaption: !!result.caption
+      });
       await sock.sendMessage(jid, {
         audio: result.audio,
         mimetype: result.mimetype || 'audio/mpeg',
         caption: result.caption,
         contextInfo: result.mentions ? { mentionedJid: result.mentions } : undefined
       });
+      console.log('✅ Audio sent successfully');
+      if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
       return;
     }
     if (result.type === 'video' && result.video) {
+      console.log('🎬 Sending video:', {
+        videoType: typeof result.video,
+        mimetype: result.mimetype,
+        hasCaption: !!result.caption
+      });
       await sock.sendMessage(jid, {
         video: result.video,
         mimetype: result.mimetype || 'video/mp4',
         caption: result.caption,
         contextInfo: result.mentions ? { mentionedJid: result.mentions } : undefined
       });
+      console.log('✅ Video sent successfully');
+      if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
       return;
     }
     if (result.type === 'image' && result.image) {
+      console.log('📸 Sending image:', {
+        imageType: typeof result.image,
+        hasCaption: !!result.caption
+      });
       await sock.sendMessage(jid, {
         image: result.image,
         caption: result.caption,
         contextInfo: result.mentions ? { mentionedJid: result.mentions } : undefined
       });
+      console.log('✅ Image sent successfully');
+      if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
       return;
     }
     if (result.type === 'buttons') {
@@ -3207,9 +3251,14 @@ async function sendResult(sock, jid, result, ctx) {
       await sendListFixedV2(sock, jid, result, ctx);
       return;
     }
+
+    // Fallback to text message
     const message = result.message || result.text || '✅ Listo';
+    console.log('📝 Fallback to text message:', message);
     await sock.sendMessage(jid, { text: message });
+    if (showPresence) await sock.sendPresenceUpdate('paused', jid).catch(() => {});
   } catch (error) {
+    console.error("❌ Error in sendResult:", error?.message);
     logger.error("Error enviando resultado", error?.message);
   }
 }

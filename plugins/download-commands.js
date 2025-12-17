@@ -207,15 +207,13 @@ async function handleTikTokDownload(ctx) {
     icon: '🎵',
   })
 
-  const simulator = new ProgressSimulator(progress, 85, 4000)
-
   try {
     await progress.update(5, '💖 Conectando con TikTok...')
-    simulator.start()
+    await progress.update(50, '✨ Descargando contenido...')
 
     const result = await downloadTikTok(url)
 
-    await simulator.jumpTo(95, '✨ Procesando video...')
+    await progress.update(95, '✨ Procesando video...')
 
     if (!result.success || !result.video) {
       throw new Error('No se pudo obtener el video')
@@ -234,7 +232,6 @@ async function handleTikTokDownload(ctx) {
     await progress.fail(`💔 ${e.message}`)
     return { success: false, message: decorateBLDownloadMessage('Error TikTok', `❌ Error TikTok: ${e.message}\n🥺 Intenta con otro enlace`, 'love') }
   } finally {
-    simulator.stop()
     progress.cleanup?.()
   }
 }
@@ -255,15 +252,13 @@ async function handleInstagramDownload(ctx) {
     icon: '📸',
   })
 
-  const simulator = new ProgressSimulator(progress, 85, 3500)
-
   try {
     await progress.update(5, 'Conectando con Instagram...')
-    simulator.start()
+    await progress.update(50, 'Descargando contenido...')
 
     const result = await downloadInstagram(url)
 
-    await simulator.jumpTo(95, 'Procesando contenido...')
+    await progress.update(95, 'Procesando contenido...')
 
     if (!result.success || (!result.image && !result.video)) {
       throw new Error('Contenido no disponible')
@@ -285,7 +280,6 @@ async function handleInstagramDownload(ctx) {
     await progress.fail(e.message)
     return { success: false, message: `❌ Error Instagram: ${e.message}` }
   } finally {
-    simulator.stop()
     progress.cleanup?.()
   }
 }
@@ -306,15 +300,13 @@ async function handleFacebookDownload(ctx) {
     icon: '📘',
   })
 
-  const simulator = new ProgressSimulator(progress, 85, 4000)
-
   try {
     await progress.update(5, 'Conectando con Facebook...')
-    simulator.start()
+    await progress.update(50, 'Descargando video...')
 
     const result = await downloadFacebook(url)
 
-    await simulator.jumpTo(95, 'Procesando video...')
+    await progress.update(95, 'Procesando video...')
 
     if (!result.success || !result.video) {
       throw new Error('No se pudo descargar el video')
@@ -333,7 +325,6 @@ async function handleFacebookDownload(ctx) {
     await progress.fail(e.message)
     return { success: false, message: `❌ Error Facebook: ${e.message}` }
   } finally {
-    simulator.stop()
     progress.cleanup?.()
   }
 }
@@ -354,15 +345,13 @@ async function handleTwitterDownload(ctx) {
     icon: '🐦',
   })
 
-  const simulator = new ProgressSimulator(progress, 85, 3000)
-
   try {
     await progress.update(5, 'Conectando con Twitter/X...')
-    simulator.start()
+    await progress.update(50, 'Descargando contenido...')
 
     const result = await downloadTwitter(url)
 
-    await simulator.jumpTo(95, 'Procesando contenido...')
+    await progress.update(95, 'Procesando contenido...')
 
     if (!result.success || (!result.video && !result.image)) {
       throw new Error('No se pudo descargar')
@@ -383,7 +372,6 @@ async function handleTwitterDownload(ctx) {
     await progress.fail(e.message)
     return { success: false, message: `❌ Error Twitter/X: ${e.message}` }
   } finally {
-    simulator.stop()
     progress.cleanup?.()
   }
 }
@@ -404,15 +392,13 @@ async function handlePinterestDownload(ctx) {
     icon: '📌',
   })
 
-  const simulator = new ProgressSimulator(progress, 85, 2500)
-
   try {
     await progress.update(5, 'Conectando con Pinterest...')
-    simulator.start()
+    await progress.update(50, 'Descargando imagen...')
 
     const result = await downloadPinterest(url)
 
-    await simulator.jumpTo(95, 'Procesando imagen...')
+    await progress.update(95, 'Procesando imagen...')
 
     if (!result.success || !result.image) {
       throw new Error('No se pudo descargar la imagen')
@@ -431,7 +417,6 @@ async function handlePinterestDownload(ctx) {
     await progress.fail(e.message)
     return { success: false, message: `❌ Error Pinterest: ${e.message}` }
   } finally {
-    simulator.stop()
     progress.cleanup?.()
   }
 }
@@ -474,6 +459,9 @@ async function handleMusicDownload(ctx) {
 
     const dl = await downloadYouTube(video.url, 'audio', (p) => {
       if (p?.percent) {
+        // Detener el simulador cuando recibimos progreso real
+        simulator.stop()
+
         const percent = Math.min(95, 20 + Math.floor(p.percent * 0.75))
 
         // Solo actualizar si cambió significativamente
@@ -556,6 +544,9 @@ async function handleVideoDownload(ctx) {
 
     const dl = await downloadYouTube(video.url, 'video', (p) => {
       if (p?.percent) {
+        // Detener el simulador cuando recibimos progreso real
+        simulator.stop()
+
         const percent = Math.min(95, 20 + Math.floor(p.percent * 0.75))
 
         if (Math.abs(percent - lastPercent) >= 1) {
@@ -643,6 +634,9 @@ async function handleSpotifySearch(ctx) {
 
     const dl = await downloadYouTube(best.url, 'audio', (p) => {
       if (p?.percent) {
+        // Detener el simulador cuando recibimos progreso real
+        simulator.stop()
+
         const percent = Math.min(95, 30 + Math.floor(p.percent * 0.65))
 
         if (Math.abs(percent - lastPercent) >= 1) {
