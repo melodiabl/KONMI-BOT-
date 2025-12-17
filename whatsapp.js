@@ -15,6 +15,7 @@ import { isSuperAdmin, setPrimaryOwner } from './plugins/config/global-config.js
 import { initStore } from './plugins/utils/utils/store.js'
 import { dispatch } from './handler.js'
 import blLogger from './plugins/utils/bl-logger.js'
+import NodeCache from 'node-cache'
 // port { extractText } from './plugins/utils/text-extractor.js'
 // ==============================================================================
 // Funciones locales de normalización y extracción de texto
@@ -293,6 +294,84 @@ function prettyPrintMessageLog(info) {
 
 /* ===== Utils mínimas ===== */
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+
+// ===== CACHE SIMPLE CON NODE-CACHE =====
+const metadataCache = new NodeCache({
+  stdTTL: 1800, // 30 minutos
+  checkperiod: 600, // Verificar cada 10 minutos
+  useClones: false,
+  maxKeys: 1000
+});
+
+const profilePictureCache = new NodeCache({
+  stdTTL: 3600, // 1 hora
+  checkperiod: 600,
+  useClones: false,
+  maxKeys: 500
+});
+
+// Funciones de cache para metadata de grupos
+async function getCachedGroupMetadata(sock, groupJid, forceUpdate = false) {
+  const cacheKey = `group:${groupJid}`;
+
+  if (!forceUpdate) {
+    const cached = metadataCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  try {
+    const metadata = await sock.groupMetadata(groupJid);
+    metadataCache.set(cacheKey, metadata);
+    return metadata;
+  } catch (error) {
+    console.error(`Error obteniendo metadata de grupo ${groupJid}:`, error);
+    // Retornar cache expirado si existe
+    return metadataCache.get(cacheKey) || null;
+  }
+}
+
+// Funciones de cache para fotos de perfil
+async function getCachedProfilePicture(sock, jid, forceUpdate = false) {
+  const cacheKey = `profile:${jid}`;
+
+  if (!forceUpdate) {
+    const cached = profilePictureCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  try {
+    const profilePic = await sock.profilePictureUrl(jid, 'image');
+    profilePictureCache.set(cacheKey, profilePic);
+    return profilePic;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Función para invalidar cache de grupo
+function invalidateGroupCache(groupJid) {
+  metadataCache.del(`group:${groupJid}`);
+}
+
+// Función para obtener estadísticas del cache
+function getCacheStats() {
+  return {
+    metadata: {
+      keys: metadataCache.keys().length,
+      hits: metadataCache.getStats().hits,
+      misses: metadataCache.getStats().misses
+    },
+    profilePictures: {
+      keys: profilePictureCache.keys().length,
+      hits: profilePictureCache.getStats().hits,
+      misses: profilePictureCache.getStats().misses
+    }
+  };
+}
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
 export const sanitizePhoneNumberInput = (v) => {
   const digits = onlyDigits(v)
@@ -524,6 +603,14 @@ const controlSet = new Set([
 let routerPath = './handler.js'
 export function setMessageRouterModulePath(p) {
   routerPath = String(p || routerPath)
+}
+
+// Exportar funciones de cache
+export {
+  getCachedGroupMetadata,
+  getCachedProfilePicture,
+  invalidateGroupCache,
+  getCacheStats
 }
 
 const processedMessageIds = new Set()
@@ -839,6 +926,33 @@ export async function connectToWhatsApp(
   try {
     if (registerMessageHandler) attachNameListeners(sock)
   } catch {}
+
+  // ====== INICIALIZAR CACHE CON LISTENERS ======
+  try {
+    // Listener para actualizaciones de grupos
+    sock.ev.on('groups.update', (updates) => {
+      for (const update of updates) {
+        const { id } = update;
+        if (id) {
+          invalidateGroupCache(id);
+          logMessage('INFO', 'CACHE', `Cache invalidado para grupo: ${id}`);
+        }
+      }
+    });
+
+    // Listener para cambios de participantes
+    sock.ev.on('group-participants.update', (update) => {
+      const { id } = update;
+      if (id) {
+        invalidateGroupCache(id);
+        logMessage('INFO', 'CACHE', `Cache invalidado por cambio de participantes: ${id}`);
+      }
+    });
+
+    logMessage('SUCCESS', 'CACHE', 'Sistema de cache con node-cache inicializado');
+  } catch (error) {
+    logMessage('ERROR', 'CACHE', 'Error inicializando cache', { error: error.message });
+  }
 
   // ====== PRELOAD: router/module de comandos ======
   if (registerMessageHandler) {

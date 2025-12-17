@@ -1460,17 +1460,40 @@ async function loadCommandModule(moduleName, commandName = null) {
 function createModuleWrapper(module, moduleName, commandName = null) {
   let handler = null;
 
+  // Mapeo específico para comandos de descarga
+  const downloadHandlerMap = {
+    'play': 'handleMusicDownload',
+    'music': 'handleMusicDownload',
+    'video': 'handleVideoDownload',
+    'youtube': 'handleVideoDownload',
+    'tiktok': 'handleTikTokDownload',
+    'instagram': 'handleInstagramDownload',
+    'ig': 'handleInstagramDownload',
+    'facebook': 'handleFacebookDownload',
+    'fb': 'handleFacebookDownload',
+    'twitter': 'handleTwitterDownload',
+    'x': 'handleTwitterDownload',
+    'pinterest': 'handlePinterestDownload',
+    'spotify': 'handleSpotifySearch',
+    'translate': 'handleTranslate',
+    'tr': 'handleTranslate',
+    'weather': 'handleWeather',
+    'clima': 'handleWeather'
+  };
+
   // Estrategias para encontrar el handler correcto
   const strategies = [
     // 1. Handler específico por nombre de comando
     () => commandName && module[commandName],
-    // 2. Handler genérico
+    // 2. Mapeo específico para download-commands
+    () => moduleName === 'download-commands' && downloadHandlerMap[commandName] && module[downloadHandlerMap[commandName]],
+    // 3. Handler genérico
     () => module.handler,
-    // 3. Handler por defecto
+    // 4. Handler por defecto
     () => module.default?.handler || module.default,
-    // 4. Handler por nombre de módulo
+    // 5. Handler por nombre de módulo
     () => module[moduleName],
-    // 5. Variaciones del nombre del módulo
+    // 6. Variaciones del nombre del módulo
     () => {
       const variations = [
         moduleName.replace(/-/g, ''),
@@ -1485,7 +1508,7 @@ function createModuleWrapper(module, moduleName, commandName = null) {
       }
       return null;
     },
-    // 6. Primera función disponible
+    // 7. Primera función disponible
     () => {
       const functions = Object.keys(module).filter(k =>
         typeof module[k] === 'function' &&
@@ -1592,24 +1615,25 @@ function registerBasicCommands() {
 function registerManualCommands() {
   // ===== COMANDOS DE DESCARGAS 📥 =====
   const downloadCommands = [
-    { cmd: 'play', desc: '🎵 Reproducir música de YouTube', emoji: '🎵' },
-    { cmd: 'music', desc: '🎶 Descargar música', emoji: '🎶' },
-    { cmd: 'video', desc: '🎬 Descargar video de YouTube', emoji: '🎬' },
-    { cmd: 'youtube', desc: '📺 Descargar de YouTube', emoji: '📺' },
-    { cmd: 'tiktok', desc: '🎵 Descargar de TikTok', emoji: '🎵' },
-    { cmd: 'instagram', desc: '📸 Descargar de Instagram', emoji: '📸' },
-    { cmd: 'ig', desc: '📸 Descargar de Instagram', emoji: '📸' },
-    { cmd: 'facebook', desc: '📘 Descargar de Facebook', emoji: '📘' },
-    { cmd: 'fb', desc: '📘 Descargar de Facebook', emoji: '📘' },
-    { cmd: 'twitter', desc: '🐦 Descargar de Twitter/X', emoji: '🐦' },
-    { cmd: 'x', desc: '🐦 Descargar de Twitter/X', emoji: '🐦' },
-    { cmd: 'pinterest', desc: '📌 Descargar de Pinterest', emoji: '📌' },
-    { cmd: 'spotify', desc: '🎧 Buscar en Spotify y descargar', emoji: '🎧' }
+    { cmd: 'play', desc: '🎵 Reproducir música de YouTube', emoji: '🎵', handler: 'handleMusicDownload' },
+    { cmd: 'music', desc: '🎶 Descargar música', emoji: '🎶', handler: 'handleMusicDownload' },
+    { cmd: 'video', desc: '🎬 Descargar video de YouTube', emoji: '🎬', handler: 'handleVideoDownload' },
+    { cmd: 'youtube', desc: '📺 Descargar de YouTube', emoji: '📺', handler: 'handleVideoDownload' },
+    { cmd: 'tiktok', desc: '🎵 Descargar de TikTok', emoji: '🎵', handler: 'handleTikTokDownload' },
+    { cmd: 'instagram', desc: '📸 Descargar de Instagram', emoji: '📸', handler: 'handleInstagramDownload' },
+    { cmd: 'ig', desc: '📸 Descargar de Instagram', emoji: '📸', handler: 'handleInstagramDownload' },
+    { cmd: 'facebook', desc: '📘 Descargar de Facebook', emoji: '📘', handler: 'handleFacebookDownload' },
+    { cmd: 'fb', desc: '📘 Descargar de Facebook', emoji: '📘', handler: 'handleFacebookDownload' },
+    { cmd: 'twitter', desc: '🐦 Descargar de Twitter/X', emoji: '🐦', handler: 'handleTwitterDownload' },
+    { cmd: 'x', desc: '🐦 Descargar de Twitter/X', emoji: '🐦', handler: 'handleTwitterDownload' },
+    { cmd: 'pinterest', desc: '📌 Descargar de Pinterest', emoji: '📌', handler: 'handlePinterestDownload' },
+    { cmd: 'spotify', desc: '🎧 Buscar en Spotify y descargar', emoji: '🎧', handler: 'handleSpotifySearch' }
   ];
 
-  downloadCommands.forEach(({ cmd, desc, emoji }) => {
+  downloadCommands.forEach(({ cmd, desc, emoji, handler }) => {
     registerCommand(cmd, {
       moduleName: 'download-commands',
+      commandName: cmd,
       category: '📥 Descargas',
       description: desc,
       emoji: emoji,
@@ -2231,6 +2255,8 @@ function registerManualCommands() {
       plugin: 'promo'
     });
   });
+
+  // Cache commands removed for now
 
   console.log('✅ TODOS los comandos manuales registrados con emojis y categorías contextuales');
   console.log(`📊 Total de comandos registrados manualmente: ${commandMap.size}`);
@@ -3318,7 +3344,7 @@ export async function dispatch(ctx = {}, runtimeContext = {}) {
     if (commandConfig.isLocal && typeof commandConfig.handler === 'function') {
       handler = commandConfig.handler;
     } else {
-      const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler, command);
+      const module = await loadCommandModule(commandConfig.moduleName || commandConfig.handler, commandConfig.commandName || command);
 
       if (!module || !module.handler) {
         await sock.sendMessage(remoteJid, {

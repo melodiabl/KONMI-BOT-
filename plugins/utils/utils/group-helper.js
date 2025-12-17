@@ -1,5 +1,6 @@
 import antibanSystem from './anti-ban.js'
 import logger from '../../config/logger.js'
+import { getCachedGroupMetadata } from '../../../whatsapp.js'
 
 const onlyDigits = (v) => String(v || '').replace(/\D/g, '')
 
@@ -158,8 +159,15 @@ export function getCachedGroupInfo(groupJid) {
  * Obtiene metadata de grupo usando la caché del sistema anti-ban.
  * Atajo conveniente para comandos.
  */
-export async function getGroupMetadataCached(socket, groupJid) {
-  return safeGetGroupMetadata(socket, groupJid)
+export async function getGroupMetadataCached(socket, groupJid, forceUpdate = false) {
+  try {
+    // Usar el cache simple de node-cache
+    return await getCachedGroupMetadata(socket, groupJid, forceUpdate);
+  } catch (error) {
+    // Fallback al método anterior si falla el cache
+    logger.warning('Cache fallback para metadata de grupo:', error.message);
+    return await safeGetGroupMetadata(socket, groupJid);
+  }
 }
 
 /**
